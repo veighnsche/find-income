@@ -422,9 +422,12 @@
       "remaining_work": "Implement exact-material approval, bounded delivery intent, per-item outcomes and uncertainty reconciliation.",
       "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
       "host_id": "local",
-      "active_slice": "I21 integrated exact approval and bounded delivery",
+      "active_slice": "Backend exact delivery/route/Stop integration plus concurrent exact-review UI",
       "active_model": "gpt-6-sol",
-      "active_effort": "high"
+      "active_effort": "high",
+      "web_thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
+      "web_model": "gpt-6-sol",
+      "web_effort": "high"
     },
     {
       "id": "I22",
