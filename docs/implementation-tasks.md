@@ -1,8 +1,8 @@
 # Recruitment agency — full task list and concurrent execution guide
 
-Updated 23 September 2026 after the reviewed core, runtime, collector, Jev and web slices. This is the complete I01–I27 task list for the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md). The owner has created an active goal to complete the entire list. I05-B builds the production commissioned work loop on Sol High; I12-A prepares deployment packaging on Sol High; I08-A corrects discovery authority on Sol High after review; new I15-A prepares truthful Typst packs on Sol Medium. I05-A/I06-A/I07-A/I10-A/I11-A reviewed slices are committed. Accepted slices remain accepted; the current assignments implement their remaining integration. The reviewed code checkpoint is `9487771` (core integration `6433d40`, server-backed UI `9487771`).
+Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the owner's active completion goal. Reviewed code is committed through `5147633`: source discovery and immutable Typst preparation in `ed64a8b`, private deployment packaging in `5147633`. Production integration continues with I05-B and I10-B on Sol High, I15-B and I18-A on Sol Medium.
 
-**Current position: 5 tasks accepted, 5 partially implemented, 3 newly in progress, 14 not started or conditional.** Accepted: I01, I02, I03, I04, I09. Partial: I05, I06, I07, I10, I11. Newly in progress: I08, I12, I15. I17 is conditional. These counts describe task acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 8 partially implemented, 1 newly in progress, 13 not started or conditional.** Accepted: I01, I02, I03, I04, I09. Partial: I05, I06, I07, I08, I10, I11, I12, I15. Newly in progress: I18. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -30,14 +30,14 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I05-B | Sol High | Production Start/Resume orchestration, shared initial schema/contracts/tool registration; new `internal/agency/**`. |
-| I12-A | Sol High | Reviewable private deployment/containment artifacts in `ops/**`; no remote provisioning before host placement. |
-| I08-A | Sol High | Correct discovery candidate authority/accounting, before-send request capture and expiry cleanup in `internal/discovery/**` and named `store/discovery*.go`. |
-| I15-A | Sol Medium | New `internal/applicationpacks/**` and named `store/applicationpacks*.go`: truthful saved packs and private bounded Typst rendering. |
+| I05-B | Sol High | Production work loop; shared schema/contracts/registration/startup; `internal/agency/**`. |
+| I10-B | Sol High | `internal/jevservice/**`, needed Jev helpers and new `store/jev_assessments.go`: durable qualification/organisation and recorded pack relevance. |
+| I15-B | Sol Medium | `internal/applicationpacks/**`, named store files and new Codex/HTTP pack handlers: guarded prepare/review/download flow. |
+| I18-A | Sol Medium | New relationships package, named store/HTTP files: sourced introductions and multiple routes to one role. |
 
-I08 started on Sol Medium and escalated after concrete cross-store authority defects; it is not accepted yet. Core/collection/Jev/runtime integrations and server-backed UI are committed as reviewed slices, not full product acceptance. The new pack task is `01a0cf93-fcaf-7422-9979-e8811994755b`; other task IDs remain in the graph and coordination ledger. I11 is idle after code and browser-fixture review.
+I08 and I12 have handed off their reviewed slices and are idle. I11 is idle pending stable integrated contracts. Core alone changes shared files; other owners supply narrow interfaces. New relationships task: `01a0cfa3-1a77-7b21-af23-7e2bafefad41`; pack task: `01a0cf93-fcaf-7422-9979-e8811994755b`. Four active workers is the ceiling.
 
-Root saved I08 live probes, three independently worded Jev consultations and their modest-confidence advice in `implementation-notes/implementation/I08-research/`; see `discovery-source-readiness.md`. Aggregator discovery still requires official-source verification.
+Root saved I08 live research and three reworded Jev consultations under `implementation-notes/implementation/I08-research/`; see `discovery-source-readiness.md`. The adapter/store slice passes fixtures; automatic official-source verification remains open. I12 packaging is available under `ops/i12/`; no selected-host deployment or live sign-in is claimed. Root also captured 11 full job source snapshots for I14 preparation, including one extra reference record; expected judgments and real quality acceptance remain open.
 
 ### Initial wave ownership and handoff record
 
@@ -230,7 +230,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 ### I08 — Discover additional official employer sources
 
-- [ ] **Not started** · GPT-6 Sol / Medium · Dependencies: I06, I07.
+- [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I06, I07.
 
 **Remaining work:** Verify and implement a minimal non-seed employer-source discovery path. Persist candidate origins, evidence and continuation; feed candidates to I10. The search capability is not yet established, so do not claim an available provider or silently substitute desktop tools.
 
@@ -284,7 +284,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 ### I12 — Establish the real private app and isolated runner
 
-- [ ] **Not started** · GPT-6 Sol / High · Dependencies: I02, I05, I06.
+- [ ] **Partial** · GPT-6 Sol / High · Dependencies: I02, I05, I06.
 
 **Remaining work:** Select and configure the concrete private app/runner environment, supported login and MCP transport; verify actual model/tool access, containment, shutdown/restart and operation. Prepare deployable configuration/runbook from current code while missing host/account details are resolved. No host, live login or production execution has been verified.
 
@@ -320,7 +320,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 ### I15 — Build one truthful Typst application pack
 
-- [ ] **Not started** · GPT-6 Sol / Medium · Dependencies: I05, I06, I09, I11.
+- [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I05, I06, I09, I11.
 
 **Remaining work:** Build one evidence-backed Typst PDF/answer pack and its review/correction flow from approved career assets and a selected role. Compile against fixtures while discovery is being finished; no asset-library project is required.
 
@@ -356,7 +356,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 ### I18 — Add lightweight recruiter, referral and contact records
 
-- [ ] **Not started** · GPT-6 Sol / Medium · Dependencies: I15.
+- [ ] **In progress** · GPT-6 Sol / Medium · Dependencies: I15.
 
 **Remaining work:** Implement minimal contact, recruiter, referral and route relationships with Codex-owned intake/correction.
 

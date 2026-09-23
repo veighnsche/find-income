@@ -7,9 +7,9 @@
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
     "I05-B",
-    "I12-A",
-    "I08-A",
-    "I15-A"
+    "I10-B",
+    "I15-B",
+    "I18-A"
   ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",
@@ -24,22 +24,26 @@
     "I10 helpers and recorded round-bound supplied-input execution; no live quality or production application claim",
     "I06 lifecycle/history/status and explicit turn execution against fakes only",
     "I05 supported mutation/MCP/dispatch and collector staging only",
-    "I11 server-backed instructions/decisions/cards/history and reviewed browser fixture behavior"
+    "I11 server-backed instructions/decisions/cards/history and reviewed browser fixture behavior",
+    "Committed ed64a8b: atomic scoped candidate staging, before-send request capture and expiry handling; focused tests pass. Live discovery/official-source verification remains open.",
+    "Committed 5147633: Linux packaging and acceptance scripts reviewed, syntax/build evidence recorded; selected-host deployment and real sign-in/isolation remain unverified.",
+    "Committed ed64a8b: pinned truthful Typst fixture/service and immutable store helper reviewed. Guarded tool/HTTP/review integration underway."
   ],
   "documentation_validated_at": "2026-09-23",
-  "code_checkpoint": "9487771",
+  "code_checkpoint": "5147633",
   "root_validation": {
     "check": "passed after OpenAPI formatting; writable Go caches",
     "test": "focused Codexservice/Jev/Jevservice/collector/store/HTTP/rounds/server packages passed; worker runtime and collection race checks passed; web has no automated test files",
     "build": "passed",
-    "e2e": "script remains placeholder; I11 controlled browser fixture interaction evidence reviewed, not live backend acceptance"
+    "e2e": "script remains placeholder; I11 controlled browser fixture interaction evidence reviewed, not live backend acceptance",
+    "latest_slices": "discovery/applicationpacks/store focused tests pass at ed64a8b; ops allowlist/shell/Python syntax checks pass at 5147633; full work-loop integration is still active"
   },
   "protected_artifacts_unchanged_prior_check": 44,
   "proposed_next_slices": [
     "I05-B",
-    "I12-A",
-    "I08-A",
-    "I15-A"
+    "I10-B",
+    "I15-B",
+    "I18-A"
   ],
   "goal_status": "active"
 }
