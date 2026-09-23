@@ -150,3 +150,32 @@ func TestResponsibilityEvidenceAndOverall(t *testing.T) {
 		t.Fatalf("published explicit frontend duty: %+v %v", report, err)
 	}
 }
+
+func TestSourcedActualPayIndependentOfAdvertisementAndConflict(t *testing.T) {
+	policy := DefaultPolicy()
+	advertised := Compensation{Kind: Employment, Currency: "USD", Period: Annual,
+		Basis: UnknownBasis, MinCents: int64ptr(10000000),
+		SourcedActual: &ActualPay{Currency: "EUR", Period: Monthly, Basis: Base,
+			AmountCents: 450000, WeeklyHours: 32}}
+	result, err := EvaluateSalary(policy, advertised)
+	if err != nil || result.State != Match || !result.ConfirmedActual {
+		t.Fatalf("direct EUR base masked by advertisement: %+v %v", result, err)
+	}
+	advertised.SourcedActual.WeeklyHours = 40
+	result, err = EvaluateSalary(policy, advertised)
+	if err != nil || result.State != Unknown || result.ConfirmedActual {
+		t.Fatalf("wrong actual hours qualified: %+v %v", result, err)
+	}
+	advertised.SourcedActual.WeeklyHours = 32
+	advertised.ActualPayConflicting = true
+	result, err = EvaluateSalary(policy, advertised)
+	if err != nil || result.State != Unknown || !result.Conflicting || result.Estimate != nil {
+		t.Fatalf("conflicting direct pay chose a value: %+v %v", result, err)
+	}
+	confirmed := CriterionEvidence{Finding: ConfirmedMatch, Authority: Employer}
+	facts := Criteria{confirmed, confirmed, confirmed, confirmed, confirmed}
+	report, err := Evaluate(policy, advertised, facts, true)
+	if err != nil || report.Overall != NeedsRequalification {
+		t.Fatalf("prior qualified conflict: %+v %v", report, err)
+	}
+}

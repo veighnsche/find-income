@@ -122,6 +122,18 @@ type Compensation struct {
 	ActualHours            *int64
 	ActualConfirmed        bool
 	ActualSource           Authority
+	// SourcedActual is a distinct confirmed offer. The repository validates
+	// its exact source before constructing this pure-rule input.
+	SourcedActual        *ActualPay
+	ActualPayConflicting bool
+}
+
+type ActualPay struct {
+	Currency    string
+	Period      PayPeriod
+	Basis       PayBasis
+	AmountCents int64
+	WeeklyHours int64
 }
 
 func (c Compensation) validate() error {
@@ -155,6 +167,10 @@ func (c Compensation) validate() error {
 	if (c.ActualHours == nil) != (c.ActualMonthlyBaseCents == nil) {
 		return fmt.Errorf("%w: actual amount and hours must occur together", ErrInvalid)
 	}
+	if c.SourcedActual != nil && (c.SourcedActual.AmountCents < 0 ||
+		c.SourcedActual.WeeklyHours < 1 || c.SourcedActual.WeeklyHours > 168) {
+		return fmt.Errorf("%w: invalid sourced actual pay", ErrInvalid)
+	}
 	return nil
 }
 
@@ -172,6 +188,7 @@ type SalaryResult struct {
 	Reason          string
 	Estimate        *Estimate
 	ConfirmedActual bool
+	Conflicting     bool
 }
 
 func EvaluateSalary(policy Policy, c Compensation) (SalaryResult, error) {
@@ -183,6 +200,21 @@ func EvaluateSalary(policy Policy, c Compensation) (SalaryResult, error) {
 	}
 	if c.Kind == Project {
 		return SalaryResult{State: Unknown, Reason: "Project revenue or rates are separate from employee base salary."}, nil
+	}
+	if c.ActualPayConflicting {
+		return SalaryResult{State: Unknown, Reason: "Current direct salary statements conflict; actual base pay needs clarification.", Conflicting: true}, nil
+	}
+	if actual := c.SourcedActual; actual != nil {
+		if actual.Currency != policy.SalaryCurrency || actual.Period != Monthly || actual.Basis != Base {
+			return SalaryResult{State: Unknown, Reason: "The sourced actual offer is not established as EUR gross monthly base pay."}, nil
+		}
+		if actual.WeeklyHours != policy.TargetHours {
+			return SalaryResult{State: Unknown, Reason: "The sourced actual offer is for different weekly hours; actual target-hours base pay needs confirmation."}, nil
+		}
+		if actual.AmountCents >= policy.MinMonthlyBaseCents {
+			return SalaryResult{State: Match, Reason: "Employer-confirmed gross monthly base at the actual target hours meets the floor.", ConfirmedActual: true}, nil
+		}
+		return SalaryResult{State: Mismatch, Reason: "Employer-confirmed gross monthly base at the actual target hours is below the floor.", ConfirmedActual: true}, nil
 	}
 	if c.Currency != policy.SalaryCurrency || c.Basis != Base {
 		return SalaryResult{State: Unknown, Reason: "EUR monthly base salary is not established; currency or pay basis needs clarification."}, nil
@@ -272,7 +304,8 @@ func Evaluate(policy Policy, compensation Compensation, facts Criteria, previous
 	}
 	results = append(results, evaluateCriterion("target_hours_available", facts.HoursAvailable))
 	results = append(results, evaluateCriterion("location_workable", facts.LocationWorkable))
-	results = append(results, CriterionResult{Criterion: "monthly_base_salary", State: salary.State, Reason: salary.Reason})
+	results = append(results, CriterionResult{Criterion: "monthly_base_salary", State: salary.State, Reason: salary.Reason,
+		Conflicting: salary.Conflicting})
 	hasMismatch, hasUnknown, hasConflict := false, false, false
 	for _, result := range results {
 		if result.State == Mismatch {
