@@ -3,9 +3,12 @@ package store
 import (
 	"context"
 	"database/sql"
+	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -14,10 +17,14 @@ var collectorErrorPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,79}$`)
 
 const collectorContinuationDelay = time.Minute
 
+//go:embed default-collector-boards.json
+var defaultCollectorBoardsFS embed.FS
+
 type CollectorBoardInput struct {
 	Provider        string
 	Site            string
 	Region          string
+	DisplayName     string
 	Enabled         bool
 	IntervalMinutes int
 }
@@ -25,43 +32,99 @@ type CollectorBoardInput struct {
 type CollectorBoard struct {
 	ID string
 	CollectorBoardInput
-	NextScanAt    time.Time
-	NextOffset    int
-	LeaseToken    string
-	LeaseUntil    time.Time
-	LastRunAt     time.Time
-	LastSuccessAt time.Time
-	LastErrorCode string
-	Revision      int64
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	OfficialCareersURL string
+	VerifiedAt         string
+	NextScanAt         time.Time
+	NextOffset         int
+	LeaseToken         string
+	LeaseUntil         time.Time
+	LastRunAt          time.Time
+	LastSuccessAt      time.Time
+	LastErrorCode      string
+	Revision           int64
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 func validateCollectorBoard(input CollectorBoardInput) error {
 	if input.Provider != "lever" || !collectorSitePattern.MatchString(input.Site) ||
 		(input.Region != "global" && input.Region != "eu") ||
+		(input.DisplayName != "" && (!boundedNonempty(input.DisplayName, 200) || strings.TrimSpace(input.DisplayName) != input.DisplayName)) ||
 		input.IntervalMinutes < 15 || input.IntervalMinutes > 10080 {
 		return fmt.Errorf("%w: supported provider, site, region and interval required", ErrInvalid)
 	}
 	return nil
 }
 
+func seedCollectorBoards(ctx context.Context, tx *sql.Tx) error {
+	data, err := defaultCollectorBoardsFS.ReadFile("default-collector-boards.json")
+	if err != nil {
+		return err
+	}
+	var seed struct {
+		VerifiedAt string `json:"verifiedAt"`
+		Boards     []struct {
+			Company            string `json:"company"`
+			Provider           string `json:"provider"`
+			Site               string `json:"site"`
+			Region             string `json:"region"`
+			OfficialCareersURL string `json:"officialCareersUrl"`
+		} `json:"boards"`
+	}
+	if err := json.Unmarshal(data, &seed); err != nil {
+		return err
+	}
+	if !validInstant(seed.VerifiedAt) || len(seed.Boards) == 0 {
+		return fmt.Errorf("%w: verified initial collector boards required", ErrInvalid)
+	}
+	now := jobTime(time.Now())
+	for _, item := range seed.Boards {
+		input := CollectorBoardInput{Provider: item.Provider, Site: item.Site, Region: item.Region,
+			DisplayName: item.Company, Enabled: true, IntervalMinutes: 60}
+		if err := validateCollectorBoard(input); err != nil {
+			return err
+		}
+		if item.OfficialCareersURL == "" {
+			return fmt.Errorf("%w: official careers URL required", ErrInvalid)
+		}
+		if err := validateWebURL(item.OfficialCareersURL); err != nil {
+			return err
+		}
+		id, err := randomID()
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO collector_boards
+  (id,provider,site,region,display_name,official_careers_url,verified_at,
+   enabled,interval_minutes,next_scan_at,created_at,updated_at)
+  VALUES (?,?,?,?,?,?,?,1,60,?,?,?)`, id, input.Provider, input.Site, input.Region,
+			input.DisplayName, item.OfficialCareersURL, seed.VerifiedAt, now, now, now)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 const collectorBoardColumns = `id,provider,site,region,enabled,interval_minutes,next_scan_at,next_offset,
-  lease_token,lease_until,last_run_at,last_success_at,last_error_code,revision,created_at,updated_at`
+  lease_token,lease_until,last_run_at,last_success_at,last_error_code,revision,created_at,updated_at,
+  display_name,official_careers_url,verified_at`
 
 func scanCollectorBoard(row rowScanner) (CollectorBoard, error) {
 	var board CollectorBoard
 	var enabled int
 	var nextScan, created, updated string
-	var token, leaseUntil, lastRun, lastSuccess, lastError sql.NullString
+	var token, leaseUntil, lastRun, lastSuccess, lastError, careersURL, verifiedAt sql.NullString
 	err := row.Scan(&board.ID, &board.Provider, &board.Site, &board.Region, &enabled,
 		&board.IntervalMinutes, &nextScan, &board.NextOffset, &token, &leaseUntil,
-		&lastRun, &lastSuccess, &lastError, &board.Revision, &created, &updated)
+		&lastRun, &lastSuccess, &lastError, &board.Revision, &created, &updated,
+		&board.DisplayName, &careersURL, &verifiedAt)
 	if err != nil {
 		return CollectorBoard{}, err
 	}
 	board.Enabled = enabled == 1
 	board.LeaseToken, board.LastErrorCode = token.String, lastError.String
+	board.OfficialCareersURL, board.VerifiedAt = careersURL.String, verifiedAt.String
 	for _, item := range []struct {
 		value string
 		out   *time.Time
@@ -86,6 +149,9 @@ func (s *Store) CreateCollectorBoard(ctx context.Context, actor Actor, input Col
 	if err := validateCollectorBoard(input); err != nil {
 		return CollectorBoard{}, err
 	}
+	if input.DisplayName == "" {
+		input.DisplayName = input.Site
+	}
 	id, err := randomID()
 	if err != nil {
 		return CollectorBoard{}, err
@@ -97,9 +163,9 @@ func (s *Store) CreateCollectorBoard(ctx context.Context, actor Actor, input Col
 	}
 	defer tx.Rollback()
 	result, err := tx.ExecContext(ctx, `INSERT INTO collector_boards
-  (id,provider,site,region,enabled,interval_minutes,next_scan_at,created_at,updated_at)
-  VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(provider,site,region) DO NOTHING`,
-		id, input.Provider, input.Site, input.Region, input.Enabled,
+	  (id,provider,site,region,display_name,enabled,interval_minutes,next_scan_at,created_at,updated_at)
+  VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(provider,site,region) DO NOTHING`,
+		id, input.Provider, input.Site, input.Region, input.DisplayName, input.Enabled,
 		input.IntervalMinutes, now, now, now)
 	if err != nil {
 		return CollectorBoard{}, err

@@ -26,6 +26,16 @@ func setupCollector(t *testing.T, endpoint string) (*store.Store, store.Collecto
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
+	seeded, err := db.ListCollectorBoards(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range seeded {
+		if _, err := db.UpdateCollectorBoard(ctx, store.Actor{Kind: "administrator", ID: "owner"},
+			item.ID, item.Revision, false, item.IntervalMinutes); err != nil {
+			t.Fatal(err)
+		}
+	}
 	board, err := db.CreateCollectorBoard(ctx, store.Actor{Kind: "administrator", ID: "owner"},
 		store.CollectorBoardInput{Provider: "lever", Site: "example", Region: "global", Enabled: true, IntervalMinutes: 15})
 	if err != nil {
@@ -103,8 +113,17 @@ func TestLeverCollectorResumesBoundedPages(t *testing.T) {
 		t.Fatalf("unbounded or wrong requests: %+v", offsets)
 	}
 	boards, err := db.ListCollectorBoards(ctx)
-	if err != nil || len(boards) != 1 || boards[0].NextScanAt.Sub(collector.Now()) != time.Minute {
-		t.Fatalf("partial sweep waited full interval: %+v %v", boards, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var current store.CollectorBoard
+	for _, item := range boards {
+		if item.ID == board.ID {
+			current = item
+		}
+	}
+	if current.ID == "" || current.NextScanAt.Sub(collector.Now()) != time.Minute {
+		t.Fatalf("partial sweep waited full interval: %+v", current)
 	}
 	previous := collector.Now()
 	collector.Now = func() time.Time { return previous.Add(2 * time.Minute) }
@@ -113,7 +132,16 @@ func TestLeverCollectorResumesBoundedPages(t *testing.T) {
 		t.Fatalf("resumed batch: %+v %v", report, err)
 	}
 	boards, err = db.ListCollectorBoards(ctx)
-	if err != nil || len(boards) != 1 || boards[0].ID != board.ID || boards[0].NextOffset != 0 {
+	if err != nil {
+		t.Fatal(err)
+	}
+	current = store.CollectorBoard{}
+	for _, item := range boards {
+		if item.ID == board.ID {
+			current = item
+		}
+	}
+	if current.ID == "" || current.NextOffset != 0 {
 		t.Fatalf("cursor not persisted: %+v %v", boards, err)
 	}
 	page, err := db.ListIngestions(ctx, "", 100)
@@ -130,7 +158,7 @@ func TestLeverCollectorSkipsUntrustedPostingAndSubmitsNext(t *testing.T) {
 		_, _ = w.Write([]byte(`[{"id":"123","text":"Backend Engineer","descriptionPlain":"Build Go services.","hostedUrl":"https://other.example/123"},` + string(valid) + `]`))
 	}))
 	defer server.Close()
-	db, _, collector := setupCollector(t, server.URL)
+	db, board, collector := setupCollector(t, server.URL)
 	report, err := collector.RunDueOnce(ctx)
 	if err != nil || report.ErrorCode != "" || report.WarningCode != "lever_invalid_posting" ||
 		report.Rejected != 1 || report.Submitted != 1 {
@@ -141,7 +169,16 @@ func TestLeverCollectorSkipsUntrustedPostingAndSubmitsNext(t *testing.T) {
 		t.Fatalf("wrong source queued: %+v %v", page, err)
 	}
 	boards, err := db.ListCollectorBoards(ctx)
-	if err != nil || len(boards) != 1 || boards[0].LastErrorCode != "lever_invalid_posting" {
+	if err != nil {
+		t.Fatal(err)
+	}
+	var warning string
+	for _, item := range boards {
+		if item.ID == board.ID {
+			warning = item.LastErrorCode
+		}
+	}
+	if warning != "lever_invalid_posting" {
 		t.Fatalf("skipped posting not reported safely: %+v %v", boards, err)
 	}
 }

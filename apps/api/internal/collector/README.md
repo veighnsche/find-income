@@ -5,9 +5,12 @@ The first supported connector reads configured Lever public posting sites throug
 global and EU hosts, pagination, `descriptionPlain`, `lists`, and `hostedUrl` in
 its [Postings API reference](https://github.com/lever/postings-api).
 
-The owner configures each board in `collector_boards` through the store API.
-There is no built-in board list and fresh databases make no collector requests.
-Each enabled board has a persisted cursor, interval, lease, and last safe error.
+Fresh databases seed five enabled boards verified from official company careers
+pages on 23 September 2026: Finom, Wypoon Technologies, Protolabs, Samba TV,
+and Yuno. Their exact site/region and verification URLs are in
+`internal/store/default-collector-boards.json`. The owner can disable them or
+add more boards through the store API. Each enabled board has a persisted
+cursor, interval, lease, and last safe error.
 One run makes at most two page requests and advances the cursor only after all
 valid postings in those pages enter the shared ingestion queue. A partial sweep
 continues after one minute; a short final page resets the cursor to zero and

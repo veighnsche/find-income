@@ -1,0 +1,41 @@
+{
+  "verifiedAt": "2026-09-23T12:50:32Z",
+  "verificationMethod": "Official company careers page links to Lever, and the public Lever postings API returned active listings.",
+  "boards": [
+    {
+      "company": "Finom",
+      "provider": "lever",
+      "site": "pnlfin",
+      "region": "eu",
+      "officialCareersUrl": "https://careers.finom.co/"
+    },
+    {
+      "company": "Wypoon Technologies",
+      "provider": "lever",
+      "site": "wypoon",
+      "region": "eu",
+      "officialCareersUrl": "https://wypoon.com/techexperts/"
+    },
+    {
+      "company": "Protolabs",
+      "provider": "lever",
+      "site": "protolabs",
+      "region": "global",
+      "officialCareersUrl": "https://www.protolabs.com/about-us/careers/"
+    },
+    {
+      "company": "Samba TV",
+      "provider": "lever",
+      "site": "sambatv",
+      "region": "global",
+      "officialCareersUrl": "https://samba.com/careers"
+    },
+    {
+      "company": "Yuno",
+      "provider": "lever",
+      "site": "yuno",
+      "region": "global",
+      "officialCareersUrl": "https://www.y.uno/en/careers"
+    }
+  ]
+}
