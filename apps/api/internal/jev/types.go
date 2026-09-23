@@ -76,6 +76,7 @@ type Result struct {
 	ReturnedModel  string
 	Answers        map[string]Answer
 	Usage          Usage
+	RawResponse    json.RawMessage // Exact validated provider body; persist privately.
 }
 
 type ErrorKind string
@@ -86,6 +87,7 @@ const (
 	ErrInvalidConfig   ErrorKind = "invalid_config"
 	ErrInvalidRequest  ErrorKind = "invalid_request"
 	ErrRequestTooLarge ErrorKind = "request_too_large"
+	ErrBudgetExceeded  ErrorKind = "budget_exceeded"
 	ErrUnauthorized    ErrorKind = "unauthorized"
 	ErrRateLimited     ErrorKind = "rate_limited"
 	ErrUnavailable     ErrorKind = "unavailable"

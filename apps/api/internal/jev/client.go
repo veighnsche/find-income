@@ -267,6 +267,7 @@ func parseResponse(body []byte, questions map[string]Question, requestedModel st
 		ReturnedModel:  *wire.Model,
 		Answers:        make(map[string]Answer, len(questions)),
 		Usage:          Usage{InputTokens: *wire.Usage.InputTokens, OutputTokens: *wire.Usage.OutputTokens},
+		RawResponse:    append(json.RawMessage(nil), body...),
 	}
 	for id, question := range questions {
 		raw, ok := wire.Answers[id]

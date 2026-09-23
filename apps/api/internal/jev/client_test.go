@@ -62,7 +62,7 @@ func TestValidTypedResponseAndMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.RequestedModel != "jev-1.13.0" || result.ReturnedModel != "jev-1.13.0" || result.Usage != (Usage{123, 17}) ||
-		result.Answers["frontend_duties"].Choice.Choice != "not_required" || result.Answers["career_direction"].Score.Score != 1.8 {
+		result.Answers["frontend_duties"].Choice.Choice != "not_required" || result.Answers["career_direction"].Score.Score != 1.8 || string(result.RawResponse) != validBody {
 		t.Fatalf("lost typed response metadata: %+v", result)
 	}
 }
