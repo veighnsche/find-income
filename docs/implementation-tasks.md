@@ -2,7 +2,7 @@
 
 Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. API/contracts are committed in `2fdfe7d`, deployment configuration in `717ef93`, and web review in `8c8b66d`. Root check/test/build pass. Core corrections and immutable pack-correction preparation are committed; commissioned input integration and native runner configuration now run concurrently.
 
-**Current position: 5 tasks accepted, 12 partial, 1 active review task, 9 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I12, I14, I15, I18, I20, I26. Active: I13. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 12 partial, 2 active tasks, 8 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I12, I14, I15, I18, I20, I26. Active: I13 and I24. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -32,8 +32,10 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 | --- | --- | --- |
 | I05/I11 contextual input | Sol High | Shared process_input, profile effective-version boundary, explicit paused replacement, pack transaction guard and API/contracts. |
 | I13 native runtime correction | Sol High | Runtime-owned Codex files and ops/i12 restrictive profile; final wrapper/account/MCP acceptance remains open. |
+| I11 contextual-input UI | Sol Medium | apps/web/src and browser fixture smoke against the published process-input contract. |
+| I24 interview domain | Sol Medium | New interviewprep domain and Jev interview-focus helper; no shared schema or UI edits. |
 
-Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; shared storage/commission integration remains open. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). The runtime writer implements that direction while core connects contextual input. Other workers are idle until a concrete independent slice or published UI contract is ready. Four live workers maximum.
+Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; shared storage/commission integration remains open. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). The runtime writer implements that direction while core connects contextual input. The web writer consumes the published contextual-input contract; the interview worker implements an independent domain slice. Four live workers maximum.
 
 Reviewed checkpoints: API `2fdfe7d`, deployment `717ef93`, UI `8c8b66d`. Root `pnpm check`, `pnpm test`, `pnpm build` pass after contract formatting. Web has no automated test files; controlled browser interactions and screenshots were reviewed. The e2e placeholder is replaced by browser fixture smoke in a2726ed; root pnpm e2e passed.
 
@@ -125,7 +127,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 | I21 | Bind exact approval to bounded delivery | Not started | I15, I20 | GPT-6 Sol / High |
 | I22 | Review delivery authority and verify a controlled send | Not started | I21 | GPT-6 Astra / High |
 | I23 | Process replies and prepare follow-ups | Not started | I09, I19 | GPT-6 Sol / Medium |
-| I24 | Prepare interviews from actual context | Not started | I15, I18 | GPT-6 Sol / Medium |
+| I24 | Prepare interviews from actual context | In progress | I15, I18 | GPT-6 Sol / Medium |
 | I25 | Compare real offer terms without invented certainty | Not started | I01, I09, I18 | GPT-6 Sol / Medium |
 | I26 | Verify current-format backup and private operation | Partial | I12, I15 | GPT-6 Sol / Medium |
 | I27 | Review the complete journey and publish accurate operating docs | Not started | I16, I18, I19, I22, I23, I24, I25, I26 | GPT-6 Sol / Medium; docs Luna Low |
@@ -442,9 +444,9 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 ### I24 — Prepare interviews from actual context
 
-- [ ] **Not started** · GPT-6 Sol / Medium · Dependencies: I15, I18.
+- [ ] **In progress** · GPT-6 Sol / Medium · Dependencies: I15, I18.
 
-**Remaining work:** Implement one-interview preparation and contextual debrief from supplied or already available evidence.
+**Remaining work:** Implement the independent sourced preparation/debrief and Jev-focus helpers, then integrate commissioned Codex execution, persistence/UI and separately reviewed quality cases. No interview acceptance yet.
 
 **Task scope:** Implement one-interview preparation using employer/context evidence and truthful examples, plus contextual debrief capture. Accept owner-supplied complete interview context without requiring inbox or calendar integration.
 
