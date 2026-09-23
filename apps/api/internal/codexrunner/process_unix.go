@@ -208,7 +208,6 @@ func (p *process) supervise(ctx context.Context) {
 }
 
 func (p *process) finish(reason error, owned bool) {
-	p.closeIO()
 	pid := p.cmd.Process.Pid
 	// Setpgid with Pgid=0 creates a group whose ID is the new child's PID.
 	// Guard even impossible IDs; never signal our own group or group 0/-1.
@@ -220,6 +219,11 @@ func (p *process) finish(reason error, owned bool) {
 	} else {
 		p.cleanup = ErrCleanup
 	}
+	// Signal before closing pipes. Closing stdout/stdin first can itself make
+	// a live child exit (SIGPIPE/EOF), leaving a zombie-only Darwin group whose
+	// kill returns EPERM and falsely classifies intentional stop as uncertain.
+	// Both pipe ends are still closed before Wait, unblocking concurrent IO.
+	p.closeIO()
 	// No group signal occurs after this reap: that would permit PGID reuse.
 	if err := p.cmd.Wait(); err != nil {
 		var exited *exec.ExitError
@@ -239,7 +243,8 @@ func (p *process) closeIO() {
 }
 
 func (p *process) requestStop(reason error) {
-	p.closeIO()
+	// The lifecycle goroutine owns teardown order: group signal, IO close,
+	// then leader reap. A stop request must not trigger child exit ahead of it.
 	select {
 	case p.stop <- reason:
 	default:

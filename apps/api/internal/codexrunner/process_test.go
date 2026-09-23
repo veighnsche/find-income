@@ -364,6 +364,53 @@ func TestContextCancellationAndDeadline(t *testing.T) {
 	}
 }
 
+func TestStopRequestDefersPipeClosureToLifecycle(t *testing.T) {
+	// No lifecycle consumer runs yet. Enqueueing a stop must not close either
+	// pipe: that can deliver EOF/SIGPIPE and make the child exit before its
+	// reserved process group is signalled. Real pipe I/O verifies the ordering
+	// without depending on process scheduling or a lucky stress iteration.
+	inRead, inWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer inRead.Close()
+	defer inWrite.Close()
+	outRead, outWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer outRead.Close()
+	defer outWrite.Close()
+	p := &process{stdin: inWrite, stdout: outRead, stop: make(chan error, 1)}
+	p.requestStop(ErrClosed)
+	if reason := <-p.stop; reason != ErrClosed {
+		t.Fatal("wrong stop reason")
+	}
+	for _, ends := range [][2]*os.File{{inWrite, inRead}, {outWrite, outRead}} {
+		if _, err := ends[0].Write([]byte("x")); err != nil {
+			t.Fatal("stop request closed a pipe before lifecycle signalling")
+		}
+		var b [1]byte
+		if _, err := io.ReadFull(ends[1], b[:]); err != nil || b[0] != 'x' {
+			t.Fatal("pipe unusable before lifecycle signalling")
+		}
+	}
+}
+
+func TestExplicitCloseWhileChildFloodsStdout(t *testing.T) {
+	p := launch(t, context.Background(), fixture(t, "flood"))
+	if line(t, p) != "ready" {
+		t.Fatal("helper readiness")
+	}
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
+	}
+	waitDone(t, p)
+	if p.Err() != ErrClosed {
+		t.Fatal(p.Err())
+	}
+}
+
 func TestOwnedDescendantCleanup(t *testing.T) {
 	callerGroup := syscall.Getpgrp()
 	for _, mode := range []string{"group", "group-crash"} {
