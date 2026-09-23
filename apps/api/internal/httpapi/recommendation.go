@@ -10,7 +10,7 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-// latestCompletedRound lets an owner recover saved home advice after a fresh
+// latestCompletedRound lets an owner recover saved work after a fresh
 // browser session without relying on a locally remembered round ID.
 func (h *Handler) latestCompletedRound(w http.ResponseWriter, r *http.Request) {
 	owner, ok := h.owner(w, r)
@@ -18,11 +18,11 @@ func (h *Handler) latestCompletedRound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	outcomes := r.URL.Query()["outcome"]
-	if len(outcomes) != 1 || outcomes[0] != "discover" {
+	if len(outcomes) != 1 || outcomes[0] != "discover" && outcomes[0] != "compare_offers" {
 		failRound(w, store.ErrInvalid)
 		return
 	}
-	round, err := h.database.LatestCompletedRound(r.Context(), owner.Actor(), "discover")
+	round, err := h.database.LatestCompletedRound(r.Context(), owner.Actor(), outcomes[0])
 	if errors.Is(err, store.ErrNotFound) {
 		writeJSON(w, http.StatusOK, nil)
 		return

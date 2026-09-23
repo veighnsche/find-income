@@ -2067,12 +2067,15 @@ func (e ListOpportunitiesParamsKind) Valid() bool {
 
 // Defines values for GetLatestCompletedRoundParamsOutcome.
 const (
-	Discover GetLatestCompletedRoundParamsOutcome = "discover"
+	CompareOffers GetLatestCompletedRoundParamsOutcome = "compare_offers"
+	Discover      GetLatestCompletedRoundParamsOutcome = "discover"
 )
 
 // Valid indicates whether the value is a known member of the GetLatestCompletedRoundParamsOutcome enum.
 func (e GetLatestCompletedRoundParamsOutcome) Valid() bool {
 	switch e {
+	case CompareOffers:
+		return true
 	case Discover:
 		return true
 	default:
@@ -3842,6 +3845,7 @@ type Round struct {
 	ProfileVersion          int64                  `json:"profileVersion"`
 	ReconciliationRequired  bool                   `json:"reconciliationRequired"`
 	Report                  map[string]interface{} `json:"report"`
+	RequestKey              string                 `json:"requestKey"`
 	Revision                int64                  `json:"revision"`
 	Scope                   RoundScope             `json:"scope"`
 	State                   RoundState             `json:"state"`

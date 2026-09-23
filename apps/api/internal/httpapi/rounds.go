@@ -144,6 +144,7 @@ func (h *Handler) prepareRound(w http.ResponseWriter, r *http.Request) {
 }
 
 type roundResponse struct {
+	RequestKey              string               `json:"requestKey"`
 	ID                      string               `json:"id"`
 	Intent                  string               `json:"intent"`
 	Outcome                 string               `json:"outcome"`
@@ -170,7 +171,7 @@ type roundResponse struct {
 }
 
 func roundModel(r store.Round) roundResponse {
-	return roundResponse{ID: r.ID, Intent: r.Intent, Outcome: r.Outcome, OriginalProfileVersion: r.InitialProfileVersion, EffectiveProfileVersion: r.ProfileVersion, ProfileVersion: r.ProfileVersion,
+	return roundResponse{ID: r.ID, RequestKey: r.RequestKey, Intent: r.Intent, Outcome: r.Outcome, OriginalProfileVersion: r.InitialProfileVersion, EffectiveProfileVersion: r.ProfileVersion, ProfileVersion: r.ProfileVersion,
 		Scope: r.Scope, State: r.State, Revision: r.Revision, Generation: r.Generation,
 		Deadline: r.Deadline, Limits: r.Limits, Used: r.Used, Step: r.Step, Cursor: r.Cursor,
 		Unresolved: r.Unresolved, Report: r.Report, StopReason: r.StopReason,

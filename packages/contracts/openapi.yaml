@@ -223,16 +223,16 @@ paths:
   /rounds/latest-completed:
     get:
       operationId: getLatestCompletedRound
-      summary: Read the owner's latest completed discovery round for saved home advice
+      summary: Read the owner's latest completed round for a saved result view
       security: [{ cookieAuth: [] }]
       parameters:
         - in: query
           name: outcome
           required: true
-          schema: { type: string, enum: [discover] }
+          schema: { type: string, enum: [discover, compare_offers] }
       responses:
         '200':
-          description: Latest completed discovery round with transient recommendation currentness, or null when none exists
+          description: Latest completed matching round, with transient currentness for discovery advice, or null when none exists
           content:
             application/json:
               schema:
@@ -2062,6 +2062,7 @@ components:
       required:
         [
           id,
+          requestKey,
           intent,
           outcome,
           originalProfileVersion,
@@ -2086,6 +2087,7 @@ components:
         ]
       properties:
         id: { type: string }
+        requestKey: { type: string }
         intent: { type: string }
         outcome: { type: string }
         originalProfileVersion: { type: integer, format: int64 }

@@ -115,3 +115,66 @@ func TestLatestCompletedDiscoveryRoundReadRoute(t *testing.T) {
 		t.Fatalf("read route mutated saved round: %s %v", stored.Report, err)
 	}
 }
+
+func TestLatestCompletedOfferReadIsOwnerAndOutcomeScoped(t *testing.T) {
+	ctx := context.Background()
+	h := newRecordHTTP(t)
+	path := "/rounds/latest-completed?outcome=compare_offers"
+	status, body := h.do(http.MethodGet, path, "", "", "", "", nil)
+	requireStatus(t, status, http.StatusUnauthorized, body)
+	owner := h.login()
+	status, body = h.owner(http.MethodGet, path)
+	requireStatus(t, status, http.StatusOK, body)
+	if string(bytes.TrimSpace(body)) != "null" {
+		t.Fatalf("empty offer history: %s", body)
+	}
+	profile, err := h.db.CurrentPreferences(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finish := func(actor store.Actor, key, outcome string) store.Round {
+		t.Helper()
+		round, _, err := h.db.StartRound(ctx, actor, store.StartRoundInput{
+			RequestKey: key, Intent: "Read a saved commissioned result", Outcome: outcome, ProfileVersion: profile.Version,
+			Scope:  store.RoundScope{Resources: []string{"campaign:active"}, Operations: []string{store.RoundJevRequest}},
+			Limits: store.RoundAllowance{Requests: 1, Items: 1, Tools: 1, Turns: 1}, Deadline: time.Now().Add(time.Minute),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.db.ActivateRound(ctx, actor, round.ID); err != nil {
+			t.Fatal(err)
+		}
+		status, body := h.owner(http.MethodGet, path)
+		requireStatus(t, status, http.StatusOK, body)
+		var activeView *roundResponse
+		if json.Unmarshal(body, &activeView) != nil || activeView != nil && activeView.ID == round.ID {
+			t.Fatalf("active round returned as complete: %s", body)
+		}
+		round, err = h.db.FinishRound(ctx, actor, round.ID, store.RoundCompleted, "saved", "partial", json.RawMessage(`{"code":"saved","comparisonId":"saved-comparison"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return round
+	}
+	comparison := finish(owner.Actor(), "owner-offer", "compare_offers")
+	discovery := finish(owner.Actor(), "owner-discovery", "discover")
+	finish(store.Actor{Kind: "administrator", ID: "different-owner"}, "foreign-offer", "compare_offers")
+	for _, expected := range []store.Round{comparison, discovery} {
+		status, body = h.owner(http.MethodGet, "/rounds/latest-completed?outcome="+expected.Outcome)
+		requireStatus(t, status, http.StatusOK, body)
+		var view roundResponse
+		if json.Unmarshal(body, &view) != nil || view.ID != expected.ID || view.Outcome != expected.Outcome || view.RequestKey != expected.RequestKey {
+			t.Fatalf("wrong owner/outcome result: %s", body)
+		}
+		if expected.Outcome == "compare_offers" && !bytes.Equal(view.Report, expected.Report) {
+			t.Fatalf("offer report was altered by discovery advice projection: %s", body)
+		}
+		stored, err := h.db.Round(ctx, expected.ID)
+		if err != nil || !bytes.Equal(stored.Report, expected.Report) || stored.Used != expected.Used || stored.Revision != expected.Revision {
+			t.Fatalf("read changed stored report, allowance or revision: %+v %v", stored, err)
+		}
+	}
+	status, body = h.owner(http.MethodGet, path+"&outcome=discover")
+	requireStatus(t, status, http.StatusBadRequest, body)
+}
