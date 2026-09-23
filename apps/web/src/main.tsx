@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   createAgentCredential,
   getHealth,
   getPreferences,
   getSession,
+  isUnauthenticated,
   listAgentCredentials,
   login,
   logout,
@@ -28,6 +29,18 @@ const scopeOptions = [
 
 function message(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Something went wrong. Try again.';
+}
+
+function protectedError(
+  cause: unknown,
+  onSessionLost: () => void,
+  setError: (value: string) => void,
+) {
+  if (isUnauthenticated(cause)) {
+    onSessionLost();
+    return;
+  }
+  setError(message(cause));
 }
 
 function ServiceStatus() {
@@ -122,7 +135,7 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session) => void }) {
   );
 }
 
-function Today() {
+function Today({ onSessionLost }: { onSessionLost: () => void }) {
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -130,10 +143,10 @@ function Today() {
     getPreferences(controller.signal)
       .then(setPreferences)
       .catch((cause: unknown) => {
-        if (!controller.signal.aborted) setError(message(cause));
+        if (!controller.signal.aborted) protectedError(cause, onSessionLost, setError);
       });
     return () => controller.abort();
-  }, []);
+  }, [onSessionLost]);
   return (
     <main id="today">
       <p className="eyebrow">Your workspace</p>
@@ -160,7 +173,7 @@ function Today() {
   );
 }
 
-function Settings({ session }: { session: Session }) {
+function Settings({ session, onSessionLost }: { session: Session; onSessionLost: () => void }) {
   const [agents, setAgents] = useState<AgentCredential[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -178,13 +191,13 @@ function Settings({ session }: { session: Session }) {
     listAgentCredentials(controller.signal)
       .then(setAgents)
       .catch((cause: unknown) => {
-        if (!controller.signal.aborted) setError(message(cause));
+        if (!controller.signal.aborted) protectedError(cause, onSessionLost, setError);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, []);
+  }, [onSessionLost]);
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -197,7 +210,7 @@ function Settings({ session }: { session: Session }) {
       setName('');
       await refresh();
     } catch (cause) {
-      setError(message(cause));
+      protectedError(cause, onSessionLost, setError);
     } finally {
       setBusy(false);
     }
@@ -209,7 +222,7 @@ function Settings({ session }: { session: Session }) {
       await revokeAgentCredential(id, session.csrfToken);
       await refresh();
     } catch (cause) {
-      setError(message(cause));
+      protectedError(cause, onSessionLost, setError);
     } finally {
       setBusy(false);
     }
@@ -331,6 +344,11 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<'today' | 'settings'>('today');
   const [signingOut, setSigningOut] = useState(false);
+  const loseSession = useCallback(() => {
+    setSession(null);
+    setPage('today');
+    setError(null);
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     getSession(controller.signal)
@@ -340,6 +358,26 @@ function App() {
       });
     return () => controller.abort();
   }, []);
+  useEffect(() => {
+    if (!session) return;
+    const expiresAt = Date.parse(session.expiresAt);
+    const remaining = expiresAt - Date.now();
+    if (!Number.isFinite(remaining) || remaining <= 0) {
+      loseSession();
+      return;
+    }
+    const timer = window.setTimeout(loseSession, remaining);
+    const checkExpiry = () => {
+      if (Date.now() >= expiresAt) loseSession();
+    };
+    window.addEventListener('focus', checkExpiry);
+    document.addEventListener('visibilitychange', checkExpiry);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('focus', checkExpiry);
+      document.removeEventListener('visibilitychange', checkExpiry);
+    };
+  }, [session, loseSession]);
   async function signOut() {
     if (!session) return;
     setSigningOut(true);
@@ -349,7 +387,8 @@ function App() {
       setSession(null);
       setPage('today');
     } catch (cause) {
-      setError(message(cause));
+      if (isUnauthenticated(cause)) loseSession();
+      else setError(message(cause));
     } finally {
       setSigningOut(false);
     }
@@ -371,7 +410,14 @@ function App() {
           <button onClick={() => window.location.reload()}>Try again</button>
         </main>
       )}
-      {session === null && <LoginPanel onLogin={setSession} />}
+      {session === null && (
+        <LoginPanel
+          onLogin={(next) => {
+            setError(null);
+            setSession(next);
+          }}
+        />
+      )}
       {session && (
         <div className="layout">
           <nav aria-label="Main navigation">
@@ -398,7 +444,11 @@ function App() {
               Sign out
             </button>
           </nav>
-          {page === 'today' ? <Today /> : <Settings session={session} />}
+          {page === 'today' ? (
+            <Today onSessionLost={loseSession} />
+          ) : (
+            <Settings session={session} onSessionLost={loseSession} />
+          )}
           {error && (
             <p role="alert" className="global-error">
               {error}

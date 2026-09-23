@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -230,5 +231,36 @@ func TestHostedLoginSetsSecureCookie(t *testing.T) {
 	cookies := response.Result().Cookies()
 	if len(cookies) != 1 || !cookies[0].Secure || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode {
 		t.Fatalf("hosted session cookie settings: %+v", cookies)
+	}
+}
+
+func TestLoginLimiterBoundsRejectedPeerMemoryAndWindowRollover(t *testing.T) {
+	limiter := newLoginLimiter()
+	current := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
+	limiter.now = func() time.Time { return current }
+	for i := 0; i < 30; i++ {
+		if !limiter.Allow("accepted-" + strconv.Itoa(i)) {
+			t.Fatalf("attempt %d was unexpectedly limited", i)
+		}
+	}
+	for i := 0; i < 5000; i++ {
+		if limiter.Allow("rejected-" + strconv.Itoa(i)) {
+			t.Fatalf("peer %d exceeded global limit", i)
+		}
+	}
+	if len(limiter.byIP) != 30 || len(limiter.global) != 30 {
+		t.Fatalf("rejected peers retained: byIP=%d global=%d", len(limiter.byIP), len(limiter.global))
+	}
+	current = current.Add(61 * time.Second)
+	if !limiter.Allow("fresh-peer") || len(limiter.byIP) != 1 || len(limiter.global) != 1 {
+		t.Fatalf("window did not release old peers: byIP=%d global=%d", len(limiter.byIP), len(limiter.global))
+	}
+	for i := 0; i < 4; i++ {
+		if !limiter.Allow("fresh-peer") {
+			t.Fatalf("peer limit early at %d", i)
+		}
+	}
+	if limiter.Allow("fresh-peer") || len(limiter.byIP) != 1 {
+		t.Fatal("per-peer rejection changed tracked peers")
 	}
 }

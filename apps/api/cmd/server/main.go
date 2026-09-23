@@ -62,7 +62,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Addr: addr, Handler: newHandler(database, service, options), ReadHeaderTimeout: 5 * time.Second}
+	server := newAPIServer(addr, newHandler(database, service, options))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
@@ -72,6 +72,15 @@ func run() error {
 		return fmt.Errorf("serve: %w", err)
 	}
 	return nil
+}
+
+func newAPIServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       5 * time.Second,
+	}
 }
 
 // serveUntil joins graceful shutdown before main closes the database. Serve

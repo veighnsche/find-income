@@ -6,6 +6,20 @@ export type Preferences = components['schemas']['PreferencesResponse'];
 export type AgentCredential = components['schemas']['AgentCredential'];
 export type CreatedAgentCredential = components['schemas']['CreatedAgentCredential'];
 
+export class RequestError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RequestError';
+  }
+}
+
+export function isUnauthenticated(cause: unknown): boolean {
+  return cause instanceof RequestError && cause.status === 401;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     credentials: 'same-origin',
@@ -20,7 +34,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     } catch {
       // An unavailable server may not return a JSON envelope.
     }
-    throw new Error(message);
+    throw new RequestError(response.status, message);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -42,7 +56,10 @@ export async function getSession(signal?: AbortSignal): Promise<Session | null> 
   });
   if (response.status === 401) return null;
   if (!response.ok)
-    throw new Error(`Could not read the dashboard session (HTTP ${response.status}).`);
+    throw new RequestError(
+      response.status,
+      `Could not read the dashboard session (HTTP ${response.status}).`,
+    );
   return (await response.json()) as Session;
 }
 

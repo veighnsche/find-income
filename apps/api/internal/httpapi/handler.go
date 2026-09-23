@@ -300,7 +300,8 @@ func newLoginLimiter() *loginLimiter {
 func (l *loginLimiter) Allow(ip string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	cutoff := l.now().Add(-time.Minute)
+	now := l.now()
+	cutoff := now.Add(-time.Minute)
 	keep := func(values []time.Time) []time.Time {
 		kept := values[:0]
 		for _, value := range values {
@@ -311,20 +312,22 @@ func (l *loginLimiter) Allow(ip string) bool {
 		return kept
 	}
 	l.global = keep(l.global)
-	attempts := keep(l.byIP[ip])
-	if len(attempts) >= 5 || len(l.global) >= 30 {
-		l.byIP[ip] = attempts
-		return false
-	}
-	now := l.now()
-	l.byIP[ip] = append(attempts, now)
-	l.global = append(l.global, now)
-	if len(l.byIP) > 1024 {
-		for key, values := range l.byIP {
-			if len(keep(values)) == 0 {
-				delete(l.byIP, key)
-			}
+	for key, values := range l.byIP {
+		active := keep(values)
+		if len(active) == 0 {
+			delete(l.byIP, key)
+		} else {
+			l.byIP[key] = active
 		}
 	}
+	attempts := l.byIP[ip]
+	if len(attempts) >= 5 || len(l.global) >= 30 {
+		return false
+	}
+	if _, exists := l.byIP[ip]; !exists && len(l.byIP) >= 30 {
+		return false
+	}
+	l.byIP[ip] = append(attempts, now)
+	l.global = append(l.global, now)
 	return true
 }
