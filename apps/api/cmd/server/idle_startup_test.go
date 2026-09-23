@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -70,13 +71,27 @@ func TestConfiguredServerStartupLeavesRecruitmentQueued(t *testing.T) {
 	t.Setenv("JOBSEEK_LISTEN_ADDR", addr)
 	serviceCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	finished := make(chan error, 1)
-	go func() { finished <- runWithContext(serviceCtx, nil) }()
+	finished := make(chan struct{})
+	var runErr error
+	go func() {
+		runErr = runWithContext(serviceCtx, nil)
+		close(finished)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-finished:
+		case <-time.After(6 * time.Second):
+			t.Error("server did not finish cleanup")
+		}
+	})
 	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil}}
+	t.Cleanup(client.CloseIdleConnections)
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		response, requestErr := client.Get("http://" + addr + "/api/v1/health")
 		if requestErr == nil {
+			_, _ = io.Copy(io.Discard, response.Body)
 			response.Body.Close()
 			if response.StatusCode != http.StatusOK {
 				t.Fatalf("health status: %d", response.StatusCode)
@@ -99,6 +114,7 @@ func TestConfiguredServerStartupLeavesRecruitmentQueued(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, _ = io.Copy(io.Discard, loginResponse.Body)
 	loginResponse.Body.Close()
 	if loginResponse.StatusCode != http.StatusOK || len(loginResponse.Cookies()) != 1 {
 		t.Fatalf("login: %d", loginResponse.StatusCode)
@@ -124,12 +140,14 @@ func TestConfiguredServerStartupLeavesRecruitmentQueued(t *testing.T) {
 		t.Fatalf("startup advertised recruitment capabilities: status=%d value=%+v decode=%v",
 			statusResponse.StatusCode, capabilities, decodeErr)
 	}
+	// Finish this fixture's connections before measuring idle server shutdown.
+	client.CloseIdleConnections()
 	time.Sleep(120 * time.Millisecond)
 	cancel()
 	select {
-	case err := <-finished:
-		if err != nil {
-			t.Fatal(err)
+	case <-finished:
+		if runErr != nil {
+			t.Fatal(runErr)
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("server did not stop")
