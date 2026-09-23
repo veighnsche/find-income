@@ -56,6 +56,7 @@ type Service struct {
 	sourceCalls     map[string]*sourceCall
 	linkFetch       func(context.Context, string, SourceLinkPage) (SourceLinksSnapshot, error)
 	packConfig      ApplicationPackRuntimeConfig
+	interviewConfig InterviewRuntimeConfig
 }
 
 func NewFromEnvironment(ctx context.Context, db *store.Store) (*Service, error) {

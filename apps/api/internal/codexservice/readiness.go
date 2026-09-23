@@ -16,12 +16,20 @@ import (
 // model/effort, quota and required MCP tools, but starts no work. The caller
 // must still explicitly commission ExecuteRoundTurn through the work loop.
 func (s *Service) CheckRound(ctx context.Context, outcome string) error {
-	if s == nil || ctx == nil || outcome != "discover" && outcome != "prepare" && outcome != "process_input" && outcome != "compare_offers" {
+	if s == nil || ctx == nil || outcome != "discover" && outcome != "prepare" && outcome != "process_input" && outcome != "compare_offers" && outcome != "interview_prepare" && outcome != "interview_debrief" {
 		return ErrUnavailable
 	}
 	if outcome == "prepare" {
 		s.mu.Lock()
 		configured := s.packConfig.ProjectRoot != "" && s.packConfig.TypstPath != "" && s.packConfig.PrivateTempDir != ""
+		s.mu.Unlock()
+		if !configured {
+			return ErrUnavailable
+		}
+	}
+	if outcome == "interview_prepare" {
+		s.mu.Lock()
+		configured := s.interviewConfig.ProjectRoot != "" || s.interviewConfig.LoadSources != nil
 		s.mu.Unlock()
 		if !configured {
 			return ErrUnavailable

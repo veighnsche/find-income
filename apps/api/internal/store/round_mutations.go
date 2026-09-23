@@ -36,13 +36,15 @@ const (
 	RoundContextTool                    = "round.context"
 	RoundJevRequest                     = "jev.request"
 	RoundDeliverApplication             = "application.delivery"
+	RoundInterviewBriefSave             = "interview.brief_save"
+	RoundInterviewDebriefSave           = "interview.debrief_save"
 )
 
 // The caller chooses an operation, never its charge. Later connectors can add
 // reviewed operations here without changing the reservation ledger.
 func RoundOperationCost(operation string) (RoundAllowance, bool) {
 	switch operation {
-	case RoundCreateCompany, RoundCreateOpportunity, RoundSaveSourceOpportunity, RoundCorrectPreferences, RoundCorrectEvidence, RoundCorrectOpportunity, RoundRelationshipCounterpartyCreate, RoundRelationshipEventCreate, RoundRelationshipRouteCreate, RoundRelationshipCorrect:
+	case RoundCreateCompany, RoundCreateOpportunity, RoundSaveSourceOpportunity, RoundCorrectPreferences, RoundCorrectEvidence, RoundCorrectOpportunity, RoundRelationshipCounterpartyCreate, RoundRelationshipEventCreate, RoundRelationshipRouteCreate, RoundRelationshipCorrect, RoundInterviewBriefSave, RoundInterviewDebriefSave:
 		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
 	case RoundFetchSource, RoundSearchSource:
 		return RoundAllowance{Requests: 1, Tools: 1}, true
@@ -77,6 +79,8 @@ type RoundMutationInput struct {
 	ApplicationPack    *ApplicationPackMutationInput   `json:"applicationPack,omitempty"`
 	OfferComparison    *OfferComparisonMutationInput   `json:"offerComparison,omitempty"`
 	Relationship       *RelationshipMutationInput      `json:"relationship,omitempty"`
+	InterviewBrief     *InterviewBriefMutation         `json:"interviewBrief,omitempty"`
+	InterviewDebrief   *InterviewDebriefMutation       `json:"interviewDebrief,omitempty"`
 	Capability         string                          `json:"-"`
 }
 
@@ -130,7 +134,14 @@ func validRoundMutation(input RoundMutationInput) bool {
 		input.Operation != RoundRelationshipCounterpartyCreate && input.Operation != RoundRelationshipEventCreate && input.Operation != RoundRelationshipRouteCreate && input.Operation != RoundRelationshipCorrect && input.Relationship != nil {
 		return false
 	}
+	if input.Operation != RoundInterviewBriefSave && input.InterviewBrief != nil || input.Operation != RoundInterviewDebriefSave && input.InterviewDebrief != nil {
+		return false
+	}
 	switch input.Operation {
+	case RoundInterviewBriefSave:
+		return input.InterviewBrief != nil && input.InterviewDebrief == nil && input.OwnerInstructionID == "" && input.ResourceID == "opportunity:"+input.InterviewBrief.OpportunityID && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.ApplicationPack == nil && input.Relationship == nil
+	case RoundInterviewDebriefSave:
+		return input.InterviewDebrief != nil && input.InterviewDebrief.DebriefID != "" && input.InterviewBrief == nil && input.OwnerInstructionID == "" && input.ResourceID == "interview:"+input.InterviewDebrief.InterviewID && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.ApplicationPack == nil && input.Relationship == nil
 	case RoundCreateCompany:
 		return input.Company != nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.ResourceID == "campaign:active"
 	case RoundCreateOpportunity:
@@ -487,7 +498,11 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 	var entityID, kind, auditID string
 	var revision int64
 	now := utcNow()
-	if input.Operation == RoundSaveSourceOpportunity {
+	if input.Operation == RoundInterviewBriefSave {
+		entityID, kind, revision, err = writeInterviewBriefTx(ctx, tx, round, input.ExpectedRevision, *input.InterviewBrief)
+	} else if input.Operation == RoundInterviewDebriefSave {
+		entityID, kind, revision, err = writeInterviewDebriefTx(ctx, tx, round, *input.InterviewDebrief)
+	} else if input.Operation == RoundSaveSourceOpportunity {
 		entityID, revision, auditID, err = saveSourcedOpportunityTx(ctx, tx, actor, *input.SourceOpportunity)
 		kind = "opportunity"
 	} else if input.Operation == RoundPrepareApplicationPack {

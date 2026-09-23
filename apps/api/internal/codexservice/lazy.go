@@ -12,13 +12,14 @@ import (
 // Lazy builds the bridge only for an explicit control or commissioned work
 // request. Health and idle startup never construct its MCP server.
 type Lazy struct {
-	ctx        context.Context
-	db         *store.Store
-	mu         sync.Mutex
-	service    *Service
-	err        error
-	closed     bool
-	packConfig *ApplicationPackRuntimeConfig
+	ctx             context.Context
+	db              *store.Store
+	mu              sync.Mutex
+	service         *Service
+	err             error
+	closed          bool
+	packConfig      *ApplicationPackRuntimeConfig
+	interviewConfig *InterviewRuntimeConfig
 }
 
 func NewLazy(ctx context.Context, db *store.Store) *Lazy { return &Lazy{ctx: ctx, db: db} }
@@ -28,6 +29,14 @@ func (l *Lazy) SetApplicationPackConfig(cfg ApplicationPackRuntimeConfig) {
 	defer l.mu.Unlock()
 	if !l.closed && l.service == nil {
 		l.packConfig = &cfg
+	}
+}
+
+func (l *Lazy) SetInterviewConfig(cfg InterviewRuntimeConfig) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.closed && l.service == nil {
+		l.interviewConfig = &cfg
 	}
 }
 
@@ -41,6 +50,9 @@ func (l *Lazy) get() (*Service, error) {
 		l.service, l.err = NewFromEnvironment(l.ctx, l.db)
 		if l.err == nil && l.packConfig != nil {
 			_ = l.service.ConfigureApplicationPacks(*l.packConfig)
+		}
+		if l.err == nil && l.interviewConfig != nil {
+			_ = l.service.ConfigureInterviews(*l.interviewConfig)
 		}
 	}
 	return l.service, l.err

@@ -34,21 +34,27 @@ type OfferTradeoffs interface {
 	RunOfferTradeoff(context.Context, jevservice.Binding, jev.OfferTradeoffInput) (jev.OfferTradeoffResult, error)
 }
 
+type InterviewFocusEvaluator interface {
+	RunInterviewFocus(context.Context, jevservice.Binding, jev.InterviewFocusInput) (jev.InterviewFocusResult, error)
+}
+
 type SourceCollector interface {
 	AcquireLever(context.Context, collector.Request) (collector.Batch, error)
 }
 
 type Engine struct {
-	Store       *store.Store
-	Runtime     Runtime
-	Decisions   Decisions
-	Tradeoffs   OfferTradeoffs
-	Collector   SourceCollector
-	InputReader OwnerSourceReader
-	PackSources PackSourceLoader
-	Context     context.Context
-	mu          sync.Mutex
-	active      map[string]*activeWorker
+	Store            *store.Store
+	Runtime          Runtime
+	Decisions        Decisions
+	Tradeoffs        OfferTradeoffs
+	InterviewSources PackSourceLoader
+	InterviewFocus   InterviewFocusEvaluator
+	Collector        SourceCollector
+	InputReader      OwnerSourceReader
+	PackSources      PackSourceLoader
+	Context          context.Context
+	mu               sync.Mutex
+	active           map[string]*activeWorker
 }
 
 type activeWorker struct {
@@ -83,6 +89,9 @@ func (e *Engine) WaitRoundStopped(ctx context.Context, id string) error {
 }
 
 func (e *Engine) CheckRound(ctx context.Context, outcome string) error {
+	if outcome == "interview_prepare" || outcome == "interview_debrief" {
+		return e.checkInterview(ctx, outcome)
+	}
 	if outcome == "compare_offers" {
 		return e.checkOfferComparison(ctx)
 	}
@@ -99,6 +108,9 @@ func (e *Engine) CheckRound(ctx context.Context, outcome string) error {
 }
 
 func (e *Engine) LaunchRound(_ context.Context, r store.Round) error {
+	if r.Outcome == "interview_prepare" || r.Outcome == "interview_debrief" {
+		return e.launchInterview(r)
+	}
 	if r.Outcome == "compare_offers" {
 		return e.launchOfferComparison(r)
 	}
