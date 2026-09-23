@@ -1,8 +1,8 @@
 # Recruitment agency — full task list and concurrent execution guide
 
-Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the owner's active completion goal. Reviewed code is committed through `5147633`: source discovery and immutable Typst preparation in `ed64a8b`, private deployment packaging in `5147633`. Production integration continues with I05-B and I10-B on Sol High, I15-B and I18-A on Sol Medium.
+Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the owner's active completion goal. Reviewed code is committed through `5147633`: source discovery and immutable Typst preparation in `ed64a8b`, private deployment packaging in `5147633`. Production integration continues with I05-B and I08-B on Sol High, I15-C and I11-B on Sol Medium. I10 and I18 have handed off tested slices for integration review.
 
-**Current position: 5 tasks accepted, 8 partially implemented, 1 newly in progress, 13 not started or conditional.** Accepted: I01, I02, I03, I04, I09. Partial: I05, I06, I07, I08, I10, I11, I12, I15. Newly in progress: I18. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 9 partially implemented, 13 not started or conditional.** Accepted: I01, I02, I03, I04, I09. Partial: I05, I06, I07, I08, I10, I11, I12, I15, I18. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -30,14 +30,16 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I05-B | Sol High | Production work loop; shared schema/contracts/registration/startup; `internal/agency/**`. |
-| I10-B | Sol High | `internal/jevservice/**`, needed Jev helpers and new `store/jev_assessments.go`: durable qualification/organisation and recorded pack relevance. |
-| I15-B | Sol Medium | `internal/applicationpacks/**`, named store files and new Codex/HTTP pack handlers: guarded prepare/review/download flow. |
-| I18-A | Sol Medium | New relationships package, named store/HTTP files: sourced introductions and multiple routes to one role. |
+| I05-B | Sol High | Production work loop; shared schema/contracts/registration/startup; `internal/agency/engine.go`. |
+| I08-B | Sol High | Discovery verification and guarded registration of a supported employer board from exact source provenance. |
+| I15-C | Sol Medium | Pack replay/deadline corrections and new `internal/agency/packs.go` prepare outcome. |
+| I11-B | Sol Medium | Web pack review/preparation, sourced relationships and truthful Jev assessment display. |
 
-I08 and I12 have handed off their reviewed slices and are idle. I11 is idle pending stable integrated contracts. Core alone changes shared files; other owners supply narrow interfaces. New relationships task: `01a0cfa3-1a77-7b21-af23-7e2bafefad41`; pack task: `01a0cf93-fcaf-7422-9979-e8811994755b`. Four active workers is the ceiling.
+I10 and I18 have handed off their code and are idle. Runtime I12 is idle after packaging. Core alone changes shared files; the pack worker owns the explicitly handed-over new agency pack file. At most four live workers; a briefly overlapping read-projection correction has finished. Root reviews coherent handoffs before committing them.
 
-Root saved I08 live research and three reworded Jev consultations under `implementation-notes/implementation/I08-research/`; see `discovery-source-readiness.md`. The adapter/store slice passes fixtures; automatic official-source verification remains open. I12 packaging is available under `ops/i12/`; no selected-host deployment or live sign-in is claimed. Root also captured 11 full job source snapshots for I14 preparation, including one extra reference record; expected judgments and real quality acceptance remain open.
+Reviewed checkpoint: `5147633`, including discovery/Typst helpers in `ed64a8b`. Current coupled integration is uncommitted while the prepare interfaces land. Do not count an intermediate compiling package as full journey acceptance.
+
+Root saved I08 research and three reworded consultations under `implementation-notes/implementation/I08-research/`. Official-source verification is active in I08-B. I12 package is under `ops/i12/`; host selection and actual sign-in/isolation remain open. I14 now has eleven full source snapshots and a reviewed 8-real/3-synthetic responsibility corpus. Four Jev cases matched reviewed alternatives; the fifth stopped at HTTP529. All calls were retained, no automatic retry or overall quality claim.
 
 ### Initial wave ownership and handoff record
 
@@ -356,9 +358,9 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 ### I18 — Add lightweight recruiter, referral and contact records
 
-- [ ] **In progress** · GPT-6 Sol / Medium · Dependencies: I15.
+- [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I15.
 
-**Remaining work:** Implement minimal contact, recruiter, referral and route relationships with Codex-owned intake/correction.
+**Remaining work:** Sourced relationship persistence and guarded reassociation fixtures pass. Finish web review/contextual correction and full selected-role integration.
 
 **Task scope:** Implement modest origin/route/counterparty/event relationships, pre-vacancy leads and Codex-owned drafting/correction. Link multiple routes to one opportunity. Preserve assignment-specific qualification and current profile; no general CRM.
 

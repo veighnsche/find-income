@@ -149,7 +149,7 @@
       "remaining_work": "Implement researched Himalayas public read-method adapter with recorded requests/responses and bounded candidates/continuation; integrate core authority and official source verification. Root live probes and three reworded Jev consultations are saved, but no dashboard acquisition or real shortlist is accepted.",
       "thread_id": "01a0ce8e-2459-78d0-9843-ac474acffe5f",
       "host_id": "local",
-      "active_slice": "Handed off; worker idle",
+      "active_slice": "I08-B",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
       "review": "Committed ed64a8b: atomic scoped candidate staging, before-send request capture and expiry handling; focused tests pass. Live discovery/official-source verification remains open."
@@ -188,10 +188,10 @@
       "status": "integration_slice_accepted",
       "thread_id": "01a0ce8e-5f14-76f0-b700-ab7a67a8f7a0",
       "host_id": "local",
-      "active_slice": "I10-B",
+      "active_slice": "I10-B and current read projection handed off; worker idle",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
-      "review": "Coordinator reviewed durable one-charge-per-HTTP capture, raw failure/invalid/usage evidence and Stop fencing; corrected saved round deadline and ran Jev/service tests. Supplied-input slice accepted, full I10 unchecked.",
+      "review": "Store/service helpers and current projection reviewed; focused tests pass. Shared HTTP current-path integration and quality acceptance remain open.",
       "remaining_work": "Wire recorded semantic decisions into production acquisition and shortlist/research/next-outcome execution; verify currentness and reuse, provide saved review reads, expose omitted candidates and incomplete source text, and run real-case quality evaluation. Durable attempt capture is implemented and reviewed."
     },
     {
@@ -210,7 +210,7 @@
       "status": "integration_slice_accepted",
       "thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
       "host_id": "local",
-      "active_slice": "I11-A reviewed and committed9487771; no active worker.",
+      "active_slice": "I11-B",
       "active_model": "gpt-6-sol",
       "active_effort": "medium",
       "review": "Reviewed server-backed instruction/decision/cards/history code and actual narrow-screen fixture screenshots/interaction report including conflict/idempotency/Stop race. Web lint/build and root check/build pass. Live loop/onboarding/real results remain incomplete.",
@@ -298,7 +298,7 @@
       "remaining_work": "Build one evidence-backed Typst PDF/answer pack and its review/correction flow from approved career assets and a selected role. Compile against fixtures while discovery is being finished; no asset-library project is required.",
       "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
       "host_id": "local",
-      "active_slice": "I15-B",
+      "active_slice": "I15-C",
       "active_model": "gpt-6-sol",
       "active_effort": "medium",
       "review": "Committed ed64a8b: pinned truthful Typst fixture/service and immutable store helper reviewed. Guarded tool/HTTP/review integration underway."
@@ -346,13 +346,14 @@
       "scope": "Implement modest origin/route/counterparty/event relationships, pre-vacancy leads and Codex-owned drafting/correction. Link multiple routes to one opportunity. Preserve assignment-specific qualification and current profile; no general CRM.",
       "acceptance": "A recruiter introduction without an opening stays an unqualified lead; one direct application and one referral to the same role do not duplicate it. No contact-entry forms, invented relationships, sends or claimed referral advantage.",
       "selection_reason": "Ordinary domain/API/UI integration on existing records uses Sol Medium.",
-      "status": "independent_slice_dispatched",
+      "status": "partial",
       "remaining_work": "Implement minimal contact, recruiter, referral and route relationships with Codex-owned intake/correction.",
-      "active_slice": "I18-A",
+      "active_slice": "Handed off; worker idle",
       "active_model": "gpt-6-sol",
       "active_effort": "medium",
       "thread_id": "01a0cfa3-1a77-7b21-af23-7e2bafefad41",
-      "host_id": "local"
+      "host_id": "local",
+      "review": "Root reviewed sourced relationship helpers and corrected mistaken-link reassociation. Guarded fixture, wrong-scope rejection and stale correction tests pass; web integration pending."
     },
     {
       "id": "I19",
@@ -514,20 +515,20 @@
       "effort": "high"
     },
     {
-      "id": "I10-B",
-      "task": "I10",
+      "id": "I08-B",
+      "task": "I08",
       "model": "gpt-6-sol",
       "effort": "high"
     },
     {
-      "id": "I15-B",
+      "id": "I15-C",
       "task": "I15",
       "model": "gpt-6-sol",
       "effort": "medium"
     },
     {
-      "id": "I18-A",
-      "task": "I18",
+      "id": "I11-B",
+      "task": "I11",
       "model": "gpt-6-sol",
       "effort": "medium"
     }
