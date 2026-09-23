@@ -7,8 +7,8 @@
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
     "I13-C",
-    "I13-A report finalization",
-    "I26-A",
+    "I13-N",
+    "I26-A correction",
     "I20-B"
   ],
   "implementation_acceptance": [

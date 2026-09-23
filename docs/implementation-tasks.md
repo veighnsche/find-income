@@ -1,6 +1,6 @@
 # Recruitment agency — full task list and concurrent execution guide
 
-Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. API/contracts are committed in `2fdfe7d`, deployment configuration in `717ef93`, and web review in `8c8b66d`. Root check/test/build pass. Core review corrections, recovery and an isolated email adapter run concurrently while the independent report is finalized.
+Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. API/contracts are committed in `2fdfe7d`, deployment configuration in `717ef93`, and web review in `8c8b66d`. Root check/test/build pass. Core review corrections, recovery and an isolated email adapter run concurrently with focused native-tool research.
 
 **Current position: 5 tasks accepted, 10 partial, 3 active review/research/implementation tasks, 9 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I12, I14, I15, I18. Active: I13, I20, I26. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
@@ -31,11 +31,11 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
 | I13-C core corrections | Sol High | Existing round lifecycle, agency collector continuation and scoped context files/tests only. |
-| I13-A report finalization | Astra High | Read-only review report for committed `717ef93`; no new code inspection during fixes. |
+| I13-N native-tool evidence | Sol High | Research exact pinned Codex controls; notes only, no runtime edits or live model calls. |
 | I26-A | Sol Medium | `ops/i26/**` current-format backup/restore with synthetic records/assets. |
 | I20-B | Sol High | New `internal/delivery/**` SMTP material/transport against synthetic destinations; no product send endpoint. |
 
-Web, discovery, Jev and relationship workers are idle. The pack worker now owns only the disjoint delivery package. Core may correct the three named integration findings; runtime/ops isolation changes are not yet assigned. Four live workers maximum, including a reviewer finishing a report.
+Web, discovery, Jev and relationship workers are idle. The pack worker now owns only the disjoint delivery package. Core may correct the three named integration findings; runtime/ops isolation changes are not yet assigned. Four live workers maximum. The Astra independent reviewer has handed off and is idle.
 
 Reviewed checkpoints: API `2fdfe7d`, deployment `717ef93`, UI `8c8b66d`. Root `pnpm check`, `pnpm test`, `pnpm build` pass after contract formatting. Web has no automated test files; controlled browser interactions and screenshots were reviewed. The e2e script remains a placeholder.
 
