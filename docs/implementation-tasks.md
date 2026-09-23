@@ -2,7 +2,7 @@
 
 Updated 24 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. Current ownership, reviewed checkpoints and remaining acceptance are recorded below; historical test passes do not establish completion of the evolving worktree.
 
-**Current position: 5 tasks accepted, 17 partial, 5 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20–I22, I24–I26. I24 recovery correction, I25 web and I10 cross-outcome advice are active. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 17 partial, 5 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20–I22, I24–I26. I10 cross-outcome advice is active; interview and offer backend/UI slices are reviewed and committed. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -30,12 +30,12 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I24 interview backend | Sol High | Correct isolated61a5d0b recovery phase ordering after reproduced P1/P2 findings; no main or web edits. |
-| I10 cross-outcome advice | Sol High | Isolated `/private/tmp/find-income-i10-advice` at7ee48d3; saved charged advice after useful supported outcomes, explicit scope and pure idle reads. |
-| I25 offer UI | Sol Medium | Main web/smoke only, using interface867f480; complete offer input, sourced comparisons and finite round controls. I24 UI committed54b7977. |
-| I25 backend/review | Sol High / Astra Medium | Complete and idle: reviewed backend integrated7ee48d3; full root Go suite and generated checks pass. |
+| I10 cross-outcome advice | Sol High | Isolated `/private/tmp/find-income-i10-advice` at7ee48d3, incorporating reviewedc85a617; saved charged advice after each useful supported outcome, explicit scope and pure idle reads. |
+| I24 interview backend | Sol High | Reviewed and integratedc85a617; writer idle. Actual interview quality and live host acceptance remain. |
+| I25 offer UI/backend | Sol Medium / Sol High | Reviewed and integratedc8ec6e6/7ee48d3; writers idle. Actual offer quality and live host acceptance remain. |
+| Independent integration review | Astra Medium | Complete and idle; recovery, stale-context replay and exact request identity rechecks passed. |
 
-The main backend checkpoint is **7ee48d3**, and the interview web checkpoint is **54b7977**. The coordinator ran the full Go suite, both generated-contract checks, web lint/TypeScript and production-build Chromium smoke. Independent I22 recheck closed all three delivery findings; all13 reviewed file hashes matched before commit. Root reproduced and rechecked the omitted preexisting dismissal defect. Saved recommendations are now recoverable in a fresh browser through a pure latest-completed read. These are local/synthetic checks, not live recruitment acceptance. Cross-outcome advice, interview recovery correction and contextual offer UI run concurrently. The offer backend frozen and integration reviews found no actionable defects; root full Go suite, generated checks and all six reviewed hashes passed before7ee48d3. The interview review reproduced two authority defects; three fresh Jev consultations used6905 reported tokens and disagreed. The correction follows the code reproduction. Interview UI corrections pass root lint/TypeScript and production-build Chromium fixtures; backend integration remains pending. Offer contract867f480 is wired by reviewed backend7ee48d3. Interview contract c55f562 is a shared interface checkpoint only: it compiles and both generated checks pass, but main interview routes are not wired until reviewed backend integration.
+The main backend checkpoint is **c85a617**, and the web checkpoint is **c8ec6e6**. The coordinator ran the full Go suite, both generated-contract checks, web lint/TypeScript and production-build Chromium smoke. Independent I22 recheck closed all three delivery findings; all13 reviewed file hashes matched before commit. Root reproduced and rechecked the omitted preexisting dismissal defect. Saved recommendations are now recoverable in a fresh browser through a pure latest-completed read. These are local/synthetic checks, not live recruitment acceptance. Cross-outcome advice continues in isolation; interview/offer writers and the independent reviewer are idle after their committed handoffs. The offer backend frozen and integration reviews found no actionable defects; root full Go suite, generated checks and all six reviewed hashes passed before7ee48d3. The interview review reproduced two authority defects; three fresh Jev consultations used6905 reported tokens and disagreed. The correction follows the code reproduction. Interview backendc85a617 is reviewed and integrated; recovery, stale-context debrief replay and exact request-key fixes pass independent/root checks. All15 reviewed hashes matched before commit. Offer contract867f480 is wired by reviewed backend7ee48d3. Interview contractc55f562 is wired by backendc85a617. Offer UIc8ec6e6 passes full then targeted corrected Chromium checks, including fractional/scientific Jev payloads and exact readable pay.
 
 Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; contextual input and shared pack transaction integration committed2279c3f after independent correction review, full Go suite and race-enabled recovery tests. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. Contextual-input UI is committed12b138d after root lint/TypeScript and production-build browser checks; real runtime acceptance remains open. The web recommendation and delivery controls are committed235441d; interview helpers are committed7299c54 after root review/tests, and the I25 offer helpers are reviewed and committed in de84e23; both domain slices still need commissioned persistence/UI integration. Four live workers maximum.
 
@@ -456,7 +456,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I15, I18.
 
-**Remaining work:** Correct the independently reproduced parent-turn recovery bypass in isolated backend61a5d0b, recheck and integrate it with main delivery recovery. Main contextual UI corrections pass root lint/TypeScript and Chromium fixtures; UI committed54b7977, verify combined routes, then evaluate real interview quality.
+**Remaining work:** Evaluate actual interview preparation/debrief usefulness and authenticated end-to-end operation. Reviewed backendc85a617 and UI54b7977/c8ec6e6 are integrated; saved next-action advice is the active I10 follow-on.
 
 **Task scope:** Implement one-interview preparation using employer/context evidence and truthful examples, plus contextual debrief capture. Accept owner-supplied complete interview context without requiring inbox or calendar integration.
 
@@ -468,7 +468,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I01, I09, I18.
 
-**Remaining work:** Complete and review contextual offer UI against integrated backend7ee48d3, including exact pending-request identity and fresh-browser outcome-specific retrieval, then evaluate actual offer cases. Backend synthetic execution is reviewed but does not complete live I25 acceptance.
+**Remaining work:** Evaluate actual offer extraction/comparison and authenticated end-to-end operation. Backend7ee48d3 and contextual UIc8ec6e6 are integrated; cross-outcome advice remains active I10 work.
 
 **Task scope:** Implement sourced offer intake/comparison, Go exact comparable amounts and Jev qualitative tradeoffs with separate real-case evaluation. Accept complete supplied offers as well as later inbox-derived evidence; no inbox dependency.
 
