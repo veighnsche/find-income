@@ -168,7 +168,7 @@ func TestRecordRoutesRealHTTPAuthRevisionsAndAudit(t *testing.T) {
 	status, body = h.do("GET", "/companies", "", readToken, "", "", nil)
 	requireStatus(t, status, 200, body)
 
-	vacancy := fmt.Sprintf(`{"companyId":%q,"title":"Platform Engineer","kind":"employment","stage":"saved","sourceUrl":"https://jobs.example.test/1","originalText":"Backend work at 32 hours","notes":"Ask about pay","compensation":{"currency":"EUR","minAmountCents":600000,"period":"month","referenceHours":40,"basis":"base"}}`, companyID)
+	vacancy := fmt.Sprintf(`{"companyId":%q,"title":"Platform Engineer","kind":"employment","stage":"saved","sourceUrl":"https://jobs.example.test/1","originalText":"Platform work at 37.5 hours","notes":"Ask about pay","compensation":{"currency":"EUR","minAmountCents":600000,"period":"month","referenceHours":"37.5","basis":"base"}}`, companyID)
 	status, body = h.do("POST", "/opportunities", vacancy, readToken, "", "", nil)
 	requireStatus(t, status, 403, body) // openings:ingest does not grant arbitrary CRUD
 	status, body = h.do("POST", "/opportunities", vacancy, writeToken, "", "", nil)
@@ -184,7 +184,7 @@ func TestRecordRoutesRealHTTPAuthRevisionsAndAudit(t *testing.T) {
 	requireStatus(t, status, 200, body)
 	change := decodeObject(t, body)
 	if change["actorKind"] != "agent" || change["actorId"] != writeAgent.ID || change["entityId"] != opportunityID ||
-		change["snapshot"].(map[string]any)["originalText"] != "Backend work at 32 hours" {
+		change["snapshot"].(map[string]any)["originalText"] != "Platform work at 37.5 hours" {
 		t.Fatalf("change attribution/snapshot: %+v", change)
 	}
 	status, body = h.do("GET", "/changes/"+companyChangeID, "", readToken, "", "", nil)
@@ -196,7 +196,7 @@ func TestRecordRoutesRealHTTPAuthRevisionsAndAudit(t *testing.T) {
 	status, body = h.owner("PATCH", "/opportunities/"+opportunityID, `{"expectedRevision":1,"notes":"Confirmed interview date"}`)
 	requireStatus(t, status, 200, body)
 	updated := decodeObject(t, body)["opportunity"].(map[string]any)
-	if updated["revision"] != float64(2) || updated["notes"] != "Confirmed interview date" || updated["originalText"] != "Backend work at 32 hours" {
+	if updated["revision"] != float64(2) || updated["notes"] != "Confirmed interview date" || updated["originalText"] != "Platform work at 37.5 hours" {
 		t.Fatalf("notes patch changed source or revision: %+v", updated)
 	}
 	status, body = h.owner("PATCH", "/opportunities/"+opportunityID, `{"expectedRevision":1,"title":"Unsaved stale edit"}`)
@@ -230,7 +230,7 @@ func TestRecordRoutesRealHTTPAuthRevisionsAndAudit(t *testing.T) {
 	}
 	status, body = h.owner("GET", "/changes/"+changeID)
 	requireStatus(t, status, 200, body)
-	if old := decodeObject(t, body)["snapshot"].(map[string]any); old["originalText"] != "Backend work at 32 hours" || old["sourceUrl"] != "https://jobs.example.test/1" {
+	if old := decodeObject(t, body)["snapshot"].(map[string]any); old["originalText"] != "Platform work at 37.5 hours" || old["sourceUrl"] != "https://jobs.example.test/1" {
 		t.Fatalf("earlier source snapshot was overwritten: %+v", old)
 	}
 	status, body = h.owner("GET", "/opportunities?limit=1")

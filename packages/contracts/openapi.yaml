@@ -90,6 +90,31 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+    put:
+      operationId: updatePreferences
+      summary: Replace the current owner's qualification preferences
+      description: Owner session, same-origin CSRF token, and current expectedVersion are required. A stale version returns 409; the caller must review its draft against the latest preferences.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdatePreferencesRequest' }
+      responses:
+        '200':
+          description: Saved preference version and audited change
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PreferencesMutation' }
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /agent-credentials:
     get:
       operationId: listAgentCredentials
@@ -254,6 +279,265 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /codex/status:
+    get:
+      operationId: getCodexStatus
+      summary: Read isolated Codex account and ingestion readiness
+      description: Owner session required. Status never includes a sign-in code. Ready requires connected account and verified scoped tools.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Safe connection state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CodexStatus' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /codex/connect:
+    post:
+      operationId: connectCodex
+      summary: Start owner device sign-in for the isolated Codex runner
+      description: Owner cookie, allowed Origin and X-CSRF-Token required. Returns an official verification URL and short-lived user code only to the owner.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Device sign-in instructions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CodexConnection' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/InternalError' }
+  /codex/connect/cancel:
+    post:
+      operationId: cancelCodexConnect
+      summary: Cancel the current owner device sign-in attempt
+      security: [{ cookieAuth: [] }]
+      responses:
+        '204': { description: Sign-in attempt cancelled or absent }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /runtime-status:
+    get:
+      operationId: getRuntimeStatus
+      summary: Read whether ingestion and organisation workers are mounted
+      description: Availability reflects actual server startup, not the presence of queued jobs.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Runtime worker availability
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeStatus' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /organisation/categories:
+    get:
+      operationId: getOrganisationCategories
+      summary: Read the owner's current category definitions
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Current categories, or version zero before configuration
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganisationCategorySet' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: updateOrganisationCategories
+      summary: Replace the owner's organisation categories
+      description: Owner cookie, allowed Origin and X-CSRF-Token required. Empty categories disable new organisation jobs. This does not change opportunity stage or qualification.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateOrganisationCategoriesRequest' }
+      responses:
+        '200':
+          description: Saved category version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganisationCategorySet' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /organisation/summaries:
+    get:
+      operationId: getOrganisationSummaries
+      summary: Read organisation status for up to 100 loaded opportunities
+      description: Bearer credentials require opportunities:read. Comma-separated IDs are bounded to 100; missing IDs are omitted.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Current summaries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganisationSummaryList' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /collector-boards:
+    get:
+      operationId: listCollectorBoards
+      summary: List configured collection boards and their last observed run status
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Collection board settings and run status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectorBoardList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createCollectorBoard
+      summary: Configure a Lever board for scheduled collection
+      description: Owner cookie, allowed Origin and X-CSRF-Token required. Configuring a board does not imply that a scan or ingestion has completed.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCollectorBoardRequest' }
+      responses:
+        '201':
+          description: Saved collection board
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectorBoard' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /collector-boards/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    put:
+      operationId: updateCollectorBoard
+      summary: Enable, pause, or change the interval of a collection board
+      description: Owner cookie, allowed Origin and X-CSRF-Token required. Board provider/site/region are immutable; disable and create a new board to change identity.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCollectorBoardRequest' }
+      responses:
+        '200':
+          description: Updated collection board
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectorBoard' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /opportunities/{id}/organisation:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: getOpportunityOrganisation
+      summary: Read current and historical organisation status
+      description: Bearer credentials require opportunities:read. Category descriptions and source facts are captured at assessment time; source references are separate from the model decision.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Organisation result and status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganisationView' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /ingestions:
+    get:
+      operationId: listIngestions
+      summary: List durable vacancy submissions and collection results
+      description: Owner session required. Results include pending and failed submissions; processing status is derived from the job record.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Ingestion page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IngestionPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: submitIngestion
+      summary: Persist a vacancy URL or full text for processing
+      description: Owner cookie or bearer credential with openings:ingest. Cookie mutations require allowed Origin and X-CSRF-Token. Origin and actor derive from credentials. The source and queued job are saved atomically. Submission does not imply processing or an opportunity was created.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitIngestionRequest' }
+      responses:
+        '202':
+          description: Durable queued submission, including an idempotent repeat
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IngestionRequest' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /ingestions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: getIngestion
+      summary: Read durable processing status and linked opportunity
+      description: Owner can read all submissions. A bearer credential with openings:ingest can read only its own submissions.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Ingestion status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IngestionRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /ingestions/{id}/retry:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    post:
+      operationId: retryIngestion
+      summary: Retry a failed submission or add full text when the URL needs it
+      description: Owner cookie or bearer credential with openings:ingest. A bearer credential can retry only its own submission. Cookie mutations require allowed Origin and X-CSRF-Token. Only terminal failed or needs_text submissions can be retried.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RetryIngestionRequest' }
+      responses:
+        '202':
+          description: New queued job for the existing submission
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IngestionRequest' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /opportunities:
     get:
       operationId: listOpportunities
@@ -363,6 +647,197 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /actions:
+    get:
+      operationId: listActions
+      summary: List follow-up actions in creation order
+      description: Bearer credentials require actions:read. Filters are bound to the cursor. Actions for archived opportunities remain readable.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, completed, cancelled] }
+        - name: opportunityId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Bounded current-action page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActionPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createAction
+      summary: Create an open follow-up action
+      description: Bearer credentials require actions:write. Cookie mutations require Origin and X-CSRF-Token. An opportunity link must target an active opportunity. Contact links and sent events are unavailable.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateActionRequest' }
+      responses:
+        '201':
+          description: New action and immutable audit change reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActionMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /actions/due:
+    get:
+      operationId: listDueActions
+      summary: List open actions due at an explicit clock
+      description: Bearer credentials require actions:read. Date-only actions are due on their calendar date in calendarTimezone; timed actions are due at their absolute instant. Clock and timezone are bound to the cursor.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/ActionClock'
+        - $ref: '#/components/parameters/ActionCalendarTimezone'
+      responses:
+        '200':
+          description: Bounded due-action page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActionPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /actions/overdue:
+    get:
+      operationId: listOverdueActions
+      summary: List open actions overdue at an explicit clock
+      description: Bearer credentials require actions:read. Date-only actions become overdue on a later local calendar day; timed actions become overdue after their absolute instant. Clock and timezone are bound to the cursor.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/ActionClock'
+        - $ref: '#/components/parameters/ActionCalendarTimezone'
+      responses:
+        '200':
+          description: Bounded overdue-action page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActionPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /actions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: getAction
+      summary: Read a follow-up action
+      description: Bearer credentials require actions:read.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Current action
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Action' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: patchAction
+      summary: Patch an open action at its expected revision
+      description: Bearer credentials require actions:write. Omitted fields are unchanged. Cookie mutations require Origin and X-CSRF-Token. A 409 includes currentAction for deliberate reconciliation; no automatic retry occurs.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchActionRequest' }
+      responses:
+        '200':
+          description: Updated action and audit change reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActionMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /actions/{id}/reschedule:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: rescheduleAction
+      summary: Replace an open action's deadline at its expected revision
+      description: Bearer credentials require actions:write. The due object returned by GET is a valid replacement. A 409 includes currentAction.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RescheduleActionRequest' }
+      responses:
+        '200':
+          description: Rescheduled action and audit change reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActionMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /actions/{id}/complete:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: completeAction
+      summary: Complete an open action once
+      description: Bearer credentials require actions:write. A 409 includes currentAction; no duplicate completion or audit is written.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionTransitionRequest' }
+      responses:
+        '200':
+          description: Completed action and audit change reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActionMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /actions/{id}/cancel:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: cancelAction
+      summary: Cancel an open action once
+      description: Bearer credentials require actions:write. A 409 includes currentAction; no duplicate cancellation or audit is written.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionTransitionRequest' }
+      responses:
+        '200':
+          description: Cancelled action and audit change reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActionMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /changes:
     get:
       operationId: listRecordChanges
@@ -404,6 +879,44 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /opportunities/{id}/offer-option-sets:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: listCurrentOfferOptionSets
+      summary: Read current source-backed offer alternatives
+      description: Bearer credentials require opportunities:read. Multiple current sets may require clarification before choosing an option.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Current alternatives
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OfferOptionSetList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: createOfferOptionSet
+      summary: Review an exact source quote that explicitly offers alternatives
+      description: Bearer credentials require evidence:write. The actor and option IDs are server derived. Cookie mutations require Origin and CSRF.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOfferOptionSetRequest' }
+      responses:
+        '201':
+          description: Saved immutable option set
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OfferOptionSetMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /opportunities/{id}/evidence-sources:
     parameters:
       - $ref: '#/components/parameters/RecordId'
@@ -588,7 +1101,7 @@ paths:
       - $ref: '#/components/parameters/RecordId'
     get:
       operationId: listQualificationHistory
-      summary: Page immutable evaluations, including unverified legacy history
+      summary: Page immutable evaluations with captured preference versions
       description: Bearer credentials require opportunities:read.
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       parameters:
@@ -641,6 +1154,18 @@ components:
       name: includeArchived
       in: query
       schema: { type: boolean, default: false }
+    ActionClock:
+      name: at
+      in: query
+      required: true
+      description: Explicit RFC3339 instant with offset.
+      schema: { type: string, format: date-time }
+    ActionCalendarTimezone:
+      name: calendarTimezone
+      in: query
+      required: true
+      description: IANA timezone used only to compare date-only deadlines.
+      schema: { type: string }
   securitySchemes:
     cookieAuth:
       type: apiKey
@@ -695,6 +1220,204 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
+    CodexStatus:
+      type: object
+      required: [state, code, connected, ingestionAvailable, busy]
+      properties:
+        state: { type: string, enum: [unavailable, needs_sign_in, connecting, ready] }
+        code: { type: string, description: Safe readiness or failure code. }
+        connected: { type: boolean }
+        ingestionAvailable: { type: boolean }
+        busy: { type: boolean }
+    CodexConnection:
+      type: object
+      required: [loginId, verificationUrl, userCode]
+      properties:
+        loginId: { type: string }
+        verificationUrl: { type: string, format: uri }
+        userCode: { type: string }
+    RuntimeStatus:
+      type: object
+      required: [ingestionAvailable, organisationAvailable, collectionAvailable]
+      properties:
+        ingestionAvailable: { type: boolean }
+        organisationAvailable: { type: boolean }
+        collectionAvailable: { type: boolean, description: Collector loop mounted; enabled board count and run outcomes are separate. }
+    CollectorBoard:
+      type: object
+      required: [id, provider, site, region, displayName, enabled, intervalMinutes, nextScanAt, revision, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        provider: { type: string, enum: [lever] }
+        site: { type: string }
+        displayName: { type: string }
+        officialCareersUrl: { type: string, format: uri }
+        verifiedAt: { type: string, format: date-time }
+        region: { type: string, enum: [global, eu] }
+        enabled: { type: boolean }
+        intervalMinutes: { type: integer, minimum: 15, maximum: 10080 }
+        nextScanAt: { type: string, format: date-time }
+        lastRunAt: { type: string, format: date-time }
+        lastSuccessAt: { type: string, format: date-time }
+        lastErrorCode: { type: string }
+        revision: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CollectorBoardList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CollectorBoard' }
+    CreateCollectorBoardRequest:
+      type: object
+      required: [provider, site, region, enabled, intervalMinutes]
+      additionalProperties: false
+      properties:
+        provider: { type: string, enum: [lever] }
+        site: { type: string, minLength: 1, maxLength: 100 }
+        displayName: { type: string, maxLength: 200 }
+        region: { type: string, enum: [global, eu] }
+        enabled: { type: boolean }
+        intervalMinutes: { type: integer, minimum: 15, maximum: 10080 }
+    UpdateCollectorBoardRequest:
+      type: object
+      required: [expectedRevision, enabled, intervalMinutes]
+      additionalProperties: false
+      properties:
+        expectedRevision: { type: integer, format: int64 }
+        enabled: { type: boolean }
+        intervalMinutes: { type: integer, minimum: 15, maximum: 10080 }
+    OrganisationCategory:
+      type: object
+      required: [id, description]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+    OrganisationCategorySet:
+      type: object
+      required: [version, categories]
+      properties:
+        version: { type: integer, format: int64 }
+        categories:
+          type: array
+          maxItems: 64
+          items: { $ref: '#/components/schemas/OrganisationCategory' }
+        createdAt: { type: string, format: date-time }
+    UpdateOrganisationCategoriesRequest:
+      type: object
+      required: [expectedVersion, categories]
+      additionalProperties: false
+      properties:
+        expectedVersion: { type: integer, format: int64, minimum: 0 }
+        categories:
+          type: array
+          maxItems: 64
+          items: { $ref: '#/components/schemas/OrganisationCategory' }
+    OrganisationSourceFact:
+      type: object
+      required: [id, sourceId, sourceRevision, sourceKind, excerpt]
+      properties:
+        id: { type: string }
+        sourceId: { type: string }
+        sourceRevision: { type: string }
+        sourceKind: { type: string }
+        observedAt: { type: string }
+        excerpt: { type: string }
+    OrganisationSourceRef:
+      type: object
+      required: [factId, sourceId, sourceRevision, sourceKind]
+      properties:
+        factId: { type: string }
+        sourceId: { type: string }
+        sourceRevision: { type: string }
+        sourceKind: { type: string }
+    OrganisationAssessment:
+      type: object
+      required: [id, categorySetVersion, disposition, sourceFacts, sourceRefs, requestedModel, returnedModel, createdAt]
+      properties:
+        id: { type: string }
+        categorySetVersion: { type: integer, format: int64 }
+        disposition: { type: string, enum: [category_selected, uncertain] }
+        categoryId: { type: string }
+        categoryDescription: { type: string, description: Category definition captured at assessment time. }
+        sourceFacts:
+          type: array
+          items: { $ref: '#/components/schemas/OrganisationSourceFact' }
+        sourceRefs:
+          type: array
+          items: { $ref: '#/components/schemas/OrganisationSourceRef' }
+        requestedModel: { type: string }
+        returnedModel: { type: string }
+        createdAt: { type: string, format: date-time }
+    OrganisationView:
+      type: object
+      required: [status, current, latestHistorical]
+      properties:
+        status: { type: string, enum: [unconfigured, pending, processing, selected, uncertain, failed, outdated] }
+        current:
+          allOf: [{ $ref: '#/components/schemas/OrganisationAssessment' }]
+          nullable: true
+        latestHistorical:
+          allOf: [{ $ref: '#/components/schemas/OrganisationAssessment' }]
+          nullable: true
+        jobId: { type: string }
+    OrganisationSummary:
+      type: object
+      required: [opportunityId, status]
+      properties:
+        opportunityId: { type: string }
+        status: { type: string, enum: [unconfigured, pending, processing, selected, uncertain, failed, outdated] }
+        categoryId: { type: string }
+    OrganisationSummaryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrganisationSummary' }
+    SubmitIngestionRequest:
+      type: object
+      required: [idempotencyKey]
+      additionalProperties: false
+      properties:
+        sourceUrl: { type: string, maxLength: 2048 }
+        originalText: { type: string, maxLength: 200000 }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 200 }
+    RetryIngestionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        originalText: { type: string, maxLength: 200000 }
+    IngestionRequest:
+      type: object
+      required: [id, origin, sourceUrl, originalText, status, jobId, jobState, attemptsStarted, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        origin: { type: string }
+        sourceUrl: { type: string }
+        originalText: { type: string }
+        status: { type: string, enum: [pending, processing, completed, needs_text, failed] }
+        jobId: { type: string }
+        jobState: { type: string, enum: [queued, running, succeeded, failed, cancelled] }
+        attemptsStarted: { type: integer, format: int64 }
+        connectorId: { type: string }
+        externalId: { type: string }
+        discoveredAt: { type: string, format: date-time }
+        opportunityId: { type: string }
+        recordChangeId: { type: string }
+        safeErrorCode: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    IngestionPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/IngestionRequest' }
+        nextCursor: { type: string }
     LoginRequest:
       type: object
       additionalProperties: false
@@ -718,26 +1441,36 @@ components:
         expiresAt:
           type: string
           format: date-time
-    PreferencesResponse:
+    RoleCriterion:
+      type: object
+      required: [id, label, description, kind, mode]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 80 }
+        label: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 1000 }
+        kind: { type: string, enum: [role, responsibility, technology] }
+        mode: { type: string, enum: [require, avoid, prefer] }
+    RoleCriterionView:
+      allOf:
+        - $ref: '#/components/schemas/RoleCriterion'
+        - type: object
+          required: [definitionHash]
+          properties:
+            definitionHash: { type: string, readOnly: true, description: Server-calculated SHA-256 of the complete criterion definition. }
+    PreferencesInput:
       type: object
       required:
         [
-          version,
           preferredLocation,
           allowRemote,
           allowHybrid,
           targetHours,
           minMonthlyBaseCents,
           salaryCurrency,
-          requireBackendPlatform,
-          excludeFrontendDuties,
-          excludePHPFocused,
           timezone,
+          roleCriteria,
         ]
       properties:
-        version:
-          type: integer
-          format: int64
         preferredLocation:
           type: string
         allowRemote:
@@ -745,21 +1478,48 @@ components:
         allowHybrid:
           type: boolean
         targetHours:
-          type: integer
-          format: int64
+          type: string
+          pattern: '^(?:[1-9][0-9]?|1[0-5][0-9]|16[0-8])(?:[.][0-9]{1,2})?$'
+          description: Decimal weekly hours with at most two places. The server stores exact hundredths.
         minMonthlyBaseCents:
           type: integer
           format: int64
         salaryCurrency:
           type: string
-        requireBackendPlatform:
-          type: boolean
-        excludeFrontendDuties:
-          type: boolean
-        excludePHPFocused:
-          type: boolean
         timezone:
           type: string
+        roleCriteria:
+          type: array
+          maxItems: 32
+          items: { $ref: '#/components/schemas/RoleCriterion' }
+    PreferencesResponse:
+      type: object
+      required: [version, preferredLocation, allowRemote, allowHybrid, targetHours, minMonthlyBaseCents, salaryCurrency, timezone, roleCriteria]
+      properties:
+        version: { type: integer, format: int64 }
+        preferredLocation: { type: string }
+        allowRemote: { type: boolean }
+        allowHybrid: { type: boolean }
+        targetHours: { type: string }
+        minMonthlyBaseCents: { type: integer, format: int64 }
+        salaryCurrency: { type: string }
+        timezone: { type: string }
+        roleCriteria:
+          type: array
+          items: { $ref: '#/components/schemas/RoleCriterionView' }
+    UpdatePreferencesRequest:
+      allOf:
+        - $ref: '#/components/schemas/PreferencesInput'
+        - type: object
+          required: [expectedVersion]
+          properties:
+            expectedVersion: { type: integer, format: int64, minimum: 1 }
+    PreferencesMutation:
+      type: object
+      required: [preferences, changeId]
+      properties:
+        preferences: { $ref: '#/components/schemas/PreferencesResponse' }
+        changeId: { type: string }
     AgentCredential:
       type: object
       required: [id, name, scopes, createdAt, expiresAt, revoked]
@@ -852,6 +1612,72 @@ components:
         details:
           type: object
           additionalProperties: true
+    ActionDue:
+      type: object
+      additionalProperties: false
+      description: Exactly date or at plus timezone is required; the server rejects mixed or incomplete shapes.
+      properties:
+        date: { type: string, description: Real YYYY-MM-DD calendar date without an instant. }
+        at: { type: string, format: date-time, description: RFC3339 instant with offset matching the IANA timezone at that instant. }
+        timezone: { type: string, description: Valid IANA timezone for local display. }
+    Action:
+      type: object
+      required: [id, opportunityId, description, due, status, revision, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string, description: Empty for standalone actions. Archived opportunity links remain readable. }
+        description: { type: string }
+        due: { $ref: '#/components/schemas/ActionDue' }
+        dueAtUtc: { type: string, format: date-time, description: Normalized stored UTC instant for timed deadlines; due.at is formatted in due.timezone for valid round-trip replacement. }
+        status: { type: string, enum: [open, completed, cancelled] }
+        completedAt: { type: string, format: date-time }
+        revision: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ActionPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Action' }
+        nextCursor: { type: string }
+    ActionMutation:
+      type: object
+      required: [action, changeId]
+      properties:
+        action: { $ref: '#/components/schemas/Action' }
+        changeId: { type: string }
+    CreateActionRequest:
+      type: object
+      additionalProperties: false
+      required: [description, due]
+      properties:
+        opportunityId: { type: string }
+        description: { type: string, minLength: 1, maxLength: 2000 }
+        due: { $ref: '#/components/schemas/ActionDue' }
+    PatchActionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision]
+      description: At least one of description or due must be supplied. Final-state actions cannot be patched.
+      properties:
+        expectedRevision: { type: integer, format: int64, minimum: 1 }
+        description: { type: string, minLength: 1, maxLength: 2000 }
+        due: { $ref: '#/components/schemas/ActionDue' }
+    RescheduleActionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision, due]
+      properties:
+        expectedRevision: { type: integer, format: int64, minimum: 1 }
+        due: { $ref: '#/components/schemas/ActionDue' }
+    ActionTransitionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision]
+      properties:
+        expectedRevision: { type: integer, format: int64, minimum: 1 }
     Company:
       type: object
       required: [id, name, website, notes, revision, createdAt, updatedAt]
@@ -925,7 +1751,10 @@ components:
         minAmountCents: { type: integer, format: int64, minimum: 0 }
         maxAmountCents: { type: integer, format: int64, minimum: 0 }
         period: { type: string, enum: [month, year, hour, project, unknown] }
-        referenceHours: { type: integer, format: int64, minimum: 1, maximum: 168 }
+        referenceHours: { type: string, description: Exact decimal weekly hours with at most two places. }
+        annualConversion: { type: string, enum: [twelve_equal_monthly_base_payments], description: Only when an exact source span states twelve equal monthly base payments for an annual base amount. }
+        annualConversionSpanStart: { type: integer, minimum: 0, description: UTF-8 byte offset into originalText for annual payment basis. }
+        annualConversionSpanEnd: { type: integer, minimum: 1, description: Exclusive UTF-8 byte offset for annual payment basis. }
         basis: { type: string, enum: [base, inclusive, unknown] }
         benefitsText: { type: string, maxLength: 10000 }
     Opportunity:
@@ -1197,13 +2026,64 @@ components:
         source: { $ref: '#/components/schemas/EvidenceSource' }
         changeId: { type: string }
         currentInputVersions: { $ref: '#/components/schemas/QualificationInputVersions' }
+    OfferOption:
+      type: object
+      required: [id, label]
+      properties:
+        id: { type: string }
+        label: { type: string }
+    OfferOptionSet:
+      type: object
+      required: [id, opportunityId, sourceId, contextVersion, spanStart, spanEnd, sourceExcerpt, excerptSha256, createdAt, actorKind, actorId, options]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        sourceId: { type: string }
+        contextVersion: { type: integer, format: int64 }
+        spanStart: { type: integer }
+        spanEnd: { type: integer }
+        sourceExcerpt: { type: string }
+        excerptSha256: { type: string }
+        supersedesId: { type: string }
+        createdAt: { type: string, format: date-time }
+        actorKind: { type: string }
+        actorId: { type: string }
+        options:
+          type: array
+          items: { $ref: '#/components/schemas/OfferOption' }
+    OfferOptionSetList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OfferOptionSet' }
+    CreateOfferOptionSetRequest:
+      type: object
+      additionalProperties: false
+      required: [sourceId, expectedContextVersion, expectedEvidenceVersion, spanStart, spanEnd, labels]
+      properties:
+        sourceId: { type: string }
+        expectedContextVersion: { type: integer, format: int64, minimum: 1 }
+        expectedEvidenceVersion: { type: integer, format: int64, minimum: 0 }
+        spanStart: { type: integer, minimum: 0 }
+        spanEnd: { type: integer, minimum: 1 }
+        labels: { type: array, minItems: 2, maxItems: 8, items: { type: string, minLength: 1, maxLength: 100 } }
+        supersedesId: { type: string }
+    OfferOptionSetMutation:
+      type: object
+      required: [set, changeId, currentInputVersions]
+      properties:
+        set: { $ref: '#/components/schemas/OfferOptionSet' }
+        changeId: { type: string }
+        currentInputVersions: { $ref: '#/components/schemas/QualificationInputVersions' }
     EvidenceHours:
       type: object
       additionalProperties: false
       required: [minWeekly, maxWeekly, hardBounds]
       properties:
-        minWeekly: { type: integer, format: int64, minimum: 1, maximum: 168 }
-        maxWeekly: { type: integer, format: int64, minimum: 1, maximum: 168 }
+        minWeekly: { type: string, description: Exact decimal weekly hours, at most two places. }
+        maxWeekly: { type: string, description: Exact decimal weekly hours, at most two places. }
         hardBounds: { type: boolean }
     EvidenceArrangement:
       type: object
@@ -1213,7 +2093,7 @@ components:
         pattern: { type: string, enum: [onsite, hybrid, remote] }
         baseLocation: { type: string, maxLength: 500 }
         remoteGeography: { type: string, maxLength: 500 }
-        onsiteDays: { type: integer, format: int64, minimum: 0, maximum: 7 }
+        onsiteDays: { type: string, description: Exact decimal days per week, at most two places. }
     EvidenceSalary:
       type: object
       additionalProperties: false
@@ -1223,12 +2103,13 @@ components:
         period: { type: string, enum: [month, year, hour, project] }
         basis: { type: string, enum: [base, inclusive, unknown] }
         amountCents: { type: integer, format: int64, minimum: 0 }
-        actualWeeklyHours: { type: integer, format: int64, minimum: 1, maximum: 168 }
+        actualWeeklyHours: { type: string, description: Exact decimal weekly hours, at most two places. }
+        annualConversion: { type: string, enum: [twelve_equal_monthly_base_payments], description: Include only when directly supported by the quoted source. }
     WriteEvidenceRequest:
       type: object
       additionalProperties: false
       required:
-        [sourceId, criterion, finding, observedValue, spanStart, spanEnd, expectedEvidenceVersion]
+        [sourceId, criterion, observedValue, spanStart, spanEnd, expectedEvidenceVersion, expectedPreferencesVersion]
       properties:
         sourceId: { type: string }
         criterion:
@@ -1236,9 +2117,7 @@ components:
             type: string,
             enum:
               [
-                backend_platform,
-                no_frontend_duties,
-                no_php_focused_duties,
+                role_criterion,
                 target_hours_available,
                 location_arrangement,
                 location_workable,
@@ -1247,7 +2126,11 @@ components:
           }
         finding:
           { type: string, enum: [explicit_match, explicit_mismatch, mention_only, ambiguous] }
-        observedValue: { type: string, maxLength: 1000 }
+        roleCriterionId: { type: string, description: Stable ID from the current preference version. }
+        rolePresence: { type: string, enum: [explicit_presence, explicit_absence, mention_only, ambiguous], description: What the exact quote establishes, independent of require/avoid/prefer mode. }
+        expectedPreferencesVersion: { type: integer, format: int64, minimum: 1 }
+        offerOptionId: { type: string, maxLength: 80, description: Named offer option grouping for schedule and economic facts. }
+        observedValue: { type: string, maxLength: 1000, description: Factual explanation of the selected source span; not a fit verdict. }
         spanStart:
           { type: integer, minimum: 0, description: UTF-8 byte offset into immutable source text. }
         spanEnd: { type: integer, minimum: 1, description: Exclusive UTF-8 byte offset. }
@@ -1270,7 +2153,6 @@ components:
           excerptSha256,
           observedAt,
           createdAt,
-          legacyUnverified,
           hasSpan,
         ]
       properties:
@@ -1282,6 +2164,12 @@ components:
         sourceContactText: { type: string }
         criterion: { type: string }
         finding: { type: string }
+        roleCriterionId: { type: string }
+        roleDefinition: { $ref: '#/components/schemas/RoleCriterion', description: Exact criterion definition captured when this claim was written. }
+        roleDefinitionHash: { type: string }
+        rolePreferencesVersion: { type: integer, format: int64 }
+        rolePresence: { type: string, enum: [explicit_presence, explicit_absence, mention_only, ambiguous] }
+        offerOptionId: { type: string }
         observedValue: { type: string }
         sourceExcerpt: { type: string }
         excerptSha256: { type: string }
@@ -1296,7 +2184,6 @@ components:
         ownerWorkableForEvidenceId: { type: string }
         ownerPreferencesVersion: { type: integer, format: int64 }
         salary: { $ref: '#/components/schemas/EvidenceSalary' }
-        legacyUnverified: { type: boolean }
     EvidencePage:
       type: object
       required: [items]
@@ -1317,17 +2204,28 @@ components:
       required: [criterion, state, reason, conflicting]
       properties:
         criterion: { type: string }
+        criterionId: { type: string }
+        label: { type: string }
+        description: { type: string }
+        kind: { type: string, enum: [role, responsibility, technology, working_terms, compensation] }
+        mode: { type: string, enum: [require, avoid, prefer] }
+        blocking: { type: boolean }
+        relevant: { type: boolean }
+        sourceBasis: { type: string }
+        evidenceIds: { type: array, items: { type: string } }
         state: { type: string, enum: [match, mismatch, unknown] }
         reason: { type: string }
         conflicting: { type: boolean }
     QualificationEstimate:
       type: object
-      required: [minDisplayCents, maxDisplayCents, targetHours, referenceHours]
+      required: [minDisplayCents, maxDisplayCents, targetHours, referenceHours, currency]
       properties:
         minDisplayCents: { type: integer, format: int64 }
         maxDisplayCents: { type: integer, format: int64 }
-        targetHours: { type: integer, format: int64 }
-        referenceHours: { type: integer, format: int64 }
+        targetHours: { type: string }
+        referenceHours: { type: string }
+        currency: { type: string }
+        annualConversion: { type: string }
     QualificationSalary:
       type: object
       required: [state, reason, confirmedActual, conflicting]
@@ -1337,12 +2235,29 @@ components:
         estimate: { $ref: '#/components/schemas/QualificationEstimate' }
         confirmedActual: { type: boolean }
         conflicting: { type: boolean }
+        applicable: { type: boolean }
+        concern: { type: boolean }
+        currency: { type: string }
+        targetHours: { type: string }
+        sourceBasis: { type: string }
+        annualConversion: { type: string }
     QualificationSourceRef:
       type: object
       required: [evidenceId, sourceId]
       properties:
         evidenceId: { type: string }
         sourceId: { type: string }
+    QualificationOptionResult:
+      type: object
+      required: [optionId, label, overall, criteria, salary]
+      properties:
+        optionId: { type: string }
+        label: { type: string }
+        overall: { type: string, enum: [qualified, unsuitable, unresolved, needs_requalification] }
+        criteria:
+          type: array
+          items: { $ref: '#/components/schemas/QualificationCriterion' }
+        salary: { $ref: '#/components/schemas/QualificationSalary' }
     QualificationEvaluation:
       type: object
       required:
@@ -1359,10 +2274,12 @@ components:
           criteria,
           salary,
           sourceRefs,
+          optionSetStatus,
+          optionSetIds,
+          optionResults,
           createdAt,
           actorKind,
           actorId,
-          legacyUnverified,
         ]
       properties:
         id: { type: string }
@@ -1381,10 +2298,14 @@ components:
         sourceRefs:
           type: array
           items: { $ref: '#/components/schemas/QualificationSourceRef' }
+        optionSetStatus: { type: string, enum: [none, current, conflicting] }
+        optionSetIds: { type: array, items: { type: string } }
+        optionResults:
+          type: array
+          items: { $ref: '#/components/schemas/QualificationOptionResult' }
         createdAt: { type: string, format: date-time }
         actorKind: { type: string }
         actorId: { type: string }
-        legacyUnverified: { type: boolean }
     QualificationView:
       type: object
       required: [status, current, latestHistorical, currentInputVersions]

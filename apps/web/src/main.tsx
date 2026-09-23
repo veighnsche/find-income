@@ -16,6 +16,10 @@ import {
   type Session,
 } from './api';
 import { Opportunities } from './opportunities';
+import { CollectorBoards } from './collector-boards';
+import { CodexConnectionPanel } from './codex-connection';
+import { OrganisationCategories } from './organisation-categories';
+import { PreferencesEditor } from './preferences-editor';
 import './style.css';
 
 const scopeOptions = [
@@ -25,6 +29,7 @@ const scopeOptions = [
   ['openings:ingest', 'Submit sourced openings'],
   ['evidence:write', 'Add sourced evidence'],
   ['actions:write', 'Manage follow-ups'],
+  ['actions:read', 'Read follow-ups'],
   ['drafts:write', 'Prepare application drafts'],
   ['judgments:request', 'Request assessments'],
 ] as const;
@@ -153,7 +158,10 @@ function Today({ onSessionLost }: { onSessionLost: () => void }) {
     <main id="today">
       <p className="eyebrow">Your workspace</p>
       <h1>Today</h1>
-      <p>Open Opportunities to save a sourced vacancy and track its details.</p>
+      <p>
+        Open Opportunities to prepare a vacancy URL or text and review saved opportunities. Intake
+        processing is currently unavailable.
+      </p>
       <section className="status" aria-live="polite">
         <h2>Current search preferences</h2>
         {!preferences && !error && <p>Loading preferences…</p>}
@@ -163,11 +171,25 @@ function Today({ onSessionLost }: { onSessionLost: () => void }) {
           </p>
         )}
         {preferences && (
-          <p>
-            {preferences.targetHours} hours/week · at least €
-            {(preferences.minMonthlyBaseCents / 100).toLocaleString('en-US')} gross monthly base ·{' '}
-            {preferences.preferredLocation} or workable remote/hybrid.
-          </p>
+          <>
+            <p>
+              {preferences.targetHours} hours/week · at least{' '}
+              {(preferences.minMonthlyBaseCents / 100).toLocaleString('en-US')}{' '}
+              {preferences.salaryCurrency} gross monthly base
+              {preferences.preferredLocation
+                ? ` · preferred location ${preferences.preferredLocation}`
+                : ''}
+              ; remote {preferences.allowRemote ? 'allowed' : 'not accepted'}, hybrid{' '}
+              {preferences.allowHybrid ? 'allowed' : 'not accepted'}.
+            </p>
+            <ul>
+              {preferences.roleCriteria.map((item) => (
+                <li key={item.id}>
+                  {item.label} ({item.mode})
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </section>
       <ServiceStatus />
@@ -233,6 +255,10 @@ function Settings({ session, onSessionLost }: { session: Session; onSessionLost:
     <main id="settings">
       <p className="eyebrow">Owner controls</p>
       <h1>Settings</h1>
+      <PreferencesEditor session={session} onSessionLost={onSessionLost} />
+      <OrganisationCategories session={session} onSessionLost={onSessionLost} />
+      <CollectorBoards session={session} onSessionLost={onSessionLost} />
+      <CodexConnectionPanel session={session} onSessionLost={onSessionLost} />
       <section className="status">
         <h2>Agent access</h2>
         <p>

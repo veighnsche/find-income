@@ -138,6 +138,7 @@ var allowedScopes = map[string]bool{
 	"opportunities:write": true,
 	"openings:ingest":     true,
 	"evidence:write":      true,
+	"actions:read":        true,
 	"actions:write":       true,
 	"drafts:write":        true,
 	"judgments:request":   true,

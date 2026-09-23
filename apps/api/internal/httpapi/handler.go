@@ -12,26 +12,38 @@ import (
 	"time"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
+	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
 type Options struct {
-	AllowedOrigins []string
-	SecureCookies  bool
+	AllowedOrigins        []string
+	SecureCookies         bool
+	IngestionAvailable    bool
+	OrganisationAvailable bool
+	CollectionAvailable   bool
+	Codex                 *codexservice.Service
 }
 
 type Handler struct {
-	auth          *auth.Service
-	database      *store.Store
-	origins       map[string]bool
-	secureCookies bool
-	limiter       *loginLimiter
+	auth                  *auth.Service
+	database              *store.Store
+	origins               map[string]bool
+	secureCookies         bool
+	ingestionAvailable    bool
+	organisationAvailable bool
+	collectionAvailable   bool
+	codex                 *codexservice.Service
+	limiter               *loginLimiter
 }
 
 func NewHandler(database *store.Store, service *auth.Service, options Options) http.Handler {
 	h := &Handler{auth: service, database: database, origins: map[string]bool{}, secureCookies: options.SecureCookies,
-		limiter: newLoginLimiter()}
+		ingestionAvailable: options.IngestionAvailable, organisationAvailable: options.OrganisationAvailable,
+		collectionAvailable: options.CollectionAvailable,
+		codex:               options.Codex,
+		limiter:             newLoginLimiter()}
 	for _, origin := range options.AllowedOrigins {
 		h.origins[origin] = true
 	}
@@ -41,6 +53,19 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("POST /api/v1/auth/logout", h.logout)
 	mux.HandleFunc("GET /api/v1/auth/session", h.session)
 	mux.HandleFunc("GET /api/v1/preferences", h.preferences)
+	mux.HandleFunc("GET /api/v1/runtime-status", h.runtimeStatus)
+	mux.HandleFunc("GET /api/v1/codex/status", h.codexStatus)
+	mux.HandleFunc("POST /api/v1/codex/connect", h.codexConnect)
+	mux.HandleFunc("POST /api/v1/codex/connect/cancel", h.codexCancelConnect)
+	mux.HandleFunc("/api/v1/codex/mcp", h.codexMCP)
+	mux.HandleFunc("/api/v1/codex/mcp/", h.codexMCP)
+	mux.HandleFunc("GET /api/v1/organisation/categories", h.organisationCategories)
+	mux.HandleFunc("PUT /api/v1/organisation/categories", h.updateOrganisationCategories)
+	mux.HandleFunc("GET /api/v1/organisation/summaries", h.organisationSummaries)
+	mux.HandleFunc("GET /api/v1/collector-boards", h.listCollectorBoards)
+	mux.HandleFunc("POST /api/v1/collector-boards", h.createCollectorBoard)
+	mux.HandleFunc("PUT /api/v1/collector-boards/{id}", h.updateCollectorBoard)
+	mux.HandleFunc("PUT /api/v1/preferences", h.updatePreferences)
 	mux.HandleFunc("GET /api/v1/agent-credentials", h.listAgents)
 	mux.HandleFunc("POST /api/v1/agent-credentials", h.createAgent)
 	mux.HandleFunc("POST /api/v1/agent-credentials/{id}/revoke", h.revokeAgent)
@@ -49,12 +74,28 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/companies/{id}", h.getCompany)
 	mux.HandleFunc("PATCH /api/v1/companies/{id}", h.patchCompany)
 	mux.HandleFunc("POST /api/v1/companies/{id}/archive", h.archiveCompany)
+	mux.HandleFunc("GET /api/v1/ingestions", h.listIngestions)
+	mux.HandleFunc("POST /api/v1/ingestions", h.submitIngestion)
+	mux.HandleFunc("GET /api/v1/ingestions/{id}", h.getIngestion)
+	mux.HandleFunc("POST /api/v1/ingestions/{id}/retry", h.retryIngestion)
 	mux.HandleFunc("GET /api/v1/opportunities", h.listOpportunities)
 	mux.HandleFunc("POST /api/v1/opportunities", h.createOpportunity)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}", h.getOpportunity)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/organisation", h.opportunityOrganisation)
 	mux.HandleFunc("PATCH /api/v1/opportunities/{id}", h.patchOpportunity)
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/archive", h.archiveOpportunity)
+	mux.HandleFunc("GET /api/v1/actions", h.listActions)
+	mux.HandleFunc("POST /api/v1/actions", h.createAction)
+	mux.HandleFunc("GET /api/v1/actions/due", h.listDueActions)
+	mux.HandleFunc("GET /api/v1/actions/overdue", h.listOverdueActions)
+	mux.HandleFunc("GET /api/v1/actions/{id}", h.getAction)
+	mux.HandleFunc("PATCH /api/v1/actions/{id}", h.patchAction)
+	mux.HandleFunc("POST /api/v1/actions/{id}/reschedule", h.rescheduleAction)
+	mux.HandleFunc("POST /api/v1/actions/{id}/complete", h.completeAction)
+	mux.HandleFunc("POST /api/v1/actions/{id}/cancel", h.cancelAction)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/evidence-sources", h.listEvidenceSources)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/offer-option-sets", h.listOfferOptionSets)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/offer-option-sets", h.createOfferOptionSet)
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/evidence-sources", h.createEvidenceSource)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/evidence-sources/{sourceId}", h.getEvidenceSource)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/evidence", h.listEvidence)
@@ -136,27 +177,6 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: auth.SessionCookie, Value: "", Path: "/api/v1", HttpOnly: true,
 		Secure: h.secureCookies, SameSite: http.SameSiteStrictMode, MaxAge: -1})
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *Handler) preferences(w http.ResponseWriter, r *http.Request) {
-	principal, ok := h.principal(w, r)
-	if !ok {
-		return
-	}
-	if !principal.HasScope("preferences:read") {
-		fail(w, http.StatusForbidden, generated.ApiErrorCodeForbidden, "Scope is required.")
-		return
-	}
-	p, err := h.database.CurrentPreferences(r.Context())
-	if err != nil {
-		fail(w, http.StatusInternalServerError, generated.ApiErrorCodeInternalError, "Could not load preferences.")
-		return
-	}
-	writeJSON(w, http.StatusOK, generated.PreferencesResponse{Version: p.Version, PreferredLocation: p.PreferredLocation,
-		AllowRemote: p.AllowRemote, AllowHybrid: p.AllowHybrid, TargetHours: p.TargetHours,
-		MinMonthlyBaseCents: p.MinMonthlyBaseCents, SalaryCurrency: p.SalaryCurrency,
-		RequireBackendPlatform: p.RequireBackendPlatform, ExcludeFrontendDuties: p.ExcludeFrontendDuties,
-		ExcludePHPFocused: p.ExcludePHPFocused, Timezone: p.Timezone})
 }
 
 func (h *Handler) listAgents(w http.ResponseWriter, r *http.Request) {

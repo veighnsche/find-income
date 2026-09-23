@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http/httptest"
 	"path/filepath"
@@ -21,6 +22,29 @@ func evidenceVersions(t *testing.T, value map[string]any) map[string]any {
 		t.Fatalf("missing current versions: %#v", value)
 	}
 	return versions
+}
+
+func firstCurrentRoleCriterion(t *testing.T, h *recordHTTP) string {
+	t.Helper()
+	status, body := h.owner("GET", "/preferences")
+	requireStatus(t, status, 200, body)
+	var profile struct {
+		RoleCriteria []struct {
+			ID string `json:"id"`
+		} `json:"roleCriteria"`
+	}
+	if err := json.Unmarshal(body, &profile); err != nil {
+		t.Fatal(err)
+	}
+	if len(profile.RoleCriteria) == 0 {
+		t.Fatal("test profile needs a role criterion")
+	}
+	return profile.RoleCriteria[0].ID
+}
+
+func withPreferenceVersion(body string, version float64) string {
+	return strings.Replace(body, `"expectedEvidenceVersion"`,
+		fmt.Sprintf(`"expectedPreferencesVersion":%.0f,"expectedEvidenceVersion"`, version), 1)
 }
 
 func evidenceFixture(t *testing.T, h *recordHTTP) (string, string, auth.Principal) {
@@ -76,12 +100,12 @@ func TestEvidenceHTTPScopesQuotesConflictsAndHistory(t *testing.T) {
 	start := strings.Index(statement, "€5,000")
 	end := start + len("€5,000")
 	missingFacts := []string{
-		fmt.Sprintf(`{"sourceId":%q,"criterion":"monthly_base_salary","finding":"explicit_match","observedValue":"actual_pay_terms","spanStart":%d,"spanEnd":%d,"expectedEvidenceVersion":%.0f,"salary":{"currency":"EUR","period":"month","basis":"base","actualWeeklyHours":32}}`, sourceID, start, end, version),
-		fmt.Sprintf(`{"sourceId":%q,"criterion":"target_hours_available","finding":"explicit_match","observedValue":"weekly_hours_available","spanStart":0,"spanEnd":7,"expectedEvidenceVersion":%.0f,"hours":{"minWeekly":32,"maxWeekly":32}}`, sourceID, version),
+		fmt.Sprintf(`{"sourceId":%q,"criterion":"monthly_base_salary","finding":"explicit_match","observedValue":"actual_pay_terms","spanStart":%d,"spanEnd":%d,"expectedEvidenceVersion":%.0f,"salary":{"currency":"EUR","period":"month","basis":"base","actualWeeklyHours":"32"}}`, sourceID, start, end, version),
+		fmt.Sprintf(`{"sourceId":%q,"criterion":"target_hours_available","finding":"explicit_match","observedValue":"weekly_hours_available","spanStart":0,"spanEnd":7,"expectedEvidenceVersion":%.0f,"hours":{"minWeekly":"32","maxWeekly":"32"}}`, sourceID, version),
 		fmt.Sprintf(`{"sourceId":%q,"criterion":"location_arrangement","finding":"explicit_match","observedValue":"work_arrangement","spanStart":0,"spanEnd":7,"expectedEvidenceVersion":%.0f,"arrangement":{"pattern":"remote","remoteGeography":"Belgium"}}`, sourceID, version),
 	}
 	for _, invalid := range missingFacts {
-		status, body = h.do("POST", path+"/evidence", invalid, writerAToken, "", "", nil)
+		status, body = h.do("POST", path+"/evidence", withPreferenceVersion(invalid, versions["preferencesVersion"].(float64)), writerAToken, "", "", nil)
 		requireStatus(t, status, 400, body)
 	}
 	status, body = h.do("GET", path+"/qualification", "", writerAToken, "", "", nil)
@@ -89,12 +113,13 @@ func TestEvidenceHTTPScopesQuotesConflictsAndHistory(t *testing.T) {
 	if evidenceVersions(t, decodeObject(t, body))["evidenceVersion"] != version {
 		t.Fatalf("missing nested fact changed evidence version: %s", body)
 	}
-	claim := fmt.Sprintf(`{"sourceId":%q,"criterion":"monthly_base_salary","finding":"explicit_match","observedValue":"actual_pay_terms","spanStart":%d,"spanEnd":%d,"expectedEvidenceVersion":%.0f,"salary":{"currency":"EUR","period":"month","basis":"base","amountCents":500000,"actualWeeklyHours":32}}`, sourceID, start, end, version)
+	claim := fmt.Sprintf(`{"sourceId":%q,"criterion":"monthly_base_salary","finding":"explicit_match","observedValue":"actual_pay_terms","spanStart":%d,"spanEnd":%d,"expectedEvidenceVersion":%.0f,"salary":{"currency":"EUR","period":"month","basis":"base","amountCents":500000,"actualWeeklyHours":"32"}}`, sourceID, start, end, version)
+	claim = withPreferenceVersion(claim, versions["preferencesVersion"].(float64))
 	status, body = h.do("POST", path+"/evidence", claim, writerAToken, "", "", nil)
 	requireStatus(t, status, 201, body)
 	claimResult := decodeObject(t, body)
 	item := claimResult["evidence"].(map[string]any)
-	if item["sourceExcerpt"] != "€5,000" || item["spanStart"] != float64(start) || item["spanEnd"] != float64(end) || item["hasSpan"] != true || item["legacyUnverified"] != false {
+	if item["sourceExcerpt"] != "€5,000" || item["spanStart"] != float64(start) || item["spanEnd"] != float64(end) || item["hasSpan"] != true {
 		t.Fatalf("exact quote provenance: %#v", item)
 	}
 	claimID := item["id"].(string)
@@ -150,8 +175,8 @@ func TestEvidenceHTTPScopesQuotesConflictsAndHistory(t *testing.T) {
 	zeroSourceID := decodeObject(t, body)["source"].(map[string]any)["id"].(string)
 	zeroVersion := evidenceVersions(t, decodeObject(t, body))["evidenceVersion"].(float64)
 	zeroStart := strings.Index(zeroStatement, "€0")
-	zeroClaim := fmt.Sprintf(`{"sourceId":%q,"criterion":"monthly_base_salary","finding":"explicit_match","observedValue":"actual_pay_terms","spanStart":%d,"spanEnd":%d,"expectedEvidenceVersion":%.0f,"salary":{"currency":"EUR","period":"month","basis":"base","amountCents":0,"actualWeeklyHours":32}}`, zeroSourceID, zeroStart, zeroStart+len("€0"), zeroVersion)
-	status, body = h.do("POST", path+"/evidence", zeroClaim, writerAToken, "", "", nil)
+	zeroClaim := fmt.Sprintf(`{"sourceId":%q,"criterion":"monthly_base_salary","finding":"explicit_match","observedValue":"actual_pay_terms","spanStart":%d,"spanEnd":%d,"expectedEvidenceVersion":%.0f,"salary":{"currency":"EUR","period":"month","basis":"base","amountCents":0,"actualWeeklyHours":"32"}}`, zeroSourceID, zeroStart, zeroStart+len("€0"), zeroVersion)
+	status, body = h.do("POST", path+"/evidence", withPreferenceVersion(zeroClaim, currentVersions["preferencesVersion"].(float64)), writerAToken, "", "", nil)
 	requireStatus(t, status, 201, body)
 	if decodeObject(t, body)["evidence"].(map[string]any)["salary"].(map[string]any)["amountCents"] != float64(0) {
 		t.Fatalf("explicit zero salary was not preserved: %s", body)
@@ -189,18 +214,20 @@ func TestEvidenceHTTPRejectsForgeryCrossOpportunityAndOwnerObservation(t *testin
 	stalePreference := fmt.Sprintf(`{"expectedContextVersion":%.0f,"ownerObservation":{"occurredAt":"2026-09-23T10:00:00Z","originalText":"Workable.","expectedPreferencesVersion":%.0f}}`, contextVersion, preferencesVersion+1)
 	status, body = h.owner("POST", path+"/evidence-sources", stalePreference)
 	requireStatus(t, status, 409, body)
+	criterionID := firstCurrentRoleCriterion(t, h)
+	claim := fmt.Sprintf(`{"sourceId":%q,"criterion":"role_criterion","roleCriterionId":%q,"rolePresence":"explicit_presence","expectedPreferencesVersion":%.0f,"observedValue":"The quoted role includes substantive platform work.","spanStart":0,"spanEnd":7,"expectedEvidenceVersion":%.0f}`, sourceID, criterionID, preferencesVersion, version)
 	badBodies := []string{
-		fmt.Sprintf(`{"sourceId":%q,"criterion":"backend_platform","finding":"explicit_match","observedValue":"backend_primary","spanStart":0,"spanEnd":7,"expectedEvidenceVersion":%.0f,"actor":{"kind":"administrator","id":"owner"}}`, sourceID, version),
-		fmt.Sprintf(`{"sourceId":%q,"criterion":"backend_platform","finding":"explicit_match","observedValue":"backend_primary","spanStart":0,"spanEnd":7,"expectedEvidenceVersion":%.0f,"authority":"employer"}`, sourceID, version),
-		fmt.Sprintf(`{"sourceId":%q,"criterion":"backend_platform","finding":"explicit_match","observedValue":"backend_primary","spanStart":0,"spanEnd":7,"expectedEvidenceVersion":%.0f,"result":"qualified"}`, sourceID, version),
-		fmt.Sprintf(`{"sourceId":%q,"sourceId":%q,"criterion":"backend_platform","finding":"explicit_match","observedValue":"backend_primary","spanStart":0,"spanEnd":7,"expectedEvidenceVersion":%.0f}`, sourceID, sourceID, version),
-		fmt.Sprintf(`{"sourceId":%q,"criterion":"backend_platform","finding":"explicit_match","observedValue":"backend_primary","spanStart":0,"spanEnd":7,"expectedEvidenceVersion":%.0f,"hours":null}`, sourceID, version),
+		strings.Replace(claim, `"expectedEvidenceVersion"`, `"actor":{"kind":"administrator","id":"owner"},"expectedEvidenceVersion"`, 1),
+		strings.Replace(claim, `"expectedEvidenceVersion"`, `"authority":"employer","expectedEvidenceVersion"`, 1),
+		strings.Replace(claim, `"expectedEvidenceVersion"`, `"result":"qualified","expectedEvidenceVersion"`, 1),
+		strings.Replace(claim, `"criterion"`, fmt.Sprintf(`"sourceId":%q,"criterion"`, sourceID), 1),
+		strings.Replace(claim, `"expectedEvidenceVersion"`, `"hours":null,"expectedEvidenceVersion"`, 1),
 	}
 	for _, invalid := range badBodies {
 		status, body = h.do("POST", path+"/evidence", invalid, writerToken, "", "", nil)
 		requireStatus(t, status, 400, body)
 	}
-	invalidUTF8 := []byte(fmt.Sprintf(`{"sourceId":%q,"criterion":"backend_platform","finding":"explicit_match","observedValue":"`, sourceID))
+	invalidUTF8 := []byte(fmt.Sprintf(`{"sourceId":%q,"criterion":"role_criterion","roleCriterionId":%q,"rolePresence":"explicit_presence","expectedPreferencesVersion":%.0f,"observedValue":"`, sourceID, criterionID, preferencesVersion))
 	invalidUTF8 = append(invalidUTF8, 0xff)
 	invalidUTF8 = append(invalidUTF8, []byte(fmt.Sprintf(`","spanStart":0,"spanEnd":7,"expectedEvidenceVersion":%.0f}`, version))...)
 	status, body = h.do("POST", path+"/evidence", string(invalidUTF8), writerToken, "", "", nil)
@@ -216,7 +243,6 @@ func TestEvidenceHTTPRejectsForgeryCrossOpportunityAndOwnerObservation(t *testin
 	otherID := decodeObject(t, body)["opportunity"].(map[string]any)["id"].(string)
 	status, body = h.do("GET", "/opportunities/"+otherID+"/evidence-sources/"+sourceID, "", writerToken, "", "", nil)
 	requireStatus(t, status, 404, body)
-	claim := fmt.Sprintf(`{"sourceId":%q,"criterion":"backend_platform","finding":"explicit_match","observedValue":"backend_primary","spanStart":0,"spanEnd":7,"expectedEvidenceVersion":%.0f}`, sourceID, version)
 	status, body = h.do("POST", "/opportunities/"+otherID+"/evidence", claim, writerToken, "", "", nil)
 	requireStatus(t, status, 404, body)
 	status, body = h.do("POST", path+"/evidence", claim, writerToken, "", "", nil)
@@ -240,12 +266,14 @@ func TestEvidenceHTTPSupersessionAndOwnerWorkability(t *testing.T) {
 	requireStatus(t, status, 201, body)
 	sourceID := decodeObject(t, body)["source"].(map[string]any)["id"].(string)
 	version := evidenceVersions(t, decodeObject(t, body))["evidenceVersion"].(float64)
-	arrangement := fmt.Sprintf(`{"sourceId":%q,"criterion":"location_arrangement","finding":"explicit_match","observedValue":"work_arrangement","spanStart":0,"spanEnd":%d,"expectedEvidenceVersion":%.0f,"arrangement":{"pattern":"hybrid","baseLocation":"Amsterdam","remoteGeography":"","onsiteDays":2}}`, sourceID, len(statement), version)
+	arrangement := fmt.Sprintf(`{"sourceId":%q,"criterion":"location_arrangement","finding":"explicit_match","observedValue":"work_arrangement","spanStart":0,"spanEnd":%d,"expectedEvidenceVersion":%.0f,"arrangement":{"pattern":"hybrid","baseLocation":"Amsterdam","remoteGeography":"","onsiteDays":"2"}}`, sourceID, len(statement), version)
+	arrangement = withPreferenceVersion(arrangement, versions["preferencesVersion"].(float64))
 	status, body = h.do("POST", path+"/evidence", arrangement, agentToken, "", "", nil)
 	requireStatus(t, status, 201, body)
 	arrangementID := decodeObject(t, body)["evidence"].(map[string]any)["id"].(string)
 	version = evidenceVersions(t, decodeObject(t, body))["evidenceVersion"].(float64)
-	replacement := fmt.Sprintf(`{"sourceId":%q,"criterion":"location_arrangement","finding":"explicit_match","observedValue":"work_arrangement","spanStart":0,"spanEnd":%d,"expectedEvidenceVersion":%.0f,"arrangement":{"pattern":"hybrid","baseLocation":"Amsterdam","remoteGeography":"","onsiteDays":2}}`, sourceID, len(statement), version)
+	replacement := fmt.Sprintf(`{"sourceId":%q,"criterion":"location_arrangement","finding":"explicit_match","observedValue":"work_arrangement","spanStart":0,"spanEnd":%d,"expectedEvidenceVersion":%.0f,"arrangement":{"pattern":"hybrid","baseLocation":"Amsterdam","remoteGeography":"","onsiteDays":"2"}}`, sourceID, len(statement), version)
+	replacement = withPreferenceVersion(replacement, versions["preferencesVersion"].(float64))
 	status, body = h.do("POST", path+"/evidence/"+arrangementID+"/supersede", replacement, agentToken, "", "", nil)
 	requireStatus(t, status, 201, body)
 	newID := decodeObject(t, body)["evidence"].(map[string]any)["id"].(string)
@@ -269,6 +297,7 @@ func TestEvidenceHTTPSupersessionAndOwnerWorkability(t *testing.T) {
 	ownerSourceID := decodeObject(t, body)["source"].(map[string]any)["id"].(string)
 	version = evidenceVersions(t, decodeObject(t, body))["evidenceVersion"].(float64)
 	workable := fmt.Sprintf(`{"sourceId":%q,"criterion":"location_workable","finding":"explicit_match","observedValue":"workable","spanStart":0,"spanEnd":%d,"expectedEvidenceVersion":%.0f,"ownerWorkableForEvidenceId":%q}`, ownerSourceID, len(ownerText), version, newID)
+	workable = withPreferenceVersion(workable, versions["preferencesVersion"].(float64))
 	status, body = h.do("POST", path+"/evidence", workable, agentToken, "", "", nil)
 	requireStatus(t, status, 403, body)
 	status, body = h.owner("POST", path+"/evidence", workable)

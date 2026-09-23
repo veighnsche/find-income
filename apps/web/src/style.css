@@ -134,6 +134,45 @@ button:disabled {
 .token-form {
   max-width: 32rem;
 }
+.preference-grid,
+.preference-criterion {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.9rem;
+}
+.preference-grid label,
+.preference-criterion label {
+  display: grid;
+  gap: 0.35rem;
+}
+.preference-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.preference-criteria {
+  gap: 1rem;
+}
+.preference-criterion,
+.preference-conflict {
+  border: 1px solid #c6d6cc;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: #f8fbf8;
+}
+.preference-criterion textarea {
+  min-height: 5rem;
+  font: inherit;
+}
+.preference-conflict {
+  display: grid;
+  gap: 0.6rem;
+  border-color: #d5ae73;
+  background: #fff8eb;
+}
+.preference-conflict button {
+  justify-self: start;
+}
 fieldset {
   border: 1px solid #d8e2da;
   border-radius: 0.5rem;

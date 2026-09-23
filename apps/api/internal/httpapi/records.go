@@ -138,10 +138,10 @@ func companyModel(value store.Company) generated.Company {
 		CreatedAt: recordedTime(value.CreatedAt), UpdatedAt: recordedTime(value.UpdatedAt)}
 }
 
-func compensationInput(value *generated.AdvertisedCompensation) store.AdvertisedCompensation {
+func compensationInput(value *generated.AdvertisedCompensation) (store.AdvertisedCompensation, bool) {
 	result := store.AdvertisedCompensation{}
 	if value == nil {
-		return result
+		return result, true
 	}
 	if value.Currency != nil {
 		result.Currency = *value.Currency
@@ -154,18 +154,40 @@ func compensationInput(value *generated.AdvertisedCompensation) store.Advertised
 	}
 	result.MinAmountCents = value.MinAmountCents
 	result.MaxAmountCents = value.MaxAmountCents
-	result.ReferenceHours = value.ReferenceHours
+	if value.ReferenceHours != nil {
+		hours, ok := parseHundredths(*value.ReferenceHours, 100, 16800)
+		if !ok {
+			return result, false
+		}
+		result.ReferenceHoursHundredths = &hours
+	}
+	if value.AnnualConversion != nil {
+		result.AnnualConversion = string(*value.AnnualConversion)
+	}
+	result.AnnualConversionSpanStart = value.AnnualConversionSpanStart
+	result.AnnualConversionSpanEnd = value.AnnualConversionSpanEnd
 	result.BenefitsText = optionalString(value.BenefitsText)
-	return result
+	return result, true
 }
 
 func compensationModel(value store.AdvertisedCompensation) generated.AdvertisedCompensation {
 	basis := generated.AdvertisedCompensationBasis(value.Basis)
 	period := generated.AdvertisedCompensationPeriod(value.Period)
-	return generated.AdvertisedCompensation{Currency: &value.Currency,
+	result := generated.AdvertisedCompensation{Currency: &value.Currency,
 		MinAmountCents: value.MinAmountCents, MaxAmountCents: value.MaxAmountCents,
-		Period: &period, ReferenceHours: value.ReferenceHours, Basis: &basis,
+		Period: &period, Basis: &basis,
 		BenefitsText: &value.BenefitsText}
+	if value.ReferenceHoursHundredths != nil {
+		hours := formatHundredths(*value.ReferenceHoursHundredths)
+		result.ReferenceHours = &hours
+	}
+	if value.AnnualConversion != "" {
+		converted := generated.AdvertisedCompensationAnnualConversion(value.AnnualConversion)
+		result.AnnualConversion = &converted
+		result.AnnualConversionSpanStart = value.AnnualConversionSpanStart
+		result.AnnualConversionSpanEnd = value.AnnualConversionSpanEnd
+	}
+	return result
 }
 
 func opportunityModel(value store.Opportunity) generated.Opportunity {
@@ -414,13 +436,18 @@ func (h *Handler) createOpportunity(w http.ResponseWriter, r *http.Request) {
 	if !decodeRecordJSON(w, r, &request) {
 		return
 	}
+	compensation, valid := compensationInput(request.Compensation)
+	if !valid {
+		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Reference hours must be an exact decimal from 1 to 168.")
+		return
+	}
 	opportunity, changeID, err := h.database.CreateOpportunity(r.Context(), p.Actor(), store.OpportunityInput{
 		CompanyID: request.CompanyId, Title: request.Title, Kind: string(request.Kind),
 		SourceURL: optionalString(request.SourceUrl), OriginalText: optionalString(request.OriginalText),
 		Notes: optionalString(request.Notes), Stage: request.Stage,
 		WorkPattern: stringValue(request.WorkPattern), LocationText: optionalString(request.LocationText),
 		PostedOn: optionalString(request.PostedOn), DeadlineOn: optionalString(request.DeadlineOn),
-		Compensation: compensationInput(request.Compensation)})
+		Compensation: compensation})
 	if err != nil {
 		failStore(w, err, "create opportunity")
 		return
@@ -459,7 +486,11 @@ func (h *Handler) patchOpportunity(w http.ResponseWriter, r *http.Request) {
 		Stage: request.Stage, WorkPattern: stringPointer(request.WorkPattern),
 		LocationText: request.LocationText, PostedOn: request.PostedOn, DeadlineOn: request.DeadlineOn}
 	if request.Compensation != nil {
-		value := compensationInput(request.Compensation)
+		value, valid := compensationInput(request.Compensation)
+		if !valid {
+			fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Reference hours must be an exact decimal from 1 to 168.")
+			return
+		}
 		patch.Compensation = &value
 	}
 	opportunity, changeID, err := h.database.PatchOpportunity(r.Context(), p.Actor(), r.PathValue("id"), patch)

@@ -7,6 +7,42 @@ import (
 	"time"
 )
 
+// Defines values for ActionStatus.
+const (
+	ActionStatusCancelled ActionStatus = "cancelled"
+	ActionStatusCompleted ActionStatus = "completed"
+	ActionStatusOpen      ActionStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the ActionStatus enum.
+func (e ActionStatus) Valid() bool {
+	switch e {
+	case ActionStatusCancelled:
+		return true
+	case ActionStatusCompleted:
+		return true
+	case ActionStatusOpen:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdvertisedCompensationAnnualConversion.
+const (
+	AdvertisedCompensationAnnualConversionTwelveEqualMonthlyBasePayments AdvertisedCompensationAnnualConversion = "twelve_equal_monthly_base_payments"
+)
+
+// Valid indicates whether the value is a known member of the AdvertisedCompensationAnnualConversion enum.
+func (e AdvertisedCompensationAnnualConversion) Valid() bool {
+	switch e {
+	case AdvertisedCompensationAnnualConversionTwelveEqualMonthlyBasePayments:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdvertisedCompensationBasis.
 const (
 	AdvertisedCompensationBasisBase      AdvertisedCompensationBasis = "base"
@@ -91,6 +127,63 @@ func (e ApiErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for CodexStatusState.
+const (
+	Connecting  CodexStatusState = "connecting"
+	NeedsSignIn CodexStatusState = "needs_sign_in"
+	Ready       CodexStatusState = "ready"
+	Unavailable CodexStatusState = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the CodexStatusState enum.
+func (e CodexStatusState) Valid() bool {
+	switch e {
+	case Connecting:
+		return true
+	case NeedsSignIn:
+		return true
+	case Ready:
+		return true
+	case Unavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CollectorBoardProvider.
+const (
+	CollectorBoardProviderLever CollectorBoardProvider = "lever"
+)
+
+// Valid indicates whether the value is a known member of the CollectorBoardProvider enum.
+func (e CollectorBoardProvider) Valid() bool {
+	switch e {
+	case CollectorBoardProviderLever:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CollectorBoardRegion.
+const (
+	CollectorBoardRegionEu     CollectorBoardRegion = "eu"
+	CollectorBoardRegionGlobal CollectorBoardRegion = "global"
+)
+
+// Valid indicates whether the value is a known member of the CollectorBoardRegion enum.
+func (e CollectorBoardRegion) Valid() bool {
+	switch e {
+	case CollectorBoardRegionEu:
+		return true
+	case CollectorBoardRegionGlobal:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CompanyDuplicateReason.
 const (
 	SameName    CompanyDuplicateReason = "same_name"
@@ -103,6 +196,39 @@ func (e CompanyDuplicateReason) Valid() bool {
 	case SameName:
 		return true
 	case SameWebsite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateCollectorBoardRequestProvider.
+const (
+	CreateCollectorBoardRequestProviderLever CreateCollectorBoardRequestProvider = "lever"
+)
+
+// Valid indicates whether the value is a known member of the CreateCollectorBoardRequestProvider enum.
+func (e CreateCollectorBoardRequestProvider) Valid() bool {
+	switch e {
+	case CreateCollectorBoardRequestProviderLever:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateCollectorBoardRequestRegion.
+const (
+	CreateCollectorBoardRequestRegionEu     CreateCollectorBoardRequestRegion = "eu"
+	CreateCollectorBoardRequestRegionGlobal CreateCollectorBoardRequestRegion = "global"
+)
+
+// Valid indicates whether the value is a known member of the CreateCollectorBoardRequestRegion enum.
+func (e CreateCollectorBoardRequestRegion) Valid() bool {
+	switch e {
+	case CreateCollectorBoardRequestRegionEu:
+		return true
+	case CreateCollectorBoardRequestRegionGlobal:
 		return true
 	default:
 		return false
@@ -166,6 +292,45 @@ func (e EvidenceArrangementPattern) Valid() bool {
 	case EvidenceArrangementPatternOnsite:
 		return true
 	case EvidenceArrangementPatternRemote:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EvidenceClaimRolePresence.
+const (
+	EvidenceClaimRolePresenceAmbiguous        EvidenceClaimRolePresence = "ambiguous"
+	EvidenceClaimRolePresenceExplicitAbsence  EvidenceClaimRolePresence = "explicit_absence"
+	EvidenceClaimRolePresenceExplicitPresence EvidenceClaimRolePresence = "explicit_presence"
+	EvidenceClaimRolePresenceMentionOnly      EvidenceClaimRolePresence = "mention_only"
+)
+
+// Valid indicates whether the value is a known member of the EvidenceClaimRolePresence enum.
+func (e EvidenceClaimRolePresence) Valid() bool {
+	switch e {
+	case EvidenceClaimRolePresenceAmbiguous:
+		return true
+	case EvidenceClaimRolePresenceExplicitAbsence:
+		return true
+	case EvidenceClaimRolePresenceExplicitPresence:
+		return true
+	case EvidenceClaimRolePresenceMentionOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EvidenceSalaryAnnualConversion.
+const (
+	EvidenceSalaryAnnualConversionTwelveEqualMonthlyBasePayments EvidenceSalaryAnnualConversion = "twelve_equal_monthly_base_payments"
+)
+
+// Valid indicates whether the value is a known member of the EvidenceSalaryAnnualConversion enum.
+func (e EvidenceSalaryAnnualConversion) Valid() bool {
+	switch e {
+	case EvidenceSalaryAnnualConversionTwelveEqualMonthlyBasePayments:
 		return true
 	default:
 		return false
@@ -289,6 +454,60 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for IngestionRequestJobState.
+const (
+	IngestionRequestJobStateCancelled IngestionRequestJobState = "cancelled"
+	IngestionRequestJobStateFailed    IngestionRequestJobState = "failed"
+	IngestionRequestJobStateQueued    IngestionRequestJobState = "queued"
+	IngestionRequestJobStateRunning   IngestionRequestJobState = "running"
+	IngestionRequestJobStateSucceeded IngestionRequestJobState = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the IngestionRequestJobState enum.
+func (e IngestionRequestJobState) Valid() bool {
+	switch e {
+	case IngestionRequestJobStateCancelled:
+		return true
+	case IngestionRequestJobStateFailed:
+		return true
+	case IngestionRequestJobStateQueued:
+		return true
+	case IngestionRequestJobStateRunning:
+		return true
+	case IngestionRequestJobStateSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IngestionRequestStatus.
+const (
+	IngestionRequestStatusCompleted  IngestionRequestStatus = "completed"
+	IngestionRequestStatusFailed     IngestionRequestStatus = "failed"
+	IngestionRequestStatusNeedsText  IngestionRequestStatus = "needs_text"
+	IngestionRequestStatusPending    IngestionRequestStatus = "pending"
+	IngestionRequestStatusProcessing IngestionRequestStatus = "processing"
+)
+
+// Valid indicates whether the value is a known member of the IngestionRequestStatus enum.
+func (e IngestionRequestStatus) Valid() bool {
+	switch e {
+	case IngestionRequestStatusCompleted:
+		return true
+	case IngestionRequestStatusFailed:
+		return true
+	case IngestionRequestStatusNeedsText:
+		return true
+	case IngestionRequestStatusPending:
+		return true
+	case IngestionRequestStatusProcessing:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OpportunityKind.
 const (
 	OpportunityKindEmployment OpportunityKind = "employment"
@@ -349,6 +568,90 @@ func (e OpportunityDuplicateReason) Valid() bool {
 	}
 }
 
+// Defines values for OrganisationAssessmentDisposition.
+const (
+	OrganisationAssessmentDispositionCategorySelected OrganisationAssessmentDisposition = "category_selected"
+	OrganisationAssessmentDispositionUncertain        OrganisationAssessmentDisposition = "uncertain"
+)
+
+// Valid indicates whether the value is a known member of the OrganisationAssessmentDisposition enum.
+func (e OrganisationAssessmentDisposition) Valid() bool {
+	switch e {
+	case OrganisationAssessmentDispositionCategorySelected:
+		return true
+	case OrganisationAssessmentDispositionUncertain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrganisationSummaryStatus.
+const (
+	OrganisationSummaryStatusFailed       OrganisationSummaryStatus = "failed"
+	OrganisationSummaryStatusOutdated     OrganisationSummaryStatus = "outdated"
+	OrganisationSummaryStatusPending      OrganisationSummaryStatus = "pending"
+	OrganisationSummaryStatusProcessing   OrganisationSummaryStatus = "processing"
+	OrganisationSummaryStatusSelected     OrganisationSummaryStatus = "selected"
+	OrganisationSummaryStatusUncertain    OrganisationSummaryStatus = "uncertain"
+	OrganisationSummaryStatusUnconfigured OrganisationSummaryStatus = "unconfigured"
+)
+
+// Valid indicates whether the value is a known member of the OrganisationSummaryStatus enum.
+func (e OrganisationSummaryStatus) Valid() bool {
+	switch e {
+	case OrganisationSummaryStatusFailed:
+		return true
+	case OrganisationSummaryStatusOutdated:
+		return true
+	case OrganisationSummaryStatusPending:
+		return true
+	case OrganisationSummaryStatusProcessing:
+		return true
+	case OrganisationSummaryStatusSelected:
+		return true
+	case OrganisationSummaryStatusUncertain:
+		return true
+	case OrganisationSummaryStatusUnconfigured:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrganisationViewStatus.
+const (
+	OrganisationViewStatusFailed       OrganisationViewStatus = "failed"
+	OrganisationViewStatusOutdated     OrganisationViewStatus = "outdated"
+	OrganisationViewStatusPending      OrganisationViewStatus = "pending"
+	OrganisationViewStatusProcessing   OrganisationViewStatus = "processing"
+	OrganisationViewStatusSelected     OrganisationViewStatus = "selected"
+	OrganisationViewStatusUncertain    OrganisationViewStatus = "uncertain"
+	OrganisationViewStatusUnconfigured OrganisationViewStatus = "unconfigured"
+)
+
+// Valid indicates whether the value is a known member of the OrganisationViewStatus enum.
+func (e OrganisationViewStatus) Valid() bool {
+	switch e {
+	case OrganisationViewStatusFailed:
+		return true
+	case OrganisationViewStatusOutdated:
+		return true
+	case OrganisationViewStatusPending:
+		return true
+	case OrganisationViewStatusProcessing:
+		return true
+	case OrganisationViewStatusSelected:
+		return true
+	case OrganisationViewStatusUncertain:
+		return true
+	case OrganisationViewStatusUnconfigured:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PatchOpportunityRequestKind.
 const (
 	PatchOpportunityRequestKindEmployment PatchOpportunityRequestKind = "employment"
@@ -391,6 +694,54 @@ func (e PatchOpportunityRequestWorkPattern) Valid() bool {
 	}
 }
 
+// Defines values for QualificationCriterionKind.
+const (
+	QualificationCriterionKindCompensation   QualificationCriterionKind = "compensation"
+	QualificationCriterionKindResponsibility QualificationCriterionKind = "responsibility"
+	QualificationCriterionKindRole           QualificationCriterionKind = "role"
+	QualificationCriterionKindTechnology     QualificationCriterionKind = "technology"
+	QualificationCriterionKindWorkingTerms   QualificationCriterionKind = "working_terms"
+)
+
+// Valid indicates whether the value is a known member of the QualificationCriterionKind enum.
+func (e QualificationCriterionKind) Valid() bool {
+	switch e {
+	case QualificationCriterionKindCompensation:
+		return true
+	case QualificationCriterionKindResponsibility:
+		return true
+	case QualificationCriterionKindRole:
+		return true
+	case QualificationCriterionKindTechnology:
+		return true
+	case QualificationCriterionKindWorkingTerms:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for QualificationCriterionMode.
+const (
+	QualificationCriterionModeAvoid   QualificationCriterionMode = "avoid"
+	QualificationCriterionModePrefer  QualificationCriterionMode = "prefer"
+	QualificationCriterionModeRequire QualificationCriterionMode = "require"
+)
+
+// Valid indicates whether the value is a known member of the QualificationCriterionMode enum.
+func (e QualificationCriterionMode) Valid() bool {
+	switch e {
+	case QualificationCriterionModeAvoid:
+		return true
+	case QualificationCriterionModePrefer:
+		return true
+	case QualificationCriterionModeRequire:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for QualificationCriterionState.
 const (
 	QualificationCriterionStateMatch    QualificationCriterionState = "match"
@@ -412,24 +763,45 @@ func (e QualificationCriterionState) Valid() bool {
 	}
 }
 
+// Defines values for QualificationEvaluationOptionSetStatus.
+const (
+	QualificationEvaluationOptionSetStatusConflicting QualificationEvaluationOptionSetStatus = "conflicting"
+	QualificationEvaluationOptionSetStatusCurrent     QualificationEvaluationOptionSetStatus = "current"
+	QualificationEvaluationOptionSetStatusNone        QualificationEvaluationOptionSetStatus = "none"
+)
+
+// Valid indicates whether the value is a known member of the QualificationEvaluationOptionSetStatus enum.
+func (e QualificationEvaluationOptionSetStatus) Valid() bool {
+	switch e {
+	case QualificationEvaluationOptionSetStatusConflicting:
+		return true
+	case QualificationEvaluationOptionSetStatusCurrent:
+		return true
+	case QualificationEvaluationOptionSetStatusNone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for QualificationEvaluationOverall.
 const (
-	NeedsRequalification QualificationEvaluationOverall = "needs_requalification"
-	Qualified            QualificationEvaluationOverall = "qualified"
-	Unresolved           QualificationEvaluationOverall = "unresolved"
-	Unsuitable           QualificationEvaluationOverall = "unsuitable"
+	QualificationEvaluationOverallNeedsRequalification QualificationEvaluationOverall = "needs_requalification"
+	QualificationEvaluationOverallQualified            QualificationEvaluationOverall = "qualified"
+	QualificationEvaluationOverallUnresolved           QualificationEvaluationOverall = "unresolved"
+	QualificationEvaluationOverallUnsuitable           QualificationEvaluationOverall = "unsuitable"
 )
 
 // Valid indicates whether the value is a known member of the QualificationEvaluationOverall enum.
 func (e QualificationEvaluationOverall) Valid() bool {
 	switch e {
-	case NeedsRequalification:
+	case QualificationEvaluationOverallNeedsRequalification:
 		return true
-	case Qualified:
+	case QualificationEvaluationOverallQualified:
 		return true
-	case Unresolved:
+	case QualificationEvaluationOverallUnresolved:
 		return true
-	case Unsuitable:
+	case QualificationEvaluationOverallUnsuitable:
 		return true
 	default:
 		return false
@@ -448,6 +820,30 @@ func (e QualificationInputVersionsOpportunityKind) Valid() bool {
 	case QualificationInputVersionsOpportunityKindEmployment:
 		return true
 	case QualificationInputVersionsOpportunityKindProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for QualificationOptionResultOverall.
+const (
+	QualificationOptionResultOverallNeedsRequalification QualificationOptionResultOverall = "needs_requalification"
+	QualificationOptionResultOverallQualified            QualificationOptionResultOverall = "qualified"
+	QualificationOptionResultOverallUnresolved           QualificationOptionResultOverall = "unresolved"
+	QualificationOptionResultOverallUnsuitable           QualificationOptionResultOverall = "unsuitable"
+)
+
+// Valid indicates whether the value is a known member of the QualificationOptionResultOverall enum.
+func (e QualificationOptionResultOverall) Valid() bool {
+	switch e {
+	case QualificationOptionResultOverallNeedsRequalification:
+		return true
+	case QualificationOptionResultOverallQualified:
+		return true
+	case QualificationOptionResultOverallUnresolved:
+		return true
+	case QualificationOptionResultOverallUnsuitable:
 		return true
 	default:
 		return false
@@ -477,19 +873,19 @@ func (e QualificationSalaryState) Valid() bool {
 
 // Defines values for QualificationViewStatus.
 const (
-	Current     QualificationViewStatus = "current"
-	NotAssessed QualificationViewStatus = "not_assessed"
-	Outdated    QualificationViewStatus = "outdated"
+	QualificationViewStatusCurrent     QualificationViewStatus = "current"
+	QualificationViewStatusNotAssessed QualificationViewStatus = "not_assessed"
+	QualificationViewStatusOutdated    QualificationViewStatus = "outdated"
 )
 
 // Valid indicates whether the value is a known member of the QualificationViewStatus enum.
 func (e QualificationViewStatus) Valid() bool {
 	switch e {
-	case Current:
+	case QualificationViewStatusCurrent:
 		return true
-	case NotAssessed:
+	case QualificationViewStatusNotAssessed:
 		return true
-	case Outdated:
+	case QualificationViewStatusOutdated:
 		return true
 	default:
 		return false
@@ -550,6 +946,90 @@ func (e RecordChangeSnapshotState) Valid() bool {
 	}
 }
 
+// Defines values for RoleCriterionKind.
+const (
+	RoleCriterionKindResponsibility RoleCriterionKind = "responsibility"
+	RoleCriterionKindRole           RoleCriterionKind = "role"
+	RoleCriterionKindTechnology     RoleCriterionKind = "technology"
+)
+
+// Valid indicates whether the value is a known member of the RoleCriterionKind enum.
+func (e RoleCriterionKind) Valid() bool {
+	switch e {
+	case RoleCriterionKindResponsibility:
+		return true
+	case RoleCriterionKindRole:
+		return true
+	case RoleCriterionKindTechnology:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleCriterionMode.
+const (
+	RoleCriterionModeAvoid   RoleCriterionMode = "avoid"
+	RoleCriterionModePrefer  RoleCriterionMode = "prefer"
+	RoleCriterionModeRequire RoleCriterionMode = "require"
+)
+
+// Valid indicates whether the value is a known member of the RoleCriterionMode enum.
+func (e RoleCriterionMode) Valid() bool {
+	switch e {
+	case RoleCriterionModeAvoid:
+		return true
+	case RoleCriterionModePrefer:
+		return true
+	case RoleCriterionModeRequire:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleCriterionViewKind.
+const (
+	RoleCriterionViewKindResponsibility RoleCriterionViewKind = "responsibility"
+	RoleCriterionViewKindRole           RoleCriterionViewKind = "role"
+	RoleCriterionViewKindTechnology     RoleCriterionViewKind = "technology"
+)
+
+// Valid indicates whether the value is a known member of the RoleCriterionViewKind enum.
+func (e RoleCriterionViewKind) Valid() bool {
+	switch e {
+	case RoleCriterionViewKindResponsibility:
+		return true
+	case RoleCriterionViewKindRole:
+		return true
+	case RoleCriterionViewKindTechnology:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleCriterionViewMode.
+const (
+	RoleCriterionViewModeAvoid   RoleCriterionViewMode = "avoid"
+	RoleCriterionViewModePrefer  RoleCriterionViewMode = "prefer"
+	RoleCriterionViewModeRequire RoleCriterionViewMode = "require"
+)
+
+// Valid indicates whether the value is a known member of the RoleCriterionViewMode enum.
+func (e RoleCriterionViewMode) Valid() bool {
+	switch e {
+	case RoleCriterionViewModeAvoid:
+		return true
+	case RoleCriterionViewModePrefer:
+		return true
+	case RoleCriterionViewModeRequire:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SessionResponseActorKind.
 const (
 	SessionResponseActorKindAdministrator SessionResponseActorKind = "administrator"
@@ -585,31 +1065,25 @@ func (e StatementSourceInputSpeakerAffiliation) Valid() bool {
 
 // Defines values for WriteEvidenceRequestCriterion.
 const (
-	BackendPlatform      WriteEvidenceRequestCriterion = "backend_platform"
-	LocationArrangement  WriteEvidenceRequestCriterion = "location_arrangement"
-	LocationWorkable     WriteEvidenceRequestCriterion = "location_workable"
-	MonthlyBaseSalary    WriteEvidenceRequestCriterion = "monthly_base_salary"
-	NoFrontendDuties     WriteEvidenceRequestCriterion = "no_frontend_duties"
-	NoPhpFocusedDuties   WriteEvidenceRequestCriterion = "no_php_focused_duties"
-	TargetHoursAvailable WriteEvidenceRequestCriterion = "target_hours_available"
+	WriteEvidenceRequestCriterionLocationArrangement  WriteEvidenceRequestCriterion = "location_arrangement"
+	WriteEvidenceRequestCriterionLocationWorkable     WriteEvidenceRequestCriterion = "location_workable"
+	WriteEvidenceRequestCriterionMonthlyBaseSalary    WriteEvidenceRequestCriterion = "monthly_base_salary"
+	WriteEvidenceRequestCriterionRoleCriterion        WriteEvidenceRequestCriterion = "role_criterion"
+	WriteEvidenceRequestCriterionTargetHoursAvailable WriteEvidenceRequestCriterion = "target_hours_available"
 )
 
 // Valid indicates whether the value is a known member of the WriteEvidenceRequestCriterion enum.
 func (e WriteEvidenceRequestCriterion) Valid() bool {
 	switch e {
-	case BackendPlatform:
+	case WriteEvidenceRequestCriterionLocationArrangement:
 		return true
-	case LocationArrangement:
+	case WriteEvidenceRequestCriterionLocationWorkable:
 		return true
-	case LocationWorkable:
+	case WriteEvidenceRequestCriterionMonthlyBaseSalary:
 		return true
-	case MonthlyBaseSalary:
+	case WriteEvidenceRequestCriterionRoleCriterion:
 		return true
-	case NoFrontendDuties:
-		return true
-	case NoPhpFocusedDuties:
-		return true
-	case TargetHoursAvailable:
+	case WriteEvidenceRequestCriterionTargetHoursAvailable:
 		return true
 	default:
 		return false
@@ -618,22 +1092,67 @@ func (e WriteEvidenceRequestCriterion) Valid() bool {
 
 // Defines values for WriteEvidenceRequestFinding.
 const (
-	Ambiguous        WriteEvidenceRequestFinding = "ambiguous"
-	ExplicitMatch    WriteEvidenceRequestFinding = "explicit_match"
-	ExplicitMismatch WriteEvidenceRequestFinding = "explicit_mismatch"
-	MentionOnly      WriteEvidenceRequestFinding = "mention_only"
+	WriteEvidenceRequestFindingAmbiguous        WriteEvidenceRequestFinding = "ambiguous"
+	WriteEvidenceRequestFindingExplicitMatch    WriteEvidenceRequestFinding = "explicit_match"
+	WriteEvidenceRequestFindingExplicitMismatch WriteEvidenceRequestFinding = "explicit_mismatch"
+	WriteEvidenceRequestFindingMentionOnly      WriteEvidenceRequestFinding = "mention_only"
 )
 
 // Valid indicates whether the value is a known member of the WriteEvidenceRequestFinding enum.
 func (e WriteEvidenceRequestFinding) Valid() bool {
 	switch e {
-	case Ambiguous:
+	case WriteEvidenceRequestFindingAmbiguous:
 		return true
-	case ExplicitMatch:
+	case WriteEvidenceRequestFindingExplicitMatch:
 		return true
-	case ExplicitMismatch:
+	case WriteEvidenceRequestFindingExplicitMismatch:
 		return true
-	case MentionOnly:
+	case WriteEvidenceRequestFindingMentionOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WriteEvidenceRequestRolePresence.
+const (
+	WriteEvidenceRequestRolePresenceAmbiguous        WriteEvidenceRequestRolePresence = "ambiguous"
+	WriteEvidenceRequestRolePresenceExplicitAbsence  WriteEvidenceRequestRolePresence = "explicit_absence"
+	WriteEvidenceRequestRolePresenceExplicitPresence WriteEvidenceRequestRolePresence = "explicit_presence"
+	WriteEvidenceRequestRolePresenceMentionOnly      WriteEvidenceRequestRolePresence = "mention_only"
+)
+
+// Valid indicates whether the value is a known member of the WriteEvidenceRequestRolePresence enum.
+func (e WriteEvidenceRequestRolePresence) Valid() bool {
+	switch e {
+	case WriteEvidenceRequestRolePresenceAmbiguous:
+		return true
+	case WriteEvidenceRequestRolePresenceExplicitAbsence:
+		return true
+	case WriteEvidenceRequestRolePresenceExplicitPresence:
+		return true
+	case WriteEvidenceRequestRolePresenceMentionOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListActionsParamsStatus.
+const (
+	ListActionsParamsStatusCancelled ListActionsParamsStatus = "cancelled"
+	ListActionsParamsStatusCompleted ListActionsParamsStatus = "completed"
+	ListActionsParamsStatusOpen      ListActionsParamsStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the ListActionsParamsStatus enum.
+func (e ListActionsParamsStatus) Valid() bool {
+	switch e {
+	case ListActionsParamsStatusCancelled:
+		return true
+	case ListActionsParamsStatusCompleted:
+		return true
+	case ListActionsParamsStatusOpen:
 		return true
 	default:
 		return false
@@ -676,18 +1195,83 @@ func (e ListOpportunitiesParamsKind) Valid() bool {
 	}
 }
 
+// Action defines model for Action.
+type Action struct {
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	Description string     `json:"description"`
+
+	// Due Exactly date or at plus timezone is required; the server rejects mixed or incomplete shapes.
+	Due ActionDue `json:"due"`
+
+	// DueAtUtc Normalized stored UTC instant for timed deadlines; due.at is formatted in due.timezone for valid round-trip replacement.
+	DueAtUtc *time.Time `json:"dueAtUtc,omitempty"`
+	Id       string     `json:"id"`
+
+	// OpportunityId Empty for standalone actions. Archived opportunity links remain readable.
+	OpportunityId string       `json:"opportunityId"`
+	Revision      int64        `json:"revision"`
+	Status        ActionStatus `json:"status"`
+	UpdatedAt     time.Time    `json:"updatedAt"`
+}
+
+// ActionStatus defines model for Action.Status.
+type ActionStatus string
+
+// ActionDue Exactly date or at plus timezone is required; the server rejects mixed or incomplete shapes.
+type ActionDue struct {
+	// At RFC3339 instant with offset matching the IANA timezone at that instant.
+	At *time.Time `json:"at,omitempty"`
+
+	// Date Real YYYY-MM-DD calendar date without an instant.
+	Date *string `json:"date,omitempty"`
+
+	// Timezone Valid IANA timezone for local display.
+	Timezone *string `json:"timezone,omitempty"`
+}
+
+// ActionMutation defines model for ActionMutation.
+type ActionMutation struct {
+	Action   Action `json:"action"`
+	ChangeId string `json:"changeId"`
+}
+
+// ActionPage defines model for ActionPage.
+type ActionPage struct {
+	Items      []Action `json:"items"`
+	NextCursor *string  `json:"nextCursor,omitempty"`
+}
+
+// ActionTransitionRequest defines model for ActionTransitionRequest.
+type ActionTransitionRequest struct {
+	ExpectedRevision int64 `json:"expectedRevision"`
+}
+
 // AdvertisedCompensation Advertised inputs only. No inferred or employer-confirmed actual-hours pay.
 type AdvertisedCompensation struct {
-	Basis        *AdvertisedCompensationBasis `json:"basis,omitempty"`
-	BenefitsText *string                      `json:"benefitsText,omitempty"`
+	// AnnualConversion Only when an exact source span states twelve equal monthly base payments for an annual base amount.
+	AnnualConversion *AdvertisedCompensationAnnualConversion `json:"annualConversion,omitempty"`
+
+	// AnnualConversionSpanEnd Exclusive UTF-8 byte offset for annual payment basis.
+	AnnualConversionSpanEnd *int `json:"annualConversionSpanEnd,omitempty"`
+
+	// AnnualConversionSpanStart UTF-8 byte offset into originalText for annual payment basis.
+	AnnualConversionSpanStart *int                         `json:"annualConversionSpanStart,omitempty"`
+	Basis                     *AdvertisedCompensationBasis `json:"basis,omitempty"`
+	BenefitsText              *string                      `json:"benefitsText,omitempty"`
 
 	// Currency Uppercase three-letter code or unknown.
 	Currency       *string                       `json:"currency,omitempty"`
 	MaxAmountCents *int64                        `json:"maxAmountCents,omitempty"`
 	MinAmountCents *int64                        `json:"minAmountCents,omitempty"`
 	Period         *AdvertisedCompensationPeriod `json:"period,omitempty"`
-	ReferenceHours *int64                        `json:"referenceHours,omitempty"`
+
+	// ReferenceHours Exact decimal weekly hours with at most two places.
+	ReferenceHours *string `json:"referenceHours,omitempty"`
 }
+
+// AdvertisedCompensationAnnualConversion Only when an exact source span states twelve equal monthly base payments for an annual base amount.
+type AdvertisedCompensationAnnualConversion string
 
 // AdvertisedCompensationBasis defines model for AdvertisedCompensation.Basis.
 type AdvertisedCompensationBasis string
@@ -724,6 +1308,58 @@ type ApiErrorCode string
 // ArchiveRequest defines model for ArchiveRequest.
 type ArchiveRequest struct {
 	ExpectedRevision int64 `json:"expectedRevision"`
+}
+
+// CodexConnection defines model for CodexConnection.
+type CodexConnection struct {
+	LoginId         string `json:"loginId"`
+	UserCode        string `json:"userCode"`
+	VerificationUrl string `json:"verificationUrl"`
+}
+
+// CodexStatus defines model for CodexStatus.
+type CodexStatus struct {
+	Busy bool `json:"busy"`
+
+	// Code Safe readiness or failure code.
+	Code               string           `json:"code"`
+	Connected          bool             `json:"connected"`
+	IngestionAvailable bool             `json:"ingestionAvailable"`
+	State              CodexStatusState `json:"state"`
+}
+
+// CodexStatusState defines model for CodexStatus.State.
+type CodexStatusState string
+
+// CollectorBoard defines model for CollectorBoard.
+type CollectorBoard struct {
+	CreatedAt          time.Time              `json:"createdAt"`
+	DisplayName        string                 `json:"displayName"`
+	Enabled            bool                   `json:"enabled"`
+	Id                 string                 `json:"id"`
+	IntervalMinutes    int                    `json:"intervalMinutes"`
+	LastErrorCode      *string                `json:"lastErrorCode,omitempty"`
+	LastRunAt          *time.Time             `json:"lastRunAt,omitempty"`
+	LastSuccessAt      *time.Time             `json:"lastSuccessAt,omitempty"`
+	NextScanAt         time.Time              `json:"nextScanAt"`
+	OfficialCareersUrl *string                `json:"officialCareersUrl,omitempty"`
+	Provider           CollectorBoardProvider `json:"provider"`
+	Region             CollectorBoardRegion   `json:"region"`
+	Revision           int64                  `json:"revision"`
+	Site               string                 `json:"site"`
+	UpdatedAt          time.Time              `json:"updatedAt"`
+	VerifiedAt         *time.Time             `json:"verifiedAt,omitempty"`
+}
+
+// CollectorBoardProvider defines model for CollectorBoard.Provider.
+type CollectorBoardProvider string
+
+// CollectorBoardRegion defines model for CollectorBoard.Region.
+type CollectorBoardRegion string
+
+// CollectorBoardList defines model for CollectorBoardList.
+type CollectorBoardList struct {
+	Items []CollectorBoard `json:"items"`
 }
 
 // Company defines model for Company.
@@ -765,12 +1401,37 @@ type CompanyView struct {
 	LikelyDuplicates []CompanyDuplicate `json:"likelyDuplicates"`
 }
 
+// CreateActionRequest defines model for CreateActionRequest.
+type CreateActionRequest struct {
+	Description string `json:"description"`
+
+	// Due Exactly date or at plus timezone is required; the server rejects mixed or incomplete shapes.
+	Due           ActionDue `json:"due"`
+	OpportunityId *string   `json:"opportunityId,omitempty"`
+}
+
 // CreateAgentCredentialRequest defines model for CreateAgentCredentialRequest.
 type CreateAgentCredentialRequest struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 	Name      string    `json:"name"`
 	Scopes    []string  `json:"scopes"`
 }
+
+// CreateCollectorBoardRequest defines model for CreateCollectorBoardRequest.
+type CreateCollectorBoardRequest struct {
+	DisplayName     *string                             `json:"displayName,omitempty"`
+	Enabled         bool                                `json:"enabled"`
+	IntervalMinutes int                                 `json:"intervalMinutes"`
+	Provider        CreateCollectorBoardRequestProvider `json:"provider"`
+	Region          CreateCollectorBoardRequestRegion   `json:"region"`
+	Site            string                              `json:"site"`
+}
+
+// CreateCollectorBoardRequestProvider defines model for CreateCollectorBoardRequest.Provider.
+type CreateCollectorBoardRequestProvider string
+
+// CreateCollectorBoardRequestRegion defines model for CreateCollectorBoardRequest.Region.
+type CreateCollectorBoardRequestRegion string
 
 // CreateCompanyRequest defines model for CreateCompanyRequest.
 type CreateCompanyRequest struct {
@@ -785,6 +1446,17 @@ type CreateEvidenceSourceRequest struct {
 	OwnerObservation       *OwnerObservationSourceInput `json:"ownerObservation,omitempty"`
 	Statement              *StatementSourceInput        `json:"statement,omitempty"`
 	VacancySnapshot        *VacancySnapshotInput        `json:"vacancySnapshot,omitempty"`
+}
+
+// CreateOfferOptionSetRequest defines model for CreateOfferOptionSetRequest.
+type CreateOfferOptionSetRequest struct {
+	ExpectedContextVersion  int64    `json:"expectedContextVersion"`
+	ExpectedEvidenceVersion int64    `json:"expectedEvidenceVersion"`
+	Labels                  []string `json:"labels"`
+	SourceId                string   `json:"sourceId"`
+	SpanEnd                 int      `json:"spanEnd"`
+	SpanStart               int      `json:"spanStart"`
+	SupersedesId            *string  `json:"supersedesId,omitempty"`
 }
 
 // CreateOpportunityRequest Provide sourceUrl or originalText; notes are separate from the source. No actor or confirmed-pay fields are accepted.
@@ -826,8 +1498,10 @@ type ErrorEnvelope struct {
 
 // EvidenceArrangement defines model for EvidenceArrangement.
 type EvidenceArrangement struct {
-	BaseLocation    string                     `json:"baseLocation"`
-	OnsiteDays      *int64                     `json:"onsiteDays,omitempty"`
+	BaseLocation string `json:"baseLocation"`
+
+	// OnsiteDays Exact decimal days per week
+	OnsiteDays      *string                    `json:"onsiteDays,omitempty"`
 	Pattern         EvidenceArrangementPattern `json:"pattern"`
 	RemoteGeography string                     `json:"remoteGeography"`
 }
@@ -837,36 +1511,48 @@ type EvidenceArrangementPattern string
 
 // EvidenceClaim defines model for EvidenceClaim.
 type EvidenceClaim struct {
-	Arrangement                *EvidenceArrangement `json:"arrangement,omitempty"`
-	CreatedAt                  time.Time            `json:"createdAt"`
-	Criterion                  string               `json:"criterion"`
-	ExcerptSha256              string               `json:"excerptSha256"`
-	Finding                    string               `json:"finding"`
-	HasSpan                    bool                 `json:"hasSpan"`
-	Hours                      *EvidenceHours       `json:"hours,omitempty"`
-	Id                         string               `json:"id"`
-	LegacyUnverified           bool                 `json:"legacyUnverified"`
-	ObservedAt                 string               `json:"observedAt"`
-	ObservedValue              string               `json:"observedValue"`
-	OpportunityId              string               `json:"opportunityId"`
-	OwnerPreferencesVersion    *int64               `json:"ownerPreferencesVersion,omitempty"`
-	OwnerWorkableForEvidenceId *string              `json:"ownerWorkableForEvidenceId,omitempty"`
-	Salary                     *EvidenceSalary      `json:"salary,omitempty"`
-	SourceContactText          *string              `json:"sourceContactText,omitempty"`
-	SourceExcerpt              string               `json:"sourceExcerpt"`
-	SourceId                   string               `json:"sourceId"`
-	SourceKind                 *string              `json:"sourceKind,omitempty"`
-	SourceUrl                  *string              `json:"sourceUrl,omitempty"`
-	SpanEnd                    *int                 `json:"spanEnd,omitempty"`
-	SpanStart                  *int                 `json:"spanStart,omitempty"`
-	SupersedesId               *string              `json:"supersedesId,omitempty"`
+	Arrangement                *EvidenceArrangement       `json:"arrangement,omitempty"`
+	CreatedAt                  time.Time                  `json:"createdAt"`
+	Criterion                  string                     `json:"criterion"`
+	ExcerptSha256              string                     `json:"excerptSha256"`
+	Finding                    string                     `json:"finding"`
+	HasSpan                    bool                       `json:"hasSpan"`
+	Hours                      *EvidenceHours             `json:"hours,omitempty"`
+	Id                         string                     `json:"id"`
+	ObservedAt                 string                     `json:"observedAt"`
+	ObservedValue              string                     `json:"observedValue"`
+	OfferOptionId              *string                    `json:"offerOptionId,omitempty"`
+	OpportunityId              string                     `json:"opportunityId"`
+	OwnerPreferencesVersion    *int64                     `json:"ownerPreferencesVersion,omitempty"`
+	OwnerWorkableForEvidenceId *string                    `json:"ownerWorkableForEvidenceId,omitempty"`
+	RoleCriterionId            *string                    `json:"roleCriterionId,omitempty"`
+	RoleDefinition             *RoleCriterion             `json:"roleDefinition,omitempty"`
+	RoleDefinitionHash         *string                    `json:"roleDefinitionHash,omitempty"`
+	RolePreferencesVersion     *int64                     `json:"rolePreferencesVersion,omitempty"`
+	RolePresence               *EvidenceClaimRolePresence `json:"rolePresence,omitempty"`
+	Salary                     *EvidenceSalary            `json:"salary,omitempty"`
+	SourceContactText          *string                    `json:"sourceContactText,omitempty"`
+	SourceExcerpt              string                     `json:"sourceExcerpt"`
+	SourceId                   string                     `json:"sourceId"`
+	SourceKind                 *string                    `json:"sourceKind,omitempty"`
+	SourceUrl                  *string                    `json:"sourceUrl,omitempty"`
+	SpanEnd                    *int                       `json:"spanEnd,omitempty"`
+	SpanStart                  *int                       `json:"spanStart,omitempty"`
+	SupersedesId               *string                    `json:"supersedesId,omitempty"`
 }
+
+// EvidenceClaimRolePresence defines model for EvidenceClaim.RolePresence.
+type EvidenceClaimRolePresence string
 
 // EvidenceHours defines model for EvidenceHours.
 type EvidenceHours struct {
-	HardBounds bool  `json:"hardBounds"`
-	MaxWeekly  int64 `json:"maxWeekly"`
-	MinWeekly  int64 `json:"minWeekly"`
+	HardBounds bool `json:"hardBounds"`
+
+	// MaxWeekly Exact decimal weekly hours
+	MaxWeekly string `json:"maxWeekly"`
+
+	// MinWeekly Exact decimal weekly hours
+	MinWeekly string `json:"minWeekly"`
 }
 
 // EvidenceMutation defines model for EvidenceMutation.
@@ -884,12 +1570,19 @@ type EvidencePage struct {
 
 // EvidenceSalary defines model for EvidenceSalary.
 type EvidenceSalary struct {
-	ActualWeeklyHours int64                `json:"actualWeeklyHours"`
-	AmountCents       int64                `json:"amountCents"`
-	Basis             EvidenceSalaryBasis  `json:"basis"`
-	Currency          string               `json:"currency"`
-	Period            EvidenceSalaryPeriod `json:"period"`
+	// ActualWeeklyHours Exact decimal weekly hours
+	ActualWeeklyHours string `json:"actualWeeklyHours"`
+	AmountCents       int64  `json:"amountCents"`
+
+	// AnnualConversion Include only when directly supported by the quoted source.
+	AnnualConversion *EvidenceSalaryAnnualConversion `json:"annualConversion,omitempty"`
+	Basis            EvidenceSalaryBasis             `json:"basis"`
+	Currency         string                          `json:"currency"`
+	Period           EvidenceSalaryPeriod            `json:"period"`
 }
+
+// EvidenceSalaryAnnualConversion Include only when directly supported by the quoted source.
+type EvidenceSalaryAnnualConversion string
 
 // EvidenceSalaryBasis defines model for EvidenceSalary.Basis.
 type EvidenceSalaryBasis string
@@ -952,9 +1645,76 @@ type HealthResponseService string
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
+// IngestionPage defines model for IngestionPage.
+type IngestionPage struct {
+	Items      []IngestionRequest `json:"items"`
+	NextCursor *string            `json:"nextCursor,omitempty"`
+}
+
+// IngestionRequest defines model for IngestionRequest.
+type IngestionRequest struct {
+	AttemptsStarted int64                    `json:"attemptsStarted"`
+	ConnectorId     *string                  `json:"connectorId,omitempty"`
+	CreatedAt       time.Time                `json:"createdAt"`
+	DiscoveredAt    *time.Time               `json:"discoveredAt,omitempty"`
+	ExternalId      *string                  `json:"externalId,omitempty"`
+	Id              string                   `json:"id"`
+	JobId           string                   `json:"jobId"`
+	JobState        IngestionRequestJobState `json:"jobState"`
+	OpportunityId   *string                  `json:"opportunityId,omitempty"`
+	Origin          string                   `json:"origin"`
+	OriginalText    string                   `json:"originalText"`
+	RecordChangeId  *string                  `json:"recordChangeId,omitempty"`
+	SafeErrorCode   *string                  `json:"safeErrorCode,omitempty"`
+	SourceUrl       string                   `json:"sourceUrl"`
+	Status          IngestionRequestStatus   `json:"status"`
+	UpdatedAt       time.Time                `json:"updatedAt"`
+}
+
+// IngestionRequestJobState defines model for IngestionRequest.JobState.
+type IngestionRequestJobState string
+
+// IngestionRequestStatus defines model for IngestionRequest.Status.
+type IngestionRequestStatus string
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	Password *string `json:"password,omitempty"`
+}
+
+// OfferOption defines model for OfferOption.
+type OfferOption struct {
+	Id    string `json:"id"`
+	Label string `json:"label"`
+}
+
+// OfferOptionSet defines model for OfferOptionSet.
+type OfferOptionSet struct {
+	ActorId        string        `json:"actorId"`
+	ActorKind      string        `json:"actorKind"`
+	ContextVersion int64         `json:"contextVersion"`
+	CreatedAt      time.Time     `json:"createdAt"`
+	ExcerptSha256  string        `json:"excerptSha256"`
+	Id             string        `json:"id"`
+	OpportunityId  string        `json:"opportunityId"`
+	Options        []OfferOption `json:"options"`
+	SourceExcerpt  string        `json:"sourceExcerpt"`
+	SourceId       string        `json:"sourceId"`
+	SpanEnd        int           `json:"spanEnd"`
+	SpanStart      int           `json:"spanStart"`
+	SupersedesId   *string       `json:"supersedesId,omitempty"`
+}
+
+// OfferOptionSetList defines model for OfferOptionSetList.
+type OfferOptionSetList struct {
+	Items []OfferOptionSet `json:"items"`
+}
+
+// OfferOptionSetMutation defines model for OfferOptionSetMutation.
+type OfferOptionSetMutation struct {
+	ChangeId             string                     `json:"changeId"`
+	CurrentInputVersions QualificationInputVersions `json:"currentInputVersions"`
+	Set                  OfferOptionSet             `json:"set"`
 }
 
 // Opportunity defines model for Opportunity.
@@ -1017,11 +1777,95 @@ type OpportunityView struct {
 	Opportunity      Opportunity            `json:"opportunity"`
 }
 
+// OrganisationAssessment defines model for OrganisationAssessment.
+type OrganisationAssessment struct {
+	// CategoryDescription Category definition captured at assessment time.
+	CategoryDescription *string                           `json:"categoryDescription,omitempty"`
+	CategoryId          *string                           `json:"categoryId,omitempty"`
+	CategorySetVersion  int64                             `json:"categorySetVersion"`
+	CreatedAt           time.Time                         `json:"createdAt"`
+	Disposition         OrganisationAssessmentDisposition `json:"disposition"`
+	Id                  string                            `json:"id"`
+	RequestedModel      string                            `json:"requestedModel"`
+	ReturnedModel       string                            `json:"returnedModel"`
+	SourceFacts         []OrganisationSourceFact          `json:"sourceFacts"`
+	SourceRefs          []OrganisationSourceRef           `json:"sourceRefs"`
+}
+
+// OrganisationAssessmentDisposition defines model for OrganisationAssessment.Disposition.
+type OrganisationAssessmentDisposition string
+
+// OrganisationCategory defines model for OrganisationCategory.
+type OrganisationCategory struct {
+	Description string `json:"description"`
+	Id          string `json:"id"`
+}
+
+// OrganisationCategorySet defines model for OrganisationCategorySet.
+type OrganisationCategorySet struct {
+	Categories []OrganisationCategory `json:"categories"`
+	CreatedAt  *time.Time             `json:"createdAt,omitempty"`
+	Version    int64                  `json:"version"`
+}
+
+// OrganisationSourceFact defines model for OrganisationSourceFact.
+type OrganisationSourceFact struct {
+	Excerpt        string  `json:"excerpt"`
+	Id             string  `json:"id"`
+	ObservedAt     *string `json:"observedAt,omitempty"`
+	SourceId       string  `json:"sourceId"`
+	SourceKind     string  `json:"sourceKind"`
+	SourceRevision string  `json:"sourceRevision"`
+}
+
+// OrganisationSourceRef defines model for OrganisationSourceRef.
+type OrganisationSourceRef struct {
+	FactId         string `json:"factId"`
+	SourceId       string `json:"sourceId"`
+	SourceKind     string `json:"sourceKind"`
+	SourceRevision string `json:"sourceRevision"`
+}
+
+// OrganisationSummary defines model for OrganisationSummary.
+type OrganisationSummary struct {
+	CategoryId    *string                   `json:"categoryId,omitempty"`
+	OpportunityId string                    `json:"opportunityId"`
+	Status        OrganisationSummaryStatus `json:"status"`
+}
+
+// OrganisationSummaryStatus defines model for OrganisationSummary.Status.
+type OrganisationSummaryStatus string
+
+// OrganisationSummaryList defines model for OrganisationSummaryList.
+type OrganisationSummaryList struct {
+	Items []OrganisationSummary `json:"items"`
+}
+
+// OrganisationView defines model for OrganisationView.
+type OrganisationView struct {
+	Current          *OrganisationAssessment `json:"current"`
+	JobId            *string                 `json:"jobId,omitempty"`
+	LatestHistorical *OrganisationAssessment `json:"latestHistorical"`
+	Status           OrganisationViewStatus  `json:"status"`
+}
+
+// OrganisationViewStatus defines model for OrganisationView.Status.
+type OrganisationViewStatus string
+
 // OwnerObservationSourceInput defines model for OwnerObservationSourceInput.
 type OwnerObservationSourceInput struct {
 	ExpectedPreferencesVersion int64     `json:"expectedPreferencesVersion"`
 	OccurredAt                 time.Time `json:"occurredAt"`
 	OriginalText               string    `json:"originalText"`
+}
+
+// PatchActionRequest At least one of description or due must be supplied. Final-state actions cannot be patched.
+type PatchActionRequest struct {
+	Description *string `json:"description,omitempty"`
+
+	// Due Exactly date or at plus timezone is required; the server rejects mixed or incomplete shapes.
+	Due              *ActionDue `json:"due,omitempty"`
+	ExpectedRevision int64      `json:"expectedRevision"`
 }
 
 // PatchCompanyRequest defines model for PatchCompanyRequest.
@@ -1057,59 +1901,99 @@ type PatchOpportunityRequestKind string
 // PatchOpportunityRequestWorkPattern defines model for PatchOpportunityRequest.WorkPattern.
 type PatchOpportunityRequestWorkPattern string
 
+// PreferencesInput defines model for PreferencesInput.
+type PreferencesInput struct {
+	AllowHybrid         bool            `json:"allowHybrid"`
+	AllowRemote         bool            `json:"allowRemote"`
+	MinMonthlyBaseCents int64           `json:"minMonthlyBaseCents"`
+	PreferredLocation   string          `json:"preferredLocation"`
+	RoleCriteria        []RoleCriterion `json:"roleCriteria"`
+	SalaryCurrency      string          `json:"salaryCurrency"`
+
+	// TargetHours Decimal weekly hours with at most two places. The server stores exact hundredths.
+	TargetHours string `json:"targetHours"`
+	Timezone    string `json:"timezone"`
+}
+
+// PreferencesMutation defines model for PreferencesMutation.
+type PreferencesMutation struct {
+	ChangeId    string              `json:"changeId"`
+	Preferences PreferencesResponse `json:"preferences"`
+}
+
 // PreferencesResponse defines model for PreferencesResponse.
 type PreferencesResponse struct {
-	AllowHybrid            bool   `json:"allowHybrid"`
-	AllowRemote            bool   `json:"allowRemote"`
-	ExcludeFrontendDuties  bool   `json:"excludeFrontendDuties"`
-	ExcludePHPFocused      bool   `json:"excludePHPFocused"`
-	MinMonthlyBaseCents    int64  `json:"minMonthlyBaseCents"`
-	PreferredLocation      string `json:"preferredLocation"`
-	RequireBackendPlatform bool   `json:"requireBackendPlatform"`
-	SalaryCurrency         string `json:"salaryCurrency"`
-	TargetHours            int64  `json:"targetHours"`
-	Timezone               string `json:"timezone"`
-	Version                int64  `json:"version"`
+	AllowHybrid         bool                `json:"allowHybrid"`
+	AllowRemote         bool                `json:"allowRemote"`
+	MinMonthlyBaseCents int64               `json:"minMonthlyBaseCents"`
+	PreferredLocation   string              `json:"preferredLocation"`
+	RoleCriteria        []RoleCriterionView `json:"roleCriteria"`
+	SalaryCurrency      string              `json:"salaryCurrency"`
+	TargetHours         string              `json:"targetHours"`
+	Timezone            string              `json:"timezone"`
+	Version             int64               `json:"version"`
 }
 
 // QualificationCriterion defines model for QualificationCriterion.
 type QualificationCriterion struct {
+	Blocking    *bool                       `json:"blocking,omitempty"`
 	Conflicting bool                        `json:"conflicting"`
 	Criterion   string                      `json:"criterion"`
+	CriterionId *string                     `json:"criterionId,omitempty"`
+	Description *string                     `json:"description,omitempty"`
+	EvidenceIds *[]string                   `json:"evidenceIds,omitempty"`
+	Kind        *QualificationCriterionKind `json:"kind,omitempty"`
+	Label       *string                     `json:"label,omitempty"`
+	Mode        *QualificationCriterionMode `json:"mode,omitempty"`
 	Reason      string                      `json:"reason"`
+	Relevant    *bool                       `json:"relevant,omitempty"`
+	SourceBasis *string                     `json:"sourceBasis,omitempty"`
 	State       QualificationCriterionState `json:"state"`
 }
+
+// QualificationCriterionKind defines model for QualificationCriterion.Kind.
+type QualificationCriterionKind string
+
+// QualificationCriterionMode defines model for QualificationCriterion.Mode.
+type QualificationCriterionMode string
 
 // QualificationCriterionState defines model for QualificationCriterion.State.
 type QualificationCriterionState string
 
 // QualificationEstimate defines model for QualificationEstimate.
 type QualificationEstimate struct {
-	MaxDisplayCents int64 `json:"maxDisplayCents"`
-	MinDisplayCents int64 `json:"minDisplayCents"`
-	ReferenceHours  int64 `json:"referenceHours"`
-	TargetHours     int64 `json:"targetHours"`
+	AnnualConversion *string `json:"annualConversion,omitempty"`
+	Currency         string  `json:"currency"`
+	MaxDisplayCents  int64   `json:"maxDisplayCents"`
+	MinDisplayCents  int64   `json:"minDisplayCents"`
+	ReferenceHours   string  `json:"referenceHours"`
+	TargetHours      string  `json:"targetHours"`
 }
 
 // QualificationEvaluation defines model for QualificationEvaluation.
 type QualificationEvaluation struct {
-	ActorId             string                         `json:"actorId"`
-	ActorKind           string                         `json:"actorKind"`
-	ContextVersion      int64                          `json:"contextVersion"`
-	CreatedAt           time.Time                      `json:"createdAt"`
-	Criteria            []QualificationCriterion       `json:"criteria"`
-	EvidenceVersion     int64                          `json:"evidenceVersion"`
-	Id                  string                         `json:"id"`
-	LegacyUnverified    bool                           `json:"legacyUnverified"`
-	MaterialVersion     int64                          `json:"materialVersion"`
-	OpportunityId       string                         `json:"opportunityId"`
-	OpportunityRevision int64                          `json:"opportunityRevision"`
-	Overall             QualificationEvaluationOverall `json:"overall"`
-	PreferencesVersion  int64                          `json:"preferencesVersion"`
-	RulesVersion        string                         `json:"rulesVersion"`
-	Salary              QualificationSalary            `json:"salary"`
-	SourceRefs          []QualificationSourceRef       `json:"sourceRefs"`
+	ActorId             string                                 `json:"actorId"`
+	ActorKind           string                                 `json:"actorKind"`
+	ContextVersion      int64                                  `json:"contextVersion"`
+	CreatedAt           time.Time                              `json:"createdAt"`
+	Criteria            []QualificationCriterion               `json:"criteria"`
+	EvidenceVersion     int64                                  `json:"evidenceVersion"`
+	Id                  string                                 `json:"id"`
+	MaterialVersion     int64                                  `json:"materialVersion"`
+	OpportunityId       string                                 `json:"opportunityId"`
+	OpportunityRevision int64                                  `json:"opportunityRevision"`
+	OptionResults       []QualificationOptionResult            `json:"optionResults"`
+	OptionSetIds        []string                               `json:"optionSetIds"`
+	OptionSetStatus     QualificationEvaluationOptionSetStatus `json:"optionSetStatus"`
+	Overall             QualificationEvaluationOverall         `json:"overall"`
+	PreferencesVersion  int64                                  `json:"preferencesVersion"`
+	RulesVersion        string                                 `json:"rulesVersion"`
+	Salary              QualificationSalary                    `json:"salary"`
+	SourceRefs          []QualificationSourceRef               `json:"sourceRefs"`
 }
+
+// QualificationEvaluationOptionSetStatus defines model for QualificationEvaluation.OptionSetStatus.
+type QualificationEvaluationOptionSetStatus string
 
 // QualificationEvaluationOverall defines model for QualificationEvaluation.Overall.
 type QualificationEvaluationOverall string
@@ -1143,13 +2027,31 @@ type QualificationMutation struct {
 	Evaluation           QualificationEvaluation    `json:"evaluation"`
 }
 
+// QualificationOptionResult defines model for QualificationOptionResult.
+type QualificationOptionResult struct {
+	Criteria []QualificationCriterion         `json:"criteria"`
+	Label    string                           `json:"label"`
+	OptionId string                           `json:"optionId"`
+	Overall  QualificationOptionResultOverall `json:"overall"`
+	Salary   QualificationSalary              `json:"salary"`
+}
+
+// QualificationOptionResultOverall defines model for QualificationOptionResult.Overall.
+type QualificationOptionResultOverall string
+
 // QualificationSalary defines model for QualificationSalary.
 type QualificationSalary struct {
-	ConfirmedActual bool                     `json:"confirmedActual"`
-	Conflicting     bool                     `json:"conflicting"`
-	Estimate        *QualificationEstimate   `json:"estimate,omitempty"`
-	Reason          string                   `json:"reason"`
-	State           QualificationSalaryState `json:"state"`
+	AnnualConversion *string                  `json:"annualConversion,omitempty"`
+	Applicable       *bool                    `json:"applicable,omitempty"`
+	Concern          *bool                    `json:"concern,omitempty"`
+	ConfirmedActual  bool                     `json:"confirmedActual"`
+	Conflicting      bool                     `json:"conflicting"`
+	Currency         *string                  `json:"currency,omitempty"`
+	Estimate         *QualificationEstimate   `json:"estimate,omitempty"`
+	Reason           string                   `json:"reason"`
+	SourceBasis      *string                  `json:"sourceBasis,omitempty"`
+	State            QualificationSalaryState `json:"state"`
+	TargetHours      *string                  `json:"targetHours,omitempty"`
 }
 
 // QualificationSalaryState defines model for QualificationSalary.State.
@@ -1209,6 +2111,58 @@ type RecordChangePage struct {
 	Watermark  int64          `json:"watermark"`
 }
 
+// RescheduleActionRequest defines model for RescheduleActionRequest.
+type RescheduleActionRequest struct {
+	// Due Exactly date or at plus timezone is required; the server rejects mixed or incomplete shapes.
+	Due              ActionDue `json:"due"`
+	ExpectedRevision int64     `json:"expectedRevision"`
+}
+
+// RetryIngestionRequest defines model for RetryIngestionRequest.
+type RetryIngestionRequest struct {
+	OriginalText *string `json:"originalText,omitempty"`
+}
+
+// RoleCriterion defines model for RoleCriterion.
+type RoleCriterion struct {
+	Description string            `json:"description"`
+	Id          string            `json:"id"`
+	Kind        RoleCriterionKind `json:"kind"`
+	Label       string            `json:"label"`
+	Mode        RoleCriterionMode `json:"mode"`
+}
+
+// RoleCriterionKind defines model for RoleCriterion.Kind.
+type RoleCriterionKind string
+
+// RoleCriterionMode defines model for RoleCriterion.Mode.
+type RoleCriterionMode string
+
+// RoleCriterionView defines model for RoleCriterionView.
+type RoleCriterionView struct {
+	// DefinitionHash Server-calculated SHA-256 of the complete criterion definition.
+	DefinitionHash *string               `json:"definitionHash,omitempty"`
+	Description    string                `json:"description"`
+	Id             string                `json:"id"`
+	Kind           RoleCriterionViewKind `json:"kind"`
+	Label          string                `json:"label"`
+	Mode           RoleCriterionViewMode `json:"mode"`
+}
+
+// RoleCriterionViewKind defines model for RoleCriterionView.Kind.
+type RoleCriterionViewKind string
+
+// RoleCriterionViewMode defines model for RoleCriterionView.Mode.
+type RoleCriterionViewMode string
+
+// RuntimeStatus defines model for RuntimeStatus.
+type RuntimeStatus struct {
+	// CollectionAvailable Collector loop mounted; enabled board count and run outcomes are separate.
+	CollectionAvailable   bool `json:"collectionAvailable"`
+	IngestionAvailable    bool `json:"ingestionAvailable"`
+	OrganisationAvailable bool `json:"organisationAvailable"`
+}
+
 // SessionResponse defines model for SessionResponse.
 type SessionResponse struct {
 	ActorId   string                   `json:"actorId"`
@@ -1235,6 +2189,41 @@ type StatementSourceInput struct {
 // StatementSourceInputSpeakerAffiliation defines model for StatementSourceInput.SpeakerAffiliation.
 type StatementSourceInputSpeakerAffiliation string
 
+// SubmitIngestionRequest defines model for SubmitIngestionRequest.
+type SubmitIngestionRequest struct {
+	IdempotencyKey string  `json:"idempotencyKey"`
+	OriginalText   *string `json:"originalText,omitempty"`
+	SourceUrl      *string `json:"sourceUrl,omitempty"`
+}
+
+// UpdateCollectorBoardRequest defines model for UpdateCollectorBoardRequest.
+type UpdateCollectorBoardRequest struct {
+	Enabled          bool  `json:"enabled"`
+	ExpectedRevision int64 `json:"expectedRevision"`
+	IntervalMinutes  int   `json:"intervalMinutes"`
+}
+
+// UpdateOrganisationCategoriesRequest defines model for UpdateOrganisationCategoriesRequest.
+type UpdateOrganisationCategoriesRequest struct {
+	Categories      []OrganisationCategory `json:"categories"`
+	ExpectedVersion int64                  `json:"expectedVersion"`
+}
+
+// UpdatePreferencesRequest defines model for UpdatePreferencesRequest.
+type UpdatePreferencesRequest struct {
+	AllowHybrid         bool            `json:"allowHybrid"`
+	AllowRemote         bool            `json:"allowRemote"`
+	ExpectedVersion     int64           `json:"expectedVersion"`
+	MinMonthlyBaseCents int64           `json:"minMonthlyBaseCents"`
+	PreferredLocation   string          `json:"preferredLocation"`
+	RoleCriteria        []RoleCriterion `json:"roleCriteria"`
+	SalaryCurrency      string          `json:"salaryCurrency"`
+
+	// TargetHours Decimal weekly hours with at most two places. The server stores exact hundredths.
+	TargetHours string `json:"targetHours"`
+	Timezone    string `json:"timezone"`
+}
+
 // VacancySnapshotInput defines model for VacancySnapshotInput.
 type VacancySnapshotInput struct {
 	RecordChangeAuditId string `json:"recordChangeAuditId"`
@@ -1245,12 +2234,24 @@ type WriteEvidenceRequest struct {
 	Arrangement                *EvidenceArrangement          `json:"arrangement,omitempty"`
 	Criterion                  WriteEvidenceRequestCriterion `json:"criterion"`
 	ExpectedEvidenceVersion    int64                         `json:"expectedEvidenceVersion"`
-	Finding                    WriteEvidenceRequestFinding   `json:"finding"`
+	ExpectedPreferencesVersion int64                         `json:"expectedPreferencesVersion"`
+	Finding                    *WriteEvidenceRequestFinding  `json:"finding,omitempty"`
 	Hours                      *EvidenceHours                `json:"hours,omitempty"`
-	ObservedValue              string                        `json:"observedValue"`
-	OwnerWorkableForEvidenceId *string                       `json:"ownerWorkableForEvidenceId,omitempty"`
-	Salary                     *EvidenceSalary               `json:"salary,omitempty"`
-	SourceId                   string                        `json:"sourceId"`
+
+	// ObservedValue Factual explanation of the selected source span; not a fit verdict.
+	ObservedValue string `json:"observedValue"`
+
+	// OfferOptionId Named offer option grouping for schedule and economic facts.
+	OfferOptionId              *string `json:"offerOptionId,omitempty"`
+	OwnerWorkableForEvidenceId *string `json:"ownerWorkableForEvidenceId,omitempty"`
+
+	// RoleCriterionId Stable ID from the current preference version.
+	RoleCriterionId *string `json:"roleCriterionId,omitempty"`
+
+	// RolePresence What the exact quote establishes
+	RolePresence *WriteEvidenceRequestRolePresence `json:"rolePresence,omitempty"`
+	Salary       *EvidenceSalary                   `json:"salary,omitempty"`
+	SourceId     string                            `json:"sourceId"`
 
 	// SpanEnd Exclusive UTF-8 byte offset.
 	SpanEnd int `json:"spanEnd"`
@@ -1264,6 +2265,15 @@ type WriteEvidenceRequestCriterion string
 
 // WriteEvidenceRequestFinding defines model for WriteEvidenceRequest.Finding.
 type WriteEvidenceRequestFinding string
+
+// WriteEvidenceRequestRolePresence What the exact quote establishes
+type WriteEvidenceRequestRolePresence string
+
+// ActionCalendarTimezone defines model for ActionCalendarTimezone.
+type ActionCalendarTimezone = string
+
+// ActionClock defines model for ActionClock.
+type ActionClock = time.Time
 
 // Cursor defines model for Cursor.
 type Cursor = string
@@ -1298,6 +2308,41 @@ type Unauthenticated = ErrorEnvelope
 // ValidationError defines model for ValidationError.
 type ValidationError = ErrorEnvelope
 
+// ListActionsParams defines parameters for ListActions.
+type ListActionsParams struct {
+	Limit         *Limit                   `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor        *Cursor                  `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Status        *ListActionsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	OpportunityId *string                  `form:"opportunityId,omitempty" json:"opportunityId,omitempty"`
+}
+
+// ListActionsParamsStatus defines parameters for ListActions.
+type ListActionsParamsStatus string
+
+// ListDueActionsParams defines parameters for ListDueActions.
+type ListDueActionsParams struct {
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// At Explicit RFC3339 instant with offset.
+	At ActionClock `form:"at" json:"at"`
+
+	// CalendarTimezone IANA timezone used only to compare date-only deadlines.
+	CalendarTimezone ActionCalendarTimezone `form:"calendarTimezone" json:"calendarTimezone"`
+}
+
+// ListOverdueActionsParams defines parameters for ListOverdueActions.
+type ListOverdueActionsParams struct {
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// At Explicit RFC3339 instant with offset.
+	At ActionClock `form:"at" json:"at"`
+
+	// CalendarTimezone IANA timezone used only to compare date-only deadlines.
+	CalendarTimezone ActionCalendarTimezone `form:"calendarTimezone" json:"calendarTimezone"`
+}
+
 // ListRecordChangesParams defines parameters for ListRecordChanges.
 type ListRecordChangesParams struct {
 	Limit      *Limit                             `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1314,6 +2359,12 @@ type ListCompaniesParams struct {
 	Limit           *Limit           `form:"limit,omitempty" json:"limit,omitempty"`
 	Cursor          *Cursor          `form:"cursor,omitempty" json:"cursor,omitempty"`
 	IncludeArchived *IncludeArchived `form:"includeArchived,omitempty" json:"includeArchived,omitempty"`
+}
+
+// ListIngestionsParams defines parameters for ListIngestions.
+type ListIngestionsParams struct {
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // ListOpportunitiesParams defines parameters for ListOpportunities.
@@ -1348,11 +2399,37 @@ type ListQualificationHistoryParams struct {
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// GetOrganisationSummariesParams defines parameters for GetOrganisationSummaries.
+type GetOrganisationSummariesParams struct {
+	Ids string `form:"ids" json:"ids"`
+}
+
+// CreateActionJSONRequestBody defines body for CreateAction for application/json ContentType.
+type CreateActionJSONRequestBody = CreateActionRequest
+
+// PatchActionJSONRequestBody defines body for PatchAction for application/json ContentType.
+type PatchActionJSONRequestBody = PatchActionRequest
+
+// CancelActionJSONRequestBody defines body for CancelAction for application/json ContentType.
+type CancelActionJSONRequestBody = ActionTransitionRequest
+
+// CompleteActionJSONRequestBody defines body for CompleteAction for application/json ContentType.
+type CompleteActionJSONRequestBody = ActionTransitionRequest
+
+// RescheduleActionJSONRequestBody defines body for RescheduleAction for application/json ContentType.
+type RescheduleActionJSONRequestBody = RescheduleActionRequest
+
 // CreateAgentCredentialJSONRequestBody defines body for CreateAgentCredential for application/json ContentType.
 type CreateAgentCredentialJSONRequestBody = CreateAgentCredentialRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
+
+// CreateCollectorBoardJSONRequestBody defines body for CreateCollectorBoard for application/json ContentType.
+type CreateCollectorBoardJSONRequestBody = CreateCollectorBoardRequest
+
+// UpdateCollectorBoardJSONRequestBody defines body for UpdateCollectorBoard for application/json ContentType.
+type UpdateCollectorBoardJSONRequestBody = UpdateCollectorBoardRequest
 
 // CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
 type CreateCompanyJSONRequestBody = CreateCompanyRequest
@@ -1362,6 +2439,12 @@ type PatchCompanyJSONRequestBody = PatchCompanyRequest
 
 // ArchiveCompanyJSONRequestBody defines body for ArchiveCompany for application/json ContentType.
 type ArchiveCompanyJSONRequestBody = ArchiveRequest
+
+// SubmitIngestionJSONRequestBody defines body for SubmitIngestion for application/json ContentType.
+type SubmitIngestionJSONRequestBody = SubmitIngestionRequest
+
+// RetryIngestionJSONRequestBody defines body for RetryIngestion for application/json ContentType.
+type RetryIngestionJSONRequestBody = RetryIngestionRequest
 
 // CreateOpportunityJSONRequestBody defines body for CreateOpportunity for application/json ContentType.
 type CreateOpportunityJSONRequestBody = CreateOpportunityRequest
@@ -1380,3 +2463,12 @@ type CreateEvidenceSourceJSONRequestBody = CreateEvidenceSourceRequest
 
 // SupersedeEvidenceJSONRequestBody defines body for SupersedeEvidence for application/json ContentType.
 type SupersedeEvidenceJSONRequestBody = WriteEvidenceRequest
+
+// CreateOfferOptionSetJSONRequestBody defines body for CreateOfferOptionSet for application/json ContentType.
+type CreateOfferOptionSetJSONRequestBody = CreateOfferOptionSetRequest
+
+// UpdateOrganisationCategoriesJSONRequestBody defines body for UpdateOrganisationCategories for application/json ContentType.
+type UpdateOrganisationCategoriesJSONRequestBody = UpdateOrganisationCategoriesRequest
+
+// UpdatePreferencesJSONRequestBody defines body for UpdatePreferences for application/json ContentType.
+type UpdatePreferencesJSONRequestBody = UpdatePreferencesRequest

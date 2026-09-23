@@ -84,7 +84,11 @@ export interface paths {
          * @description Bearer credentials require the preferences:read scope.
          */
         get: operations["getPreferences"];
-        put?: never;
+        /**
+         * Replace the current owner's qualification preferences
+         * @description Owner session, same-origin CSRF token, and current expectedVersion are required. A stale version returns 409; the caller must review its draft against the latest preferences.
+         */
+        put: operations["updatePreferences"];
         post?: never;
         delete?: never;
         options?: never;
@@ -201,6 +205,257 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/codex/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read isolated Codex account and ingestion readiness
+         * @description Owner session required. Status never includes a sign-in code. Ready requires connected account and verified scoped tools.
+         */
+        get: operations["getCodexStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/codex/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start owner device sign-in for the isolated Codex runner
+         * @description Owner cookie, allowed Origin and X-CSRF-Token required. Returns an official verification URL and short-lived user code only to the owner.
+         */
+        post: operations["connectCodex"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/codex/connect/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel the current owner device sign-in attempt */
+        post: operations["cancelCodexConnect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runtime-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read whether ingestion and organisation workers are mounted
+         * @description Availability reflects actual server startup, not the presence of queued jobs.
+         */
+        get: operations["getRuntimeStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organisation/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the owner's current category definitions */
+        get: operations["getOrganisationCategories"];
+        /**
+         * Replace the owner's organisation categories
+         * @description Owner cookie, allowed Origin and X-CSRF-Token required. Empty categories disable new organisation jobs. This does not change opportunity stage or qualification.
+         */
+        put: operations["updateOrganisationCategories"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organisation/summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read organisation status for up to 100 loaded opportunities
+         * @description Bearer credentials require opportunities:read. Comma-separated IDs are bounded to 100; missing IDs are omitted.
+         */
+        get: operations["getOrganisationSummaries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/collector-boards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List configured collection boards and their last observed run status */
+        get: operations["listCollectorBoards"];
+        put?: never;
+        /**
+         * Configure a Lever board for scheduled collection
+         * @description Owner cookie, allowed Origin and X-CSRF-Token required. Configuring a board does not imply that a scan or ingestion has completed.
+         */
+        post: operations["createCollectorBoard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/collector-boards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Enable, pause, or change the interval of a collection board
+         * @description Owner cookie, allowed Origin and X-CSRF-Token required. Board provider/site/region are immutable; disable and create a new board to change identity.
+         */
+        put: operations["updateCollectorBoard"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/organisation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read current and historical organisation status
+         * @description Bearer credentials require opportunities:read. Category descriptions and source facts are captured at assessment time; source references are separate from the model decision.
+         */
+        get: operations["getOpportunityOrganisation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ingestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List durable vacancy submissions and collection results
+         * @description Owner session required. Results include pending and failed submissions; processing status is derived from the job record.
+         */
+        get: operations["listIngestions"];
+        put?: never;
+        /**
+         * Persist a vacancy URL or full text for processing
+         * @description Owner cookie or bearer credential with openings:ingest. Cookie mutations require allowed Origin and X-CSRF-Token. Origin and actor derive from credentials. The source and queued job are saved atomically. Submission does not imply processing or an opportunity was created.
+         */
+        post: operations["submitIngestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ingestions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read durable processing status and linked opportunity
+         * @description Owner can read all submissions. A bearer credential with openings:ingest can read only its own submissions.
+         */
+        get: operations["getIngestion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ingestions/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry a failed submission or add full text when the URL needs it
+         * @description Owner cookie or bearer credential with openings:ingest. A bearer credential can retry only its own submission. Cookie mutations require allowed Origin and X-CSRF-Token. Only terminal failed or needs_text submissions can be retried.
+         */
+        post: operations["retryIngestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/opportunities": {
         parameters: {
             query?: never;
@@ -273,6 +528,162 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List follow-up actions in creation order
+         * @description Bearer credentials require actions:read. Filters are bound to the cursor. Actions for archived opportunities remain readable.
+         */
+        get: operations["listActions"];
+        put?: never;
+        /**
+         * Create an open follow-up action
+         * @description Bearer credentials require actions:write. Cookie mutations require Origin and X-CSRF-Token. An opportunity link must target an active opportunity. Contact links and sent events are unavailable.
+         */
+        post: operations["createAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/actions/due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List open actions due at an explicit clock
+         * @description Bearer credentials require actions:read. Date-only actions are due on their calendar date in calendarTimezone; timed actions are due at their absolute instant. Clock and timezone are bound to the cursor.
+         */
+        get: operations["listDueActions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/actions/overdue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List open actions overdue at an explicit clock
+         * @description Bearer credentials require actions:read. Date-only actions become overdue on a later local calendar day; timed actions become overdue after their absolute instant. Clock and timezone are bound to the cursor.
+         */
+        get: operations["listOverdueActions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/actions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read a follow-up action
+         * @description Bearer credentials require actions:read.
+         */
+        get: operations["getAction"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch an open action at its expected revision
+         * @description Bearer credentials require actions:write. Omitted fields are unchanged. Cookie mutations require Origin and X-CSRF-Token. A 409 includes currentAction for deliberate reconciliation; no automatic retry occurs.
+         */
+        patch: operations["patchAction"];
+        trace?: never;
+    };
+    "/actions/{id}/reschedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace an open action's deadline at its expected revision
+         * @description Bearer credentials require actions:write. The due object returned by GET is a valid replacement. A 409 includes currentAction.
+         */
+        post: operations["rescheduleAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/actions/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete an open action once
+         * @description Bearer credentials require actions:write. A 409 includes currentAction; no duplicate completion or audit is written.
+         */
+        post: operations["completeAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/actions/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel an open action once
+         * @description Bearer credentials require actions:write. A 409 includes currentAction; no duplicate cancellation or audit is written.
+         */
+        post: operations["cancelAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/changes": {
         parameters: {
             query?: never;
@@ -309,6 +720,32 @@ export interface paths {
         get: operations["getRecordChange"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/offer-option-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read current source-backed offer alternatives
+         * @description Bearer credentials require opportunities:read. Multiple current sets may require clarification before choosing an option.
+         */
+        get: operations["listCurrentOfferOptionSets"];
+        put?: never;
+        /**
+         * Review an exact source quote that explicitly offers alternatives
+         * @description Bearer credentials require evidence:write. The actor and option IDs are server derived. Cookie mutations require Origin and CSRF.
+         */
+        post: operations["createOfferOptionSet"];
         delete?: never;
         options?: never;
         head?: never;
@@ -468,7 +905,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Page immutable evaluations, including unverified legacy history
+         * Page immutable evaluations with captured preference versions
          * @description Bearer credentials require opportunities:read.
          */
         get: operations["listQualificationHistory"];
@@ -506,6 +943,172 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CodexStatus: {
+            /** @enum {string} */
+            state: "unavailable" | "needs_sign_in" | "connecting" | "ready";
+            /** @description Safe readiness or failure code. */
+            code: string;
+            connected: boolean;
+            ingestionAvailable: boolean;
+            busy: boolean;
+        };
+        CodexConnection: {
+            loginId: string;
+            /** Format: uri */
+            verificationUrl: string;
+            userCode: string;
+        };
+        RuntimeStatus: {
+            ingestionAvailable: boolean;
+            organisationAvailable: boolean;
+            /** @description Collector loop mounted; enabled board count and run outcomes are separate. */
+            collectionAvailable: boolean;
+        };
+        CollectorBoard: {
+            id: string;
+            /** @enum {string} */
+            provider: "lever";
+            site: string;
+            displayName: string;
+            /** Format: uri */
+            officialCareersUrl?: string;
+            /** Format: date-time */
+            verifiedAt?: string;
+            /** @enum {string} */
+            region: "global" | "eu";
+            enabled: boolean;
+            intervalMinutes: number;
+            /** Format: date-time */
+            nextScanAt: string;
+            /** Format: date-time */
+            lastRunAt?: string;
+            /** Format: date-time */
+            lastSuccessAt?: string;
+            lastErrorCode?: string;
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CollectorBoardList: {
+            items: components["schemas"]["CollectorBoard"][];
+        };
+        CreateCollectorBoardRequest: {
+            /** @enum {string} */
+            provider: "lever";
+            site: string;
+            displayName?: string;
+            /** @enum {string} */
+            region: "global" | "eu";
+            enabled: boolean;
+            intervalMinutes: number;
+        };
+        UpdateCollectorBoardRequest: {
+            /** Format: int64 */
+            expectedRevision: number;
+            enabled: boolean;
+            intervalMinutes: number;
+        };
+        OrganisationCategory: {
+            id: string;
+            description: string;
+        };
+        OrganisationCategorySet: {
+            /** Format: int64 */
+            version: number;
+            categories: components["schemas"]["OrganisationCategory"][];
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        UpdateOrganisationCategoriesRequest: {
+            /** Format: int64 */
+            expectedVersion: number;
+            categories: components["schemas"]["OrganisationCategory"][];
+        };
+        OrganisationSourceFact: {
+            id: string;
+            sourceId: string;
+            sourceRevision: string;
+            sourceKind: string;
+            observedAt?: string;
+            excerpt: string;
+        };
+        OrganisationSourceRef: {
+            factId: string;
+            sourceId: string;
+            sourceRevision: string;
+            sourceKind: string;
+        };
+        OrganisationAssessment: {
+            id: string;
+            /** Format: int64 */
+            categorySetVersion: number;
+            /** @enum {string} */
+            disposition: "category_selected" | "uncertain";
+            categoryId?: string;
+            /** @description Category definition captured at assessment time. */
+            categoryDescription?: string;
+            sourceFacts: components["schemas"]["OrganisationSourceFact"][];
+            sourceRefs: components["schemas"]["OrganisationSourceRef"][];
+            requestedModel: string;
+            returnedModel: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        OrganisationView: {
+            /** @enum {string} */
+            status: "unconfigured" | "pending" | "processing" | "selected" | "uncertain" | "failed" | "outdated";
+            current: components["schemas"]["OrganisationAssessment"] | null;
+            latestHistorical: components["schemas"]["OrganisationAssessment"] | null;
+            jobId?: string;
+        };
+        OrganisationSummary: {
+            opportunityId: string;
+            /** @enum {string} */
+            status: "unconfigured" | "pending" | "processing" | "selected" | "uncertain" | "failed" | "outdated";
+            categoryId?: string;
+        };
+        OrganisationSummaryList: {
+            items: components["schemas"]["OrganisationSummary"][];
+        };
+        SubmitIngestionRequest: {
+            sourceUrl?: string;
+            originalText?: string;
+            idempotencyKey: string;
+        };
+        RetryIngestionRequest: {
+            originalText?: string;
+        };
+        IngestionRequest: {
+            id: string;
+            origin: string;
+            sourceUrl: string;
+            originalText: string;
+            /** @enum {string} */
+            status: "pending" | "processing" | "completed" | "needs_text" | "failed";
+            jobId: string;
+            /** @enum {string} */
+            jobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            /** Format: int64 */
+            attemptsStarted: number;
+            connectorId?: string;
+            externalId?: string;
+            /** Format: date-time */
+            discoveredAt?: string;
+            opportunityId?: string;
+            recordChangeId?: string;
+            safeErrorCode?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        IngestionPage: {
+            items: components["schemas"]["IngestionRequest"][];
+            nextCursor?: string;
+        };
         LoginRequest: {
             password: string;
         };
@@ -517,21 +1120,51 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
         };
+        RoleCriterion: {
+            id: string;
+            label: string;
+            description: string;
+            /** @enum {string} */
+            kind: "role" | "responsibility" | "technology";
+            /** @enum {string} */
+            mode: "require" | "avoid" | "prefer";
+        };
+        RoleCriterionView: components["schemas"]["RoleCriterion"] & {
+            /** @description Server-calculated SHA-256 of the complete criterion definition. */
+            readonly definitionHash: string;
+        };
+        PreferencesInput: {
+            preferredLocation: string;
+            allowRemote: boolean;
+            allowHybrid: boolean;
+            /** @description Decimal weekly hours with at most two places. The server stores exact hundredths. */
+            targetHours: string;
+            /** Format: int64 */
+            minMonthlyBaseCents: number;
+            salaryCurrency: string;
+            timezone: string;
+            roleCriteria: components["schemas"]["RoleCriterion"][];
+        };
         PreferencesResponse: {
             /** Format: int64 */
             version: number;
             preferredLocation: string;
             allowRemote: boolean;
             allowHybrid: boolean;
-            /** Format: int64 */
-            targetHours: number;
+            targetHours: string;
             /** Format: int64 */
             minMonthlyBaseCents: number;
             salaryCurrency: string;
-            requireBackendPlatform: boolean;
-            excludeFrontendDuties: boolean;
-            excludePHPFocused: boolean;
             timezone: string;
+            roleCriteria: components["schemas"]["RoleCriterionView"][];
+        };
+        UpdatePreferencesRequest: components["schemas"]["PreferencesInput"] & {
+            /** Format: int64 */
+            expectedVersion: number;
+        };
+        PreferencesMutation: {
+            preferences: components["schemas"]["PreferencesResponse"];
+            changeId: string;
         };
         AgentCredential: {
             id: string;
@@ -577,6 +1210,69 @@ export interface components {
             details?: {
                 [key: string]: unknown;
             };
+        };
+        /** @description Exactly date or at plus timezone is required; the server rejects mixed or incomplete shapes. */
+        ActionDue: {
+            /** @description Real YYYY-MM-DD calendar date without an instant. */
+            date?: string;
+            /**
+             * Format: date-time
+             * @description RFC3339 instant with offset matching the IANA timezone at that instant.
+             */
+            at?: string;
+            /** @description Valid IANA timezone for local display. */
+            timezone?: string;
+        };
+        Action: {
+            id: string;
+            /** @description Empty for standalone actions. Archived opportunity links remain readable. */
+            opportunityId: string;
+            description: string;
+            due: components["schemas"]["ActionDue"];
+            /**
+             * Format: date-time
+             * @description Normalized stored UTC instant for timed deadlines; due.at is formatted in due.timezone for valid round-trip replacement.
+             */
+            dueAtUtc?: string;
+            /** @enum {string} */
+            status: "open" | "completed" | "cancelled";
+            /** Format: date-time */
+            completedAt?: string;
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ActionPage: {
+            items: components["schemas"]["Action"][];
+            nextCursor?: string;
+        };
+        ActionMutation: {
+            action: components["schemas"]["Action"];
+            changeId: string;
+        };
+        CreateActionRequest: {
+            opportunityId?: string;
+            description: string;
+            due: components["schemas"]["ActionDue"];
+        };
+        /** @description At least one of description or due must be supplied. Final-state actions cannot be patched. */
+        PatchActionRequest: {
+            /** Format: int64 */
+            expectedRevision: number;
+            description?: string;
+            due?: components["schemas"]["ActionDue"];
+        };
+        RescheduleActionRequest: {
+            /** Format: int64 */
+            expectedRevision: number;
+            due: components["schemas"]["ActionDue"];
+        };
+        ActionTransitionRequest: {
+            /** Format: int64 */
+            expectedRevision: number;
         };
         Company: {
             id: string;
@@ -636,8 +1332,17 @@ export interface components {
             maxAmountCents?: number;
             /** @enum {string} */
             period?: "month" | "year" | "hour" | "project" | "unknown";
-            /** Format: int64 */
-            referenceHours?: number;
+            /** @description Exact decimal weekly hours with at most two places. */
+            referenceHours?: string;
+            /**
+             * @description Only when an exact source span states twelve equal monthly base payments for an annual base amount.
+             * @enum {string}
+             */
+            annualConversion?: "twelve_equal_monthly_base_payments";
+            /** @description UTF-8 byte offset into originalText for annual payment basis. */
+            annualConversionSpanStart?: number;
+            /** @description Exclusive UTF-8 byte offset for annual payment basis. */
+            annualConversionSpanEnd?: number;
             /** @enum {string} */
             basis?: "base" | "inclusive" | "unknown";
             benefitsText?: string;
@@ -836,11 +1541,51 @@ export interface components {
             changeId: string;
             currentInputVersions: components["schemas"]["QualificationInputVersions"];
         };
+        OfferOption: {
+            id: string;
+            label: string;
+        };
+        OfferOptionSet: {
+            id: string;
+            opportunityId: string;
+            sourceId: string;
+            /** Format: int64 */
+            contextVersion: number;
+            spanStart: number;
+            spanEnd: number;
+            sourceExcerpt: string;
+            excerptSha256: string;
+            supersedesId?: string;
+            /** Format: date-time */
+            createdAt: string;
+            actorKind: string;
+            actorId: string;
+            options: components["schemas"]["OfferOption"][];
+        };
+        OfferOptionSetList: {
+            items: components["schemas"]["OfferOptionSet"][];
+        };
+        CreateOfferOptionSetRequest: {
+            sourceId: string;
+            /** Format: int64 */
+            expectedContextVersion: number;
+            /** Format: int64 */
+            expectedEvidenceVersion: number;
+            spanStart: number;
+            spanEnd: number;
+            labels: string[];
+            supersedesId?: string;
+        };
+        OfferOptionSetMutation: {
+            set: components["schemas"]["OfferOptionSet"];
+            changeId: string;
+            currentInputVersions: components["schemas"]["QualificationInputVersions"];
+        };
         EvidenceHours: {
-            /** Format: int64 */
-            minWeekly: number;
-            /** Format: int64 */
-            maxWeekly: number;
+            /** @description Exact decimal weekly hours */
+            minWeekly: string;
+            /** @description Exact decimal weekly hours */
+            maxWeekly: string;
             hardBounds: boolean;
         };
         EvidenceArrangement: {
@@ -848,8 +1593,8 @@ export interface components {
             pattern: "onsite" | "hybrid" | "remote";
             baseLocation: string;
             remoteGeography: string;
-            /** Format: int64 */
-            onsiteDays?: number;
+            /** @description Exact decimal days per week */
+            onsiteDays?: string;
         };
         EvidenceSalary: {
             currency: string;
@@ -859,15 +1604,32 @@ export interface components {
             basis: "base" | "inclusive" | "unknown";
             /** Format: int64 */
             amountCents: number;
-            /** Format: int64 */
-            actualWeeklyHours: number;
+            /** @description Exact decimal weekly hours */
+            actualWeeklyHours: string;
+            /**
+             * @description Include only when directly supported by the quoted source.
+             * @enum {string}
+             */
+            annualConversion?: "twelve_equal_monthly_base_payments";
         };
         WriteEvidenceRequest: {
             sourceId: string;
             /** @enum {string} */
-            criterion: "backend_platform" | "no_frontend_duties" | "no_php_focused_duties" | "target_hours_available" | "location_arrangement" | "location_workable" | "monthly_base_salary";
+            criterion: "role_criterion" | "target_hours_available" | "location_arrangement" | "location_workable" | "monthly_base_salary";
             /** @enum {string} */
-            finding: "explicit_match" | "explicit_mismatch" | "mention_only" | "ambiguous";
+            finding?: "explicit_match" | "explicit_mismatch" | "mention_only" | "ambiguous";
+            /** @description Stable ID from the current preference version. */
+            roleCriterionId?: string;
+            /**
+             * @description What the exact quote establishes
+             * @enum {string}
+             */
+            rolePresence?: "explicit_presence" | "explicit_absence" | "mention_only" | "ambiguous";
+            /** Format: int64 */
+            expectedPreferencesVersion: number;
+            /** @description Named offer option grouping for schedule and economic facts. */
+            offerOptionId?: string;
+            /** @description Factual explanation of the selected source span; not a fit verdict. */
             observedValue: string;
             /** @description UTF-8 byte offset into immutable source text. */
             spanStart: number;
@@ -889,6 +1651,15 @@ export interface components {
             sourceContactText?: string;
             criterion: string;
             finding: string;
+            roleCriterionId?: string;
+            /** @description Exact criterion definition captured when this claim was written. */
+            roleDefinition?: components["schemas"]["RoleCriterion"];
+            roleDefinitionHash?: string;
+            /** Format: int64 */
+            rolePreferencesVersion?: number;
+            /** @enum {string} */
+            rolePresence?: "explicit_presence" | "explicit_absence" | "mention_only" | "ambiguous";
+            offerOptionId?: string;
             observedValue: string;
             sourceExcerpt: string;
             excerptSha256: string;
@@ -905,7 +1676,6 @@ export interface components {
             /** Format: int64 */
             ownerPreferencesVersion?: number;
             salary?: components["schemas"]["EvidenceSalary"];
-            legacyUnverified: boolean;
         };
         EvidencePage: {
             items: components["schemas"]["EvidenceClaim"][];
@@ -918,6 +1688,17 @@ export interface components {
         };
         QualificationCriterion: {
             criterion: string;
+            criterionId?: string;
+            label?: string;
+            description?: string;
+            /** @enum {string} */
+            kind?: "role" | "responsibility" | "technology" | "working_terms" | "compensation";
+            /** @enum {string} */
+            mode?: "require" | "avoid" | "prefer";
+            blocking?: boolean;
+            relevant?: boolean;
+            sourceBasis?: string;
+            evidenceIds?: string[];
             /** @enum {string} */
             state: "match" | "mismatch" | "unknown";
             reason: string;
@@ -928,10 +1709,10 @@ export interface components {
             minDisplayCents: number;
             /** Format: int64 */
             maxDisplayCents: number;
-            /** Format: int64 */
-            targetHours: number;
-            /** Format: int64 */
-            referenceHours: number;
+            targetHours: string;
+            referenceHours: string;
+            currency: string;
+            annualConversion?: string;
         };
         QualificationSalary: {
             /** @enum {string} */
@@ -940,10 +1721,24 @@ export interface components {
             estimate?: components["schemas"]["QualificationEstimate"];
             confirmedActual: boolean;
             conflicting: boolean;
+            applicable?: boolean;
+            concern?: boolean;
+            currency?: string;
+            targetHours?: string;
+            sourceBasis?: string;
+            annualConversion?: string;
         };
         QualificationSourceRef: {
             evidenceId: string;
             sourceId: string;
+        };
+        QualificationOptionResult: {
+            optionId: string;
+            label: string;
+            /** @enum {string} */
+            overall: "qualified" | "unsuitable" | "unresolved" | "needs_requalification";
+            criteria: components["schemas"]["QualificationCriterion"][];
+            salary: components["schemas"]["QualificationSalary"];
         };
         QualificationEvaluation: {
             id: string;
@@ -964,11 +1759,14 @@ export interface components {
             criteria: components["schemas"]["QualificationCriterion"][];
             salary: components["schemas"]["QualificationSalary"];
             sourceRefs: components["schemas"]["QualificationSourceRef"][];
+            /** @enum {string} */
+            optionSetStatus: "none" | "current" | "conflicting";
+            optionSetIds: string[];
+            optionResults: components["schemas"]["QualificationOptionResult"][];
             /** Format: date-time */
             createdAt: string;
             actorKind: string;
             actorId: string;
-            legacyUnverified: boolean;
         };
         QualificationView: {
             /** @enum {string} */
@@ -1059,6 +1857,10 @@ export interface components {
         Limit: number;
         Cursor: string;
         IncludeArchived: boolean;
+        /** @description Explicit RFC3339 instant with offset. */
+        ActionClock: string;
+        /** @description IANA timezone used only to compare date-only deadlines. */
+        ActionCalendarTimezone: string;
     };
     requestBodies: never;
     headers: never;
@@ -1175,6 +1977,34 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    updatePreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePreferencesRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved preference version and audited change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferencesMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
         };
     };
     listAgentCredentials: {
@@ -1391,6 +2221,385 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    getCodexStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Safe connection state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodexStatus"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    connectCodex: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Device sign-in instructions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodexConnection"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["InternalError"];
+        };
+    };
+    cancelCodexConnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sign-in attempt cancelled or absent */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getRuntimeStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runtime worker availability */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeStatus"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getOrganisationCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current categories, or version zero before configuration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganisationCategorySet"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    updateOrganisationCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOrganisationCategoriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved category version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganisationCategorySet"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getOrganisationSummaries: {
+        parameters: {
+            query: {
+                ids: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganisationSummaryList"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listCollectorBoards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Collection board settings and run status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectorBoardList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createCollectorBoard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCollectorBoardRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved collection board */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectorBoard"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    updateCollectorBoard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCollectorBoardRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated collection board */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectorBoard"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getOpportunityOrganisation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Organisation result and status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganisationView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listIngestions: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ingestion page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionPage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    submitIngestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitIngestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Durable queued submission, including an idempotent repeat */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionRequest"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getIngestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ingestion status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionRequest"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    retryIngestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetryIngestionRequest"];
+            };
+        };
+        responses: {
+            /** @description New queued job for the existing submission */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionRequest"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     listOpportunities: {
         parameters: {
             query?: {
@@ -1535,6 +2744,271 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    listActions: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                status?: "open" | "completed" | "cancelled";
+                opportunityId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded current-action page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateActionRequest"];
+            };
+        };
+        responses: {
+            /** @description New action and immutable audit change reference */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listDueActions: {
+        parameters: {
+            query: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Explicit RFC3339 instant with offset. */
+                at: components["parameters"]["ActionClock"];
+                /** @description IANA timezone used only to compare date-only deadlines. */
+                calendarTimezone: components["parameters"]["ActionCalendarTimezone"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded due-action page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listOverdueActions: {
+        parameters: {
+            query: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Explicit RFC3339 instant with offset. */
+                at: components["parameters"]["ActionClock"];
+                /** @description IANA timezone used only to compare date-only deadlines. */
+                calendarTimezone: components["parameters"]["ActionCalendarTimezone"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded overdue-action page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current action */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Action"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated action and audit change reference */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    rescheduleAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RescheduleActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Rescheduled action and audit change reference */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    completeAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionTransitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Completed action and audit change reference */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    cancelAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionTransitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Cancelled action and audit change reference */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     listRecordChanges: {
         parameters: {
             query?: {
@@ -1586,6 +3060,62 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listCurrentOfferOptionSets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current alternatives */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferOptionSetList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createOfferOptionSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOfferOptionSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved immutable option set */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferOptionSetMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listEvidenceSources: {

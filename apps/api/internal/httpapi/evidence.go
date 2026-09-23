@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"unicode/utf8"
 
+	"github.com/veighnsche/find-income-dashboard/api/internal/fit"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
@@ -42,23 +43,27 @@ type createSourceRequest struct {
 }
 
 type writeEvidenceRequest struct {
-	SourceID                string `json:"sourceId"`
-	Criterion               string `json:"criterion"`
-	Finding                 string `json:"finding"`
-	ObservedValue           string `json:"observedValue"`
-	SpanStart               *int   `json:"spanStart"`
-	SpanEnd                 *int   `json:"spanEnd"`
-	ExpectedEvidenceVersion *int64 `json:"expectedEvidenceVersion"`
-	Hours                   *struct {
-		MinWeekly  int64 `json:"minWeekly"`
-		MaxWeekly  int64 `json:"maxWeekly"`
-		HardBounds *bool `json:"hardBounds"`
+	SourceID                   string `json:"sourceId"`
+	Criterion                  string `json:"criterion"`
+	RoleCriterionID            string `json:"roleCriterionId"`
+	RolePresence               string `json:"rolePresence"`
+	ExpectedPreferencesVersion *int64 `json:"expectedPreferencesVersion"`
+	OfferOptionID              string `json:"offerOptionId"`
+	Finding                    string `json:"finding"`
+	ObservedValue              string `json:"observedValue"`
+	SpanStart                  *int   `json:"spanStart"`
+	SpanEnd                    *int   `json:"spanEnd"`
+	ExpectedEvidenceVersion    *int64 `json:"expectedEvidenceVersion"`
+	Hours                      *struct {
+		MinWeekly  string `json:"minWeekly"`
+		MaxWeekly  string `json:"maxWeekly"`
+		HardBounds *bool  `json:"hardBounds"`
 	} `json:"hours"`
 	Arrangement *struct {
 		Pattern         string  `json:"pattern"`
 		BaseLocation    *string `json:"baseLocation"`
 		RemoteGeography *string `json:"remoteGeography"`
-		OnsiteDays      *int64  `json:"onsiteDays"`
+		OnsiteDays      *string `json:"onsiteDays"`
 	} `json:"arrangement"`
 	OwnerWorkableForEvidenceID *string `json:"ownerWorkableForEvidenceId"`
 	Salary                     *struct {
@@ -66,7 +71,8 @@ type writeEvidenceRequest struct {
 		Period            string `json:"period"`
 		Basis             string `json:"basis"`
 		AmountCents       *int64 `json:"amountCents"`
-		ActualWeeklyHours int64  `json:"actualWeeklyHours"`
+		ActualWeeklyHours string `json:"actualWeeklyHours"`
+		AnnualConversion  string `json:"annualConversion"`
 	} `json:"salary"`
 }
 
@@ -236,7 +242,7 @@ func evidenceModel(value store.Evidence) map[string]any {
 		"criterion": value.Criterion, "finding": value.Finding, "observedValue": value.ObservedValue,
 		"sourceExcerpt": value.SourceExcerpt, "excerptSha256": value.ExcerptSHA256,
 		"observedAt": value.ObservedAt, "createdAt": value.CreatedAt,
-		"legacyUnverified": value.Legacy, "hasSpan": value.HasSpan,
+		"hasSpan": value.HasSpan,
 	}
 	if value.HasSpan {
 		model["spanStart"], model["spanEnd"] = value.SpanStart, value.SpanEnd
@@ -253,13 +259,26 @@ func evidenceModel(value store.Evidence) map[string]any {
 	if value.SupersedesID != "" {
 		model["supersedesId"] = value.SupersedesID
 	}
+	if value.RoleCriterionID != "" {
+		model["roleCriterionId"] = value.RoleCriterionID
+		model["roleDefinitionHash"] = value.RoleDefinitionHash
+		model["rolePreferencesVersion"] = value.RolePreferencesVersion
+		model["rolePresence"] = value.RolePresence
+		if value.RoleDefinition != nil {
+			model["roleDefinition"] = value.RoleDefinition
+		}
+	}
+	if value.OfferOptionID != "" {
+		model["offerOptionId"] = value.OfferOptionID
+	}
 	if value.Hours != nil {
-		model["hours"] = map[string]any{"minWeekly": value.Hours.MinWeekly, "maxWeekly": value.Hours.MaxWeekly, "hardBounds": value.Hours.HardBounds}
+		model["hours"] = map[string]any{"minWeekly": formatHundredths(value.Hours.MinHundredths),
+			"maxWeekly": formatHundredths(value.Hours.MaxHundredths), "hardBounds": value.Hours.HardBounds}
 	}
 	if value.Arrangement != nil {
 		arrangement := map[string]any{"pattern": value.Arrangement.Pattern, "baseLocation": value.Arrangement.BaseLocation, "remoteGeography": value.Arrangement.RemoteGeography}
-		if value.Arrangement.OnsiteDays != nil {
-			arrangement["onsiteDays"] = *value.Arrangement.OnsiteDays
+		if value.Arrangement.OnsiteDaysHundredths != nil {
+			arrangement["onsiteDays"] = formatHundredths(*value.Arrangement.OnsiteDaysHundredths)
 		}
 		model["arrangement"] = arrangement
 	}
@@ -270,45 +289,85 @@ func evidenceModel(value store.Evidence) map[string]any {
 		model["ownerPreferencesVersion"] = value.OwnerPreferencesVersion
 	}
 	if value.Salary != nil {
-		model["salary"] = map[string]any{"currency": value.Salary.Currency, "period": value.Salary.Period, "basis": value.Salary.Basis, "amountCents": value.Salary.AmountCents, "actualWeeklyHours": value.Salary.ActualWeeklyHours}
+		salary := map[string]any{"currency": value.Salary.Currency, "period": value.Salary.Period,
+			"basis": value.Salary.Basis, "amountCents": value.Salary.AmountCents,
+			"actualWeeklyHours": formatHundredths(value.Salary.ActualWeeklyHoursHundredths)}
+		if value.Salary.AnnualConversion != "" {
+			salary["annualConversion"] = value.Salary.AnnualConversion
+		}
+		model["salary"] = salary
 	}
 	return model
 }
 
-func evaluationModel(value store.Evaluation) map[string]any {
-	criteria := make([]map[string]any, 0, len(value.Criteria))
-	if !value.Legacy {
-		for _, item := range value.Criteria {
-			criteria = append(criteria, map[string]any{"criterion": item.Criterion, "state": item.State, "reason": item.Reason, "conflicting": item.Conflicting})
+func criteriaModels(items []fit.CriterionResult) []map[string]any {
+	criteria := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		criterion := map[string]any{"criterion": item.Criterion, "state": item.State,
+			"reason": item.Reason, "conflicting": item.Conflicting,
+			"blocking": item.Blocking, "relevant": item.Relevant, "sourceBasis": item.SourceBasis}
+		if item.ID != "" {
+			criterion["criterionId"] = item.ID
 		}
+		if item.Label != "" {
+			criterion["label"] = item.Label
+		}
+		if item.Description != "" {
+			criterion["description"] = item.Description
+		}
+		if item.Kind != "" {
+			criterion["kind"] = item.Kind
+		}
+		if item.Mode != "" {
+			criterion["mode"] = item.Mode
+		}
+		if len(item.EvidenceIDs) > 0 {
+			criterion["evidenceIds"] = item.EvidenceIDs
+		}
+		criteria = append(criteria, criterion)
 	}
-	refs := make([]store.EvidenceRef, 0, len(value.SourceRefs))
-	if !value.Legacy {
-		refs = append(refs, value.SourceRefs...)
+	return criteria
+}
+
+func salaryModel(value fit.SalaryResult) map[string]any {
+	salary := map[string]any{"state": value.State, "reason": value.Reason,
+		"confirmedActual": value.ConfirmedActual, "conflicting": value.Conflicting,
+		"applicable": value.Applicable, "concern": value.Concern,
+		"currency": value.Currency, "targetHours": formatHundredths(value.TargetHoursHundredths),
+		"sourceBasis": value.SourceBasis, "annualConversion": value.AnnualConversion}
+	if value.Estimate != nil {
+		salary["estimate"] = map[string]any{"minDisplayCents": value.Estimate.MinDisplayCents,
+			"maxDisplayCents":  value.Estimate.MaxDisplayCents,
+			"targetHours":      formatHundredths(value.Estimate.TargetHoursHundredths),
+			"referenceHours":   formatHundredths(value.Estimate.ReferenceHoursHundredths),
+			"currency":         value.Estimate.Currency,
+			"annualConversion": value.Estimate.AnnualConversion}
 	}
-	salary := map[string]any{"state": value.Salary.State, "reason": value.Salary.Reason,
-		"confirmedActual": value.Salary.ConfirmedActual && !value.Legacy, "conflicting": value.Salary.Conflicting}
-	if value.Legacy {
-		salary = map[string]any{"state": "unknown", "reason": "Legacy evaluation has no verified source provenance.", "confirmedActual": false, "conflicting": false}
+	return salary
+}
+
+func evaluationModel(value store.Evaluation) map[string]any {
+	refs := append([]store.EvidenceRef{}, value.SourceRefs...)
+	options := make([]map[string]any, 0, len(value.OptionResults))
+	for _, item := range value.OptionResults {
+		options = append(options, map[string]any{"optionId": item.OptionID, "label": item.Label,
+			"overall": item.Overall, "criteria": criteriaModels(item.Criteria), "salary": salaryModel(item.Salary)})
 	}
-	if value.Salary.Estimate != nil && !value.Legacy {
-		salary["estimate"] = map[string]any{"minDisplayCents": value.Salary.Estimate.MinDisplayCents,
-			"maxDisplayCents": value.Salary.Estimate.MaxDisplayCents, "targetHours": value.Salary.Estimate.TargetHours,
-			"referenceHours": value.Salary.Estimate.ReferenceHours}
-	}
+	setIDs := append([]string{}, value.OptionSetIDs...)
 	return map[string]any{
 		"id": value.ID, "opportunityId": value.OpportunityID, "opportunityRevision": value.OpportunityRevision,
 		"materialVersion": value.MaterialVersion, "evidenceVersion": value.EvidenceVersion,
 		"contextVersion": value.ContextVersion, "preferencesVersion": value.PreferencesVersion,
-		"rulesVersion": value.RulesVersion, "overall": value.Overall, "criteria": criteria,
-		"salary": salary, "sourceRefs": refs, "createdAt": value.CreatedAt,
+		"rulesVersion": value.RulesVersion, "overall": value.Overall,
+		"criteria": criteriaModels(value.Criteria), "salary": salaryModel(value.Salary),
+		"optionSetStatus": value.OptionSetStatus, "optionSetIds": setIDs, "optionResults": options,
+		"sourceRefs": refs, "createdAt": value.CreatedAt,
 		"actorKind": value.Actor.Kind, "actorId": value.Actor.ID,
-		"legacyUnverified": value.Legacy,
 	}
 }
 
 func evaluationMatchesInputs(value store.Evaluation, inputs store.QualificationInputVersions) bool {
-	return !value.Legacy && value.OpportunityID == inputs.OpportunityID &&
+	return value.OpportunityID == inputs.OpportunityID &&
 		value.MaterialVersion == inputs.MaterialVersion && value.EvidenceVersion == inputs.EvidenceVersion &&
 		value.ContextVersion == inputs.ContextVersion && value.PreferencesVersion == inputs.PreferencesVersion &&
 		value.RulesVersion == inputs.RulesVersion
@@ -525,14 +584,21 @@ func (h *Handler) writeEvidence(w http.ResponseWriter, r *http.Request, supersed
 	if !decodeEvidenceJSON(w, r, evidenceClaimBodyLimit, &request) {
 		return
 	}
-	if request.SpanStart == nil || request.SpanEnd == nil || request.ExpectedEvidenceVersion == nil || *request.ExpectedEvidenceVersion < 0 {
-		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Quote offsets and expected evidence version are required.")
+	if request.SpanStart == nil || request.SpanEnd == nil || request.ExpectedEvidenceVersion == nil ||
+		*request.ExpectedEvidenceVersion < 0 || request.ExpectedPreferencesVersion == nil ||
+		*request.ExpectedPreferencesVersion < 1 {
+		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Quote offsets and current evidence/preference versions are required.")
 		return
 	}
 	if request.SourceID == "" || request.Hours != nil && request.Hours.HardBounds == nil ||
 		request.Arrangement != nil && (request.Arrangement.BaseLocation == nil || request.Arrangement.RemoteGeography == nil) ||
 		request.Salary != nil && request.Salary.AmountCents == nil {
 		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Required source or criterion facts are missing.")
+		return
+	}
+	if request.Criterion == "role_criterion" &&
+		(request.RoleCriterionID == "" || request.RolePresence == "") {
+		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Current role criterion, presence and preference version are required.")
 		return
 	}
 	if request.Criterion == "location_workable" && !p.IsOwner() {
@@ -547,7 +613,8 @@ func (h *Handler) writeEvidence(w http.ResponseWriter, r *http.Request, supersed
 		if !ok {
 			return
 		}
-		if prior.Criterion != request.Criterion {
+		if prior.Criterion != request.Criterion ||
+			request.Criterion == "role_criterion" && prior.RoleCriterionID != request.RoleCriterionID {
 			fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Replacement criterion must match prior claim.")
 			return
 		}
@@ -567,14 +634,41 @@ func (h *Handler) writeEvidence(w http.ResponseWriter, r *http.Request, supersed
 		SpanStart: *request.SpanStart, SpanEnd: *request.SpanEnd,
 		ExpectedEvidenceVersion:    *request.ExpectedEvidenceVersion,
 		OwnerWorkableForEvidenceID: request.OwnerWorkableForEvidenceID}
+	input.CriterionID = request.RoleCriterionID
+	input.Presence = request.RolePresence
+	input.OfferOptionID = request.OfferOptionID
+	if request.ExpectedPreferencesVersion != nil {
+		input.ExpectedPreferencesVersion = *request.ExpectedPreferencesVersion
+	}
 	if request.Hours != nil {
-		input.Hours = &store.HoursAvailability{MinWeekly: request.Hours.MinWeekly, MaxWeekly: request.Hours.MaxWeekly, HardBounds: *request.Hours.HardBounds}
+		minimum, minOK := parseHundredths(request.Hours.MinWeekly, 100, 16800)
+		maximum, maxOK := parseHundredths(request.Hours.MaxWeekly, 100, 16800)
+		if !minOK || !maxOK || maximum < minimum {
+			fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Hours must be exact decimals from 1 to 168 in increasing order.")
+			return
+		}
+		input.Hours = &store.HoursAvailability{MinHundredths: minimum, MaxHundredths: maximum, HardBounds: *request.Hours.HardBounds}
 	}
 	if request.Arrangement != nil {
-		input.Arrangement = &store.WorkArrangement{Pattern: request.Arrangement.Pattern, BaseLocation: *request.Arrangement.BaseLocation, RemoteGeography: *request.Arrangement.RemoteGeography, OnsiteDays: request.Arrangement.OnsiteDays}
+		input.Arrangement = &store.WorkArrangement{Pattern: request.Arrangement.Pattern, BaseLocation: *request.Arrangement.BaseLocation, RemoteGeography: *request.Arrangement.RemoteGeography}
+		if request.Arrangement.OnsiteDays != nil {
+			days, ok := parseHundredths(*request.Arrangement.OnsiteDays, 0, 700)
+			if !ok {
+				fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Onsite days must be an exact decimal from 0 to 7.")
+				return
+			}
+			input.Arrangement.OnsiteDaysHundredths = &days
+		}
 	}
 	if request.Salary != nil {
-		input.Salary = &store.ActualSalaryFacts{Currency: request.Salary.Currency, Period: request.Salary.Period, Basis: request.Salary.Basis, AmountCents: *request.Salary.AmountCents, ActualWeeklyHours: request.Salary.ActualWeeklyHours}
+		hours, ok := parseHundredths(request.Salary.ActualWeeklyHours, 100, 16800)
+		if !ok {
+			fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Actual hours must be an exact decimal from 1 to 168.")
+			return
+		}
+		input.Salary = &store.ActualSalaryFacts{Currency: request.Salary.Currency, Period: request.Salary.Period,
+			Basis: request.Salary.Basis, AmountCents: *request.Salary.AmountCents,
+			ActualWeeklyHoursHundredths: hours, AnnualConversion: request.Salary.AnnualConversion}
 	}
 	var value store.Evidence
 	var changeID string

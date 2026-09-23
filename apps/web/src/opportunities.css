@@ -8,9 +8,6 @@
   align-items: flex-start;
   gap: 1rem;
 }
-.op-heading-row > button {
-  flex: none;
-}
 .op-heading-row p {
   margin: 0.35rem 0;
 }
@@ -25,35 +22,18 @@
 .op-card h3 {
   margin-top: 0;
 }
-.op-form {
-  display: block;
-}
-.op-form > .op-card {
-  display: grid;
-  gap: 0.75rem;
-}
-.op-comp-fields {
-  display: grid;
-  gap: 0.75rem;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-.op-subform {
-  margin-top: 1rem;
-  padding: 1rem;
-  border: 1px solid #d8e2da;
-  border-radius: 0.5rem;
-}
 .op-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.8rem 1rem;
 }
-.op-grid label,
-.op-form label {
+.op-grid label {
   display: grid;
   gap: 0.35rem;
+}
+.op-card[aria-label='Vacancy intake'] > label {
+  display: block;
+  margin-bottom: 0.4rem;
 }
 .op-filters {
   grid-template-columns: 2fr repeat(3, minmax(8rem, 1fr));
@@ -112,27 +92,6 @@
 .op-history details {
   margin-top: 0.55rem;
 }
-.op-conflict {
-  margin-top: 1rem;
-  padding: 1.2rem;
-  border: 2px solid #b35a46;
-  border-radius: 0.6rem;
-  background: #fff8f3;
-}
-.op-compare-header,
-.op-compare-row {
-  display: grid;
-  grid-template-columns: 10rem minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0.7rem;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid #e2d3cb;
-}
-.op-compare-row span {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  max-height: 10rem;
-  overflow-y: auto;
-}
 .op-main .button-row {
   flex-wrap: wrap;
 }
@@ -148,12 +107,5 @@
   }
   .op-heading-row {
     flex-wrap: wrap;
-  }
-  .op-compare-header,
-  .op-compare-row {
-    grid-template-columns: 1fr;
-  }
-  .op-compare-header {
-    display: none;
   }
 }
