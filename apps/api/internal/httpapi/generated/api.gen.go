@@ -100,6 +100,7 @@ const (
 	ApiErrorCodeNotFound        ApiErrorCode = "not_found"
 	ApiErrorCodeRateLimited     ApiErrorCode = "rate_limited"
 	ApiErrorCodeUnauthenticated ApiErrorCode = "unauthenticated"
+	ApiErrorCodeUnavailable     ApiErrorCode = "unavailable"
 	ApiErrorCodeValidationError ApiErrorCode = "validation_error"
 )
 
@@ -120,6 +121,8 @@ func (e ApiErrorCode) Valid() bool {
 		return true
 	case ApiErrorCodeUnauthenticated:
 		return true
+	case ApiErrorCodeUnavailable:
+		return true
 	case ApiErrorCodeValidationError:
 		return true
 	default:
@@ -129,22 +132,22 @@ func (e ApiErrorCode) Valid() bool {
 
 // Defines values for CodexStatusState.
 const (
-	Connecting  CodexStatusState = "connecting"
-	NeedsSignIn CodexStatusState = "needs_sign_in"
-	Ready       CodexStatusState = "ready"
-	Unavailable CodexStatusState = "unavailable"
+	CodexStatusStateConnecting  CodexStatusState = "connecting"
+	CodexStatusStateNeedsSignIn CodexStatusState = "needs_sign_in"
+	CodexStatusStateReady       CodexStatusState = "ready"
+	CodexStatusStateUnavailable CodexStatusState = "unavailable"
 )
 
 // Valid indicates whether the value is a known member of the CodexStatusState enum.
 func (e CodexStatusState) Valid() bool {
 	switch e {
-	case Connecting:
+	case CodexStatusStateConnecting:
 		return true
-	case NeedsSignIn:
+	case CodexStatusStateNeedsSignIn:
 		return true
-	case Ready:
+	case CodexStatusStateReady:
 		return true
-	case Unavailable:
+	case CodexStatusStateUnavailable:
 		return true
 	default:
 		return false
@@ -1024,6 +1027,75 @@ func (e RoleCriterionViewMode) Valid() bool {
 	case RoleCriterionViewModePrefer:
 		return true
 	case RoleCriterionViewModeRequire:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoundState.
+const (
+	RoundStateAwaitingInput RoundState = "awaiting_input"
+	RoundStateCompleted     RoundState = "completed"
+	RoundStateFailed        RoundState = "failed"
+	RoundStatePaused        RoundState = "paused"
+	RoundStateQueued        RoundState = "queued"
+	RoundStateRunning       RoundState = "running"
+	RoundStateStopping      RoundState = "stopping"
+)
+
+// Valid indicates whether the value is a known member of the RoundState enum.
+func (e RoundState) Valid() bool {
+	switch e {
+	case RoundStateAwaitingInput:
+		return true
+	case RoundStateCompleted:
+		return true
+	case RoundStateFailed:
+		return true
+	case RoundStatePaused:
+		return true
+	case RoundStateQueued:
+		return true
+	case RoundStateRunning:
+		return true
+	case RoundStateStopping:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoundMutationRequestOperation.
+const (
+	CompanyCreate     RoundMutationRequestOperation = "company.create"
+	OpportunityCreate RoundMutationRequestOperation = "opportunity.create"
+)
+
+// Valid indicates whether the value is a known member of the RoundMutationRequestOperation enum.
+func (e RoundMutationRequestOperation) Valid() bool {
+	switch e {
+	case CompanyCreate:
+		return true
+	case OpportunityCreate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoundMutationResultEntityKind.
+const (
+	RoundMutationResultEntityKindCompany     RoundMutationResultEntityKind = "company"
+	RoundMutationResultEntityKindOpportunity RoundMutationResultEntityKind = "opportunity"
+)
+
+// Valid indicates whether the value is a known member of the RoundMutationResultEntityKind enum.
+func (e RoundMutationResultEntityKind) Valid() bool {
+	switch e {
+	case RoundMutationResultEntityKindCompany:
+		return true
+	case RoundMutationResultEntityKindOpportunity:
 		return true
 	default:
 		return false
@@ -2155,6 +2227,92 @@ type RoleCriterionViewKind string
 // RoleCriterionViewMode defines model for RoleCriterionView.Mode.
 type RoleCriterionViewMode string
 
+// Round defines model for Round.
+type Round struct {
+	CompletedAt            *time.Time             `json:"completedAt,omitempty"`
+	CreatedAt              time.Time              `json:"createdAt"`
+	Cursor                 map[string]interface{} `json:"cursor"`
+	Deadline               time.Time              `json:"deadline"`
+	DeliverableStatus      string                 `json:"deliverableStatus"`
+	Generation             int64                  `json:"generation"`
+	Id                     string                 `json:"id"`
+	Intent                 string                 `json:"intent"`
+	Limits                 RoundAllowance         `json:"limits"`
+	Outcome                string                 `json:"outcome"`
+	ProfileVersion         int64                  `json:"profileVersion"`
+	ReconciliationRequired bool                   `json:"reconciliationRequired"`
+	Report                 map[string]interface{} `json:"report"`
+	Revision               int64                  `json:"revision"`
+	Scope                  RoundScope             `json:"scope"`
+	State                  RoundState             `json:"state"`
+	Step                   string                 `json:"step"`
+	StopReason             string                 `json:"stopReason"`
+	Unresolved             []interface{}          `json:"unresolved"`
+	UpdatedAt              time.Time              `json:"updatedAt"`
+	Used                   RoundAllowance         `json:"used"`
+}
+
+// RoundState defines model for Round.State.
+type RoundState string
+
+// RoundAllowance defines model for RoundAllowance.
+type RoundAllowance struct {
+	Items    int64 `json:"items"`
+	Requests int64 `json:"requests"`
+	Tools    int64 `json:"tools"`
+	Turns    int64 `json:"turns"`
+}
+
+// RoundCapability defines model for RoundCapability.
+type RoundCapability struct {
+	CanStart    bool           `json:"canStart"`
+	Intent      string         `json:"intent"`
+	Limits      RoundAllowance `json:"limits"`
+	Outcome     string         `json:"outcome"`
+	Reason      string         `json:"reason"`
+	SourceCount int            `json:"sourceCount"`
+}
+
+// RoundMutationRequest defines model for RoundMutationRequest.
+type RoundMutationRequest struct {
+	Company          *CreateCompanyRequest         `json:"company,omitempty"`
+	ExpectedRevision int64                         `json:"expectedRevision"`
+	Operation        RoundMutationRequestOperation `json:"operation"`
+
+	// Opportunity Provide sourceUrl or originalText; notes are separate from the source. No actor or confirmed-pay fields are accepted.
+	Opportunity *CreateOpportunityRequest `json:"opportunity,omitempty"`
+	RequestKey  string                    `json:"requestKey"`
+	ResourceId  string                    `json:"resourceId"`
+}
+
+// RoundMutationRequestOperation defines model for RoundMutationRequest.Operation.
+type RoundMutationRequestOperation string
+
+// RoundMutationResult defines model for RoundMutationResult.
+type RoundMutationResult struct {
+	AttemptId  string                        `json:"attemptId"`
+	AuditId    string                        `json:"auditId"`
+	EntityId   string                        `json:"entityId"`
+	EntityKind RoundMutationResultEntityKind `json:"entityKind"`
+	Revision   int64                         `json:"revision"`
+}
+
+// RoundMutationResultEntityKind defines model for RoundMutationResult.EntityKind.
+type RoundMutationResultEntityKind string
+
+// RoundResults defines model for RoundResults.
+type RoundResults struct {
+	Items []interface{} `json:"items"`
+}
+
+// RoundScope defines model for RoundScope.
+type RoundScope struct {
+	Delegates  []string `json:"delegates"`
+	InputRefs  []string `json:"inputRefs"`
+	Operations []string `json:"operations"`
+	Resources  []string `json:"resources"`
+}
+
 // RuntimeStatus defines model for RuntimeStatus.
 type RuntimeStatus struct {
 	// CollectionAvailable Collector loop mounted; enabled board count and run outcomes are separate.
@@ -2173,6 +2331,11 @@ type SessionResponse struct {
 
 // SessionResponseActorKind defines model for SessionResponse.ActorKind.
 type SessionResponseActorKind string
+
+// StartRoundRequest Owner Start sends only a durable click idempotency key; the server chooses the current outcome, profile, scope, allowance and deadline.
+type StartRoundRequest struct {
+	RequestKey string `json:"requestKey"`
+}
 
 // StatementSourceInput defines model for StatementSourceInput.
 type StatementSourceInput struct {
@@ -2305,6 +2468,9 @@ type RateLimited = ErrorEnvelope
 // Unauthenticated defines model for Unauthenticated.
 type Unauthenticated = ErrorEnvelope
 
+// Unavailable defines model for Unavailable.
+type Unavailable = ErrorEnvelope
+
 // ValidationError defines model for ValidationError.
 type ValidationError = ErrorEnvelope
 
@@ -2404,11 +2570,10 @@ type GetOrganisationSummariesParams struct {
 	Ids string `form:"ids" json:"ids"`
 }
 
-// CreateActionJSONRequestBody defines body for CreateAction for application/json ContentType.
-type CreateActionJSONRequestBody = CreateActionRequest
-
-// PatchActionJSONRequestBody defines body for PatchAction for application/json ContentType.
-type PatchActionJSONRequestBody = PatchActionRequest
+// ApplyRoundMutationParams defines parameters for ApplyRoundMutation.
+type ApplyRoundMutationParams struct {
+	XRoundCapability string `json:"X-Round-Capability"`
+}
 
 // CancelActionJSONRequestBody defines body for CancelAction for application/json ContentType.
 type CancelActionJSONRequestBody = ActionTransitionRequest
@@ -2416,29 +2581,11 @@ type CancelActionJSONRequestBody = ActionTransitionRequest
 // CompleteActionJSONRequestBody defines body for CompleteAction for application/json ContentType.
 type CompleteActionJSONRequestBody = ActionTransitionRequest
 
-// RescheduleActionJSONRequestBody defines body for RescheduleAction for application/json ContentType.
-type RescheduleActionJSONRequestBody = RescheduleActionRequest
-
 // CreateAgentCredentialJSONRequestBody defines body for CreateAgentCredential for application/json ContentType.
 type CreateAgentCredentialJSONRequestBody = CreateAgentCredentialRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
-
-// CreateCollectorBoardJSONRequestBody defines body for CreateCollectorBoard for application/json ContentType.
-type CreateCollectorBoardJSONRequestBody = CreateCollectorBoardRequest
-
-// UpdateCollectorBoardJSONRequestBody defines body for UpdateCollectorBoard for application/json ContentType.
-type UpdateCollectorBoardJSONRequestBody = UpdateCollectorBoardRequest
-
-// CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
-type CreateCompanyJSONRequestBody = CreateCompanyRequest
-
-// PatchCompanyJSONRequestBody defines body for PatchCompany for application/json ContentType.
-type PatchCompanyJSONRequestBody = PatchCompanyRequest
-
-// ArchiveCompanyJSONRequestBody defines body for ArchiveCompany for application/json ContentType.
-type ArchiveCompanyJSONRequestBody = ArchiveRequest
 
 // SubmitIngestionJSONRequestBody defines body for SubmitIngestion for application/json ContentType.
 type SubmitIngestionJSONRequestBody = SubmitIngestionRequest
@@ -2446,29 +2593,8 @@ type SubmitIngestionJSONRequestBody = SubmitIngestionRequest
 // RetryIngestionJSONRequestBody defines body for RetryIngestion for application/json ContentType.
 type RetryIngestionJSONRequestBody = RetryIngestionRequest
 
-// CreateOpportunityJSONRequestBody defines body for CreateOpportunity for application/json ContentType.
-type CreateOpportunityJSONRequestBody = CreateOpportunityRequest
+// StartRoundJSONRequestBody defines body for StartRound for application/json ContentType.
+type StartRoundJSONRequestBody = StartRoundRequest
 
-// PatchOpportunityJSONRequestBody defines body for PatchOpportunity for application/json ContentType.
-type PatchOpportunityJSONRequestBody = PatchOpportunityRequest
-
-// ArchiveOpportunityJSONRequestBody defines body for ArchiveOpportunity for application/json ContentType.
-type ArchiveOpportunityJSONRequestBody = ArchiveRequest
-
-// CreateEvidenceJSONRequestBody defines body for CreateEvidence for application/json ContentType.
-type CreateEvidenceJSONRequestBody = WriteEvidenceRequest
-
-// CreateEvidenceSourceJSONRequestBody defines body for CreateEvidenceSource for application/json ContentType.
-type CreateEvidenceSourceJSONRequestBody = CreateEvidenceSourceRequest
-
-// SupersedeEvidenceJSONRequestBody defines body for SupersedeEvidence for application/json ContentType.
-type SupersedeEvidenceJSONRequestBody = WriteEvidenceRequest
-
-// CreateOfferOptionSetJSONRequestBody defines body for CreateOfferOptionSet for application/json ContentType.
-type CreateOfferOptionSetJSONRequestBody = CreateOfferOptionSetRequest
-
-// UpdateOrganisationCategoriesJSONRequestBody defines body for UpdateOrganisationCategories for application/json ContentType.
-type UpdateOrganisationCategoriesJSONRequestBody = UpdateOrganisationCategoriesRequest
-
-// UpdatePreferencesJSONRequestBody defines body for UpdatePreferences for application/json ContentType.
-type UpdatePreferencesJSONRequestBody = UpdatePreferencesRequest
+// ApplyRoundMutationJSONRequestBody defines body for ApplyRoundMutation for application/json ContentType.
+type ApplyRoundMutationJSONRequestBody = RoundMutationRequest

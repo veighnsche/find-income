@@ -17,6 +17,7 @@ var (
 	ErrUnsupported        = errors.New("codex operation unsupported")
 	ErrStaleRequest       = errors.New("codex server request no longer pending")
 	ErrInvalidArgument    = errors.New("codex invalid argument")
+	ErrHistoryIncomplete  = errors.New("codex dispatch history incomplete")
 )
 
 // RPCError deliberately discards upstream message/data. They can contain prompts,

@@ -76,3 +76,63 @@ func (s *Store) FindMatchingIngestionOpportunity(ctx context.Context, claim Job)
 	}
 	return findMatchingOpportunity(ctx, s.db, sourceURL, originalText)
 }
+
+// ResolveIngestionBeforeDispatch links a verified, identical current source
+// without starting Codex. Its lease check and mapping commit are atomic. A
+// changed source returns false so extraction can refresh the mapped record.
+func (s *Store) ResolveIngestionBeforeDispatch(ctx context.Context, claim Job) (bool, error) {
+	if claim.Kind != IngestionJobKind || claim.ID == "" || claim.LeaseToken == "" || claim.AttemptCount < 1 {
+		return false, ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `UPDATE ingestion_requests SET id=id WHERE job_id=?`, claim.ID); err != nil {
+		return false, err
+	}
+	item, err := scanIngestion(tx.QueryRowContext(ctx, `SELECT `+ingestionColumns+`
+  FROM ingestion_requests i JOIN jobs j ON j.id=i.job_id WHERE i.job_id=?
+    AND j.kind=? AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?`,
+		claim.ID, IngestionJobKind, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now())))
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, ErrConflict
+	}
+	if err != nil {
+		return false, err
+	}
+	if item.DispatchStarted || item.Status == "needs_text" || item.OriginalText == "" {
+		return false, nil
+	}
+	if item.SourceOpeningID != "" {
+		var latestID string
+		if err = tx.QueryRowContext(ctx, `SELECT current_ingestion_id FROM source_openings WHERE id=?`, item.SourceOpeningID).Scan(&latestID); err != nil {
+			return false, err
+		}
+		if latestID != item.ID {
+			return false, ErrConflict
+		}
+	}
+	match, found, err := findMatchingOpportunity(ctx, tx, item.SourceURL, item.OriginalText)
+	if err != nil || !found {
+		return false, err
+	}
+	if err = recordIngestionResultTx(ctx, tx, claim, item, match.OpportunityID, match.RecordChangeID); err != nil {
+		return false, err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE ingestion_requests SET status='completed',safe_error_code=NULL,updated_at=?
+  WHERE id=? AND job_id=? AND opportunity_id=? AND record_change_id=? AND source_id IS NOT NULL`,
+		utcNow(), item.ID, claim.ID, match.OpportunityID, match.RecordChangeID)
+	if err != nil {
+		return false, err
+	}
+	count, err := result.RowsAffected()
+	if err != nil || count != 1 {
+		return false, ErrConflict
+	}
+	if err = tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
+}

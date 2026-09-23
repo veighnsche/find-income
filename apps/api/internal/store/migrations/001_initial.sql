@@ -1,4 +1,4 @@
--- Initial schema for the single-user qualification prototype.
+-- Initial schema for the single-owner recruitment prototype.
 -- Fresh databases are seeded with editable preferences by the Go bootstrap.
 
 CREATE TABLE preferences_versions (
@@ -250,6 +250,130 @@ CREATE TABLE job_attempts (
       OR (outcome <> 'running' AND finished_at IS NOT NULL))
 );
 
+-- A commissioned round is the sole authority for recruitment work. The
+-- partial unique index includes paused rounds so restart never frees a slot.
+CREATE TABLE rounds (
+  id TEXT PRIMARY KEY,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  request_sha256 TEXT NOT NULL,
+  intent TEXT NOT NULL CHECK (length(trim(intent)) BETWEEN 1 AND 2000),
+  outcome TEXT NOT NULL CHECK (length(trim(outcome)) BETWEEN 1 AND 100),
+  profile_version INTEGER NOT NULL REFERENCES preferences_versions(version),
+  scope_json TEXT NOT NULL CHECK (json_valid(scope_json)),
+  state TEXT NOT NULL CHECK (state IN ('queued','running','awaiting_input','stopping','paused','completed','failed')),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  generation INTEGER NOT NULL CHECK (generation > 0),
+  deadline_at TEXT NOT NULL,
+  request_limit INTEGER NOT NULL CHECK (request_limit >= 0),
+  item_limit INTEGER NOT NULL CHECK (item_limit >= 0),
+  tool_limit INTEGER NOT NULL CHECK (tool_limit >= 0),
+  turn_limit INTEGER NOT NULL CHECK (turn_limit >= 0),
+  requests_used INTEGER NOT NULL DEFAULT 0 CHECK (requests_used >= 0 AND requests_used <= request_limit),
+  items_used INTEGER NOT NULL DEFAULT 0 CHECK (items_used >= 0 AND items_used <= item_limit),
+  tools_used INTEGER NOT NULL DEFAULT 0 CHECK (tools_used >= 0 AND tools_used <= tool_limit),
+  turns_used INTEGER NOT NULL DEFAULT 0 CHECK (turns_used >= 0 AND turns_used <= turn_limit),
+  step TEXT NOT NULL DEFAULT '',
+  cursor_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(cursor_json)),
+  unresolved_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(unresolved_json)),
+  report_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(report_json)),
+  stop_reason TEXT NOT NULL DEFAULT '',
+  deliverable_status TEXT NOT NULL DEFAULT '',
+  reconciliation_required INTEGER NOT NULL DEFAULT 0 CHECK (reconciliation_required IN (0,1)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  completed_at TEXT,
+  UNIQUE(actor_kind,actor_id,request_key)
+);
+CREATE UNIQUE INDEX one_active_round ON rounds((1))
+  WHERE state IN ('queued','running','awaiting_input','stopping','paused');
+
+CREATE TABLE round_attempts (
+  id TEXT PRIMARY KEY,
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  request_key TEXT NOT NULL,
+  request_sha256 TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  resource_id TEXT NOT NULL,
+  generation INTEGER NOT NULL CHECK (generation > 0),
+  state TEXT NOT NULL CHECK (state IN ('reserved','dispatched','succeeded','failed','uncertain','observed_success','observed_failure','cancelled')),
+  requests_reserved INTEGER NOT NULL CHECK (requests_reserved >= 0),
+  items_reserved INTEGER NOT NULL CHECK (items_reserved >= 0),
+  tools_reserved INTEGER NOT NULL CHECK (tools_reserved >= 0),
+  turns_reserved INTEGER NOT NULL CHECK (turns_reserved >= 0),
+  result_json TEXT CHECK (result_json IS NULL OR json_valid(result_json)),
+  late_result_json TEXT CHECK (late_result_json IS NULL OR json_valid(late_result_json)),
+  error_code TEXT NOT NULL DEFAULT '',
+  cancel_requested_at TEXT,
+  cancel_error TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  dispatched_at TEXT,
+  finished_at TEXT,
+  UNIQUE(round_id,request_key)
+);
+CREATE INDEX round_attempts_by_state ON round_attempts(round_id,state);
+
+CREATE TABLE round_remote_dispatches (
+  attempt_id TEXT PRIMARY KEY REFERENCES round_attempts(id),
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  generation INTEGER NOT NULL,
+  thread_id TEXT,
+  turn_id TEXT,
+  observed_status TEXT CHECK (observed_status IN ('completed','failed','interrupted','unknown')),
+  observed_evidence_json TEXT CHECK (observed_evidence_json IS NULL OR json_valid(observed_evidence_json)),
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE round_tool_capabilities (
+  token_sha256 TEXT PRIMARY KEY,
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  attempt_id TEXT NOT NULL REFERENCES round_attempts(id),
+  actor_id TEXT NOT NULL,
+  generation INTEGER NOT NULL,
+  issued_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+CREATE UNIQUE INDEX round_tool_capabilities_by_attempt ON round_tool_capabilities(attempt_id);
+
+CREATE TABLE round_results (
+  id TEXT PRIMARY KEY,
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  attempt_id TEXT NOT NULL UNIQUE REFERENCES round_attempts(id),
+  result_json TEXT NOT NULL CHECK (json_valid(result_json)),
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE round_record_changes (
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  attempt_id TEXT NOT NULL REFERENCES round_attempts(id),
+  audit_id TEXT NOT NULL REFERENCES audit_changes(id),
+  attached_at TEXT NOT NULL,
+  PRIMARY KEY (round_id,audit_id)
+);
+
+-- Exact collector page evidence has its own bounded row; the round cursor
+-- stores only this attempt reference and never truncates fetched postings.
+CREATE TABLE round_collector_batches (
+  attempt_id TEXT PRIMARY KEY REFERENCES round_attempts(id),
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  payload_json BLOB NOT NULL CHECK (json_valid(payload_json)),
+  bytes INTEGER NOT NULL CHECK (bytes > 0 AND bytes <= 16777216),
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE round_reconciliation_checks (
+  id TEXT PRIMARY KEY,
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  attempt_id TEXT NOT NULL REFERENCES round_attempts(id),
+  control_generation INTEGER NOT NULL CHECK (control_generation > 0),
+  state TEXT NOT NULL CHECK (state IN ('pending','resolved','unknown','fenced')),
+  evidence_json TEXT CHECK (evidence_json IS NULL OR json_valid(evidence_json)),
+  created_at TEXT NOT NULL,
+  finished_at TEXT
+);
+
 -- Both scheduled discoveries and owner submissions enter this same durable
 -- intake. Jobs provide leases/attempt history; this row preserves source and
 -- the exact verified record mapping across retries and process restarts.
@@ -264,6 +388,7 @@ CREATE TABLE ingestion_requests (
   original_text TEXT NOT NULL DEFAULT '',
   connector_id TEXT,
   external_id TEXT,
+  source_opening_id TEXT REFERENCES source_openings(id),
   discovered_at TEXT,
   status TEXT NOT NULL CHECK (status IN ('pending','processing','completed','needs_text','failed')),
   job_id TEXT NOT NULL REFERENCES jobs(id),
@@ -271,6 +396,7 @@ CREATE TABLE ingestion_requests (
   dispatch_started INTEGER NOT NULL DEFAULT 0 CHECK (dispatch_started IN (0,1)),
   codex_thread_id TEXT,
   codex_turn_id TEXT,
+  dispatch_terminal_status TEXT CHECK (dispatch_terminal_status IN ('completed','failed','interrupted')),
   opportunity_id TEXT REFERENCES opportunities(id),
   record_change_id TEXT REFERENCES record_changes(audit_id),
   source_id TEXT REFERENCES evidence_sources(id),
@@ -288,6 +414,50 @@ CREATE TABLE ingestion_requests (
 CREATE INDEX ingestion_requests_recent_idx ON ingestion_requests(created_at,id);
 CREATE INDEX ingestion_requests_job_idx ON ingestion_requests(job_id);
 CREATE INDEX ingestion_requests_opportunity_idx ON ingestion_requests(opportunity_id);
+CREATE INDEX ingestion_requests_source_opening_idx ON ingestion_requests(source_opening_id,created_at);
+
+CREATE TABLE ingestion_dispatch_history (
+  ingestion_id TEXT NOT NULL REFERENCES ingestion_requests(id),
+  job_id TEXT NOT NULL UNIQUE REFERENCES jobs(id),
+  codex_thread_id TEXT NOT NULL,
+  codex_turn_id TEXT NOT NULL,
+  terminal_status TEXT NOT NULL CHECK (terminal_status IN ('completed','failed','interrupted')),
+  confirmed_at TEXT NOT NULL,
+  PRIMARY KEY (ingestion_id,job_id)
+);
+
+-- One reliable source key owns a stable opportunity mapping. The digest is
+-- only the latest observed revision; every retrieval is retained below.
+CREATE TABLE source_openings (
+  id TEXT PRIMARY KEY,
+  identity_key TEXT NOT NULL UNIQUE,
+  canonical_url TEXT,
+  current_sha256 TEXT NOT NULL,
+  current_ingestion_id TEXT NOT NULL REFERENCES ingestion_requests(id),
+  opportunity_id TEXT REFERENCES opportunities(id),
+  latest_observed_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE source_sightings (
+  id TEXT PRIMARY KEY,
+  source_opening_id TEXT NOT NULL REFERENCES source_openings(id),
+  ingestion_id TEXT NOT NULL REFERENCES ingestion_requests(id),
+  source_url TEXT,
+  original_text TEXT NOT NULL,
+  content_sha256 TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  decision TEXT NOT NULL CHECK (decision IN ('new','changed','unchanged','older'))
+);
+CREATE INDEX source_sightings_opening_idx ON source_sightings(source_opening_id,observed_at,id);
+CREATE TRIGGER source_sightings_no_update BEFORE UPDATE ON source_sightings
+BEGIN SELECT RAISE(ABORT,'source sightings are immutable'); END;
+CREATE TRIGGER source_sightings_no_delete BEFORE DELETE ON source_sightings
+BEGIN SELECT RAISE(ABORT,'source sightings are immutable'); END;
 
 -- Configured public ATS boards are scanned in bounded pages. A cursor and
 -- lease make one scan resumable across service restarts and overlapping workers.

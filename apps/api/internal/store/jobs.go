@@ -291,9 +291,12 @@ func (s *Store) ClaimNextJob(ctx context.Context, workerID string, kinds []strin
 		return Job{}, false, err
 	}
 	marks := strings.TrimSuffix(strings.Repeat("?,", len(kinds)), ",")
+	// Recruitment jobs have no round binding yet. They remain queued until a
+	// round-scoped claimant can fence their writes and callbacks atomically.
 	query := `UPDATE jobs SET state='running', attempt_count=attempt_count+1,
   lease_token=?, lease_owner=?, lease_until=?, updated_at=?
   WHERE id=(SELECT id FROM jobs WHERE state='queued' AND available_at<=? AND kind IN (` + marks + `)
+    AND kind NOT IN ('opportunity.ingest','organisation.evaluate')
     ORDER BY available_at, created_at, id LIMIT 1)
   RETURNING ` + jobColumns
 	args := []any{token, workerID, leaseUntil, nowText, nowText}

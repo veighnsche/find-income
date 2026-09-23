@@ -7,8 +7,8 @@ import (
 
 // StartThread accepts trusted application instructions only. Runtime paths,
 // providers, tool configuration and sandbox overrides are never user inputs.
-func (c *Client) StartThread(ctx context.Context, instructions string) (Thread, error) {
-	if strings.TrimSpace(instructions) == "" {
+func (c *Client) StartThread(ctx context.Context, instructions, model string) (Thread, error) {
+	if strings.TrimSpace(instructions) == "" || strings.TrimSpace(model) == "" {
 		return Thread{}, ErrInvalidArgument
 	}
 	var result struct {
@@ -16,10 +16,11 @@ func (c *Client) StartThread(ctx context.Context, instructions string) (Thread, 
 	}
 	err := c.call(ctx, "thread/start", struct {
 		DeveloperInstructions string `json:"developerInstructions"`
+		Model                 string `json:"model"`
 		Sandbox               string `json:"sandbox"`
 		ApprovalPolicy        string `json:"approvalPolicy"`
 		ApprovalsReviewer     string `json:"approvalsReviewer"`
-	}{instructions, "workspace-write", "on-request", "user"}, &result, false)
+	}{instructions, model, "workspace-write", "on-request", "user"}, &result, false)
 	if err == nil && result.Thread.ID == "" {
 		c.fail(ErrMalformedFrame)
 		err = ErrMalformedFrame
@@ -31,8 +32,8 @@ func (c *Client) StartThread(ctx context.Context, instructions string) (Thread, 
 }
 
 // StartTurn sends text only. It makes no retry or remote idempotency promise.
-func (c *Client) StartTurn(ctx context.Context, threadID, text string) (Turn, error) {
-	if threadID == "" || strings.TrimSpace(text) == "" {
+func (c *Client) StartTurn(ctx context.Context, threadID, text, effort string) (Turn, error) {
+	if threadID == "" || strings.TrimSpace(text) == "" || strings.TrimSpace(effort) == "" {
 		return Turn{}, ErrInvalidArgument
 	}
 	type input struct {
@@ -44,8 +45,9 @@ func (c *Client) StartTurn(ctx context.Context, threadID, text string) (Turn, er
 	}
 	err := c.call(ctx, "turn/start", struct {
 		ThreadID string  `json:"threadId"`
+		Effort   string  `json:"effort"`
 		Input    []input `json:"input"`
-	}{threadID, []input{{"text", text}}}, &result, false)
+	}{threadID, effort, []input{{"text", text}}}, &result, false)
 	if err == nil && (result.Turn.ID == "" || !validTurnStatus(result.Turn.Status)) {
 		c.fail(ErrMalformedFrame)
 		err = ErrMalformedFrame

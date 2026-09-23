@@ -14,6 +14,7 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
 	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
+	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
@@ -24,6 +25,7 @@ type Options struct {
 	OrganisationAvailable bool
 	CollectionAvailable   bool
 	Codex                 *codexservice.Service
+	Rounds                *rounds.Service
 }
 
 type Handler struct {
@@ -35,6 +37,7 @@ type Handler struct {
 	organisationAvailable bool
 	collectionAvailable   bool
 	codex                 *codexservice.Service
+	rounds                *rounds.Service
 	limiter               *loginLimiter
 }
 
@@ -43,6 +46,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 		ingestionAvailable: options.IngestionAvailable, organisationAvailable: options.OrganisationAvailable,
 		collectionAvailable: options.CollectionAvailable,
 		codex:               options.Codex,
+		rounds:              options.Rounds,
 		limiter:             newLoginLimiter()}
 	for _, origin := range options.AllowedOrigins {
 		h.origins[origin] = true
@@ -53,6 +57,14 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("POST /api/v1/auth/logout", h.logout)
 	mux.HandleFunc("GET /api/v1/auth/session", h.session)
 	mux.HandleFunc("GET /api/v1/preferences", h.preferences)
+	mux.HandleFunc("GET /api/v1/rounds/active", h.activeRound)
+	mux.HandleFunc("GET /api/v1/rounds/capability", h.roundCapability)
+	mux.HandleFunc("POST /api/v1/rounds", h.startRound)
+	mux.HandleFunc("GET /api/v1/rounds/{id}", h.getRound)
+	mux.HandleFunc("GET /api/v1/rounds/{id}/results", h.roundResults)
+	mux.HandleFunc("POST /api/v1/rounds/{id}/stop", h.stopRound)
+	mux.HandleFunc("POST /api/v1/rounds/{id}/resume", h.resumeRound)
+	mux.HandleFunc("POST /api/v1/rounds/{id}/mutations", h.roundMutation)
 	mux.HandleFunc("GET /api/v1/runtime-status", h.runtimeStatus)
 	mux.HandleFunc("GET /api/v1/codex/status", h.codexStatus)
 	mux.HandleFunc("POST /api/v1/codex/connect", h.codexConnect)
@@ -60,51 +72,51 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("/api/v1/codex/mcp", h.codexMCP)
 	mux.HandleFunc("/api/v1/codex/mcp/", h.codexMCP)
 	mux.HandleFunc("GET /api/v1/organisation/categories", h.organisationCategories)
-	mux.HandleFunc("PUT /api/v1/organisation/categories", h.updateOrganisationCategories)
+	mux.HandleFunc("PUT /api/v1/organisation/categories", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/organisation/summaries", h.organisationSummaries)
 	mux.HandleFunc("GET /api/v1/collector-boards", h.listCollectorBoards)
-	mux.HandleFunc("POST /api/v1/collector-boards", h.createCollectorBoard)
-	mux.HandleFunc("PUT /api/v1/collector-boards/{id}", h.updateCollectorBoard)
-	mux.HandleFunc("PUT /api/v1/preferences", h.updatePreferences)
+	mux.HandleFunc("POST /api/v1/collector-boards", h.unsupportedRecruitmentMutation)
+	mux.HandleFunc("PUT /api/v1/collector-boards/{id}", h.unsupportedRecruitmentMutation)
+	mux.HandleFunc("PUT /api/v1/preferences", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/agent-credentials", h.listAgents)
 	mux.HandleFunc("POST /api/v1/agent-credentials", h.createAgent)
 	mux.HandleFunc("POST /api/v1/agent-credentials/{id}/revoke", h.revokeAgent)
 	mux.HandleFunc("GET /api/v1/companies", h.listCompanies)
-	mux.HandleFunc("POST /api/v1/companies", h.createCompany)
+	mux.HandleFunc("POST /api/v1/companies", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/companies/{id}", h.getCompany)
-	mux.HandleFunc("PATCH /api/v1/companies/{id}", h.patchCompany)
-	mux.HandleFunc("POST /api/v1/companies/{id}/archive", h.archiveCompany)
+	mux.HandleFunc("PATCH /api/v1/companies/{id}", h.unsupportedRecruitmentMutation)
+	mux.HandleFunc("POST /api/v1/companies/{id}/archive", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/ingestions", h.listIngestions)
 	mux.HandleFunc("POST /api/v1/ingestions", h.submitIngestion)
 	mux.HandleFunc("GET /api/v1/ingestions/{id}", h.getIngestion)
 	mux.HandleFunc("POST /api/v1/ingestions/{id}/retry", h.retryIngestion)
 	mux.HandleFunc("GET /api/v1/opportunities", h.listOpportunities)
-	mux.HandleFunc("POST /api/v1/opportunities", h.createOpportunity)
+	mux.HandleFunc("POST /api/v1/opportunities", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}", h.getOpportunity)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/organisation", h.opportunityOrganisation)
-	mux.HandleFunc("PATCH /api/v1/opportunities/{id}", h.patchOpportunity)
-	mux.HandleFunc("POST /api/v1/opportunities/{id}/archive", h.archiveOpportunity)
+	mux.HandleFunc("PATCH /api/v1/opportunities/{id}", h.unsupportedRecruitmentMutation)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/archive", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/actions", h.listActions)
-	mux.HandleFunc("POST /api/v1/actions", h.createAction)
+	mux.HandleFunc("POST /api/v1/actions", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/actions/due", h.listDueActions)
 	mux.HandleFunc("GET /api/v1/actions/overdue", h.listOverdueActions)
 	mux.HandleFunc("GET /api/v1/actions/{id}", h.getAction)
-	mux.HandleFunc("PATCH /api/v1/actions/{id}", h.patchAction)
-	mux.HandleFunc("POST /api/v1/actions/{id}/reschedule", h.rescheduleAction)
+	mux.HandleFunc("PATCH /api/v1/actions/{id}", h.unsupportedRecruitmentMutation)
+	mux.HandleFunc("POST /api/v1/actions/{id}/reschedule", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("POST /api/v1/actions/{id}/complete", h.completeAction)
 	mux.HandleFunc("POST /api/v1/actions/{id}/cancel", h.cancelAction)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/evidence-sources", h.listEvidenceSources)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/offer-option-sets", h.listOfferOptionSets)
-	mux.HandleFunc("POST /api/v1/opportunities/{id}/offer-option-sets", h.createOfferOptionSet)
-	mux.HandleFunc("POST /api/v1/opportunities/{id}/evidence-sources", h.createEvidenceSource)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/offer-option-sets", h.unsupportedRecruitmentMutation)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/evidence-sources", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/evidence-sources/{sourceId}", h.getEvidenceSource)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/evidence", h.listEvidence)
-	mux.HandleFunc("POST /api/v1/opportunities/{id}/evidence", h.createEvidence)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/evidence", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/evidence/{evidenceId}", h.getEvidence)
-	mux.HandleFunc("POST /api/v1/opportunities/{id}/evidence/{evidenceId}/supersede", h.supersedeEvidence)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/evidence/{evidenceId}/supersede", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/qualification", h.getQualification)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/qualification/history", h.listQualificationHistory)
-	mux.HandleFunc("POST /api/v1/opportunities/{id}/qualification/reevaluate", h.reevaluateQualification)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/qualification/reevaluate", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/changes", h.listChanges)
 	mux.HandleFunc("GET /api/v1/changes/{id}", h.getChange)
 	mux.HandleFunc("/api/v1/", h.privateNotFound)

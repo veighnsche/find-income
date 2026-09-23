@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -13,9 +12,6 @@ import (
 )
 
 var collectorSitePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$`)
-var collectorErrorPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,79}$`)
-
-const collectorContinuationDelay = time.Minute
 
 //go:embed default-collector-boards.json
 var defaultCollectorBoardsFS embed.FS
@@ -256,93 +252,4 @@ func (s *Store) ListCollectorBoards(ctx context.Context) ([]CollectorBoard, erro
 		boards = append(boards, board)
 	}
 	return boards, rows.Err()
-}
-
-// ClaimDueCollectorBoard leases exactly one configured due board. The update
-// is atomic, so overlapping processes cannot scan the same board concurrently.
-func (s *Store) ClaimDueCollectorBoard(ctx context.Context, now time.Time, lease time.Duration) (CollectorBoard, bool, error) {
-	if lease <= 0 || lease > 10*time.Minute {
-		return CollectorBoard{}, false, ErrInvalid
-	}
-	token, err := randomID()
-	if err != nil {
-		return CollectorBoard{}, false, err
-	}
-	board, err := scanCollectorBoard(s.db.QueryRowContext(ctx, `UPDATE collector_boards
-  SET lease_token=?,lease_until=?,updated_at=?
-  WHERE id=(SELECT id FROM collector_boards WHERE enabled=1 AND next_scan_at<=?
-    AND (lease_until IS NULL OR lease_until<=?) ORDER BY next_scan_at,id LIMIT 1)
-  RETURNING `+collectorBoardColumns, token, jobTime(now.Add(lease)), jobTime(now), jobTime(now), jobTime(now)))
-	if errors.Is(err, sql.ErrNoRows) {
-		return CollectorBoard{}, false, nil
-	}
-	return board, err == nil, err
-}
-
-type CollectorBoardResult struct {
-	NextOffset  int
-	ErrorCode   string // Empty on success; safe machine code on failure.
-	WarningCode string // Safe code for skipped invalid postings on an otherwise successful page.
-}
-
-func (s *Store) FinishCollectorBoard(ctx context.Context, claim CollectorBoard, result CollectorBoardResult, now time.Time) (bool, error) {
-	if claim.ID == "" || claim.LeaseToken == "" || result.NextOffset < 0 ||
-		(result.ErrorCode != "" && !collectorErrorPattern.MatchString(result.ErrorCode)) ||
-		(result.WarningCode != "" && !collectorErrorPattern.MatchString(result.WarningCode)) {
-		return false, ErrInvalid
-	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback()
-	var nextOffset = result.NextOffset
-	if result.ErrorCode != "" {
-		nextOffset = claim.NextOffset
-	}
-	finishedAt := jobTime(now)
-	nextScan := now.Add(time.Duration(claim.IntervalMinutes) * time.Minute)
-	if result.ErrorCode == "" && nextOffset > 0 {
-		nextScan = now.Add(collectorContinuationDelay)
-	}
-	lastCode := result.ErrorCode
-	if lastCode == "" {
-		lastCode = result.WarningCode
-	}
-	var lastSuccess any
-	if result.ErrorCode == "" {
-		lastSuccess = finishedAt
-	}
-	res, err := tx.ExecContext(ctx, `UPDATE collector_boards SET next_offset=?,next_scan_at=?,
-  lease_token=NULL,lease_until=NULL,last_run_at=?,last_success_at=COALESCE(?,last_success_at),
-  last_error_code=?,updated_at=? WHERE id=? AND lease_token=? AND lease_until>?`,
-		nextOffset, jobTime(nextScan), finishedAt,
-		lastSuccess, optionalText(lastCode), finishedAt, claim.ID, claim.LeaseToken, finishedAt)
-	if err != nil {
-		return false, err
-	}
-	count, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	if count == 0 {
-		return false, nil
-	}
-	auditID, err := randomID()
-	if err != nil {
-		return false, err
-	}
-	operation := "collector.board.scan"
-	if result.ErrorCode != "" {
-		operation = "collector.board.scan_failed"
-	} else if result.WarningCode != "" {
-		operation = "collector.board.scan_with_rejections"
-	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO audit_changes
-  (id,actor_kind,actor_id,operation,entity_kind,entity_id,occurred_at)
-  VALUES (?,?,?,?,?,?,?)`, auditID, "system", "collector", operation, "collector_board", claim.ID, finishedAt)
-	if err != nil {
-		return false, err
-	}
-	return true, tx.Commit()
 }

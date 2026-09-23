@@ -15,19 +15,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
 	"golang.org/x/term"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
-	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
-	"github.com/veighnsche/find-income-dashboard/api/internal/collector"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
-	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
-	"github.com/veighnsche/find-income-dashboard/api/internal/jobs"
-	"github.com/veighnsche/find-income-dashboard/api/internal/organisation"
+	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
@@ -40,6 +35,10 @@ func main() {
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	return runWithContext(ctx, os.Args[1:])
+}
+
+func runWithContext(ctx context.Context, args []string) error {
 	dataDir, err := privateDataDir()
 	if err != nil {
 		return err
@@ -50,8 +49,8 @@ func run() error {
 	}
 	defer database.Close()
 	service := auth.NewService(database)
-	if len(os.Args) > 1 {
-		if len(os.Args) != 2 || os.Args[1] != "setup-admin" {
+	if len(args) > 0 {
+		if len(args) != 1 || args[0] != "setup-admin" {
 			return errors.New("usage: jobseek [setup-admin]; passwords are read from stdin, never arguments")
 		}
 		if err := setupAdmin(ctx, service, os.Stdin, os.Stderr); err != nil {
@@ -68,113 +67,21 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	jevConfig := jev.DefaultConfig()
-	jevConfig.Enabled = strings.TrimSpace(os.Getenv(jev.CredentialEnvironmentVariable)) != ""
-	organisationWorker, err := newOrganisationWorker(database, jevConfig, nil)
-	if err != nil {
-		return fmt.Errorf("configure organisation worker: %w", err)
-	}
-	collectorService := &collector.Collector{Store: database, PollInterval: time.Minute, Lease: 5 * time.Minute}
-	codexRuntime, err := codexservice.NewFromEnvironment(ctx, database)
-	if err != nil {
-		return fmt.Errorf("configure Codex ingestion: %w", err)
-	}
-	defer func() { _ = codexRuntime.Close() }()
-	options.OrganisationAvailable = organisationWorker != nil
-	options.CollectionAvailable = true
-	options.Codex = codexRuntime
+	// Recruitment work requires a commissioned round. Until that boundary exists,
+	// queued collector, intake and organisation jobs stay inert even with keys.
+	// The controller is available for saved round reads and Stop. No readiness
+	// provider is attached until a bounded runtime/collector is implemented.
+	options.Rounds = &rounds.Service{Store: database}
 	server := newAPIServer(addr, newHandler(database, service, options))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
 	log.Printf("jobseek API listening on %s", addr)
-	background := []backgroundRunner{
-		{name: "collector", run: collectorService.Run},
-		{name: "Codex ingestion", run: codexRuntime.Run},
-	}
-	if organisationWorker != nil {
-		background = append(background, backgroundRunner{name: "organisation worker", run: organisationWorker.Run})
-	}
-	if err := serveWithBackground(ctx, server, listener, background...); err != nil {
+	if err := serveUntil(ctx, server, listener); err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
 	return nil
-}
-
-// No credential means no worker claims: queued organisation jobs remain
-// pending until the server is configured with a valid provider key.
-func newOrganisationWorker(database *store.Store, cfg jev.Config, httpClient *http.Client) (*jobs.Worker, error) {
-	if !cfg.Enabled {
-		return nil, nil
-	}
-	client, err := jev.NewFromEnvironment(cfg, httpClient)
-	if err != nil {
-		return nil, err
-	}
-	return &jobs.Worker{
-		Queue: database, ID: fmt.Sprintf("organisation-%d", os.Getpid()),
-		Handlers:     map[string]jobs.Handler{store.OrganisationJobKind: organisation.Handler(database, client)},
-		PollInterval: time.Second, LeaseDuration: time.Minute,
-	}, nil
-}
-
-type backgroundRunner struct {
-	name string
-	run  func(context.Context) error
-}
-
-type backgroundResult struct {
-	name string
-	err  error
-}
-
-// serveWithBackground gives each configured service the same cancellation
-// boundary, and joins every service before run closes the database.
-func serveWithBackground(ctx context.Context, server *http.Server, listener net.Listener, runners ...backgroundRunner) error {
-	if len(runners) == 0 {
-		return serveUntil(ctx, server, listener)
-	}
-	serviceCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	runnerDone := make(chan backgroundResult, len(runners))
-	serverDone := make(chan error, 1)
-	for _, runner := range runners {
-		go func() { runnerDone <- backgroundResult{name: runner.name, err: runner.run(serviceCtx)} }()
-	}
-	go func() { serverDone <- serveUntil(serviceCtx, server, listener) }()
-	select {
-	case result := <-runnerDone:
-		unexpectedStop := ctx.Err() == nil && result.err == nil
-		cancel()
-		serverErr := <-serverDone
-		for range len(runners) - 1 {
-			other := <-runnerDone
-			if result.err == nil && other.err != nil {
-				result = other
-			}
-		}
-		if result.err != nil {
-			return fmt.Errorf("%s: %w", result.name, result.err)
-		}
-		if unexpectedStop {
-			return fmt.Errorf("%s stopped unexpectedly", result.name)
-		}
-		return serverErr
-	case serverErr := <-serverDone:
-		cancel()
-		var runnerErr error
-		for range runners {
-			result := <-runnerDone
-			if runnerErr == nil && result.err != nil {
-				runnerErr = fmt.Errorf("%s: %w", result.name, result.err)
-			}
-		}
-		if serverErr != nil {
-			return serverErr
-		}
-		return runnerErr
-	}
 }
 
 func newAPIServer(addr string, handler http.Handler) *http.Server {

@@ -68,12 +68,13 @@ export function CodexConnectionPanel({
     <section className="status">
       <h2>Codex processing</h2>
       <p>
-        Codex reads queued vacancies and saves extracted opportunities when its isolated runner and
-        scoped tools are ready.
+        This connects the isolated Codex runner. Signing in or reconnecting does not start
+        recruitment work; a separately commissioned round also needs server-confirmed execution
+        readiness.
       </p>
       <p role="status">
         {status
-          ? `Connection: ${status.state.replaceAll('_', ' ')} · ${status.code.replaceAll('_', ' ')}. Ingestion worker: ${status.ingestionAvailable ? 'ready' : 'unavailable'}.`
+          ? `Connection: ${status.state.replaceAll('_', ' ')} · ${status.code.replaceAll('_', ' ')}. Intake worker: ${status.ingestionAvailable ? 'connected' : 'unavailable'}. Round execution readiness is not reported here.`
           : 'Checking Codex connection…'}
       </p>
       {error && (

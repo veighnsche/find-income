@@ -1,5 +1,5 @@
-// Package collector reads configured public ATS boards in bounded batches and
-// submits their sourced postings to the shared durable ingestion queue.
+// Package collector acquires exact public ATS postings for a commissioned
+// round. The caller owns round authority, allowances and durable staging.
 package collector
 
 import (
@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,35 +19,56 @@ import (
 )
 
 const pageLimit = 25
-const maxPagesPerRun = 2
 const maxResponseBytes = 6 << 20
 
-type IntakeStore interface {
-	ClaimDueCollectorBoard(context.Context, time.Time, time.Duration) (store.CollectorBoard, bool, error)
-	FinishCollectorBoard(context.Context, store.CollectorBoard, store.CollectorBoardResult, time.Time) (bool, error)
-	SubmitIngestion(context.Context, store.Actor, store.IngestionInput) (store.IngestionRequest, bool, error)
-}
-
 type Collector struct {
-	Store        IntakeStore
-	HTTPClient   *http.Client
-	PollInterval time.Duration
-	Lease        time.Duration
-	Now          func() time.Time
+	HTTPClient *http.Client
+	Now        func() time.Time
 	// endpoint is only overridden by package tests. Production always uses the
 	// fixed Lever API host for the configured region.
 	endpoint func(store.CollectorBoard) string
 }
 
-type RunReport struct {
-	BoardID     string
-	Found       bool
-	Submitted   int
-	Duplicates  int
-	Rejected    int
-	NextOffset  int
-	ErrorCode   string
-	WarningCode string
+// Cursor is a serialized page boundary. Pending keeps the exact unread
+// response items if an item allowance stops in the middle of a page.
+type Cursor struct {
+	BoardID    string           `json:"boardId"`
+	NextOffset int              `json:"nextOffset"`
+	Pending    []PendingPosting `json:"pending,omitempty"`
+	EndOfBoard bool             `json:"endOfBoard,omitempty"`
+}
+
+type PendingPosting struct {
+	Raw        []byte `json:"raw"`
+	ObservedAt string `json:"observedAt"`
+}
+
+type Request struct {
+	Board    store.CollectorBoard
+	Cursor   Cursor
+	MaxPages int // reserved source-page requests, including failed responses
+	MaxItems int // reserved response items, including invalid postings
+}
+
+type StagedPosting struct {
+	Provider      string `json:"provider"`
+	BoardID       string `json:"boardId"`
+	ExternalID    string `json:"externalId"`
+	SourceURL     string `json:"sourceUrl"`
+	OriginalText  []byte `json:"originalText"`
+	ContentSHA256 string `json:"contentSha256"`
+	ObservedAt    string `json:"observedAt"`
+}
+
+type Batch struct {
+	Postings      []StagedPosting `json:"postings"`
+	Next          *Cursor         `json:"next,omitempty"`
+	PagesFetched  int             `json:"pagesFetched"`
+	ItemsExamined int             `json:"itemsExamined"`
+	Rejected      int             `json:"rejected"`
+	ErrorCode     string          `json:"errorCode,omitempty"`
+	WarningCode   string          `json:"warningCode,omitempty"`
+	Interrupted   bool            `json:"interrupted,omitempty"`
 }
 
 func (c *Collector) now() time.Time {
@@ -168,95 +188,82 @@ func collectorPostingID(value string) bool {
 	return true
 }
 
-// RunDueOnce scans at most two 25-posting pages from one due board. It stores
-// the exact posting JSON supplied by Lever, not a claimed full web page. A
-// provider failure is recorded on the board and returned as a safe code.
-func (c *Collector) RunDueOnce(ctx context.Context) (RunReport, error) {
-	if c.Store == nil || c.Lease <= 0 || c.Lease > 10*time.Minute {
-		return RunReport{}, fmt.Errorf("%w: collector store and lease required", store.ErrInvalid)
+// AcquireLever performs only the requests and item reads explicitly allowed
+// by this invocation. A non-nil Next is serializable for the next commission.
+// Provider errors retain the cursor and never imply a role has closed.
+func (c *Collector) AcquireLever(ctx context.Context, request Request) (Batch, error) {
+	board := request.Board
+	if board.ID == "" || board.Provider != "lever" || board.Site == "" ||
+		(board.Region != "global" && board.Region != "eu") ||
+		request.MaxPages < 0 || request.MaxItems < 0 ||
+		(request.MaxPages == 0 && request.MaxItems == 0) ||
+		request.Cursor.NextOffset < 0 || len(request.Cursor.Pending) > pageLimit ||
+		(request.Cursor.BoardID != "" && request.Cursor.BoardID != board.ID) ||
+		(request.Cursor.BoardID == "" && (request.Cursor.NextOffset != 0 || len(request.Cursor.Pending) != 0 || request.Cursor.EndOfBoard)) {
+		return Batch{}, fmt.Errorf("%w: invalid commissioned Lever request", store.ErrInvalid)
 	}
-	board, found, err := c.Store.ClaimDueCollectorBoard(ctx, c.now(), c.Lease)
-	if err != nil || !found {
-		return RunReport{}, err
+	if request.MaxItems > 0 && request.MaxPages == 0 && len(request.Cursor.Pending) == 0 {
+		return Batch{}, fmt.Errorf("%w: page allowance required", store.ErrInvalid)
 	}
-	report := RunReport{BoardID: board.ID, Found: true, NextOffset: board.NextOffset}
-	if board.Provider != "lever" {
-		report.ErrorCode = "collector_unsupported_provider"
-	} else {
-		for page := 0; page < maxPagesPerRun; page++ {
-			postings, code := c.fetchPage(ctx, board, report.NextOffset)
-			if code != "" {
-				report.ErrorCode = code
-				break
-			}
-			for _, raw := range postings {
-				posting, code := validateLeverPosting(board, raw)
-				if code != "" {
-					report.Rejected++
-					report.WarningCode = code
-					continue
-				}
-				digest := sha256.Sum256(raw)
-				input := store.IngestionInput{
-					Origin: "collector", SourceURL: posting.HostedURL, OriginalText: string(raw),
-					ConnectorID: "lever:" + board.ID, ExternalID: posting.ID,
-					DiscoveredAt:   c.now().Format(time.RFC3339Nano),
-					IdempotencyKey: "lever:" + board.ID + ":" + hex.EncodeToString(digest[:]),
-				}
-				_, created, err := c.Store.SubmitIngestion(ctx, store.Actor{Kind: "system", ID: "collector:" + board.ID}, input)
-				if err != nil {
-					// Preserve the cursor and surface database errors to the service.
-					report.ErrorCode = "collector_submit"
-					break
-				}
-				if created {
-					report.Submitted++
-				} else {
-					report.Duplicates++
-				}
-			}
-			if report.ErrorCode != "" {
-				break
-			}
-			if len(postings) < pageLimit {
-				report.NextOffset = 0
-				break
-			}
-			report.NextOffset += len(postings)
-		}
-	}
-	result := store.CollectorBoardResult{NextOffset: report.NextOffset,
-		ErrorCode: report.ErrorCode, WarningCode: report.WarningCode}
-	if applied, finishErr := c.Store.FinishCollectorBoard(ctx, board, result, c.now()); finishErr != nil {
-		return report, finishErr
-	} else if !applied {
-		return report, store.ErrConflict
-	}
-	return report, nil
-}
-
-func (c *Collector) Run(ctx context.Context) error {
-	if c.Store == nil || c.PollInterval <= 0 || c.Lease <= 0 || c.Lease > 10*time.Minute {
-		return fmt.Errorf("%w: collector store, poll and lease required", store.ErrInvalid)
-	}
-	for {
+	cursor := request.Cursor
+	cursor.BoardID = board.ID
+	batch := Batch{Postings: []StagedPosting{}, Next: &cursor}
+	for batch.ItemsExamined < request.MaxItems {
 		if ctx.Err() != nil {
-			return nil
+			batch.Interrupted = true
+			return batch, nil
 		}
-		_, err := c.RunDueOnce(ctx)
-		if err != nil {
-			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
-				return nil
+		if len(cursor.Pending) == 0 {
+			if cursor.EndOfBoard {
+				batch.Next = nil
+				return batch, nil
 			}
-			return err
+			if batch.PagesFetched >= request.MaxPages {
+				return batch, nil
+			}
+			rawPostings, code := c.fetchPage(ctx, board, cursor.NextOffset)
+			batch.PagesFetched++
+			if ctx.Err() != nil {
+				batch.Interrupted = true
+				return batch, nil
+			}
+			if code != "" {
+				batch.ErrorCode = code
+				return batch, nil
+			}
+			observed := c.now().Format(time.RFC3339Nano)
+			for _, raw := range rawPostings {
+				cursor.Pending = append(cursor.Pending, PendingPosting{Raw: append([]byte(nil), raw...), ObservedAt: observed})
+			}
+			cursor.NextOffset += len(rawPostings)
+			cursor.EndOfBoard = len(rawPostings) < pageLimit
+			if len(cursor.Pending) == 0 {
+				batch.Next = nil
+				return batch, nil
+			}
 		}
-		// Each poll scans at most one board, including when many are due.
-		timer := time.NewTimer(c.PollInterval)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil
-		case <-timer.C:
+		if ctx.Err() != nil {
+			batch.Interrupted = true
+			return batch, nil
 		}
+		entry := cursor.Pending[0]
+		cursor.Pending = cursor.Pending[1:]
+		batch.ItemsExamined++
+		posting, code := validateLeverPosting(board, json.RawMessage(entry.Raw))
+		if code != "" {
+			batch.Rejected++
+			batch.WarningCode = code
+			continue
+		}
+		digest := sha256.Sum256(entry.Raw)
+		batch.Postings = append(batch.Postings, StagedPosting{
+			Provider: "lever", BoardID: board.ID, ExternalID: posting.ID,
+			SourceURL: posting.HostedURL, OriginalText: append([]byte(nil), entry.Raw...),
+			ContentSHA256: hex.EncodeToString(digest[:]), ObservedAt: entry.ObservedAt,
+		})
 	}
+	if len(cursor.Pending) == 0 && cursor.EndOfBoard {
+		batch.Next = nil
+	}
+	return batch, nil
 }

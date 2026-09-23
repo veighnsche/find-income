@@ -2,6 +2,21 @@
   max-width: 78rem;
   width: 100%;
 }
+.agency-lead {
+  border-color: #8aa997;
+  background: #f7fbf7;
+}
+.agency-lead .eyebrow {
+  margin: 0 0 0.35rem;
+}
+.agency-brief {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+.agency-brief h3 {
+  margin: 0.85rem 0 0.35rem;
+}
 .op-heading-row {
   display: flex;
   justify-content: space-between;
@@ -101,6 +116,9 @@
   }
 }
 @media (max-width: 650px) {
+  .agency-brief {
+    grid-template-columns: 1fr;
+  }
   .op-grid,
   .op-filters {
     grid-template-columns: 1fr;

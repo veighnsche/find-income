@@ -1,92 +1,58 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  createAgentCredential,
   getHealth,
-  getPreferences,
   getSession,
   isUnauthenticated,
-  listAgentCredentials,
   login,
   logout,
-  revokeAgentCredential,
-  type AgentCredential,
   type Health,
-  type Preferences,
   type Session,
 } from './api';
-import { Opportunities } from './opportunities';
-import { CollectorBoards } from './collector-boards';
 import { CodexConnectionPanel } from './codex-connection';
-import { OrganisationCategories } from './organisation-categories';
-import { PreferencesEditor } from './preferences-editor';
+import { Opportunities } from './opportunities';
 import './style.css';
 
-const scopeOptions = [
-  ['preferences:read', 'Read job preferences'],
-  ['opportunities:read', 'Read opportunities'],
-  ['opportunities:write', 'Edit companies and opportunities'],
-  ['openings:ingest', 'Submit sourced openings'],
-  ['evidence:write', 'Add sourced evidence'],
-  ['actions:write', 'Manage follow-ups'],
-  ['actions:read', 'Read follow-ups'],
-  ['drafts:write', 'Prepare application drafts'],
-  ['judgments:request', 'Request assessments'],
-] as const;
-
 function message(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Something went wrong. Try again.';
-}
-
-function protectedError(
-  cause: unknown,
-  onSessionLost: () => void,
-  setError: (value: string) => void,
-) {
-  if (isUnauthenticated(cause)) {
-    onSessionLost();
-    return;
-  }
-  setError(message(cause));
+  return cause instanceof Error ? cause.message : 'The request could not be completed.';
 }
 
 function ServiceStatus() {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [retry, setRetry] = useState(0);
+  const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
-    setHealth(null);
-    setError(null);
     getHealth(controller.signal)
       .then(setHealth)
-      .catch((cause: unknown) => {
+      .catch((cause) => {
         if (!controller.signal.aborted) setError(message(cause));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [retry]);
+  }, [refresh]);
   return (
-    <section aria-live="polite" className="status">
+    <section className="status" aria-live="polite">
       <h2>Service status</h2>
-      {loading && <p>Checking the API…</p>}
-      {!loading && health && (
-        <p className="success">
-          Connected to {health.service} v{health.version}.
+      {health && (
+        <p>
+          Dashboard API connected (v{health.version}). Recruitment execution readiness is separate.
         </p>
       )}
-      {!loading && error && (
-        <div role="alert">
-          <p>Could not connect to the dashboard API. {error}</p>
-          <button type="button" onClick={() => setRetry((value) => value + 1)}>
-            Try again
-          </button>
-        </div>
+      {error && (
+        <p role="alert" className="error">
+          Could not connect to the dashboard API: {error}
+        </p>
       )}
+      <button
+        className="secondary"
+        type="button"
+        onClick={() => {
+          setError(null);
+          setRefresh((value) => value + 1);
+        }}
+      >
+        Refresh service status
+      </button>
     </section>
   );
 }
@@ -111,11 +77,10 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session) => void }) {
   return (
     <main className="login-page">
       <div className="login-card">
-        <p className="eyebrow">Private workspace</p>
-        <h1>Sign in to Jobseek</h1>
-        <p>Use the administrator password configured on this device.</p>
-        <form onSubmit={submit}>
-          <label htmlFor="password">Password</label>
+        <p className="eyebrow">Private recruitment workspace</p>
+        <h1>Sign in</h1>
+        <form onSubmit={(event) => void submit(event)}>
+          <label htmlFor="password">Administrator password</label>
           <input
             id="password"
             type="password"
@@ -134,7 +99,7 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session) => void }) {
           </p>
         )}
         <p className="hint">
-          First use: run <code>jobseek setup-admin</code> locally to set your password.
+          First use: run <code>jobseek setup-admin</code> locally.
         </p>
       </div>
       <ServiceStatus />
@@ -142,246 +107,21 @@ function LoginPanel({ onLogin }: { onLogin: (session: Session) => void }) {
   );
 }
 
-function Today({ onSessionLost }: { onSessionLost: () => void }) {
-  const [preferences, setPreferences] = useState<Preferences | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    getPreferences(controller.signal)
-      .then(setPreferences)
-      .catch((cause: unknown) => {
-        if (!controller.signal.aborted) protectedError(cause, onSessionLost, setError);
-      });
-    return () => controller.abort();
-  }, [onSessionLost]);
-  return (
-    <main id="today">
-      <p className="eyebrow">Your workspace</p>
-      <h1>Today</h1>
-      <p>
-        Open Opportunities to prepare a vacancy URL or text and review saved opportunities. Intake
-        processing is currently unavailable.
-      </p>
-      <section className="status" aria-live="polite">
-        <h2>Current search preferences</h2>
-        {!preferences && !error && <p>Loading preferences…</p>}
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
-        {preferences && (
-          <>
-            <p>
-              {preferences.targetHours} hours/week · at least{' '}
-              {(preferences.minMonthlyBaseCents / 100).toLocaleString('en-US')}{' '}
-              {preferences.salaryCurrency} gross monthly base
-              {preferences.preferredLocation
-                ? ` · preferred location ${preferences.preferredLocation}`
-                : ''}
-              ; remote {preferences.allowRemote ? 'allowed' : 'not accepted'}, hybrid{' '}
-              {preferences.allowHybrid ? 'allowed' : 'not accepted'}.
-            </p>
-            <ul>
-              {preferences.roleCriteria.map((item) => (
-                <li key={item.id}>
-                  {item.label} ({item.mode})
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </section>
-      <ServiceStatus />
-    </main>
-  );
-}
-
-function Settings({ session, onSessionLost }: { session: Session; onSessionLost: () => void }) {
-  const [agents, setAgents] = useState<AgentCredential[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [scopes, setScopes] = useState<string[]>(['preferences:read', 'opportunities:read']);
-  const [days, setDays] = useState(30);
-  const [newToken, setNewToken] = useState<string | null>(null);
-
-  async function refresh() {
-    setAgents(await listAgentCredentials());
-  }
-  useEffect(() => {
-    const controller = new AbortController();
-    listAgentCredentials(controller.signal)
-      .then(setAgents)
-      .catch((cause: unknown) => {
-        if (!controller.signal.aborted) protectedError(cause, onSessionLost, setError);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [onSessionLost]);
-  async function create(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    setNewToken(null);
-    try {
-      const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-      const created = await createAgentCredential(name, scopes, expiresAt, session.csrfToken);
-      setNewToken(created.token);
-      setName('');
-      await refresh();
-    } catch (cause) {
-      protectedError(cause, onSessionLost, setError);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function revoke(id: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      await revokeAgentCredential(id, session.csrfToken);
-      await refresh();
-    } catch (cause) {
-      protectedError(cause, onSessionLost, setError);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <main id="settings">
-      <p className="eyebrow">Owner controls</p>
-      <h1>Settings</h1>
-      <PreferencesEditor session={session} onSessionLost={onSessionLost} />
-      <OrganisationCategories session={session} onSessionLost={onSessionLost} />
-      <CollectorBoards session={session} onSessionLost={onSessionLost} />
-      <CodexConnectionPanel session={session} onSessionLost={onSessionLost} />
-      <section className="status">
-        <h2>Agent access</h2>
-        <p>
-          Create a separate token for each agent. Its permitted actions and expiry are shown below.
-        </p>
-        <form onSubmit={create} className="token-form">
-          <label htmlFor="agent-name">Agent name</label>
-          <input
-            id="agent-name"
-            required
-            maxLength={80}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Research assistant"
-          />
-          <fieldset>
-            <legend>Permitted actions</legend>
-            {scopeOptions.map(([scope, label]) => (
-              <label className="checkbox" key={scope}>
-                <input
-                  type="checkbox"
-                  checked={scopes.includes(scope)}
-                  onChange={(event) => {
-                    setScopes((current) =>
-                      event.target.checked
-                        ? [...current, scope]
-                        : current.filter((item) => item !== scope),
-                    );
-                  }}
-                />
-                <span>{label}</span>
-              </label>
-            ))}
-          </fieldset>
-          <label htmlFor="agent-expiry">Expires after</label>
-          <select
-            id="agent-expiry"
-            value={days}
-            onChange={(event) => setDays(Number(event.target.value))}
-          >
-            <option value={7}>7 days</option>
-            <option value={30}>30 days</option>
-            <option value={90}>90 days</option>
-          </select>
-          <button type="submit" disabled={busy || scopes.length === 0}>
-            Create token
-          </button>
-        </form>
-        {newToken && (
-          <div className="new-token" role="status">
-            <h3>Copy this token now</h3>
-            <p>It will not appear again after you leave this page.</p>
-            <code>{newToken}</code>
-            <div className="button-row">
-              <button
-                type="button"
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(newToken)
-                    .catch((cause: unknown) => setError(message(cause)))
-                }
-              >
-                Copy token
-              </button>
-              <button type="button" className="secondary" onClick={() => setNewToken(null)}>
-                Done
-              </button>
-            </div>
-          </div>
-        )}
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
-        <h3>Existing agents</h3>
-        {loading && <p>Loading agents…</p>}
-        {!loading && agents.length === 0 && <p>No agents have access yet.</p>}
-        <ul className="agent-list">
-          {agents.map((agent) => (
-            <li key={agent.id}>
-              <div>
-                <strong>{agent.name}</strong>{' '}
-                <span className="muted">
-                  {agent.revoked
-                    ? 'Revoked'
-                    : `Expires ${new Date(agent.expiresAt).toLocaleDateString()}`}
-                </span>
-                <p>{agent.scopes.join(', ')}</p>
-              </div>
-              {!agent.revoked && (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  onClick={() => revoke(agent.id)}
-                >
-                  Revoke
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      </section>
-    </main>
-  );
-}
-
 function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState<'today' | 'opportunities' | 'settings'>('today');
+  const [page, setPage] = useState<'agency' | 'account'>('agency');
   const [signingOut, setSigningOut] = useState(false);
   const loseSession = useCallback(() => {
     setSession(null);
-    setPage('today');
+    setPage('agency');
     setError(null);
   }, []);
   useEffect(() => {
     const controller = new AbortController();
     getSession(controller.signal)
       .then(setSession)
-      .catch((cause: unknown) => {
+      .catch((cause) => {
         if (!controller.signal.aborted) setError(message(cause));
       });
     return () => controller.abort();
@@ -389,21 +129,17 @@ function App() {
   useEffect(() => {
     if (!session) return;
     const expiresAt = Date.parse(session.expiresAt);
-    const remaining = expiresAt - Date.now();
-    if (!Number.isFinite(remaining) || remaining <= 0) {
-      loseSession();
-      return;
-    }
-    const timer = window.setTimeout(loseSession, remaining);
-    const checkExpiry = () => {
+    const check = () => {
       if (Date.now() >= expiresAt) loseSession();
     };
-    window.addEventListener('focus', checkExpiry);
-    document.addEventListener('visibilitychange', checkExpiry);
+    check();
+    const timer = window.setTimeout(check, Math.max(0, expiresAt - Date.now()));
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', check);
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener('focus', checkExpiry);
-      document.removeEventListener('visibilitychange', checkExpiry);
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', check);
     };
   }, [session, loseSession]);
   async function signOut() {
@@ -412,8 +148,7 @@ function App() {
     setError(null);
     try {
       await logout(session.csrfToken);
-      setSession(null);
-      setPage('today');
+      loseSession();
     } catch (cause) {
       if (isUnauthenticated(cause)) loseSession();
       else setError(message(cause));
@@ -425,7 +160,7 @@ function App() {
     <div className="app">
       <header className="topbar">
         <strong>Jobseek</strong>
-        <span>Private workspace</span>
+        <span>Personal recruitment agency</span>
       </header>
       {session === undefined && !error && (
         <main>
@@ -435,7 +170,9 @@ function App() {
       {session === undefined && error && (
         <main role="alert">
           <p>{error}</p>
-          <button onClick={() => window.location.reload()}>Try again</button>
+          <button type="button" onClick={() => window.location.reload()}>
+            Try again
+          </button>
         </main>
       )}
       {session === null && (
@@ -451,39 +188,38 @@ function App() {
           <nav aria-label="Main navigation">
             <button
               type="button"
-              className={page === 'today' ? 'active' : 'nav-button'}
-              onClick={() => setPage('today')}
-              aria-current={page === 'today' ? 'page' : undefined}
+              className={page === 'agency' ? 'active' : 'nav-button'}
+              aria-current={page === 'agency' ? 'page' : undefined}
+              onClick={() => setPage('agency')}
             >
-              Today
+              Agency
             </button>
             <button
               type="button"
-              className={page === 'opportunities' ? 'active' : 'nav-button'}
-              onClick={() => setPage('opportunities')}
-              aria-current={page === 'opportunities' ? 'page' : undefined}
+              className={page === 'account' ? 'active' : 'nav-button'}
+              aria-current={page === 'account' ? 'page' : undefined}
+              onClick={() => setPage('account')}
             >
-              Opportunities
+              Account
             </button>
-            <span>People</span>
-            <span>Applications</span>
             <button
               type="button"
-              className={page === 'settings' ? 'active' : 'nav-button'}
-              onClick={() => setPage('settings')}
-              aria-current={page === 'settings' ? 'page' : undefined}
+              className="sign-out"
+              disabled={signingOut}
+              onClick={() => void signOut()}
             >
-              Settings
-            </button>
-            <button type="button" className="sign-out" disabled={signingOut} onClick={signOut}>
               Sign out
             </button>
           </nav>
-          {page === 'today' && <Today onSessionLost={loseSession} />}
-          {page === 'opportunities' && (
-            <Opportunities session={session} onSessionLost={loseSession} />
+          {page === 'agency' && <Opportunities session={session} onSessionLost={loseSession} />}
+          {page === 'account' && (
+            <main>
+              <p className="eyebrow">Owner account</p>
+              <h1>Connection and service</h1>
+              <CodexConnectionPanel session={session} onSessionLost={loseSession} />
+              <ServiceStatus />
+            </main>
           )}
-          {page === 'settings' && <Settings session={session} onSessionLost={loseSession} />}
           {error && (
             <p role="alert" className="global-error">
               {error}

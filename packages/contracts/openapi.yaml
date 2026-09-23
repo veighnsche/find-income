@@ -19,6 +19,144 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
         '500':
           $ref: '#/components/responses/InternalError'
+  /rounds/active:
+    get:
+      operationId: getActiveRound
+      summary: Read the active commissioned round
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Active round,
+            content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /rounds/capability:
+    get:
+      operationId: getRoundCapability
+      summary: Read server-selected outcome and current execution availability
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Capability and bounded plan summary,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/RoundCapability' } } },
+          }
+  /rounds:
+    post:
+      operationId: startRound
+      summary: Owner starts one commissioned outcome
+      description: Requires owner session, same-origin CSRF token, and a ready execution capability. An exact requestKey replay returns the existing round.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        {
+          required: true,
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/StartRoundRequest' } } },
+        }
+      responses:
+        '200':
+          {
+            description: Existing round,
+            content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
+          }
+        '201':
+          {
+            description: Round created,
+            content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
+          }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /rounds/{id}:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getRound
+      summary: Read a commissioned round
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Round,
+            content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /rounds/{id}/results:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getRoundResults
+      summary: Read committed results for a round
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Result list,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/RoundResults' } } },
+          }
+  /rounds/{id}/stop:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: stopRound
+      summary: Owner fences further round work and requests cancellation
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Stopped round,
+            content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
+          }
+  /rounds/{id}/resume:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: resumeRound
+      summary: Owner resumes after bounded reconciliation
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Resumed round,
+            content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
+          }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /rounds/{id}/mutations:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: applyRoundMutation
+      summary: Delegated agent performs one atomic round record mutation
+      description: Requires a named bearer agent with opportunities:write, present in scope.delegates, and a secret capability bound to one dispatched turn. Actor, resource, operation, profile revision, generation, cost and audit link are checked in one write transaction.
+      parameters:
+        - name: X-Round-Capability
+          in: header
+          required: true
+          schema: { type: string }
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        {
+          required: true,
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/RoundMutationRequest' } } },
+        }
+      responses:
+        '200':
+          {
+            description: Exact replay,
+            content:
+              {
+                application/json: { schema: { $ref: '#/components/schemas/RoundMutationResult' } },
+              },
+          }
+        '201':
+          {
+            description: Record created,
+            content:
+              {
+                application/json: { schema: { $ref: '#/components/schemas/RoundMutationResult' } },
+              },
+          }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
   /auth/login:
     post:
       operationId: login
@@ -90,31 +228,6 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
-    put:
-      operationId: updatePreferences
-      summary: Replace the current owner's qualification preferences
-      description: Owner session, same-origin CSRF token, and current expectedVersion are required. A stale version returns 409; the caller must review its draft against the latest preferences.
-      security:
-        - cookieAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/UpdatePreferencesRequest' }
-      responses:
-        '200':
-          description: Saved preference version and audited change
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/PreferencesMutation' }
-        '400':
-          $ref: '#/components/responses/ValidationError'
-        '401':
-          $ref: '#/components/responses/Unauthenticated'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
   /agent-credentials:
     get:
       operationId: listAgentCredentials
@@ -198,25 +311,6 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
-    post:
-      operationId: createCompany
-      summary: Create a company
-      description: Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token. Actor identity is derived from the credential.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateCompanyRequest' }
-      responses:
-        '201':
-          description: Saved company and immutable change reference
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/CompanyMutation' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
   /companies/{id}:
     parameters:
       - $ref: '#/components/parameters/RecordId'
@@ -234,51 +328,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-    patch:
-      operationId: patchCompany
-      summary: Patch a company at its expected revision
-      description: Omitted fields are unchanged; an empty optional string clears it. Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/PatchCompanyRequest' }
-      responses:
-        '200':
-          description: Updated company and immutable change reference
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/CompanyMutation' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-  /companies/{id}/archive:
-    parameters:
-      - $ref: '#/components/parameters/RecordId'
-    post:
-      operationId: archiveCompany
-      summary: Archive a company at its expected revision
-      description: Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ArchiveRequest' }
-      responses:
-        '200':
-          description: Archived company and immutable change reference
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/CompanyMutation' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /codex/status:
     get:
       operationId: getCodexStatus
@@ -346,26 +395,6 @@ paths:
               schema: { $ref: '#/components/schemas/OrganisationCategorySet' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
-    put:
-      operationId: updateOrganisationCategories
-      summary: Replace the owner's organisation categories
-      description: Owner cookie, allowed Origin and X-CSRF-Token required. Empty categories disable new organisation jobs. This does not change opportunity stage or qualification.
-      security: [{ cookieAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/UpdateOrganisationCategoriesRequest' }
-      responses:
-        '200':
-          description: Saved category version
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/OrganisationCategorySet' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /organisation/summaries:
     get:
       operationId: getOrganisationSummaries
@@ -399,49 +428,6 @@ paths:
               schema: { $ref: '#/components/schemas/CollectorBoardList' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
-    post:
-      operationId: createCollectorBoard
-      summary: Configure a Lever board for scheduled collection
-      description: Owner cookie, allowed Origin and X-CSRF-Token required. Configuring a board does not imply that a scan or ingestion has completed.
-      security: [{ cookieAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateCollectorBoardRequest' }
-      responses:
-        '201':
-          description: Saved collection board
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/CollectorBoard' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { $ref: '#/components/responses/Conflict' }
-  /collector-boards/{id}:
-    parameters:
-      - $ref: '#/components/parameters/RecordId'
-    put:
-      operationId: updateCollectorBoard
-      summary: Enable, pause, or change the interval of a collection board
-      description: Owner cookie, allowed Origin and X-CSRF-Token required. Board provider/site/region are immutable; disable and create a new board to change identity.
-      security: [{ cookieAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/UpdateCollectorBoardRequest' }
-      responses:
-        '200':
-          description: Updated collection board
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/CollectorBoard' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /opportunities/{id}/organisation:
     parameters:
       - $ref: '#/components/parameters/RecordId'
@@ -566,25 +552,6 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
-    post:
-      operationId: createOpportunity
-      summary: Save an opportunity with its original source
-      description: Source URL or original vacancy text is required. Bearer credentials require opportunities:write. The separate openings:ingest scope grants no arbitrary edit access. Cookie mutations require Origin and X-CSRF-Token. Actor and confirmed-pay fields cannot be supplied. Read the saved detail or list for advisory duplicate warnings.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateOpportunityRequest' }
-      responses:
-        '201':
-          description: Saved opportunity and immutable change reference
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/OpportunityMutation' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
   /opportunities/{id}:
     parameters:
       - $ref: '#/components/parameters/RecordId'
@@ -602,51 +569,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-    patch:
-      operationId: patchOpportunity
-      summary: Patch an opportunity at its expected revision
-      description: Omitted fields are unchanged; an empty optional string clears it. Omitted compensation preserves the current advertised inputs; a supplied compensation object replaces all of them, and an empty object resets them to unknown. Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token. Read the saved detail or list for advisory duplicate warnings.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/PatchOpportunityRequest' }
-      responses:
-        '200':
-          description: Updated opportunity and immutable change reference
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/OpportunityMutation' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-  /opportunities/{id}/archive:
-    parameters:
-      - $ref: '#/components/parameters/RecordId'
-    post:
-      operationId: archiveOpportunity
-      summary: Archive an opportunity at its expected revision
-      description: Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ArchiveRequest' }
-      responses:
-        '200':
-          description: Archived opportunity and immutable change reference
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/OpportunityMutation' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /actions:
     get:
       operationId: listActions
@@ -668,25 +590,6 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ActionPage' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-    post:
-      operationId: createAction
-      summary: Create an open follow-up action
-      description: Bearer credentials require actions:write. Cookie mutations require Origin and X-CSRF-Token. An opportunity link must target an active opportunity. Contact links and sent events are unavailable.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateActionRequest' }
-      responses:
-        '201':
-          description: New action and immutable audit change reference
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ActionMutation' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -748,50 +651,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-    patch:
-      operationId: patchAction
-      summary: Patch an open action at its expected revision
-      description: Bearer credentials require actions:write. Omitted fields are unchanged. Cookie mutations require Origin and X-CSRF-Token. A 409 includes currentAction for deliberate reconciliation; no automatic retry occurs.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/PatchActionRequest' }
-      responses:
-        '200':
-          description: Updated action and audit change reference
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ActionMutation' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-  /actions/{id}/reschedule:
-    parameters: [{ $ref: '#/components/parameters/RecordId' }]
-    post:
-      operationId: rescheduleAction
-      summary: Replace an open action's deadline at its expected revision
-      description: Bearer credentials require actions:write. The due object returned by GET is a valid replacement. A 409 includes currentAction.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/RescheduleActionRequest' }
-      responses:
-        '200':
-          description: Rescheduled action and audit change reference
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ActionMutation' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /actions/{id}/complete:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     post:
@@ -896,27 +755,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-    post:
-      operationId: createOfferOptionSet
-      summary: Review an exact source quote that explicitly offers alternatives
-      description: Bearer credentials require evidence:write. The actor and option IDs are server derived. Cookie mutations require Origin and CSRF.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateOfferOptionSetRequest' }
-      responses:
-        '201':
-          description: Saved immutable option set
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/OfferOptionSetMutation' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /opportunities/{id}/evidence-sources:
     parameters:
       - $ref: '#/components/parameters/RecordId'
@@ -938,27 +776,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-    post:
-      operationId: createEvidenceSource
-      summary: Record an immutable vacancy snapshot, attributed statement or owner observation
-      description: Bearer credentials require evidence:write. Owner observations require an owner session and current preference version. The actor and source kind are server derived.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateEvidenceSourceRequest' }
-      responses:
-        '201':
-          description: Source recorded and qualification reevaluated
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/EvidenceSourceMutation' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /opportunities/{id}/evidence-sources/{sourceId}:
     parameters:
       - $ref: '#/components/parameters/RecordId'
@@ -1004,27 +821,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-    post:
-      operationId: createEvidence
-      summary: Record a typed observation over exact UTF-8 source byte offsets
-      description: Bearer credentials require evidence:write. Owner workability requires an owner session. Authority and confirmation are derived, never request fields.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/WriteEvidenceRequest' }
-      responses:
-        '201':
-          description: Claim recorded and qualification reevaluated
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/EvidenceMutation' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /opportunities/{id}/evidence/{evidenceId}:
     parameters:
       - $ref: '#/components/parameters/RecordId'
@@ -1046,34 +842,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-  /opportunities/{id}/evidence/{evidenceId}/supersede:
-    parameters:
-      - $ref: '#/components/parameters/RecordId'
-      - name: evidenceId
-        in: path
-        required: true
-        schema: { type: string }
-    post:
-      operationId: supersedeEvidence
-      summary: Append a replacement for an unsuperseded claim
-      description: Bearer credentials require evidence:write; owner workability requires an owner session. The prior claim must belong to this opportunity and criterion.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/WriteEvidenceRequest' }
-      responses:
-        '201':
-          description: Replacement claim recorded
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/EvidenceMutation' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /opportunities/{id}/qualification:
     parameters:
       - $ref: '#/components/parameters/RecordId'
@@ -1117,24 +885,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-  /opportunities/{id}/qualification/reevaluate:
-    parameters:
-      - $ref: '#/components/parameters/RecordId'
-    post:
-      operationId: reevaluateQualification
-      summary: Explicitly run local deterministic qualification
-      description: Bearer credentials require evidence:write. No caller supplied result or evidence is accepted. Cookie mutation requires Origin and CSRF.
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      responses:
-        '200':
-          description: New evaluation
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/QualificationMutation' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/InternalError' }
 components:
   parameters:
     RecordId:
@@ -1177,6 +927,11 @@ components:
       scheme: bearer
       description: Named agent token with operation-specific scopes.
   responses:
+    Unavailable:
+      description: Required round execution capability is unavailable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     ValidationError:
       description: Invalid request
       content:
@@ -1220,6 +975,115 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
+    RoundAllowance:
+      type: object
+      required: [requests, items, tools, turns]
+      properties:
+        requests: { type: integer, format: int64, minimum: 0 }
+        items: { type: integer, format: int64, minimum: 0 }
+        tools: { type: integer, format: int64, minimum: 0 }
+        turns: { type: integer, format: int64, minimum: 0 }
+    RoundScope:
+      type: object
+      required: [inputRefs, resources, operations, delegates]
+      properties:
+        inputRefs: { type: array, items: { type: string } }
+        resources: { type: array, items: { type: string } }
+        operations: { type: array, items: { type: string } }
+        delegates: { type: array, items: { type: string } }
+    StartRoundRequest:
+      type: object
+      additionalProperties: false
+      description: Owner Start sends only a durable click idempotency key; the server chooses the current outcome, profile, scope, allowance and deadline.
+      required: [requestKey]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+    RoundCapability:
+      type: object
+      required: [canStart, reason, intent, outcome, limits, sourceCount]
+      properties:
+        canStart: { type: boolean }
+        reason: { type: string }
+        intent: { type: string }
+        outcome: { type: string }
+        limits: { $ref: '#/components/schemas/RoundAllowance' }
+        sourceCount: { type: integer, minimum: 0 }
+    Round:
+      type: object
+      required:
+        [
+          id,
+          intent,
+          outcome,
+          profileVersion,
+          scope,
+          state,
+          revision,
+          generation,
+          deadline,
+          limits,
+          used,
+          step,
+          cursor,
+          unresolved,
+          report,
+          stopReason,
+          deliverableStatus,
+          reconciliationRequired,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string }
+        intent: { type: string }
+        outcome: { type: string }
+        profileVersion: { type: integer, format: int64 }
+        scope: { $ref: '#/components/schemas/RoundScope' }
+        state:
+          {
+            type: string,
+            enum: [queued, running, awaiting_input, stopping, paused, completed, failed],
+          }
+        revision: { type: integer, format: int64 }
+        generation: { type: integer, format: int64 }
+        deadline: { type: string, format: date-time }
+        limits: { $ref: '#/components/schemas/RoundAllowance' }
+        used: { $ref: '#/components/schemas/RoundAllowance' }
+        step: { type: string }
+        cursor: { type: object, additionalProperties: true }
+        unresolved: { type: array, items: {} }
+        report: { type: object, additionalProperties: true }
+        stopReason: { type: string }
+        deliverableStatus: { type: string }
+        reconciliationRequired: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+    RoundResults:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: {} }
+    RoundMutationRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey, operation, resourceId, expectedRevision]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        operation: { type: string, enum: [company.create, opportunity.create] }
+        resourceId: { type: string }
+        expectedRevision: { type: integer, format: int64, minimum: 1 }
+        company: { $ref: '#/components/schemas/CreateCompanyRequest' }
+        opportunity: { $ref: '#/components/schemas/CreateOpportunityRequest' }
+    RoundMutationResult:
+      type: object
+      required: [attemptId, entityKind, entityId, revision, auditId]
+      properties:
+        attemptId: { type: string }
+        entityKind: { type: string, enum: [company, opportunity] }
+        entityId: { type: string }
+        revision: { type: integer, format: int64 }
+        auditId: { type: string }
     CodexStatus:
       type: object
       required: [state, code, connected, ingestionAvailable, busy]
@@ -1669,6 +1533,7 @@ components:
               csrf_failed,
               rate_limited,
               conflict,
+              unavailable,
               internal_error,
             ]
         message:

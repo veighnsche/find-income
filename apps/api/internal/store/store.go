@@ -94,6 +94,9 @@ func Open(ctx context.Context, privateDataDir string) (_ *Store, err error) {
 	if err = migrate(ctx, db); err != nil {
 		return nil, err
 	}
+	if err = recoverRounds(ctx, db); err != nil {
+		return nil, fmt.Errorf("pause interrupted rounds: %w", err)
+	}
 	return &Store{db: db}, nil
 }
 

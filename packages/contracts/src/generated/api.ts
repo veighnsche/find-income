@@ -21,6 +21,158 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rounds/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the active commissioned round */
+        get: operations["getActiveRound"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rounds/capability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read server-selected outcome and current execution availability */
+        get: operations["getRoundCapability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Owner starts one commissioned outcome
+         * @description Requires owner session, same-origin CSRF token, and a ready execution capability. An exact requestKey replay returns the existing round.
+         */
+        post: operations["startRound"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rounds/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Read a commissioned round */
+        get: operations["getRound"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rounds/{id}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Read committed results for a round */
+        get: operations["getRoundResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rounds/{id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner fences further round work and requests cancellation */
+        post: operations["stopRound"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rounds/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner resumes after bounded reconciliation */
+        post: operations["resumeRound"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rounds/{id}/mutations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delegated agent performs one atomic round record mutation
+         * @description Requires a named bearer agent with opportunities:write, present in scope.delegates, and a secret capability bound to one dispatched turn. Actor, resource, operation, profile revision, generation, cost and audit link are checked in one write transaction.
+         */
+        post: operations["applyRoundMutation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/login": {
         parameters: {
             query?: never;
@@ -84,11 +236,7 @@ export interface paths {
          * @description Bearer credentials require the preferences:read scope.
          */
         get: operations["getPreferences"];
-        /**
-         * Replace the current owner's qualification preferences
-         * @description Owner session, same-origin CSRF token, and current expectedVersion are required. A stale version returns 409; the caller must review its draft against the latest preferences.
-         */
-        put: operations["updatePreferences"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -146,11 +294,7 @@ export interface paths {
          */
         get: operations["listCompanies"];
         put?: never;
-        /**
-         * Create a company
-         * @description Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token. Actor identity is derived from the credential.
-         */
-        post: operations["createCompany"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -173,32 +317,6 @@ export interface paths {
         get: operations["getCompany"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Patch a company at its expected revision
-         * @description Omitted fields are unchanged; an empty optional string clears it. Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token.
-         */
-        patch: operations["patchCompany"];
-        trace?: never;
-    };
-    "/companies/{id}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Archive a company at its expected revision
-         * @description Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token.
-         */
-        post: operations["archiveCompany"];
         delete?: never;
         options?: never;
         head?: never;
@@ -291,11 +409,7 @@ export interface paths {
         };
         /** Read the owner's current category definitions */
         get: operations["getOrganisationCategories"];
-        /**
-         * Replace the owner's organisation categories
-         * @description Owner cookie, allowed Origin and X-CSRF-Token required. Empty categories disable new organisation jobs. This does not change opportunity stage or qualification.
-         */
-        put: operations["updateOrganisationCategories"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -333,32 +447,6 @@ export interface paths {
         /** List configured collection boards and their last observed run status */
         get: operations["listCollectorBoards"];
         put?: never;
-        /**
-         * Configure a Lever board for scheduled collection
-         * @description Owner cookie, allowed Origin and X-CSRF-Token required. Configuring a board does not imply that a scan or ingestion has completed.
-         */
-        post: operations["createCollectorBoard"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/collector-boards/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Enable, pause, or change the interval of a collection board
-         * @description Owner cookie, allowed Origin and X-CSRF-Token required. Board provider/site/region are immutable; disable and create a new board to change identity.
-         */
-        put: operations["updateCollectorBoard"];
         post?: never;
         delete?: never;
         options?: never;
@@ -469,11 +557,7 @@ export interface paths {
          */
         get: operations["listOpportunities"];
         put?: never;
-        /**
-         * Save an opportunity with its original source
-         * @description Source URL or original vacancy text is required. Bearer credentials require opportunities:write. The separate openings:ingest scope grants no arbitrary edit access. Cookie mutations require Origin and X-CSRF-Token. Actor and confirmed-pay fields cannot be supplied. Read the saved detail or list for advisory duplicate warnings.
-         */
-        post: operations["createOpportunity"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -499,32 +583,6 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /**
-         * Patch an opportunity at its expected revision
-         * @description Omitted fields are unchanged; an empty optional string clears it. Omitted compensation preserves the current advertised inputs; a supplied compensation object replaces all of them, and an empty object resets them to unknown. Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token. Read the saved detail or list for advisory duplicate warnings.
-         */
-        patch: operations["patchOpportunity"];
-        trace?: never;
-    };
-    "/opportunities/{id}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Archive an opportunity at its expected revision
-         * @description Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token.
-         */
-        post: operations["archiveOpportunity"];
-        delete?: never;
-        options?: never;
-        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -541,11 +599,7 @@ export interface paths {
          */
         get: operations["listActions"];
         put?: never;
-        /**
-         * Create an open follow-up action
-         * @description Bearer credentials require actions:write. Cookie mutations require Origin and X-CSRF-Token. An opportunity link must target an active opportunity. Contact links and sent events are unavailable.
-         */
-        post: operations["createAction"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -608,32 +662,6 @@ export interface paths {
         get: operations["getAction"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Patch an open action at its expected revision
-         * @description Bearer credentials require actions:write. Omitted fields are unchanged. Cookie mutations require Origin and X-CSRF-Token. A 409 includes currentAction for deliberate reconciliation; no automatic retry occurs.
-         */
-        patch: operations["patchAction"];
-        trace?: never;
-    };
-    "/actions/{id}/reschedule": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Replace an open action's deadline at its expected revision
-         * @description Bearer credentials require actions:write. The due object returned by GET is a valid replacement. A 409 includes currentAction.
-         */
-        post: operations["rescheduleAction"];
         delete?: never;
         options?: never;
         head?: never;
@@ -741,11 +769,7 @@ export interface paths {
          */
         get: operations["listCurrentOfferOptionSets"];
         put?: never;
-        /**
-         * Review an exact source quote that explicitly offers alternatives
-         * @description Bearer credentials require evidence:write. The actor and option IDs are server derived. Cookie mutations require Origin and CSRF.
-         */
-        post: operations["createOfferOptionSet"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -767,11 +791,7 @@ export interface paths {
          */
         get: operations["listEvidenceSources"];
         put?: never;
-        /**
-         * Record an immutable vacancy snapshot, attributed statement or owner observation
-         * @description Bearer credentials require evidence:write. Owner observations require an owner session and current preference version. The actor and source kind are server derived.
-         */
-        post: operations["createEvidenceSource"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -816,11 +836,7 @@ export interface paths {
          */
         get: operations["listEvidence"];
         put?: never;
-        /**
-         * Record a typed observation over exact UTF-8 source byte offsets
-         * @description Bearer credentials require evidence:write. Owner workability requires an owner session. Authority and confirmation are derived, never request fields.
-         */
-        post: operations["createEvidence"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -844,29 +860,6 @@ export interface paths {
         get: operations["getEvidence"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/opportunities/{id}/evidence/{evidenceId}/supersede": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-                evidenceId: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Append a replacement for an unsuperseded claim
-         * @description Bearer credentials require evidence:write; owner workability requires an owner session. The prior claim must belong to this opportunity and criterion.
-         */
-        post: operations["supersedeEvidence"];
         delete?: never;
         options?: never;
         head?: never;
@@ -917,32 +910,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/opportunities/{id}/qualification/reevaluate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Explicitly run local deterministic qualification
-         * @description Bearer credentials require evidence:write. No caller supplied result or evidence is accepted. Cookie mutation requires Origin and CSRF.
-         */
-        post: operations["reevaluateQualification"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        RoundAllowance: {
+            /** Format: int64 */
+            requests: number;
+            /** Format: int64 */
+            items: number;
+            /** Format: int64 */
+            tools: number;
+            /** Format: int64 */
+            turns: number;
+        };
+        RoundScope: {
+            inputRefs: string[];
+            resources: string[];
+            operations: string[];
+            delegates: string[];
+        };
+        /** @description Owner Start sends only a durable click idempotency key; the server chooses the current outcome, profile, scope, allowance and deadline. */
+        StartRoundRequest: {
+            requestKey: string;
+        };
+        RoundCapability: {
+            canStart: boolean;
+            reason: string;
+            intent: string;
+            outcome: string;
+            limits: components["schemas"]["RoundAllowance"];
+            sourceCount: number;
+        };
+        Round: {
+            id: string;
+            intent: string;
+            outcome: string;
+            /** Format: int64 */
+            profileVersion: number;
+            scope: components["schemas"]["RoundScope"];
+            /** @enum {string} */
+            state: "queued" | "running" | "awaiting_input" | "stopping" | "paused" | "completed" | "failed";
+            /** Format: int64 */
+            revision: number;
+            /** Format: int64 */
+            generation: number;
+            /** Format: date-time */
+            deadline: string;
+            limits: components["schemas"]["RoundAllowance"];
+            used: components["schemas"]["RoundAllowance"];
+            step: string;
+            cursor: {
+                [key: string]: unknown;
+            };
+            unresolved: unknown[];
+            report: {
+                [key: string]: unknown;
+            };
+            stopReason: string;
+            deliverableStatus: string;
+            reconciliationRequired: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            completedAt?: string;
+        };
+        RoundResults: {
+            items: unknown[];
+        };
+        RoundMutationRequest: {
+            requestKey: string;
+            /** @enum {string} */
+            operation: "company.create" | "opportunity.create";
+            resourceId: string;
+            /** Format: int64 */
+            expectedRevision: number;
+            company?: components["schemas"]["CreateCompanyRequest"];
+            opportunity?: components["schemas"]["CreateOpportunityRequest"];
+        };
+        RoundMutationResult: {
+            attemptId: string;
+            /** @enum {string} */
+            entityKind: "company" | "opportunity";
+            entityId: string;
+            /** Format: int64 */
+            revision: number;
+            auditId: string;
+        };
         CodexStatus: {
             /** @enum {string} */
             state: "unavailable" | "needs_sign_in" | "connecting" | "ready";
@@ -1205,7 +1261,7 @@ export interface components {
              * @description Stable machine-readable error code.
              * @enum {string}
              */
-            code: "validation_error" | "not_found" | "unauthenticated" | "forbidden" | "csrf_failed" | "rate_limited" | "conflict" | "internal_error";
+            code: "validation_error" | "not_found" | "unauthenticated" | "forbidden" | "csrf_failed" | "rate_limited" | "conflict" | "unavailable" | "internal_error";
             message: string;
             details?: {
                 [key: string]: unknown;
@@ -1788,6 +1844,15 @@ export interface components {
         };
     };
     responses: {
+        /** @description Required round execution capability is unavailable */
+        Unavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
         /** @description Invalid request */
         ValidationError: {
             headers: {
@@ -1889,6 +1954,212 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    getActiveRound: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active round */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Round"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getRoundCapability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Capability and bounded plan summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundCapability"];
+                };
+            };
+        };
+    };
+    startRound: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartRoundRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing round */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Round"];
+                };
+            };
+            /** @description Round created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Round"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getRound: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Round */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Round"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getRoundResults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Result list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundResults"];
+                };
+            };
+        };
+    };
+    stopRound: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stopped round */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Round"];
+                };
+            };
+        };
+    };
+    resumeRound: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resumed round */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Round"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    applyRoundMutation: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Round-Capability": string;
+            };
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoundMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Exact replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundMutationResult"];
+                };
+            };
+            /** @description Record created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundMutationResult"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -1977,34 +2248,6 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
-        };
-    };
-    updatePreferences: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdatePreferencesRequest"];
-            };
-        };
-        responses: {
-            /** @description Saved preference version and audited change */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PreferencesMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            409: components["responses"]["Conflict"];
         };
     };
     listAgentCredentials: {
@@ -2107,33 +2350,6 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
-    createCompany: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateCompanyRequest"];
-            };
-        };
-        responses: {
-            /** @description Saved company and immutable change reference */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-        };
-    };
     getCompany: {
         parameters: {
             query?: never;
@@ -2157,68 +2373,6 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-        };
-    };
-    patchCompany: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PatchCompanyRequest"];
-            };
-        };
-        responses: {
-            /** @description Updated company and immutable change reference */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-        };
-    };
-    archiveCompany: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ArchiveRequest"];
-            };
-        };
-        responses: {
-            /** @description Archived company and immutable change reference */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
         };
     };
     getCodexStatus: {
@@ -2332,34 +2486,6 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
-    updateOrganisationCategories: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateOrganisationCategoriesRequest"];
-            };
-        };
-        responses: {
-            /** @description Saved category version */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrganisationCategorySet"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            409: components["responses"]["Conflict"];
-        };
-    };
     getOrganisationSummaries: {
         parameters: {
             query: {
@@ -2405,64 +2531,6 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
-        };
-    };
-    createCollectorBoard: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateCollectorBoardRequest"];
-            };
-        };
-        responses: {
-            /** @description Saved collection board */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CollectorBoard"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            409: components["responses"]["Conflict"];
-        };
-    };
-    updateCollectorBoard: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateCollectorBoardRequest"];
-            };
-        };
-        responses: {
-            /** @description Updated collection board */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CollectorBoard"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            409: components["responses"]["Conflict"];
         };
     };
     getOpportunityOrganisation: {
@@ -2630,33 +2698,6 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
-    createOpportunity: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateOpportunityRequest"];
-            };
-        };
-        responses: {
-            /** @description Saved opportunity and immutable change reference */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpportunityMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-        };
-    };
     getOpportunity: {
         parameters: {
             query?: never;
@@ -2682,68 +2723,6 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    patchOpportunity: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PatchOpportunityRequest"];
-            };
-        };
-        responses: {
-            /** @description Updated opportunity and immutable change reference */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpportunityMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-        };
-    };
-    archiveOpportunity: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ArchiveRequest"];
-            };
-        };
-        responses: {
-            /** @description Archived opportunity and immutable change reference */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpportunityMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-        };
-    };
     listActions: {
         parameters: {
             query?: {
@@ -2765,33 +2744,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActionPage"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-        };
-    };
-    createAction: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateActionRequest"];
-            };
-        };
-        responses: {
-            /** @description New action and immutable audit change reference */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActionMutation"];
                 };
             };
             400: components["responses"]["ValidationError"];
@@ -2883,68 +2835,6 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-        };
-    };
-    patchAction: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PatchActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Updated action and audit change reference */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActionMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-        };
-    };
-    rescheduleAction: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RescheduleActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Rescheduled action and audit change reference */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActionMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
         };
     };
     completeAction: {
@@ -3087,37 +2977,6 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    createOfferOptionSet: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateOfferOptionSetRequest"];
-            };
-        };
-        responses: {
-            /** @description Saved immutable option set */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OfferOptionSetMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-        };
-    };
     listEvidenceSources: {
         parameters: {
             query?: {
@@ -3145,37 +3004,6 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-        };
-    };
-    createEvidenceSource: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateEvidenceSourceRequest"];
-            };
-        };
-        responses: {
-            /** @description Source recorded and qualification reevaluated */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EvidenceSourceMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
         };
     };
     getEvidenceSource: {
@@ -3234,37 +3062,6 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    createEvidence: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WriteEvidenceRequest"];
-            };
-        };
-        responses: {
-            /** @description Claim recorded and qualification reevaluated */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EvidenceMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-        };
-    };
     getEvidence: {
         parameters: {
             query?: never;
@@ -3289,38 +3086,6 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-        };
-    };
-    supersedeEvidence: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-                evidenceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WriteEvidenceRequest"];
-            };
-        };
-        responses: {
-            /** @description Replacement claim recorded */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EvidenceMutation"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
         };
     };
     getQualification: {
@@ -3384,32 +3149,6 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-        };
-    };
-    reevaluateQualification: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description New evaluation */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QualificationMutation"];
-                };
-            };
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            500: components["responses"]["InternalError"];
         };
     };
 }

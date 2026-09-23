@@ -20,13 +20,15 @@ type Config struct {
 	IsolationVerified                                  bool
 	BridgeToken                                        string
 	BridgeName                                         string
+	Model, Effort                                      string
 }
 
 func configFromEnvironment() Config {
 	return Config{Host: os.Getenv("JOBSEEK_CODEX_SSH_HOST"), User: os.Getenv("JOBSEEK_CODEX_SSH_USER"),
 		IdentityFile: os.Getenv("JOBSEEK_CODEX_SSH_IDENTITY_FILE"), KnownHostsFile: os.Getenv("JOBSEEK_CODEX_SSH_KNOWN_HOSTS"),
 		Launcher: os.Getenv("JOBSEEK_CODEX_REMOTE_LAUNCHER"), IsolationVerified: os.Getenv("JOBSEEK_CODEX_ISOLATION_VERIFIED") == "true",
-		BridgeToken: os.Getenv("JOBSEEK_CODEX_BRIDGE_TOKEN"), BridgeName: "jobseek"}
+		BridgeToken: os.Getenv("JOBSEEK_CODEX_BRIDGE_TOKEN"), BridgeName: "jobseek",
+		Model: os.Getenv("JOBSEEK_CODEX_MODEL"), Effort: os.Getenv("JOBSEEK_CODEX_EFFORT")}
 }
 
 var hostPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.-]*$`)
@@ -59,7 +61,7 @@ func dialSSH(ctx context.Context, cfg Config) (io.ReadWriteCloser, error) {
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/ssh", "-F", "/dev/null", "-T",
 		"-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "IdentitiesOnly=yes",
-		"-o", "ClearAllForwardings=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2",
+		"-o", "ClearAllForwardings=yes", "-o", "ForwardAgent=no", "-o", "ForwardX11=no", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2",
 		"-o", "UserKnownHostsFile="+cfg.KnownHostsFile, "-i", cfg.IdentityFile,
 		"--", cfg.User+"@"+cfg.Host, cfg.Launcher)
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C"}

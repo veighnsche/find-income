@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -46,6 +47,7 @@ type IngestionRequest struct {
 	OpportunityID     string
 	RecordChangeID    string
 	SourceID          string
+	SourceOpeningID   string
 	OrganisationJobID string
 	SafeErrorCode     string
 	CreatedAt         string
@@ -99,6 +101,44 @@ func ingestionDigest(input IngestionInput) string {
 	}{input.Origin, input.SourceURL, input.OriginalText, input.ConnectorID, input.ExternalID})
 	sum := sha256.Sum256(encoded)
 	return hex.EncodeToString(sum[:])
+}
+
+func canonicalIngestionURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u == nil || u.Hostname() == "" {
+		return ""
+	}
+	u.Scheme = strings.ToLower(u.Scheme)
+	u.Host = strings.ToLower(u.Host)
+	u.Fragment = ""
+	if u.Path == "" {
+		u.Path = "/"
+	}
+	return u.String()
+}
+
+func ingestionIdentity(input IngestionInput) (string, string) {
+	canonical := canonicalIngestionURL(input.SourceURL)
+	if input.Origin == "collector" && input.ExternalID != "" {
+		return "collector:" + input.ConnectorID + ":" + input.ExternalID, canonical
+	}
+	if canonical != "" {
+		return "url:" + canonical, canonical
+	}
+	return "", ""
+}
+
+func insertSourceSighting(ctx context.Context, tx *sql.Tx, openingID, ingestionID string, input IngestionInput, digest, observedAt, recordedAt string, actor Actor, decision string) error {
+	id, err := randomID()
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO source_sightings
+  (id,source_opening_id,ingestion_id,source_url,original_text,content_sha256,
+   observed_at,recorded_at,actor_kind,actor_id,decision)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?)`, id, openingID, ingestionID, optionalText(input.SourceURL),
+		input.OriginalText, digest, observedAt, recordedAt, actor.Kind, actor.ID, decision)
+	return err
 }
 
 func insertIngestionJob(ctx context.Context, tx *sql.Tx, actor Actor, intakeID string, attempt int64, now time.Time) (string, error) {
@@ -179,6 +219,47 @@ func (s *Store) SubmitIngestion(ctx context.Context, actor Actor, input Ingestio
 		return IngestionRequest{}, false, err
 	}
 	now := time.Now().UTC()
+	identity, canonical := ingestionIdentity(input)
+	contentSHA := sourceDigest(input.OriginalText)
+	observedAt := jobTime(now)
+	if input.DiscoveredAt != "" {
+		observed, parseErr := time.Parse(time.RFC3339Nano, input.DiscoveredAt)
+		if parseErr != nil {
+			return IngestionRequest{}, false, ErrInvalid
+		}
+		observedAt = jobTime(observed)
+	}
+	var openingID, previousSHA, previousIngestionID, latestObserved string
+	if identity != "" {
+		err = tx.QueryRowContext(ctx, `SELECT id,current_sha256,current_ingestion_id,latest_observed_at
+  FROM source_openings WHERE identity_key=?`, identity).Scan(&openingID, &previousSHA, &previousIngestionID, &latestObserved)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return IngestionRequest{}, false, err
+		}
+		if err == nil && (previousSHA == contentSHA || observedAt < latestObserved) {
+			decision := "unchanged"
+			if observedAt < latestObserved && previousSHA != contentSHA {
+				decision = "older"
+			}
+			if err = insertSourceSighting(ctx, tx, openingID, previousIngestionID, input, contentSHA, observedAt, jobTime(now), actor, decision); err != nil {
+				return IngestionRequest{}, false, err
+			}
+			if observedAt > latestObserved {
+				if _, err = tx.ExecContext(ctx, `UPDATE source_openings SET latest_observed_at=?,updated_at=? WHERE id=?`, observedAt, jobTime(now), openingID); err != nil {
+					return IngestionRequest{}, false, err
+				}
+			}
+			item, err := scanIngestion(tx.QueryRowContext(ctx, `SELECT `+ingestionColumns+`
+  FROM ingestion_requests i JOIN jobs j ON j.id=i.job_id WHERE i.id=?`, previousIngestionID))
+			if err != nil {
+				return IngestionRequest{}, false, err
+			}
+			if err = tx.Commit(); err != nil {
+				return IngestionRequest{}, false, err
+			}
+			return item, false, nil
+		}
+	}
 	jobID, err := insertIngestionJob(ctx, tx, actor, id, 1, now)
 	if err != nil {
 		return IngestionRequest{}, false, err
@@ -191,6 +272,31 @@ func (s *Store) SubmitIngestion(ctx context.Context, actor Actor, input Ingestio
 		optionalText(input.DiscoveredAt), "pending", jobID, jobTime(now), jobTime(now))
 	if err != nil {
 		return IngestionRequest{}, false, err
+	}
+	if identity != "" {
+		decision := "changed"
+		if openingID == "" {
+			decision = "new"
+			openingID, err = randomID()
+			if err != nil {
+				return IngestionRequest{}, false, err
+			}
+			_, err = tx.ExecContext(ctx, `INSERT INTO source_openings
+  (id,identity_key,canonical_url,current_sha256,current_ingestion_id,latest_observed_at,created_at,updated_at)
+  VALUES (?,?,?,?,?,?,?,?)`, openingID, identity, optionalText(canonical), contentSHA, id, observedAt, jobTime(now), jobTime(now))
+		} else {
+			_, err = tx.ExecContext(ctx, `UPDATE source_openings SET current_sha256=?,current_ingestion_id=?,
+  latest_observed_at=?,updated_at=? WHERE id=?`, contentSHA, id, observedAt, jobTime(now), openingID)
+		}
+		if err != nil {
+			return IngestionRequest{}, false, err
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE ingestion_requests SET source_opening_id=? WHERE id=?`, openingID, id); err != nil {
+			return IngestionRequest{}, false, err
+		}
+		if err = insertSourceSighting(ctx, tx, openingID, id, input, contentSHA, observedAt, jobTime(now), actor, decision); err != nil {
+			return IngestionRequest{}, false, err
+		}
 	}
 	if err = writeIngestionAudit(ctx, tx, actor, "ingestion.submit", id); err != nil {
 		return IngestionRequest{}, false, err
@@ -209,21 +315,22 @@ func (s *Store) SubmitIngestion(ctx context.Context, actor Actor, input Ingestio
 const ingestionColumns = `i.id,i.origin,i.actor_kind,i.actor_id,i.idempotency_key,i.submission_sha256,
   i.source_url,i.original_text,i.connector_id,i.external_id,i.discovered_at,i.status,i.job_id,
   i.attempts_started,i.dispatch_started,i.codex_thread_id,i.codex_turn_id,i.opportunity_id,i.record_change_id,i.source_id,i.organisation_job_id,
-  i.safe_error_code,i.created_at,i.updated_at,j.state,j.last_error_code`
+  i.safe_error_code,i.created_at,i.updated_at,j.state,j.last_error_code,i.source_opening_id`
 
 func scanIngestion(row rowScanner) (IngestionRequest, error) {
 	var item IngestionRequest
-	var sourceURL, connectorID, externalID, discoveredAt, threadID, turnID, opportunityID, changeID, sourceID, organisationJobID, errorCode, jobError sql.NullString
+	var sourceURL, connectorID, externalID, discoveredAt, threadID, turnID, opportunityID, changeID, sourceID, organisationJobID, errorCode, jobError, sourceOpeningID sql.NullString
 	err := row.Scan(&item.ID, &item.Origin, &item.Actor.Kind, &item.Actor.ID, &item.IdempotencyKey, &item.SubmissionSHA256,
 		&sourceURL, &item.OriginalText, &connectorID, &externalID, &discoveredAt, &item.Status, &item.JobID,
 		&item.AttemptsStarted, &item.DispatchStarted, &threadID, &turnID, &opportunityID, &changeID, &sourceID, &organisationJobID, &errorCode, &item.CreatedAt, &item.UpdatedAt,
-		&item.JobState, &jobError)
+		&item.JobState, &jobError, &sourceOpeningID)
 	if err != nil {
 		return IngestionRequest{}, err
 	}
 	item.SourceURL, item.ConnectorID, item.ExternalID, item.DiscoveredAt = sourceURL.String, connectorID.String, externalID.String, discoveredAt.String
 	item.CodexThreadID, item.CodexTurnID, item.OpportunityID, item.RecordChangeID = threadID.String, turnID.String, opportunityID.String, changeID.String
 	item.SourceID = sourceID.String
+	item.SourceOpeningID = sourceOpeningID.String
 	item.OrganisationJobID = organisationJobID.String
 	if item.Status != "completed" && item.Status != "needs_text" {
 		switch item.JobState {
@@ -317,6 +424,21 @@ func (s *Store) RetryIngestion(ctx context.Context, actor Actor, id string, full
 	if actor != item.Actor && actor.Kind != "administrator" {
 		return IngestionRequest{}, ErrInvalid
 	}
+	// A remote dispatch may still exist when its local job is terminal. Only a
+	// correlated terminal observation permits another attempt; its identity is
+	// retained in ingestion_dispatch_history before the current slot is reset.
+	if item.DispatchStarted {
+		var terminal string
+		err = tx.QueryRowContext(ctx, `SELECT terminal_status FROM ingestion_dispatch_history
+  WHERE ingestion_id=? AND job_id=? AND codex_thread_id=? AND codex_turn_id=?`,
+			id, item.JobID, item.CodexThreadID, item.CodexTurnID).Scan(&terminal)
+		if errors.Is(err, sql.ErrNoRows) {
+			return IngestionRequest{}, ErrUncertain
+		}
+		if err != nil {
+			return IngestionRequest{}, err
+		}
+	}
 	partialSave := item.JobState == JobFailed &&
 		item.OpportunityID != "" && item.RecordChangeID != "" && item.SourceID != ""
 	if !partialSave && item.Status != "failed" && item.Status != "needs_text" ||
@@ -341,6 +463,7 @@ func (s *Store) RetryIngestion(ctx context.Context, actor Actor, id string, full
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE ingestion_requests SET original_text=?,status='pending',job_id=?,
   attempts_started=attempts_started+1,dispatch_started=0,codex_thread_id=NULL,codex_turn_id=NULL,
+  dispatch_terminal_status=NULL,
   safe_error_code=NULL,updated_at=? WHERE id=?`, text, jobID, jobTime(now), id)
 	if err != nil {
 		return IngestionRequest{}, err
@@ -600,6 +723,28 @@ func recordIngestionResultTx(ctx context.Context, tx *sql.Tx, claim Job, item In
 		currentURL, currentText, sourceID); err != nil {
 		return err
 	}
+	if item.SourceOpeningID != "" {
+		if err = bindSourceOpeningTx(ctx, tx, item, opportunityID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func bindSourceOpeningTx(ctx context.Context, tx *sql.Tx, item IngestionRequest, opportunityID string) error {
+	result, err := tx.ExecContext(ctx, `UPDATE source_openings SET opportunity_id=?,updated_at=?
+  WHERE id=? AND current_ingestion_id=? AND (opportunity_id IS NULL OR opportunity_id=?)`,
+		opportunityID, utcNow(), item.SourceOpeningID, item.ID, opportunityID)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrConflict
+	}
 	return nil
 }
 
@@ -618,6 +763,62 @@ func writeIngestedRecordAudit(ctx context.Context, tx *sql.Tx, actor Actor, oper
   (id,actor_kind,actor_id,operation,entity_kind,entity_id,revision_after,occurred_at)
   VALUES (?,?,?,?,?,?,1,?)`, auditID, actor.Kind, actor.ID, operation, kind, id, utcNow())
 	return auditID, err
+}
+
+// A source revision changes the vacancy snapshot on the mapped record while
+// retaining its owner-edited fields, stage, notes, evidence and application
+// history. The subsequent extraction may add claims from the new snapshot.
+func (s *Store) refreshIngestionOpportunityTx(ctx context.Context, tx *sql.Tx, claim Job, item IngestionRequest, opportunityID string) (Opportunity, string, error) {
+	current, err := scanOpportunity(tx.QueryRowContext(ctx, `SELECT `+opportunityColumns+opportunityFrom+` WHERE o.id=?`, opportunityID))
+	if errors.Is(err, sql.ErrNoRows) || current.ArchivedAt != "" {
+		return Opportunity{}, "", ErrConflict
+	}
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	if current.SourceURL == item.SourceURL && current.OriginalText == item.OriginalText {
+		match, found, err := findMatchingOpportunity(ctx, tx, item.SourceURL, item.OriginalText)
+		if err != nil || !found || match.OpportunityID != opportunityID {
+			return Opportunity{}, "", ErrConflict
+		}
+		if err = recordIngestionResultTx(ctx, tx, claim, item, opportunityID, match.RecordChangeID); err != nil {
+			return Opportunity{}, "", err
+		}
+		if err = tx.Commit(); err != nil {
+			return Opportunity{}, "", err
+		}
+		return current, match.RecordChangeID, nil
+	}
+	updatedAt := recordNow()
+	_, err = tx.ExecContext(ctx, `UPDATE opportunities SET source_url=?,original_text=?,revision=revision+1,updated_at=?
+  WHERE id=? AND revision=? AND archived_at IS NULL`, optionalText(item.SourceURL), item.OriginalText,
+		updatedAt, opportunityID, current.Revision)
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	changeID, err := randomID()
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	actor := Actor{Kind: "system", ID: "ingestion:" + item.ID}
+	_, err = tx.ExecContext(ctx, `INSERT INTO audit_changes
+  (id,actor_kind,actor_id,operation,entity_kind,entity_id,revision_before,revision_after,occurred_at)
+  VALUES (?,?,?,?,?,?,?,?,?)`, changeID, actor.Kind, actor.ID, "opportunity.source_refresh", "opportunity",
+		opportunityID, current.Revision, current.Revision+1, updatedAt)
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	if err = recordIngestionResultTx(ctx, tx, claim, item, opportunityID, changeID); err != nil {
+		return Opportunity{}, "", err
+	}
+	updated, err := scanOpportunity(tx.QueryRowContext(ctx, `SELECT `+opportunityColumns+opportunityFrom+` WHERE o.id=?`, opportunityID))
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	if err = tx.Commit(); err != nil {
+		return Opportunity{}, "", err
+	}
+	return updated, changeID, nil
 }
 
 // SaveIngestionOpportunity is the trusted record-writing bridge for one
@@ -660,6 +861,20 @@ func (s *Store) SaveIngestionOpportunity(ctx context.Context, claim Job, input I
 	}
 	if err != nil {
 		return Opportunity{}, "", err
+	}
+	if item.SourceOpeningID != "" {
+		var mappedID, currentIngestionID sql.NullString
+		err = tx.QueryRowContext(ctx, `SELECT opportunity_id,current_ingestion_id FROM source_openings WHERE id=?`, item.SourceOpeningID).
+			Scan(&mappedID, &currentIngestionID)
+		if err != nil {
+			return Opportunity{}, "", err
+		}
+		if currentIngestionID.String != item.ID {
+			return Opportunity{}, "", ErrConflict
+		}
+		if mappedID.Valid {
+			return s.refreshIngestionOpportunityTx(ctx, tx, claim, item, mappedID.String)
+		}
 	}
 	match, found, err := findMatchingOpportunity(ctx, tx, item.SourceURL, item.OriginalText)
 	if err != nil {
@@ -780,6 +995,11 @@ func (s *Store) SaveIngestionOpportunity(ctx context.Context, claim Job, input I
 	if err = maybeScheduleOrganisationTx(ctx, tx, item.ID, opportunityID, companyID, opportunityInput.Kind,
 		opportunityInput.SourceURL, opportunityInput.OriginalText, sourceID); err != nil {
 		return Opportunity{}, "", err
+	}
+	if item.SourceOpeningID != "" {
+		if err = bindSourceOpeningTx(ctx, tx, item, opportunityID); err != nil {
+			return Opportunity{}, "", err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return Opportunity{}, "", err

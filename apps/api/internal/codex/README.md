@@ -1,6 +1,6 @@
 # Private Codex protocol client (T38 slice)
 
-This package is a stdlib-only App Server client for the pinned `codex-cli 0.153.4` protocol. It is not wired into the application. It starts no process, reads no environment/configuration, opens no connection and runs no login or model turn by itself. There is no HTTP/raw-RPC proxy, database integration, supervisor or deployment configuration. Full T38 remains open.
+This package is a stdlib-only App Server client for the pinned `codex-cli 0.153.4` protocol. It starts no process, reads no environment/configuration, opens no connection and runs no login or model turn by itself. The application runtime now calls its typed methods for an explicitly commissioned round turn, while deployment and live runner verification remain open. There is no HTTP/raw-RPC proxy in this package.
 
 Compatibility evidence was generated locally from 0.153.4 and recorded in the project's `implementation-notes/codex/` handoff. `PinnedVersion` and `SchemaSHA256` identify that baseline; the initialize user-agent check is not executable attestation. The supervisor must verify the selected platform binary separately. The [official App Server reference](https://learn.chatgpt.com/docs/app-server) is a cross-check; it can describe capabilities absent from this binary.
 
@@ -36,63 +36,16 @@ Unsupported server requests—including permission expansion, external-token ref
 
 1. **Supervisor (remaining T38):** injected closeable transport, pinned per-platform artifact, minimal child environment, dedicated state/work paths, verified runner sandbox, whole-process-group shutdown/reaping, startup health and failure reporting. Match returned home/platform to the intended runner. Never pass SQLite/backups, TYPESAFE_API_KEY, API keys or admin credentials into that runner.
 2. **Account service (T39):** owner authentication/CSRF, serialized official login attempts, URL validation, cancellation/completion correlation, account/model/limit validation and redacted public DTOs. Missing quota remains unavailable. No API-key fallback.
-3. **Run service (T40):** durable dispatch intent/idempotency, one active turn/bounded queue, supported authenticated history reconciliation, event persistence/replay cursors, pending-request authorization and run-scoped MCP identity. Do not interpret transport acknowledgement as a completed turn. These services are not faked here.
+3. **Run service (T40):** the application now persists dispatch intent and exact remote IDs for an explicitly called round turn, bounds one active turn, binds scoped MCP identity and retains uncertain history for reconciliation. Authenticated production history, event replay and interactive owner-request authorization remain unverified or unimplemented. Do not interpret transport acknowledgement as a completed turn.
 4. **Execution gate:** tools stay unavailable until selected-host isolation, required production MCP behavior, owner login, supported history and live turn interruption/crash recovery are verified. Offline client tests do not satisfy these gates.
 
 ## Verification
 
-### Bounded intake controller
+### Bound turn controller
 
-`NewIntakeController(client, trustedInstructions)` supplies one-active-intake
-`Run(ctx, preparedText, hooks)` for collector and URL/paste submissions. It owns
-the client's event stream during Run; do not attach a competing event consumer.
-The service must provide a single controller and retain/renew its ingestion job
-claim. Loss of that claim cancels Run. This package does not claim jobs, start a
-runtime, fetch URLs, configure MCP, expose HTTP routes or enable tools.
+`NewTurnController(client, instructions, model, effort)` owns one client's event stream during a previously persisted round dispatch. Its `Run(ctx, text, hooks)` requires `BindThread` and `BindTurn` callbacks that record the exact returned IDs before the next remote step. The application reserves and marks the round attempt dispatched before invoking it; this package never creates that authority itself. It accepts only an exact thread/turn terminal notification. Raw model prose, an unrelated completion, and a wire acknowledgement do not establish a saved record. Cancellation, missing identifiers, an owner-attention request or transport loss interrupt when possible, close the client and leave the result uncertain for exact-history reconciliation. It never retries the turn.
 
-`IntakeHooks` are closures over the current durable job claim:
-
-- `Ready` verifies the approved isolated runtime and required scoped tools.
-  Run additionally requires a ChatGPT account returned by `account/read`.
-- `RecordDispatch` first receives empty IDs to record intent before creation;
-  subsequent calls bind the returned thread and turn IDs. Fence every update
-  to the active claim, reject duplicate dispatch and retain uncertain outcomes
-  for an explicit decision. Do not reset unknown dispatch to pending blindly.
-- `ReadSaved` returns source-backed persisted opportunity IDs belonging to this
-  ingestion, verified against its exact source snapshot. Model prose and item
-  output are never a result authority.
-- `Finish` records outcome and preserves partial results. Map into the actual
-  ingestion schema; preserve an existing `needs_text` result from retrieval.
-  The callbacks get a bounded uncancelled context for final recording, but must
-  still reject an expired job claim.
-
-Foundation's current adapter mapping is direct: empty `RecordDispatch` calls
-`BeginIngestionDispatch`; thread-only calls `BindIngestionThread`; both IDs call
-`BindIngestionTurn`. `ReadSaved` reads the result mapping recorded by
-`RecordIngestionResult`, which validates the immutable opportunity change against
-the ingestion's exact source. `Finish` settles the claimed job through the
-application service; do not replace that result mapping with model-returned IDs.
-Inspect `IntakeOutcome.State`: Run can return a nil error with `failed`,
-`interrupted` or `needs_attention`. Nil error alone never means ingestion succeeded.
-
-Progress is drained while start RPCs are pending, so an early completion is
-correlated after the start response. Only the matching thread/turn can finish
-the run. A completed turn without a saved opportunity fails with
-`no_saved_opportunity`; unavailable result readback remains uncertain. Failed or
-interrupted turns preserve trusted partial record links. Cancellation or a lost
-acknowledgement attempts interrupt when possible and closes the connection;
-it does not assert the remote turn stopped. The controller never retries a turn.
-
-A genuine runtime approval/question becomes `needs_attention`; this minimal
-slice attempts interrupt and closes the connection without answering it. It
-does not retain an actionable approval session or implement an interactive
-approval UI; that capability remains incomplete. Raw request text, error payloads
-and assistant prose are not persisted or displayed by this controller. Normal
-authorized bridge writes should not require such a question.
-
-This slice is unmounted. Trusted runner configuration, scoped production bridge,
-durable-store adapter, owner account service and a real signed-in ingestion turn
-remain integration work. Synthetic tests are not live readiness evidence.
+`codexservice.ExecuteRoundTurn` supplies the durable callbacks and a generation-bound tool capability. Its route remains unmounted; no idle login or status call starts a turn. Synthetic tests do not satisfy the private runner's live verification gates.
 
 Run from `apps/api`, with writable caches:
 

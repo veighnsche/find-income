@@ -280,6 +280,43 @@ func (c *Client) ListTurns(ctx context.Context, threadID string, cursor *string)
 	return result, nil
 }
 
+// ObserveTurn reads one known dispatch by its persisted IDs. Incomplete or
+// unsupported history never authorizes a retry. The caller must still verify
+// ownership and persist a terminal observation before resetting a job.
+func (c *Client) ObserveTurn(ctx context.Context, threadID, turnID string) (string, error) {
+	if threadID == "" || turnID == "" {
+		return "", ErrInvalidArgument
+	}
+	if _, err := c.ReadThread(ctx, threadID); err != nil {
+		return "", err
+	}
+	var cursor *string
+	seen := make(map[string]struct{}, 10)
+	for page := 0; page < 10; page++ {
+		turns, err := c.ListTurns(ctx, threadID, cursor)
+		if err != nil {
+			return "", err
+		}
+		for _, turn := range turns.Data {
+			if turn.ID == turnID {
+				if !validTurnStatus(turn.Status) {
+					return "", ErrMalformedFrame
+				}
+				return turn.Status, nil
+			}
+		}
+		if turns.NextCursor == nil || *turns.NextCursor == "" {
+			return "", ErrHistoryIncomplete
+		}
+		if _, duplicate := seen[*turns.NextCursor]; duplicate {
+			return "", ErrHistoryIncomplete
+		}
+		seen[*turns.NextCursor] = struct{}{}
+		cursor = turns.NextCursor
+	}
+	return "", ErrHistoryIncomplete
+}
+
 // Available in schema but explicitly unsupported by the pinned runtime probe.
 func (c *Client) ListThreadItems(context.Context, string) error { return ErrUnsupported }
 

@@ -185,6 +185,48 @@ func TestOutOfOrderResponsesAndIDTypes(t *testing.T) {
 	}
 }
 
+func TestObserveTurnRequiresExactSupportedHistory(t *testing.T) {
+	for _, test := range []struct {
+		name, page, want string
+	}{
+		{"terminal", `{"data":[{"id":"other","status":"completed"},{"id":"turn-a","status":"interrupted"}]}`, "interrupted"},
+		{"still_running", `{"data":[{"id":"turn-a","status":"inProgress"}]}`, "inProgress"},
+		{"missing", `{"data":[{"id":"other","status":"completed"}]}`, ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c, p := setup(t, Options{})
+			initialize(t, c, p)
+			var observed string
+			done := callAsync(func() error {
+				var err error
+				observed, err = c.ObserveTurn(context.Background(), "thread-a", "turn-a")
+				return err
+			})
+			read := p.read(t)
+			if string(read["method"]) != `"thread/read"` {
+				t.Fatal("history identity read missing")
+			}
+			p.result(t, read, `{"thread":{"id":"thread-a"}}`)
+			list := p.read(t)
+			if string(list["method"]) != `"thread/turns/list"` {
+				t.Fatal("supported turn list missing")
+			}
+			p.result(t, list, test.page)
+			err := receive(t, done)
+			if test.want == "" {
+				if !errors.Is(err, ErrHistoryIncomplete) {
+					t.Fatal(err)
+				}
+			} else if err != nil || observed != test.want {
+				t.Fatal(observed, err)
+			}
+		})
+	}
+	if _, err := (&Client{}).ObserveTurn(context.Background(), "", "turn-a"); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+}
+
 func TestTimeoutCancellationAndLateReply(t *testing.T) {
 	c, p := setup(t, Options{Timeout: time.Second})
 	initialize(t, c, p)
