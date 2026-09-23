@@ -2,7 +2,7 @@
 
 Updated 24 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. Current ownership, reviewed checkpoints and remaining acceptance are recorded below; historical test passes do not establish completion of the evolving worktree.
 
-**Current position: 5 tasks accepted, 18 partial, 4 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20–I22, I24–I27. I10 advice is under authority review, I27 UI corrections are under browser verification, and current-schema recovery validation is active; interview and offer backend/UI slices are reviewed and committed. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 18 partial, 4 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20–I22, I24–I27. I10 advice is being corrected after authority review, I27 UI corrections are under browser verification, and current-schema recovery is committed; interview and offer backend/UI slices are reviewed and committed. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -28,16 +28,18 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 ### Current live assignments
 
+**Budget priority:** preserve remaining tokens for actual job search. Finish the two active I10 slices, reuse worker verification, and run additional checks or review only for a concrete unresolved risk. No speculative features or routine duplicate audits; prioritise the usable deployment path.
+
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I10 cross-outcome advice | Sol High implementation; Astra Medium review | Isolated commit149c616 is frozen for authority review; root owns integration, then web owns supported advice navigation. |
-| I26 current-schema recovery | Sol Medium | `ops/i26/**`: verify current interview, offer and delivery records survive sanitized backup/restore; actual host recovery remains pending. |
+| I10 cross-outcome advice | Sol High correction; Astra Medium recheck | Correct actual tool scope rejection, nil-provider finalization and captured-advice Resume in the isolated checkout; stable action/target contract supports the next web slice. |
+| I26 current-schema recovery | Sol Medium | Reviewed and committedc1f3c83/ff8777c; seven root recovery tests pass. Writer idle; actual host recovery remains pending. |
 | I27 client/server corrections | Sol Medium | Main web/smoke: retain definitive rejection across reload, replace unsupported delivery Resume with its real review controls, and allow exact saved debrief replay after source changes. |
-| Independent authority review | Astra Medium | Review isolated I10 scope, budgets, Stop/replay and bounded-facts disclosure. Earlier interview recovery review is complete. |
+| Independent authority review | Astra Medium | Three I10 defects reproduced; reviewer idle until bounded correction recheck. |
 
 The main backend checkpoint is **c85a617**, and the web checkpoint is **c8ec6e6**. Interview preparation/debrief and whole-offer comparisons are integrated alongside discovery, contextual input, application packs and reviewed delivery controls. Root verified the combined Go suite and generated contracts, then the affected checks after narrow replay/identity corrections. Browser validation covers the full synthetic journey plus the corrected offer numeric parser and readable exact pay. Independent recovery/integration reviews closed the recorded findings; root matched all15 final interview review hashes before commit. These checks establish local implementation evidence, not live recruitment acceptance.
 
-I10 commit149c616 adds saved next-action advice beyond discovery in its isolated checkout and is awaiting authority review and web integration. The owner explicitly limited offer/delivery next-action requests to bounded result facts, excluding message bodies, recipients and raw offer text; this restriction does not change the separately authorised detailed per-outcome assessments. Advice quality must be evaluated within that disclosed context limit. I27 audit found three concrete UI recovery/control mismatches; root lint passed the corrections, but the full browser check exposed a timing failure now being investigated by the web owner. A separate task is verifying recovery against the current full schema. Other interview/offer writers are idle. One writer per physical checkout/path remains enforced; shared changes are integrated directly with no compatibility paths.
+I10 commit149c616 adds saved next-action advice beyond discovery in its isolated checkout. Review reproduced three defects in real tool scope validation, unavailable-provider finalization and captured-advice Resume; Sol High corrections precede integration. The owner explicitly limited offer/delivery next-action requests to bounded result facts, excluding message bodies, recipients and raw offer text; this restriction does not change the separately authorised detailed per-outcome assessments. Advice quality must be evaluated within that disclosed context limit. I27 audit found three concrete UI recovery/control mismatches; root lint passed the corrections, but the full browser check exposed a timing failure now being investigated by the web owner. Current-schema recovery is reviewed and committedc1f3c83/ff8777c, including interrupted delivery uncertainty and material digest checks; seven root tests pass. Other interview/offer writers are idle. One writer per physical checkout/path remains enforced; shared changes are integrated directly with no compatibility paths.
 
 Live host/account, usable research capability, inbox and exact delivery inputs remain unresolved. Native boundary code/configuration is reviewed, including the twelve-tool runtime/template/probe consistency check, but selected-host sign-in and containment are unverified. Real discovery→selection→pack acceptance (I16), actual interview/offer usefulness and the owner walkthrough remain open.
 
@@ -475,7 +477,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I12, I15.
 
-**Remaining work:** Validate final current schema in I27 and actual private-host recovery/account reconnect/idle behavior after I12.
+**Remaining work:** Actual private-host recovery/account reconnect/idle behavior after I12; repeat schema validation only if the current schema changes.
 
 **Task scope:** Package persistent private app/runner operation and current-format data/asset/pack backup/restore with clear account reconnection boundaries. Extend the current snapshot as later domain tables land; no legacy migration support. Do not wait for interview/offer UI to protect useful stored work.
 
@@ -483,7 +485,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 **Why this model/effort:** Known persistence and operational checks fit Sol Medium; documentation handoff can use Luna after commands are verified.
 
-**Reviewed evidence:** Committed3bcbd42: current-format backup/restore, credential removal/free-page purge, exact pack/assets integrity and preserved board eligibility. Five synthetic tests pass independently.
+**Reviewed evidence:** Committed3bcbd42 foundations andc1f3c83/ff8777c current-schema corrections: sanitized recovery preserves interview/debrief, offer/tradeoff, delivery review/MIME and pack/assets; interrupted sending becomes uncertain. Seven root synthetic tests pass, including rejection of rehashed archives retaining sending state or inconsistent delivery material digests. Actual host operation remains unverified.
 
 ### I27 — Review the complete journey and publish accurate operating docs
 

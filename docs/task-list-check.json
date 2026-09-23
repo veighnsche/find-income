@@ -6,9 +6,8 @@
   "models_valid": true,
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
-    "I10 isolated149c616 authority review, Astra Medium",
-    "I27 main web correction/browser verification, Sol Medium",
-    "I26 current-schema backup/restore verification, Sol Medium"
+    "I10 isolated authority corrections, Sol High",
+    "I27 main web correction/browser verification, Sol Medium"
   ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",
@@ -40,7 +39,9 @@
     "Committed54b7977: sourced interview/debrief UI and exact retry/control behavior; root lint/TypeScript and production-build Chromium pass. Main backend routes await corrected isolated integration.",
     "Committed7ee48d3: I25 commissioned sourced offer backend after independent frozen and shared-recovery rechecks; six reviewed hashes match, root full Go suite and both generated checks pass. UI/live quality remain open.",
     "Committedc8ec6e6: whole-offer UI, fresh-browser retrieval, exact pending key, readable exact pay and valid fractional/scientific Jev metadata. Root full Chromium suite then targeted corrected offer run passed.",
-    "Committedc85a617: corrected interview prep/debrief backend after independent recovery, HTTP replay and merge rechecks; all15 final hashes matched. Combined Go suite and generated checks passed, plus affected post-fix suites and tool-inventory consistency."
+    "Committedc85a617: corrected interview prep/debrief backend after independent recovery, HTTP replay and merge rechecks; all15 final hashes matched. Combined Go suite and generated checks passed, plus affected post-fix suites and tool-inventory consistency.",
+    "Committedc1f3c83: root current-schema recovery review and six synthetic tests pass; interrupted deliveries remain uncertain, actual host acceptance pending.",
+    "Committedff8777c: saved delivery MIME, attachment and pack digest checks; seven root recovery tests pass."
   ],
   "documentation_validated_at": "2026-09-24",
   "code_checkpoint": "c85a617",

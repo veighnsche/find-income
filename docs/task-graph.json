@@ -188,10 +188,10 @@
       "status": "partial",
       "thread_id": "01a0cf13-2c03-73f2-b074-6c73d7120ebe",
       "host_id": "local",
-      "active_slice": "Frozen isolated149c616; Astra Medium authority review before root integration and web navigation",
+      "active_slice": "Sol High corrects three actual authority/recovery defects from independent149c616 review before integration and UI",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
-      "review": "Committed 2fdfe7d: recorded choices, guarded current screening/organisation projection and pack relevance; responsibility evaluation has ten complete cases.",
+      "review": "Independent Astra Medium review reproduced actual Codex scope rejection, nil-provider panic, and complete next-outcome capture stuck at Service.Resume; correction required.",
       "remaining_work": "Extend saved next-action generation beyond discovery to each implemented outcome, using explicit commissioned scope and only supported actions, then verify real usefulness. Discovery advice/currentness/latest retrieval are committed d9679af; four candidate actions do not establish cross-outcome integration.",
       "worktree": "/private/tmp/find-income-i10-advice",
       "worktree_base": "09bfc01",
@@ -556,9 +556,9 @@
       "acceptance": "Restore a synthetic current-format backup with referenced assets, verify auth/restart/idle behaviour and secrets exclusion, and record real host operating steps. Final validation in I27 uses the complete current schema. No production credentials in backups/build artifacts.",
       "selection_reason": "Known persistence and operational checks fit Sol Medium; documentation handoff can use Luna after commands are verified.",
       "status": "partial",
-      "remaining_work": "Validate final current schema in I27 and actual private-host recovery/account reconnect/idle behavior after I12.",
-      "active_slice": "Validate current interview/offer/delivery schema backup and idle restore in ops/i26",
-      "review": "Committed3bcbd42: current-format backup/restore, credential removal/free-page purge, exact pack/assets integrity and preserved board eligibility. Five synthetic tests pass independently.",
+      "remaining_work": "Actual private-host recovery, account reconnect and idle behavior after I12. Recheck schema only if it changes.",
+      "active_slice": "Current-schema corrections reviewed and committedc1f3c83/ff8777c; writer idle",
+      "review": "Root reviewed current schema, interrupted sends and saved delivery digests; seven synthetic recovery tests pass. Actual host acceptance pending.",
       "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
       "host_id": "local",
       "active_model": "gpt-6-sol",
@@ -597,33 +597,15 @@
   "execution_guide": "/Users/vince/Projects/find-income/dashboard/docs/implementation-tasks.md",
   "next_proposed_slices": [
     {
-      "id": "I05-B",
-      "task": "I05",
-      "model": "gpt-6-sol",
-      "effort": "high"
-    },
-    {
-      "id": "I08-B",
-      "task": "I08",
-      "model": "gpt-6-sol",
-      "effort": "high"
-    },
-    {
-      "id": "I15-C",
-      "task": "I15",
-      "model": "gpt-6-sol",
-      "effort": "medium"
-    },
-    {
-      "id": "I11-B",
-      "task": "I11",
+      "id": "I10-web",
+      "task": "I10",
       "model": "gpt-6-sol",
       "effort": "medium"
     }
   ],
   "max_concurrent_live_workers": 4,
-  "dispatch_status": "active_goal_three_live_workers",
-  "code_checkpoint": "2f2b8cb",
+  "dispatch_status": "active_goal_two_live_workers",
+  "code_checkpoint": "ff8777c",
   "goal_status": "active",
   "goal_objective": "Complete all I01–I27 task acceptance using concurrent live tasks, reviewed coherent commits and actual live acceptance where required."
 }
