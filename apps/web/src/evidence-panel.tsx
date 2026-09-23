@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { OwnerInstructionPanel } from './owner-instruction';
 import {
   getQualification,
   isUnauthenticated,
@@ -12,6 +13,7 @@ import {
   type Opportunity,
   type QualificationEvaluation,
   type QualificationView,
+  type Session,
 } from './api';
 import './evidence-panel.css';
 
@@ -81,7 +83,7 @@ function Evaluation({ value }: { value: QualificationEvaluation }) {
   );
 }
 
-function Claim({ value }: { value: EvidenceClaim }) {
+function Claim({ value, onCorrect }: { value: EvidenceClaim; onCorrect: () => void }) {
   return (
     <li>
       <strong>{value.roleDefinition?.label || words(value.criterion)}:</strong>{' '}
@@ -117,17 +119,23 @@ function Claim({ value }: { value: EvidenceClaim }) {
         Source {value.sourceId} · recorded {new Date(value.createdAt).toLocaleString()}
         {value.supersedesId && ` · supersedes ${value.supersedesId}`}
       </p>
+      <button type="button" className="secondary" onClick={onCorrect}>
+        Correct this evidence claim
+      </button>
     </li>
   );
 }
 
 export function EvidencePanel({
   opportunity,
+  session,
   onSessionLost,
 }: {
   opportunity: Opportunity;
+  session: Session;
   onSessionLost: () => void;
 }) {
+  const [correction, setCorrection] = useState<EvidenceClaim | null>(null);
   const [qualification, setQualification] = useState<QualificationView | null>(null);
   const [sources, setSources] = useState<EvidenceSource[]>([]);
   const [claims, setClaims] = useState<EvidenceClaim[]>([]);
@@ -257,7 +265,7 @@ export function EvidencePanel({
             ) : (
               <ol>
                 {claims.map((claim) => (
-                  <Claim key={claim.id} value={claim} />
+                  <Claim key={claim.id} value={claim} onCorrect={() => setCorrection(claim)} />
                 ))}
               </ol>
             )}
@@ -299,6 +307,20 @@ export function EvidencePanel({
               </button>
             )}
           </section>
+          {correction && (
+            <OwnerInstructionPanel
+              key={correction.id}
+              target={{
+                targetKind: 'evidence',
+                targetId: correction.id,
+                expectedRevision: 1,
+              }}
+              title="Correct evidence claim"
+              session={session}
+              onSessionLost={onSessionLost}
+              onClose={() => setCorrection(null)}
+            />
+          )}
           <section>
             <h3>Assessment history</h3>
             {history.length === 0 ? (

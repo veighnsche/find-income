@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ProcessInputReport } from './process-input-report';
 import {
   getActiveRound,
   getRoundCards,
@@ -17,16 +18,25 @@ import {
   type RoundCapability,
   type RoundHistoryEvent,
   type Session,
+  type StartRoundRequest,
 } from './api';
 
 const lastRoundKey = 'jobseek.last-round';
 const startKey = 'jobseek.pending-round-start';
+function readPendingStart(): StartRoundRequest | null {
+  try {
+    return JSON.parse(localStorage.getItem(startKey) || 'null') as StartRoundRequest | null;
+  } catch {
+    return null;
+  }
+}
 const activeStates = new Set<Round['state']>(['queued', 'running', 'awaiting_input', 'stopping']);
 const pollIntervalMs = 5000;
 
 function roundTitle(outcome: string): string {
   if (outcome === 'discover') return 'Find my next opportunities';
   if (outcome === 'prepare') return 'Prepare an application';
+  if (outcome === 'process_input') return 'Handle your input';
   return outcome.replaceAll('_', ' ');
 }
 
@@ -58,11 +68,13 @@ export function AgencyHome({
   onSessionLost,
   onOpenOpportunity,
   onEditBrief,
+  onBriefLoaded,
 }: {
   session: Session;
   onSessionLost: () => void;
   onOpenOpportunity: (id: string) => void;
   onEditBrief: (version: number) => void;
+  onBriefLoaded?: (version: number) => void;
 }) {
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [round, setRound] = useState<Round | null>(null);
@@ -75,6 +87,8 @@ export function AgencyHome({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingStart, setPendingStart] = useState<StartRoundRequest | null>(readPendingStart);
+  const [staleStart, setStaleStart] = useState(false);
   const readController = useRef<AbortController | null>(null);
   const readPromise = useRef<Promise<Round | null | undefined> | null>(null);
   const readVersion = useRef(0);
@@ -120,6 +134,7 @@ export function AgencyHome({
           }
           if (!currentRead()) return undefined;
           setPreferences(brief);
+          onBriefLoaded?.(brief.version);
           setCapability(available);
           setRound(current);
           setError(null);
@@ -190,7 +205,7 @@ export function AgencyHome({
       });
       return task;
     },
-    [onSessionLost],
+    [onSessionLost, onBriefLoaded],
   );
 
   useEffect(() => {
@@ -200,6 +215,15 @@ export function AgencyHome({
       mounted.current = false;
       invalidateRead();
     };
+  }, [refresh, invalidateRead]);
+
+  useEffect(() => {
+    const onCommissioned = () => {
+      invalidateRead();
+      void refresh();
+    };
+    window.addEventListener('jobseek:round-commissioned', onCommissioned);
+    return () => window.removeEventListener('jobseek:round-commissioned', onCommissioned);
   }, [refresh, invalidateRead]);
 
   useEffect(() => {
@@ -247,28 +271,41 @@ export function AgencyHome({
   }
 
   async function start() {
+    const replacePaused =
+      round?.state === 'paused'
+        ? { roundId: round.id, expectedRevision: round.revision }
+        : undefined;
     if (
-      !capability?.canStart ||
       mutationInFlight.current ||
-      (round && ['queued', 'running', 'awaiting_input', 'stopping', 'paused'].includes(round.state))
+      (!pendingStart &&
+        (!(capability?.canStart || (replacePaused && capability?.reason === 'round_active')) ||
+          (round && activeStates.has(round.state))))
     )
       return;
     mutationInFlight.current = true;
     invalidateRead();
     setBusy(true);
     setActionError(null);
+    setStaleStart(false);
     try {
-      let key = localStorage.getItem(startKey);
-      if (!key) {
-        key = crypto.randomUUID();
-        localStorage.setItem(startKey, key);
+      let input = pendingStart;
+      if (!input) {
+        input = { requestKey: crypto.randomUUID(), ...(replacePaused ? { replacePaused } : {}) };
+        localStorage.setItem(startKey, JSON.stringify(input));
+        setPendingStart(input);
       }
-      const created = await startRound(key, session.csrfToken);
+      const created = await startRound(input, session.csrfToken);
       if (mounted.current) setRound(created);
       localStorage.removeItem(startKey);
+      setPendingStart(null);
     } catch (cause) {
       if (isUnauthenticated(cause)) onSessionLost();
-      else if (mounted.current)
+      else if (cause instanceof RequestError && cause.status === 409) {
+        setStaleStart(true);
+        setActionError(
+          'This Start request was rejected because the paused work changed. Review current work before starting a new request.',
+        );
+      } else if (mounted.current)
         setActionError(
           `${message(cause)} Refresh work before retrying; the same Start identity is retained.`,
         );
@@ -279,6 +316,21 @@ export function AgencyHome({
         void refresh(true);
       }
     }
+  }
+
+  async function reviewRejectedStart() {
+    if (!pendingStart || !staleStart || busy) return;
+    const current = await refresh();
+    if (current === undefined) {
+      setActionError('Current work could not be refreshed. The rejected request remains saved.');
+      return;
+    }
+    localStorage.removeItem(startKey);
+    setPendingStart(null);
+    setStaleStart(false);
+    setActionError(
+      'Current work was refreshed. Review it before starting a new discovery request.',
+    );
   }
 
   const active = round && ['queued', 'running', 'awaiting_input', 'stopping'].includes(round.state);
@@ -315,7 +367,11 @@ export function AgencyHome({
               {round.step || 'Current step has not been reported.'}
             </p>
             <p>{round.intent}</p>
-            {reportSummary && <p>{reportSummary}</p>}
+            {round.outcome === 'process_input' ? (
+              <ProcessInputReport round={round} />
+            ) : (
+              reportSummary && <p>{reportSummary}</p>
+            )}
             {round.stopReason && <p>Stopped because: {round.stopReason.replaceAll('_', ' ')}</p>}
             {round.deliverableStatus && (
               <p>Deliverable: {round.deliverableStatus.replaceAll('_', ' ')}</p>
@@ -327,8 +383,9 @@ export function AgencyHome({
             )}
             {round.unresolved.length > 0 && (
               <p>
-                {round.unresolved.length} unresolved item{round.unresolved.length === 1 ? '' : 's'}{' '}
-                remain in the saved report.
+                {round.outcome === 'process_input'
+                  ? `Execution reconciliation has ${round.unresolved.length} unresolved attempt${round.unresolved.length === 1 ? '' : 's'}.`
+                  : `${round.unresolved.length} unresolved item${round.unresolved.length === 1 ? '' : 's'} remain in the saved report.`}
               </p>
             )}
             <details>
@@ -375,7 +432,7 @@ export function AgencyHome({
                 remaining allowance remain readable.
               </p>
             )}
-            {!active && !paused && capability && (
+            {!active && !pendingStart && capability && (
               <div className="agency-next">
                 <h3>Next useful action</h3>
                 <p>
@@ -384,12 +441,17 @@ export function AgencyHome({
                 </p>
                 <button
                   type="button"
-                  disabled={busy || !capability.canStart}
+                  disabled={
+                    busy ||
+                    !(capability.canStart || (paused && capability.reason === 'round_active'))
+                  }
                   onClick={() => void start()}
                 >
-                  {capability.canStart
-                    ? 'Find my next opportunities'
-                    : 'Find my next opportunities — unavailable'}
+                  {paused && capability.reason === 'round_active'
+                    ? `End paused ${round.outcome.replaceAll('_', ' ')} round and find my next opportunities`
+                    : capability.canStart
+                      ? 'Find my next opportunities'
+                      : 'Find my next opportunities — unavailable'}
                 </button>
               </div>
             )}
@@ -416,7 +478,7 @@ export function AgencyHome({
             )}
             <button
               type="button"
-              disabled={busy || !capability?.canStart}
+              disabled={busy || !capability?.canStart || Boolean(pendingStart)}
               onClick={() => void start()}
             >
               {capability?.canStart
@@ -425,6 +487,27 @@ export function AgencyHome({
             </button>
           </>
         ) : null}
+        {pendingStart && (
+          <div className="agency-next">
+            <p>
+              The earlier discovery Start response was not confirmed. Retry its saved request to
+              check the same commission.
+            </p>
+            <button type="button" disabled={busy} onClick={() => void start()}>
+              Retry same discovery request
+            </button>
+            {staleStart && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy || loading}
+                onClick={() => void reviewRejectedStart()}
+              >
+                Review work and start a new request
+              </button>
+            )}
+          </div>
+        )}
         {actionError && (
           <p role="alert" className="error">
             {actionError} Saved work remains visible; refresh its status before another action.

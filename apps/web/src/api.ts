@@ -8,6 +8,9 @@ export type RoundCapability = components['schemas']['RoundCapability'];
 export type RoundCard = components['schemas']['RoundCard'];
 export type RoundHistoryEvent = components['schemas']['RoundHistoryEvent'];
 export type PrepareRoundRequest = components['schemas']['PrepareRoundRequest'];
+export type StartRoundRequest = components['schemas']['StartRoundRequest'];
+export type ProcessInputRequest = components['schemas']['ProcessInputRequest'];
+export type ProcessInputResponse = components['schemas']['ProcessInputResponse'];
 export type ApplicationPackSummary = components['schemas']['ApplicationPackSummary'];
 export type ApplicationPackDetail = components['schemas']['ApplicationPackDetail'];
 export type RoundScreeningView = components['schemas']['RoundScreeningView'];
@@ -139,11 +142,11 @@ export function getRoundCapability(signal?: AbortSignal): Promise<RoundCapabilit
   return request<RoundCapability>('/rounds/capability', { signal });
 }
 
-export function startRound(requestKey: string, csrfToken: string): Promise<Round> {
+export function startRound(input: StartRoundRequest, csrfToken: string): Promise<Round> {
   return request<Round>('/rounds', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-    body: JSON.stringify({ requestKey }),
+    body: JSON.stringify(input),
   });
 }
 
@@ -152,6 +155,17 @@ export function prepareApplicationRound(
   csrfToken: string,
 ): Promise<Round> {
   return request<Round>('/rounds/prepare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(input),
+  });
+}
+
+export function processInput(
+  input: ProcessInputRequest,
+  csrfToken: string,
+): Promise<ProcessInputResponse> {
+  return request<ProcessInputResponse>('/rounds/process-input', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
     body: JSON.stringify(input),

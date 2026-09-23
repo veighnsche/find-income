@@ -8,6 +8,7 @@ import {
   stopRound,
   type Round,
   type Session,
+  type PrepareRoundRequest,
 } from './api';
 
 const runningStates = new Set<Round['state']>(['queued', 'running', 'awaiting_input', 'stopping']);
@@ -24,6 +25,13 @@ function roundKey(id: string) {
 }
 function requestKey(id: string) {
   return `jobseek.prepare-request.${id}`;
+}
+function readPendingPrepare(id: string): PrepareRoundRequest | null {
+  try {
+    return JSON.parse(localStorage.getItem(requestKey(id)) || 'null') as PrepareRoundRequest | null;
+  } catch {
+    return null;
+  }
 }
 function errorText(cause: unknown) {
   return cause instanceof Error ? cause.message : 'Request failed.';
@@ -44,7 +52,7 @@ export function PackRoundPanel({
   sourceReady: boolean;
   hasSavedPack: boolean;
   session: Session;
-  startPreparation: (requestKey: string) => Promise<Round>;
+  startPreparation: (input: PrepareRoundRequest) => Promise<Round>;
   onRoundSettled: () => void;
   onSessionLost: () => void;
 }) {
@@ -54,9 +62,13 @@ export function PackRoundPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [stalePrepare, setStalePrepare] = useState(false);
+  const [pendingPrepare, setPendingPrepare] = useState<PrepareRoundRequest | null>(() =>
+    readPendingPrepare(opportunityId),
+  );
   const controller = useRef<AbortController | null>(null);
   const readVersion = useRef(0);
-  const readPromise = useRef<Promise<void> | null>(null);
+  const readPromise = useRef<Promise<boolean> | null>(null);
   const mounted = useRef(false);
   const mutating = useRef(false);
   const lastSettled = useRef('');
@@ -71,8 +83,8 @@ export function PackRoundPanel({
   }, []);
 
   const refresh = useCallback(
-    (silent = false): Promise<void> => {
-      if (!mounted.current || mutating.current) return Promise.resolve();
+    (silent = false): Promise<boolean> => {
+      if (!mounted.current || mutating.current) return Promise.resolve(false);
       if (readPromise.current) return readPromise.current;
       const current = new AbortController();
       const version = ++readVersion.current;
@@ -102,7 +114,7 @@ export function PackRoundPanel({
               }
             }
           }
-          if (!fresh()) return;
+          if (!fresh()) return false;
           setRound(remembered);
           setOtherActive(active && !own ? active : null);
           setError(null);
@@ -113,11 +125,13 @@ export function PackRoundPanel({
               onSettledRef.current();
             }
           }
+          return true;
         } catch (cause) {
-          if (!fresh()) return;
+          if (!fresh()) return false;
           if (isUnauthenticated(cause)) onSessionLost();
           else
             setError(`${errorText(cause)} Saved pack versions remain below; refresh to try again.`);
+          return false;
         } finally {
           if (fresh()) setLoading(false);
         }
@@ -160,32 +174,50 @@ export function PackRoundPanel({
   }, [round?.id, round?.state, otherActive?.id, otherActive?.state, refresh]);
 
   async function prepare() {
+    const pausedRound =
+      otherActive?.state === 'paused' ? otherActive : round?.state === 'paused' ? round : null;
+    const replacePaused = pausedRound
+      ? { roundId: pausedRound.id, expectedRevision: pausedRound.revision }
+      : undefined;
     if (
-      !selected ||
-      !sourceReady ||
-      loading ||
       mutating.current ||
-      otherActive ||
-      (round && occupiedStates.has(round.state))
+      (!pendingPrepare &&
+        (!selected ||
+          !sourceReady ||
+          loading ||
+          (otherActive && otherActive.state !== 'paused') ||
+          (round && runningStates.has(round.state))))
     )
       return;
     mutating.current = true;
     invalidate();
     setBusy(true);
     setActionError(null);
+    setStalePrepare(false);
     try {
-      let key = localStorage.getItem(requestKey(opportunityId));
-      if (!key) {
-        key = crypto.randomUUID();
-        localStorage.setItem(requestKey(opportunityId), key);
+      let input = pendingPrepare;
+      if (!input) {
+        input = {
+          requestKey: crypto.randomUUID(),
+          opportunityId,
+          ...(replacePaused ? { replacePaused } : {}),
+        };
+        localStorage.setItem(requestKey(opportunityId), JSON.stringify(input));
+        setPendingPrepare(input);
       }
-      const created = await startPreparation(key);
+      const created = await startPreparation(input);
       if (mounted.current) setRound(created);
       localStorage.setItem(roundKey(opportunityId), created.id);
       localStorage.removeItem(requestKey(opportunityId));
+      setPendingPrepare(null);
     } catch (cause) {
       if (isUnauthenticated(cause)) onSessionLost();
-      else if (mounted.current)
+      else if (cause instanceof RequestError && cause.status === 409) {
+        setStalePrepare(true);
+        setActionError(
+          'This Prepare request was rejected because the paused work changed. Review current work before starting a new request.',
+        );
+      } else if (mounted.current)
         setActionError(
           `${errorText(cause)} Refresh status before retrying; this Prepare identity is retained.`,
         );
@@ -196,6 +228,20 @@ export function PackRoundPanel({
         void refresh(true);
       }
     }
+  }
+
+  async function reviewRejectedPrepare() {
+    if (!pendingPrepare || !stalePrepare || busy) return;
+    if (!(await refresh())) {
+      setActionError('Current work could not be refreshed. The rejected request remains saved.');
+      return;
+    }
+    localStorage.removeItem(requestKey(opportunityId));
+    setPendingPrepare(null);
+    setStalePrepare(false);
+    setActionError(
+      'Current work was refreshed. Review it before starting a new preparation request.',
+    );
   }
 
   async function act(operation: 'stop' | 'resume') {
@@ -250,8 +296,10 @@ export function PackRoundPanel({
       {otherActive && (
         <p role="status">
           Another {otherActive.outcome.replaceAll('_', ' ')} round is{' '}
-          {otherActive.state.replaceAll('_', ' ')}. Finish or stop it from your campaign before
-          preparing this role.
+          {otherActive.state.replaceAll('_', ' ')}.{' '}
+          {otherActive.state === 'paused'
+            ? 'You can end it and start this preparation with its history retained.'
+            : 'Finish or stop it from your campaign before preparing this role.'}
         </p>
       )}
       {round && (
@@ -305,14 +353,43 @@ export function PackRoundPanel({
       {selected && !sourceReady && (
         <p className="hint">A saved source URL and vacancy text are needed before preparation.</p>
       )}
-      {selected && sourceReady && !otherActive && !active && !paused && (
-        <button
-          type="button"
-          disabled={busy || loading || Boolean(error)}
-          onClick={() => void prepare()}
-        >
-          {hasSavedPack || round ? 'Prepare a new version' : 'Prepare application'}
-        </button>
+      {selected &&
+        sourceReady &&
+        !pendingPrepare &&
+        (!otherActive || otherActive.state === 'paused') &&
+        !active && (
+          <button
+            type="button"
+            disabled={busy || loading || Boolean(error)}
+            onClick={() => void prepare()}
+          >
+            {otherActive?.state === 'paused' || paused
+              ? `End paused ${(otherActive || round)!.outcome.replaceAll('_', ' ')} round and prepare this application`
+              : hasSavedPack || round
+                ? 'Prepare a new version'
+                : 'Prepare application'}
+          </button>
+        )}
+      {pendingPrepare && (
+        <div className="button-row">
+          <p>
+            The earlier Prepare response was not confirmed. Retry its saved request to check the
+            same commission.
+          </p>
+          <button type="button" disabled={busy} onClick={() => void prepare()}>
+            Retry same preparation request
+          </button>
+          {stalePrepare && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy || loading}
+              onClick={() => void reviewRejectedPrepare()}
+            >
+              Review work and start a new preparation request
+            </button>
+          )}
+        </div>
       )}
       {actionError && (
         <p role="alert" className="error">

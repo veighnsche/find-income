@@ -158,6 +158,17 @@ function manifest(pack) {
     preparationRequestSha256: '1'.repeat(64),
   };
 }
+function inputChange(operation, entityKind, revisionAfter) {
+  return {
+    auditId: `synthetic-${operation}`,
+    attemptId: 'synthetic-attempt',
+    operation,
+    entityKind,
+    entityId: `synthetic-${entityKind}`,
+    revisionAfter,
+    occurredAt: time,
+  };
+}
 function sendJson(res, status, value) {
   const body = Buffer.from(JSON.stringify(value));
   res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': body.length });
@@ -198,13 +209,26 @@ async function serveStatic(res, pathname) {
 export async function startFixture() {
   const state = {
     decision: null,
+    profileVersion: profile.version,
+    currentInput: null,
+    organisationLimitNext: false,
     round: { ...round },
+    previousRounds: new Map(),
     packs: [pack2, pack1],
     details: new Map([
       [pack2.id, { ...pack2, manifest: manifest(pack2) }],
       [pack1.id, { ...pack1, manifest: manifest(pack1) }],
     ]),
     failDetail: false,
+    failFirstProcessResponse: false,
+    processResponses: new Map(),
+    prepareResponses: new Map(),
+    discoveryResponses: new Map(),
+    failFirstPrepareResponse: false,
+    failFirstDiscoveryResponse: false,
+    staleNextPrepare: false,
+    staleNextDiscovery: false,
+    discoveryReady: false,
     requests: [],
   };
   const server = createServer(async (req, res) => {
@@ -222,7 +246,8 @@ export async function startFixture() {
         });
       if (path === '/api/v1/health')
         return sendJson(res, 200, { status: 'ok', service: 'jobseek-api', version: 'ui-fixture' });
-      if (path === '/api/v1/preferences') return sendJson(res, 200, profile);
+      if (path === '/api/v1/preferences')
+        return sendJson(res, 200, { ...profile, version: state.profileVersion });
       if (path === '/api/v1/rounds/active')
         return ['queued', 'running', 'awaiting_input', 'stopping', 'paused'].includes(
           state.round.state,
@@ -231,37 +256,199 @@ export async function startFixture() {
           : error(res, 404);
       if (path === '/api/v1/rounds/capability')
         return sendJson(res, 200, {
-          canStart: false,
-          reason: 'fixture',
+          canStart:
+            state.discoveryReady &&
+            !['queued', 'running', 'awaiting_input', 'stopping', 'paused'].includes(
+              state.round.state,
+            ),
+          reason: ['queued', 'running', 'awaiting_input', 'stopping', 'paused'].includes(
+            state.round.state,
+          )
+            ? 'round_active'
+            : state.discoveryReady
+              ? ''
+              : 'fixture',
           intent: 'Synthetic discovery unavailable',
           outcome: 'discover',
           limits: allowance,
           sourceCount: 0,
         });
-      if (path === `/api/v1/rounds/${round.id}`) return sendJson(res, 200, state.round);
+      if (path === `/api/v1/rounds/${state.round.id}`) return sendJson(res, 200, state.round);
       if (
-        path === `/api/v1/rounds/${round.id}/history` ||
-        path === `/api/v1/rounds/${round.id}/cards`
+        path.startsWith('/api/v1/rounds/') &&
+        state.previousRounds.has(path.split('/')[4]) &&
+        path.split('/').length === 5
+      )
+        return sendJson(res, 200, state.previousRounds.get(path.split('/')[4]));
+      if (
+        path === `/api/v1/rounds/${state.round.id}/history` ||
+        path === `/api/v1/rounds/${state.round.id}/cards` ||
+        (state.previousRounds.has(path.split('/')[4]) &&
+          ['/history', '/cards'].some((suffix) => path.endsWith(suffix)))
       )
         return sendJson(res, 200, { items: [] });
       if (path === '/api/v1/rounds/prepare' && req.method === 'POST') {
+        const previous = state.prepareResponses.get(payload.requestKey);
+        if (previous) return sendJson(res, 200, previous);
+        if (state.staleNextPrepare) {
+          state.staleNextPrepare = false;
+          state.round = { ...state.round, revision: state.round.revision + 1 };
+          return error(res, 409);
+        }
         if (payload.opportunityId !== opportunity.id || state.decision?.decision !== 'selected')
           return error(res, 409);
+        if (
+          state.round.state === 'paused' &&
+          (payload.replacePaused?.roundId !== state.round.id ||
+            payload.replacePaused?.expectedRevision !== state.round.revision)
+        )
+          return error(res, 409);
+        if (['queued', 'running', 'awaiting_input', 'stopping'].includes(state.round.state))
+          return error(res, 409);
+        state.previousRounds.set(state.round.id, state.round);
         state.round = {
           ...round,
+          id: `synthetic-prepare-${state.prepareResponses.size + 1}`,
           state: 'running',
           revision: 2,
           step: 'research',
           deliverableStatus: 'pending',
           report: {},
         };
+        state.prepareResponses.set(payload.requestKey, state.round);
+        if (state.failFirstPrepareResponse) {
+          state.failFirstPrepareResponse = false;
+          return error(res, 503);
+        }
         return sendJson(res, 201, state.round);
       }
-      if (path === `/api/v1/rounds/${round.id}/stop` && req.method === 'POST') {
+      if (path === '/api/v1/rounds' && req.method === 'POST') {
+        const previous = state.discoveryResponses.get(payload.requestKey);
+        if (previous) return sendJson(res, 200, previous);
+        if (state.staleNextDiscovery) {
+          state.staleNextDiscovery = false;
+          state.round = { ...state.round, revision: state.round.revision + 1 };
+          return error(res, 409);
+        }
+        if (!state.discoveryReady) return error(res, 503);
+        if (
+          state.round.state === 'paused' &&
+          (payload.replacePaused?.roundId !== state.round.id ||
+            payload.replacePaused?.expectedRevision !== state.round.revision)
+        )
+          return error(res, 409);
+        if (['queued', 'running', 'awaiting_input', 'stopping'].includes(state.round.state))
+          return error(res, 409);
+        state.previousRounds.set(state.round.id, state.round);
+        state.round = {
+          ...round,
+          id: `synthetic-discover-${state.discoveryResponses.size + 1}`,
+          outcome: 'discover',
+          intent: 'Find sourced opportunities',
+          state: 'running',
+          revision: 1,
+          scope: {
+            inputRefs: [],
+            resources: [],
+            operations: ['opportunity.discover'],
+            delegates: ['codex-runner'],
+          },
+          step: 'searching',
+          deliverableStatus: 'pending',
+        };
+        state.discoveryResponses.set(payload.requestKey, state.round);
+        if (state.failFirstDiscoveryResponse) {
+          state.failFirstDiscoveryResponse = false;
+          return error(res, 503);
+        }
+        return sendJson(res, 201, state.round);
+      }
+      if (path === '/api/v1/rounds/process-input' && req.method === 'POST') {
+        let response = state.processResponses.get(payload.requestKey);
+        if (response) return sendJson(res, 200, response);
+        if (
+          payload.targetKind === 'campaign' &&
+          (payload.targetId !== 'active' ||
+            payload.expectedRevision !== state.profileVersion ||
+            Boolean(payload.text) ||
+            !(payload.sourceUrl || payload.originalText))
+        )
+          return error(res, 400);
+        if (
+          payload.targetKind === 'application_pack' &&
+          (!state.packs.some(
+            (pack) =>
+              pack.id === payload.targetId &&
+              pack.version === payload.expectedRevision &&
+              pack.opportunityRevision === opportunity.revision &&
+              pack.profileRevision === profile.version,
+          ) ||
+            !payload.text)
+        )
+          return error(res, 409);
+        if (
+          payload.targetKind === 'profile' &&
+          (payload.targetId !== 'current' ||
+            payload.expectedRevision !== state.profileVersion ||
+            !payload.text)
+        )
+          return error(res, 409);
+        if (!response) {
+          if (['queued', 'running', 'awaiting_input', 'stopping'].includes(state.round.state))
+            return error(res, 409);
+          if (
+            state.round.state === 'paused' &&
+            (payload.replacePaused?.roundId !== state.round.id ||
+              payload.replacePaused?.expectedRevision !== state.round.revision)
+          )
+            return error(res, 409);
+          response = {
+            round: {
+              ...round,
+              id: `synthetic-input-${state.processResponses.size + 1}`,
+              outcome: 'process_input',
+              intent: 'Handle owner input',
+              scope: {
+                inputRefs: [`synthetic-input:${payload.requestKey}`],
+                resources:
+                  payload.targetKind === 'application_pack'
+                    ? [`opportunity:${opportunity.id}`]
+                    : [`${payload.targetKind}:${payload.targetId}`],
+                operations:
+                  payload.targetKind === 'application_pack'
+                    ? ['application_pack.prepare']
+                    : payload.targetKind === 'profile'
+                      ? ['preferences.correct']
+                      : payload.targetKind === 'campaign'
+                        ? ['opportunity.source_save']
+                        : [`${payload.targetKind}.correct`],
+                delegates: ['codex-runner'],
+              },
+              state: 'running',
+              revision: 1,
+              step: 'processing',
+              deliverableStatus: 'pending',
+              report: {},
+            },
+            ...(payload.replacePaused ? { replacedRoundId: payload.replacePaused.roundId } : {}),
+          };
+          state.processResponses.set(payload.requestKey, response);
+          state.currentInput = payload;
+          state.previousRounds.set(state.round.id, state.round);
+          state.round = response.round;
+          if (payload.targetKind === 'profile') state.profileVersion += 1;
+        }
+        if (state.failFirstProcessResponse) {
+          state.failFirstProcessResponse = false;
+          return error(res, 503);
+        }
+        return sendJson(res, 201, response);
+      }
+      if (path === `/api/v1/rounds/${state.round.id}/stop` && req.method === 'POST') {
         state.round = { ...state.round, state: 'paused', revision: state.round.revision + 1 };
         return sendJson(res, 200, state.round);
       }
-      if (path === `/api/v1/rounds/${round.id}/resume` && req.method === 'POST') {
+      if (path === `/api/v1/rounds/${state.round.id}/resume` && req.method === 'POST') {
         state.round = { ...state.round, state: 'running', revision: state.round.revision + 1 };
         return sendJson(res, 200, state.round);
       }
@@ -365,6 +552,88 @@ export async function startFixture() {
       };
       state.packs = [newest, ...state.packs];
       state.details.set(newest.id, { ...newest, manifest: manifest(newest) });
+    },
+    pauseRound() {
+      state.round = {
+        ...state.round,
+        state: 'paused',
+        revision: state.round.revision + 1,
+        report: state.round.outcome === 'process_input' ? {} : { summary: 'Prior work paused.' },
+      };
+    },
+    completeInput() {
+      const input = state.currentInput;
+      let report = { summary: 'Synthetic round completed.' };
+      if (state.round.outcome === 'process_input' && input) {
+        if (input.targetKind === 'application_pack') {
+          const newest = {
+            ...pack2,
+            id: 'synthetic-pack-4',
+            version: 4,
+            createdAt: '2026-09-23T14:00:00Z',
+          };
+          state.packs = [newest, ...state.packs];
+          state.details.set(newest.id, { ...newest, manifest: manifest(newest) });
+          report = {
+            code: 'pack_ready',
+            opportunityId: opportunity.id,
+            packId: newest.id,
+            version: newest.version,
+            materialUnknowns: ['Application destination remains unconfirmed.'],
+            remaining: allowance,
+          };
+        } else {
+          let code = 'input_applied';
+          let appliedChanges = [];
+          let unresolved = [];
+          if (input.targetKind === 'profile') {
+            appliedChanges = [
+              inputChange('preferences.correct', 'preferences', state.profileVersion),
+            ];
+          } else if (
+            input.targetKind === 'campaign' &&
+            input.sourceUrl === 'https://example.invalid/jobs/second-role'
+          ) {
+            code = 'unsupported_source_url';
+            unresolved = [
+              'The saved vacancy URL could not be verified from a supported source. Paste the complete vacancy text to process it.',
+            ];
+          } else if (input.targetKind === 'campaign') {
+            appliedChanges = [
+              inputChange('opportunity.source_save', 'opportunity', opportunity.revision),
+            ];
+            if (state.organisationLimitNext) {
+              code = 'organisation_unresolved';
+              unresolved = [
+                'The vacancy was saved, but semantic organisation could not be recorded.',
+              ];
+              state.organisationLimitNext = false;
+            }
+          }
+          report = {
+            code,
+            originalProfileVersion:
+              input.targetKind === 'profile' || input.targetKind === 'campaign'
+                ? input.expectedRevision
+                : state.profileVersion,
+            effectiveProfileVersion: state.profileVersion,
+            appliedChanges,
+            unresolved,
+          };
+        }
+      }
+      state.round = {
+        ...state.round,
+        state: 'completed',
+        revision: state.round.revision + 1,
+        deliverableStatus:
+          state.round.outcome !== 'process_input' ||
+          report.code === 'pack_ready' ||
+          (report.appliedChanges?.length && !report.unresolved?.length)
+            ? 'complete'
+            : 'partial',
+        report,
+      };
     },
     close: () =>
       new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))),

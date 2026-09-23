@@ -8,21 +8,15 @@ import { ApplicationPackPanel } from './application-pack-panel';
 import { ScreeningPanel } from './screening-panel';
 import {
   getOpportunity,
-  getIngestion,
+  getRuntimeStatus,
   getOpportunityOrganisation,
   getOrganisationCategories,
   getOrganisationSummaries,
-  getRuntimeStatus,
   isUnauthenticated,
   listCompanies,
-  listIngestions,
   listOpportunityChanges,
   listOpportunities,
-  retryIngestion,
-  RequestError,
-  submitIngestion,
   type Company,
-  type IngestionRequest,
   type OrganisationCategory,
   type OrganisationSummary,
   type OrganisationView,
@@ -35,201 +29,10 @@ import {
 } from './api';
 import './opportunities.css';
 
-const draftKey = 'jobseek.vacancy-intake-draft';
-const recoveryKey = 'jobseek.vacancy-recovery';
 const selectedKey = 'jobseek.selected-opportunity';
-const correctionKey = 'jobseek.correction-draft.';
-
-function recoveryDraftKey(item: IngestionRequest): string {
-  return `${recoveryKey}.${item.id}`;
-}
-
-function needsOwnerText(item: IngestionRequest): boolean {
-  return item.origin === 'owner' && item.status === 'needs_text' && !item.originalText.trim();
-}
-
-function retryable(item: IngestionRequest): boolean {
-  return (
-    (item.status === 'failed' || item.status === 'needs_text') &&
-    ['failed', 'succeeded', 'cancelled'].includes(item.jobState)
-  );
-}
-
-function extractionStatus(item: IngestionRequest): string {
-  if (item.status === 'completed') return 'Extraction completed';
-  if (item.status === 'needs_text')
-    return item.origin === 'owner'
-      ? 'Extraction needs full vacancy text'
-      : 'Source text inaccessible';
-  if (item.status === 'failed' || item.jobState === 'failed') return 'Extraction failed';
-  if (item.status === 'processing' || item.jobState === 'running') return 'Extraction running';
-  return 'Extraction queued';
-}
 
 function errorText(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Something went wrong. Try again.';
-}
-
-function IngestionActivity({
-  onSessionLost,
-  onOpen,
-  onRecover,
-  activeRequest,
-  refresh,
-}: {
-  onSessionLost: () => void;
-  onOpen: (id: string) => void;
-  onRecover: (item: IngestionRequest | null) => void;
-  activeRequest: IngestionRequest | null;
-  refresh: number;
-}) {
-  const [items, setItems] = useState<IngestionRequest[]>([]);
-  const [cursor, setCursor] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  async function load(next = '', append = false) {
-    setLoading(true);
-    setError(null);
-    try {
-      const page = await listIngestions(next);
-      setItems((old) => (append ? [...old, ...page.items] : page.items));
-      setCursor(page.nextCursor || '');
-      if (activeRequest) {
-        const updated = page.items.find((item) => item.id === activeRequest.id);
-        if (updated) onRecover(updated);
-      }
-    } catch (cause) {
-      if (isUnauthenticated(cause)) onSessionLost();
-      else setError(errorText(cause));
-    } finally {
-      setLoading(false);
-    }
-  }
-  useEffect(() => {
-    void load();
-  }, [onSessionLost, refresh]);
-  useEffect(() => {
-    let stored: { id: string; sourceUrl: string } | null = null;
-    try {
-      stored = JSON.parse(localStorage.getItem(recoveryKey) || 'null') as {
-        id: string;
-        sourceUrl: string;
-      } | null;
-    } catch {
-      return;
-    }
-    if (!stored?.id || !stored.sourceUrl) return;
-    let cancelled = false;
-    getIngestion(stored.id)
-      .then((item) => {
-        if (
-          !cancelled &&
-          JSON.parse(localStorage.getItem(recoveryKey) || 'null')?.id === stored.id &&
-          item.origin === 'owner' &&
-          item.sourceUrl === stored?.sourceUrl &&
-          retryable(item)
-        )
-          onRecover(item);
-        else if (!cancelled) localStorage.removeItem(recoveryKey);
-      })
-      .catch((cause) => {
-        if (!cancelled && isUnauthenticated(cause)) onSessionLost();
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return (
-    <section className="op-card" aria-label="Vacancy processing status">
-      <div className="op-heading-row">
-        <h2>Collection and processing</h2>
-        <button className="secondary" type="button" disabled={loading} onClick={() => void load()}>
-          Refresh status
-        </button>
-      </div>
-      {loading && <p role="status">Loading processing status…</p>}
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
-      {!loading && !error && items.length === 0 && (
-        <p>No collected or submitted vacancies are recorded yet.</p>
-      )}
-      <ol className="op-history">
-        {items.map((item) => (
-          <li key={item.id}>
-            <strong>
-              {item.sourceUrl ||
-                `${item.originalText.slice(0, 90)}${item.originalText.length > 90 ? '…' : ''}`}
-            </strong>
-            <p>
-              {item.origin === 'collector'
-                ? 'Collected'
-                : item.origin === 'owner'
-                  ? 'Added by you'
-                  : 'Added by agent'}{' '}
-              · {new Date(item.createdAt).toLocaleString()}
-            </p>
-            <p>
-              {extractionStatus(item)} · job {words(item.jobState)}
-              {item.safeErrorCode && ` · ${words(item.safeErrorCode)}`}
-            </p>
-            {item.opportunityId && (
-              <p className="hint">Opportunity saved. Extraction status is shown separately.</p>
-            )}
-            {item.opportunityId && (
-              <button
-                className="op-text-button"
-                type="button"
-                onClick={() => onOpen(item.opportunityId!)}
-              >
-                Open saved opportunity
-              </button>
-            )}
-            {item.opportunityId && item.jobState !== 'succeeded' && (
-              <p className="hint">
-                The opportunity is saved; later processing may still be running or may need
-                attention.
-              </p>
-            )}
-            {item.status === 'needs_text' && (
-              <p className="hint">
-                {needsOwnerText(item)
-                  ? 'Paste the full vacancy text for this URL in the input above.'
-                  : 'Source text was inaccessible. This source needs a collection retry or diagnostic review.'}
-              </p>
-            )}
-            {item.origin === 'collector' && item.status === 'failed' && (
-              <p className="hint">
-                Automatic collection or extraction failed. Review the source status and retry when
-                available; no pasted text is required from you.
-              </p>
-            )}
-            {item.origin === 'owner' && retryable(item) && (
-              <button className="secondary" type="button" onClick={() => onRecover(item)}>
-                {activeRequest?.id === item.id
-                  ? 'Selected for retry'
-                  : needsOwnerText(item)
-                    ? 'Provide full text'
-                    : 'Retry this import'}
-              </button>
-            )}
-          </li>
-        ))}
-      </ol>
-      {cursor && (
-        <button
-          className="secondary"
-          type="button"
-          disabled={loading}
-          onClick={() => void load(cursor, true)}
-        >
-          Load more processing records
-        </button>
-      )}
-    </section>
-  );
 }
 
 function words(value: string): string {
@@ -271,408 +74,6 @@ function compensationText(value: Opportunity['compensation']): string {
       ? ''
       : `–${display(value.maxAmountCents)} ${value.currency || ''}`;
   return `${amount}${maximum} ${value.period && value.period !== 'unknown' ? `per ${value.period}` : '(period unknown)'}${value.referenceHours ? ` at ${value.referenceHours} hours/week` : ''}`;
-}
-
-type IntakeDraft = { value: string; key: string };
-
-function savedDraft(): IntakeDraft {
-  try {
-    const raw = localStorage.getItem(draftKey);
-    if (!raw) return { value: '', key: '' };
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return { value: '', key: '' };
-    }
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      'value' in parsed &&
-      'key' in parsed &&
-      typeof parsed.value === 'string' &&
-      typeof parsed.key === 'string' &&
-      (!parsed.value || parsed.key.trim().length > 0)
-    )
-      return parsed as IntakeDraft;
-    return { value: '', key: '' };
-  } catch {
-    return { value: '', key: '' };
-  }
-}
-
-function VacancyIntake({
-  session,
-  onSessionLost,
-  onSubmitted,
-  recovery,
-  onClearRecovery,
-  onUpdateRecovery,
-  correction,
-}: {
-  session: Session;
-  onSessionLost: () => void;
-  onSubmitted: () => void;
-  recovery: IngestionRequest | null;
-  onClearRecovery: () => void;
-  onUpdateRecovery: (item: IngestionRequest) => void;
-  correction?: string;
-}) {
-  const [draft, setDraft] = useState(() => {
-    if (correction) {
-      try {
-        return { value: localStorage.getItem(correctionKey + correction) || '', key: '' };
-      } catch {
-        return { value: '', key: '' };
-      }
-    }
-    if (!recovery) return savedDraft();
-    try {
-      const saved = JSON.parse(localStorage.getItem(recoveryDraftKey(recovery)) || 'null') as {
-        sourceUrl?: string;
-        value?: string;
-      } | null;
-      return {
-        value:
-          saved?.sourceUrl === recovery.sourceUrl && typeof saved.value === 'string'
-            ? saved.value
-            : '',
-        key: '',
-      };
-    } catch {
-      return { value: '', key: '' };
-    }
-  });
-  const [stored, setStored] = useState(() => {
-    try {
-      return (
-        localStorage.getItem(
-          correction
-            ? correctionKey + correction
-            : recovery
-              ? recoveryDraftKey(recovery)
-              : draftKey,
-        ) !== null
-      );
-    } catch {
-      return false;
-    }
-  });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState<IngestionRequest | null>(null);
-  const [uncertain, setUncertain] = useState(false);
-  const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
-  useEffect(() => {
-    if (correction) document.getElementById('vacancy-intake')?.focus();
-  }, [correction]);
-  useEffect(() => {
-    const controller = new AbortController();
-    getRuntimeStatus(controller.signal)
-      .then(setRuntime)
-      .catch((cause) => {
-        if (!controller.signal.aborted && isUnauthenticated(cause)) onSessionLost();
-      });
-    return () => controller.abort();
-  }, [onSessionLost]);
-
-  function update(value: string) {
-    const next = { value, key: recovery || correction ? '' : value ? crypto.randomUUID() : '' };
-    setDraft(next);
-    setError(null);
-    setSubmitted(null);
-    try {
-      const key = correction
-        ? correctionKey + correction
-        : recovery
-          ? recoveryDraftKey(recovery)
-          : draftKey;
-      if (value)
-        localStorage.setItem(
-          key,
-          correction
-            ? value
-            : recovery
-              ? JSON.stringify({ sourceUrl: recovery.sourceUrl, value })
-              : JSON.stringify(next),
-        );
-      else localStorage.removeItem(key);
-      setStored(Boolean(value));
-    } catch {
-      setStored(false);
-    }
-  }
-
-  async function submit() {
-    if (correction) {
-      setError(
-        'The scoped instruction service is not available yet. Your instruction remains saved for this opportunity in this browser.',
-      );
-      return;
-    }
-    const value = draft.value.trim();
-    if (
-      busy ||
-      uncertain ||
-      (recovery && needsOwnerText(recovery) && !value) ||
-      (!recovery && !value)
-    )
-      return;
-    setError(null);
-    if (recovery) {
-      if (!retryable(recovery)) {
-        setError('Refresh processing status before retrying this import.');
-        return;
-      }
-      if (
-        needsOwnerText(recovery) &&
-        (value.length > 200000 || (/^https?:\/\//i.test(value) && !/\s/.test(value)))
-      ) {
-        setError('Paste the full vacancy text, not a URL (up to 200,000 characters).');
-        return;
-      }
-      setBusy(true);
-      try {
-        const result = await retryIngestion(
-          recovery.id,
-          needsOwnerText(recovery) ? { originalText: draft.value } : {},
-          session.csrfToken,
-        );
-        setSubmitted(result);
-        setUncertain(false);
-        setDraft({ value: '', key: '' });
-        try {
-          localStorage.removeItem(recoveryDraftKey(recovery));
-        } catch {
-          /* Server accepted the text. */
-        }
-        onSubmitted();
-      } catch (cause) {
-        if (isUnauthenticated(cause)) onSessionLost();
-        else if (cause instanceof RequestError && cause.status >= 400 && cause.status < 500) {
-          if (cause.status === 409) setUncertain(true);
-          setError(`${errorText(cause)} Refresh status before retrying.`);
-        } else {
-          setUncertain(true);
-          setError(
-            'The retry response was interrupted. Its outcome is unknown. Check this request’s status before trying again; your text is saved in this browser.',
-          );
-        }
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-    let sourceUrl: string | undefined;
-    let originalText: string | undefined;
-    if (/^https?:\/\//i.test(value) && !/\s/.test(value)) {
-      try {
-        const url = new URL(value);
-        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
-          throw new Error();
-        sourceUrl = value;
-      } catch {
-        setError('Enter a valid job URL or paste the full vacancy text.');
-        return;
-      }
-    } else {
-      originalText = draft.value;
-    }
-    const snapshot = draft;
-    try {
-      localStorage.setItem(draftKey, JSON.stringify(snapshot));
-      setStored(true);
-    } catch {
-      setStored(false);
-    }
-    setBusy(true);
-    try {
-      const result = await submitIngestion(
-        { idempotencyKey: snapshot.key, sourceUrl, originalText },
-        session.csrfToken,
-      );
-      setSubmitted(result);
-      setDraft({ value: '', key: '' });
-      try {
-        localStorage.removeItem(draftKey);
-      } catch {
-        /* The response confirms durable server storage. */
-      }
-      setStored(false);
-      onSubmitted();
-    } catch (cause) {
-      if (isUnauthenticated(cause)) onSessionLost();
-      else
-        setError(
-          `${errorText(cause)} Your draft is still here. Retry with the same content to check the same submission.`,
-        );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="op-card" aria-label="Vacancy intake">
-      <h2>
-        {correction
-          ? correction === 'brief'
-            ? 'Instruction for your campaign brief'
-            : 'Instruction for this opportunity'
-          : recovery
-            ? needsOwnerText(recovery)
-              ? 'Provide full text for this URL'
-              : 'Retry this import'
-            : 'Add a link or vacancy'}
-      </h2>
-      {recovery && !correction && (
-        <p>
-          <strong>Original URL:</strong> <SourceLink value={recovery.sourceUrl} />
-        </p>
-      )}
-      <label htmlFor="vacancy-intake">
-        {correction
-          ? correction === 'brief'
-            ? 'Correction to your stated direction'
-            : 'Correction or question about the selected opportunity'
-          : recovery
-            ? needsOwnerText(recovery)
-              ? 'Full vacancy text for this request'
-              : 'This request is ready to retry'
-            : 'Job URL or full vacancy text'}
-      </label>
-      <textarea
-        id="vacancy-intake"
-        rows={8}
-        value={draft.value}
-        disabled={busy || Boolean(recovery && !needsOwnerText(recovery) && !correction)}
-        onChange={(event) => update(event.target.value)}
-        placeholder={
-          correction
-            ? correction === 'brief'
-              ? 'Describe the change to your campaign brief'
-              : 'Describe the correction or missing fact for this opportunity'
-            : recovery
-              ? needsOwnerText(recovery)
-                ? 'Paste the complete vacancy text for the URL above'
-                : 'No additional text is needed for this retry'
-              : 'Paste a job URL or the complete vacancy here'
-        }
-      />
-      <p role="status" className="hint">
-        {correction
-          ? draft.value
-            ? stored
-              ? correction === 'brief'
-                ? 'Instruction saved in this browser for your campaign brief.'
-                : 'Instruction saved in this browser for this opportunity.'
-              : 'Instruction is held in this page only.'
-            : 'Only you can supply a correction or owner-held fact; the agency handles record edits when the instruction service is available.'
-          : recovery && !needsOwnerText(recovery)
-            ? 'This retries the original import and keeps any saved opportunity linked.'
-            : draft.value
-              ? stored
-                ? 'Draft saved in this browser until submission is confirmed.'
-                : 'Draft is held in this open page only. Browser storage is unavailable.'
-              : recovery
-                ? 'Paste the complete text for the original URL.'
-                : 'Paste a URL or full vacancy to prepare a draft.'}
-      </p>
-      {!recovery && !correction && (
-        <p className="muted">
-          Saving records the source for a future commissioned round; it does not start recruitment
-          or create an opportunity.{' '}
-          {runtime === null
-            ? 'Execution readiness has not been confirmed.'
-            : runtime.ingestionAvailable
-              ? 'An intake worker is connected, but round execution readiness is separate.'
-              : 'The intake worker is unavailable; saved requests remain pending.'}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
-      {submitted && (
-        <p role="status" className="success">
-          {submitted.status === 'completed'
-            ? 'Extraction completed.'
-            : 'Source saved for a commissioned round.'}{' '}
-          {submitted.opportunityId
-            ? 'The saved opportunity remains available in processing status.'
-            : 'Processing has not been confirmed; check status for a later result.'}
-        </p>
-      )}
-      <div className="button-row">
-        <button
-          type="button"
-          disabled={
-            busy ||
-            uncertain ||
-            Boolean(submitted && recovery) ||
-            Boolean(correction) ||
-            (recovery
-              ? !retryable(recovery) || (needsOwnerText(recovery) && !draft.value.trim())
-              : !draft.value.trim())
-          }
-          onClick={() => void submit()}
-        >
-          {correction
-            ? 'Instruction service unavailable'
-            : busy
-              ? 'Saving…'
-              : recovery
-                ? needsOwnerText(recovery)
-                  ? 'Submit text and retry'
-                  : 'Retry original import'
-                : 'Save source for a round'}
-        </button>
-        {recovery && !correction && (
-          <button className="secondary" type="button" disabled={busy} onClick={onClearRecovery}>
-            Return to new intake
-          </button>
-        )}
-        {correction === 'brief' && (
-          <button className="secondary" type="button" onClick={onClearRecovery}>
-            Return to source intake
-          </button>
-        )}
-        {uncertain && recovery && (
-          <button
-            className="secondary"
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              void getIngestion(recovery.id)
-                .then((current) => {
-                  if (
-                    current.attemptsStarted > recovery.attemptsStarted ||
-                    current.jobId !== recovery.jobId
-                  ) {
-                    setSubmitted(current);
-                    setUncertain(false);
-                    onUpdateRecovery(current);
-                    onSubmitted();
-                  } else {
-                    setError(
-                      'No accepted retry is visible yet. Check status again before submitting another retry.',
-                    );
-                  }
-                })
-                .catch((cause) => setError(errorText(cause)));
-            }}
-          >
-            Check retry status
-          </button>
-        )}
-        {!recovery && draft.value && (
-          <button className="secondary" type="button" disabled={busy} onClick={() => update('')}>
-            Clear draft
-          </button>
-        )}
-      </div>
-    </section>
-  );
 }
 
 function OrganisationPanel({ id, onSessionLost }: { id: string; onSessionLost: () => void }) {
@@ -983,7 +384,11 @@ function OpportunityDetail({
             )}
           </section>
           <OrganisationPanel id={id} onSessionLost={onSessionLost} />
-          <EvidencePanel opportunity={opportunity} onSessionLost={onSessionLost} />
+          <EvidencePanel
+            opportunity={opportunity}
+            session={session}
+            onSessionLost={onSessionLost}
+          />
           <ScreeningPanel opportunityId={id} onSessionLost={onSessionLost} />
           <OwnerDecisionControls
             id={id}
@@ -1053,9 +458,16 @@ export function Opportunities({
     }
   });
   const [briefVersion, setBriefVersion] = useState<number | null>(null);
-  const [recovery, setRecovery] = useState<IngestionRequest | null>(null);
+  const [currentProfileVersion, setCurrentProfileVersion] = useState<number | null>(null);
   const [briefInstruction, setBriefInstruction] = useState(false);
-  const [ingestionRefresh, setIngestionRefresh] = useState(0);
+  useEffect(() => {
+    if (
+      briefInstruction &&
+      currentProfileVersion !== null &&
+      currentProfileVersion !== briefVersion
+    )
+      setBriefVersion(currentProfileVersion);
+  }, [briefInstruction, briefVersion, currentProfileVersion]);
   const [items, setItems] = useState<OpportunityView[]>([]);
   const [organisationSummaries, setOrganisationSummaries] = useState<
     Record<string, OrganisationSummary>
@@ -1082,22 +494,6 @@ export function Opportunities({
       else localStorage.removeItem(selectedKey);
     } catch {
       /* Selection remains available in this page. */
-    }
-  }
-  function selectRecovery(item: IngestionRequest | null) {
-    if (item) {
-      setBriefInstruction(false);
-    }
-    setRecovery(item);
-    try {
-      if (item)
-        localStorage.setItem(
-          recoveryKey,
-          JSON.stringify({ id: item.id, sourceUrl: item.sourceUrl }),
-        );
-      else localStorage.removeItem(recoveryKey);
-    } catch {
-      /* Context remains bound in this page. */
     }
   }
   async function loadSummaries(views: OpportunityView[], append: boolean) {
@@ -1206,9 +602,9 @@ export function Opportunities({
       <AgencyHome
         session={session}
         onSessionLost={onSessionLost}
+        onBriefLoaded={setCurrentProfileVersion}
         onOpenOpportunity={(id) => openOpportunity(id)}
         onEditBrief={(version) => {
-          selectRecovery(null);
           setBriefInstruction(true);
           setBriefVersion(version);
         }}
@@ -1223,28 +619,23 @@ export function Opportunities({
             setBriefInstruction(false);
           }}
         />
-      ) : (
-        <VacancyIntake
-          key={briefInstruction ? 'brief' : recovery?.id || 'new'}
+      ) : currentProfileVersion !== null ? (
+        <OwnerInstructionPanel
+          target={{
+            targetKind: 'campaign',
+            targetId: 'active',
+            expectedRevision: currentProfileVersion,
+          }}
+          title="Add a link or vacancy"
           session={session}
           onSessionLost={onSessionLost}
-          onSubmitted={() => setIngestionRefresh((value) => value + 1)}
-          recovery={briefInstruction ? null : recovery}
-          correction={briefInstruction ? 'brief' : undefined}
-          onClearRecovery={() => {
-            selectRecovery(null);
-            setBriefInstruction(false);
-          }}
-          onUpdateRecovery={selectRecovery}
         />
+      ) : (
+        <section className="op-card">
+          <h2>Add a link or vacancy</h2>
+          <p>Reading the current brief before accepting material…</p>
+        </section>
       )}
-      <IngestionActivity
-        onSessionLost={onSessionLost}
-        onOpen={(id) => openOpportunity(id)}
-        onRecover={selectRecovery}
-        activeRequest={recovery}
-        refresh={ingestionRefresh}
-      />
       <RelationshipsPanel session={session} onSessionLost={onSessionLost} />
       <section className="op-card" aria-label="Opportunity filters">
         <h2>Saved opportunities</h2>

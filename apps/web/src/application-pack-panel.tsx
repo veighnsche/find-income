@@ -13,6 +13,7 @@ import {
   type Session,
 } from './api';
 import { PackRoundPanel } from './pack-round';
+import { OwnerInstructionPanel } from './owner-instruction';
 
 function SourceLink({ value }: { value: string }) {
   try {
@@ -147,7 +148,7 @@ export function ApplicationPackPanel({
     const controller = new AbortController();
     setDetailLoading(true);
     setDetailError(null);
-    setDetail(null);
+    setDetail((current) => (current?.id === selectedId ? current : null));
     getApplicationPack(selectedId, controller.signal)
       .then((value) => {
         if (!controller.signal.aborted) setDetail(value);
@@ -176,9 +177,7 @@ export function ApplicationPackPanel({
           !opportunity.archivedAt,
         )}
         session={session}
-        startPreparation={(requestKey) =>
-          prepareApplicationRound({ requestKey, opportunityId: opportunity.id }, session.csrfToken)
-        }
+        startPreparation={(input) => prepareApplicationRound(input, session.csrfToken)}
         onRoundSettled={() => setRefresh((old) => old + 1)}
         onSessionLost={onSessionLost}
       />
@@ -349,10 +348,34 @@ export function ApplicationPackPanel({
                 <p>No relevance assessments were recorded.</p>
               )}
             </details>
-            <p className="hint">
-              To change this draft, prepare a new immutable version. Pack-specific owner correction
-              context is not yet available in this review.
-            </p>
+            {detail.opportunityRevision === opportunity.revision &&
+            profileVersion !== null &&
+            detail.profileRevision === profileVersion ? (
+              <OwnerInstructionPanel
+                key={detail.id}
+                target={{
+                  targetKind: 'application_pack',
+                  targetId: detail.id,
+                  expectedRevision: detail.version,
+                }}
+                title={`Correct pack version ${detail.version}`}
+                onRoundSettled={(round) => {
+                  if (
+                    round.scope.resources.includes(`opportunity:${opportunity.id}`) &&
+                    typeof round.report.packId === 'string' &&
+                    !packs.some((pack) => pack.id === round.report.packId)
+                  )
+                    setRefresh((old) => old + 1);
+                }}
+                session={session}
+                onSessionLost={onSessionLost}
+              />
+            ) : (
+              <p className="hint">
+                This pack's role or brief snapshot is no longer current. Review a current version
+                before commissioning a correction.
+              </p>
+            )}
           </div>
         )}
       </section>
