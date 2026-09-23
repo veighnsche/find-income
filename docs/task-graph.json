@@ -179,14 +179,14 @@
       "scope": "Integrate durable assessments and bounded candidate selection with the controller and acquisition services. Include organisation, factual scope, lead/research priority and next useful implemented outcome. Persist full request/response, versions, options, source support and usage; treat facts and require/avoid/prefer policy separately.",
       "acceptance": "Integration fakes show Jev choices affect selected work while Go enforces scope/arithmetic. No keyword ranking or hidden Codex-only fallback; stale or invalid results stay unresolved. Candidate omission, long text and conflicts are observable. Display saved next-action advice while idle; no planning-only commission.",
       "selection_reason": "Semantic contracts, persistence and orchestration cross packages; use Sol High on this integration rather than on evidence copying.",
-      "status": "integration_slice_dispatched",
+      "status": "integration_slice_accepted",
       "thread_id": "01a0ce8e-5f14-76f0-b700-ab7a67a8f7a0",
       "host_id": "local",
-      "active_slice": "I10-A as defined in implementation-tasks.md",
+      "active_slice": "I10-A reviewed; no active worker. Production bindings and real quality remain.",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
-      "review": "Typed candidate helpers accepted against fake checks. Full durable orchestration, failed-attempt capture and real quality pending dependencies.",
-      "remaining_work": "Persist full requests, exact responses, candidate/source references, versions and usage for successful AND invalid/failed/over-budget attempts. Wire source selection, factual assessment, organisation, research priority, shortlist and next-outcome advice into actual bounded execution. Existing factual and candidate-choice helpers are accepted; ensure large text and missing support remain visible."
+      "review": "Coordinator reviewed durable one-charge-per-HTTP capture, raw failure/invalid/usage evidence and Stop fencing; corrected saved round deadline and ran Jev/service tests. Supplied-input slice accepted, full I10 unchecked.",
+      "remaining_work": "Wire recorded semantic decisions into production acquisition and shortlist/research/next-outcome execution; verify currentness and reuse, provide saved review reads, expose omitted candidates and incomplete source text, and run real-case quality evaluation. Durable attempt capture is implemented and reviewed."
     },
     {
       "id": "I11",
@@ -201,10 +201,10 @@
       "scope": "Reuse contextual-recovery work. Build the known-answer brief, named Start/Stop/Resume, partial sourced cards, preserved selection and one context-bound instruction/URL/full-text input against stable DTOs. Remove manual source/preference/record forms and inactive navigation. Use stored recommendations supplied by I10 when integrated.",
       "acceptance": "Browser fixtures show no repeated known questions, row entry, chat or extra planning click; material unknowns remain visible. Correct/dismiss/select has the right local or campaign scope. Drafts and partial results survive refresh without new work. Check narrow-screen reading and interruption states.",
       "selection_reason": "The approved interaction pattern and stable API make this ordinary Sol Medium UI work. Do not assign Luna to uncertain browser state/debugging.",
-      "status": "independent_slice_accepted",
+      "status": "integration_slice_dispatched",
       "thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
       "host_id": "local",
-      "active_slice": "No active assignment; server-backed correction, selection, history and typed result integration remain.",
+      "active_slice": "I11-A server-backed owner instruction, decisions, typed cards/history integration.",
       "active_model": "gpt-6-sol",
       "active_effort": "medium",
       "review": "UI/controller code and synthetic browser evidence reviewed, including real Stop shape, automatic progress, terminal polling stop, delayed-read fencing and preserved drafts/results. Full I11 remains unchecked.",
@@ -503,10 +503,10 @@
       "effort": "high"
     },
     {
-      "id": "I10-A",
-      "task": "I10",
+      "id": "I11-A",
+      "task": "I11",
       "model": "gpt-6-sol",
-      "effort": "high"
+      "effort": "medium"
     }
   ],
   "max_concurrent_live_workers": 4,

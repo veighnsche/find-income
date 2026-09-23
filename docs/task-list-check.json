@@ -9,7 +9,7 @@
     "I05-A",
     "I06-A",
     "I07-A",
-    "I10-A"
+    "I11-A"
   ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",
@@ -21,7 +21,7 @@
   "approval_blocked": [],
   "accepted_partial_slices": [
     "I07 acquisition only",
-    "I10 decision helpers only",
+    "I10 helpers and recorded round-bound supplied-input execution; no live quality or production application claim",
     "I06 lifecycle/history/status and explicit turn execution against fakes only",
     "I05 supported mutation/MCP/dispatch and collector staging only",
     "I11 round controls, automatic progress and local draft UI only"
@@ -40,7 +40,7 @@
     "I05-A",
     "I06-A",
     "I07-A",
-    "I10-A"
+    "I11-A"
   ],
   "goal_status": "active"
 }

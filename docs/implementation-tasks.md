@@ -1,6 +1,6 @@
 # Recruitment agency — full task list and concurrent execution guide
 
-Updated 23 September 2026 after the reviewed core, runtime, collector, Jev and web slices. This is the complete I01–I27 task list for the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md). The owner has created an active goal to complete the entire list. I05-A, I06-A, I07-A and I10-A are now dispatched concurrently to the four existing live tasks on Sol High. Accepted slices remain accepted; the current assignments implement their remaining integration. The reviewed code checkpoint is `5e93c0d`.
+Updated 23 September 2026 after the reviewed core, runtime, collector, Jev and web slices. This is the complete I01–I27 task list for the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md). The owner has created an active goal to complete the entire list. I05-A, I06-A and I07-A continue on Sol High; I10-A has handed off its reviewed capture service and the fourth slot now runs I11-A server-backed UI integration on Sol Medium. Accepted slices remain accepted; the current assignments implement their remaining integration. The reviewed code checkpoint is `5e93c0d`.
 
 **Current position: 5 tasks accepted, 5 partially implemented, 17 not started or conditional.** Accepted: I01, I02, I03, I04, I09. Partial: I05, I06, I07, I10, I11. I17 is conditional. These counts describe task acceptance, not percentage of product completion.
 
@@ -26,7 +26,7 @@ Use **one coordinator plus up to four independent live implementation tasks**. F
 
 Dependencies in the task index gate **full integration and acceptance**. They do not prohibit an explicitly named independent slice from coding against an agreed narrow interface. A worker must have useful owned code to change, not an instruction to wait and repeatedly check another task. When a worker finishes, review its result and immediately dispatch the next ready slice; do not wait for an entire batch to finish.
 
-### Current launch: four concrete independent assignments
+### Active wave and completed handoff
 
 These slice labels divide existing tasks; they do not create additional product acceptance checkboxes.
 
@@ -35,7 +35,9 @@ These slice labels divide existing tasks; they do not create additional product 
 | A — core | I05-A · Sol High | Owner instruction scope, direct select/dismiss/ack, necessary profile/evidence mutation boundaries, typed result/history contracts. Own the shared schema, OpenAPI/generated types, HTTP and round bridge. | Publish usable types and store signatures early for B/C/D and web. Stop after focused authority tests and report; no live executor claim. |
 | B — runtime | I06-A · Sol High | Finish the bounded research/tool adapter and commissioned execution integration in runtime-owned files. Reuse accepted lifecycle and turn code. Verify one actual supported research path; unresolved provider access remains explicit. | Consume existing allowance/dispatch interfaces; request shared tool registration/store changes from A. If a difficult provider/tool decision is unresolved, gather evidence and use the required Jev consultation before committing to it. |
 | C — collection | I07-A · Sol High | Connect accepted Lever batches to existing source identity/snapshot/reuse/refresh code through the shared authority. Preserve final-page drain and cross-round continuation. | Own collector and explicitly handed-over ingestion/source identity files. A supplies any initial-schema/shared mutation edits. Stop after collector/store integration fixtures; no automatic scanner or live search. |
-| D — Jev | I10-A · Sol High | Add durable decision-attempt capture through a narrow store interface, including invalid responses/usage; connect existing factual and candidate-choice helpers to supplied acquisition evidence. | Own Jev/service logic and explicitly named Jev persistence files; A alone applies shared schema edits. Final source-choice integration waits for I08 candidates, but supplied-candidate execution/failure tests can run now. |
+| D — Jev (handed off) | I10-A · Sol High | Add durable decision-attempt capture through a narrow store interface, including invalid responses/usage; connect existing factual and candidate-choice helpers to supplied acquisition evidence. | Own Jev/service logic and explicitly named Jev persistence files; A alone applies shared schema edits. Final source-choice integration waits for I08 candidates, but supplied-candidate execution/failure tests can run now. |
+
+**Slot D now runs I11-A on Sol Medium:** integrate server-backed contextual instructions, direct selection/dismissal/acknowledgement, typed cards and history in `apps/web/src/**`. Core owns DTOs and sends its stable interface directly. I10-A durable supplied-input Jev capture passed coordinator review and deadline correction; production decision application and real quality remain open.
 
 A publishes **contracts, not speculative alternate implementations**. B/C/D can implement their owned logic and focused tests while A handles shared changes; they cannot independently invent incompatible DTOs or edit the same files. If a dependency blocks the entire assigned slice, stop it and reuse its slot for a ready slice below.
 
