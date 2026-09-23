@@ -7,7 +7,8 @@
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
     "I21 web delivery control/replay corrections",
-    "I22 independent backend delivery authority review"
+    "I22 independent backend delivery authority review",
+    "I10 persisted cross-outcome recommendation"
   ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",

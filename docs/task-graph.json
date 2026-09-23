@@ -188,7 +188,7 @@
       "status": "partial",
       "thread_id": "01a0cf13-2c03-73f2-b074-6c73d7120ebe",
       "host_id": "local",
-      "active_slice": "Substantial discovery committedcd2f9ab; cross-outcome recommendation remains",
+      "active_slice": "Persisted cross-outcome recommendation during commissioned discovery, existing round report only",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
       "review": "Committed 2fdfe7d: recorded choices, guarded current screening/organisation projection and pack relevance; responsibility evaluation has ten complete cases.",
