@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Jobseek dashboard API
   version: 0.1.0
-  description: Versioned private dashboard API. The foundation exposes health only.
+  description: Versioned private dashboard API. All data routes require authentication.
 servers:
   - url: /api/v1
 paths:
@@ -19,7 +19,152 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
         '500':
           $ref: '#/components/responses/InternalError'
+  /auth/login:
+    post:
+      operationId: login
+      summary: Start the owner's dashboard session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Session cookie set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Revoke the current owner session
+      security:
+        - cookieAuth: []
+      responses:
+        '204':
+          description: Session revoked
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /auth/session:
+    get:
+      operationId: getSession
+      summary: Read the current owner session and CSRF token
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Active owner session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+  /preferences:
+    get:
+      operationId: getPreferences
+      summary: Read current qualification preferences
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      description: Bearer credentials require the preferences:read scope.
+      responses:
+        '200':
+          description: Current policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /agent-credentials:
+    get:
+      operationId: listAgentCredentials
+      summary: List named agent credentials without their tokens
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Credentials metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentCredentialList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createAgentCredential
+      summary: Create a scoped agent token; raw token appears once
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentCredentialRequest'
+      responses:
+        '201':
+          description: Credential and one-time token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedAgentCredential'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /agent-credentials/{id}/revoke:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: revokeAgentCredential
+      summary: Revoke an agent token immediately
+      security:
+        - cookieAuth: []
+      responses:
+        '204':
+          description: Credential revoked
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: jobseek_session
+      description: Owner session. Cookie mutations also require X-CSRF-Token and same-origin Origin.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Named agent token with operation-specific scopes.
   responses:
     ValidationError:
       description: Invalid request
@@ -39,6 +184,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    Forbidden:
+      description: Authenticated but not permitted
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
     Conflict:
       description: Revision conflict
       content:
@@ -51,7 +202,129 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    RateLimited:
+      description: Too many login attempts
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password:
+          type: string
+          minLength: 1
+          writeOnly: true
+    SessionResponse:
+      type: object
+      required: [actorKind, actorId, csrfToken, expiresAt]
+      properties:
+        actorKind:
+          type: string
+          enum: [administrator]
+        actorId:
+          type: string
+        csrfToken:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    PreferencesResponse:
+      type: object
+      required:
+        [
+          version,
+          preferredLocation,
+          allowRemote,
+          allowHybrid,
+          targetHours,
+          minMonthlyBaseCents,
+          salaryCurrency,
+          requireBackendPlatform,
+          excludeFrontendDuties,
+          excludePHPFocused,
+          timezone,
+        ]
+      properties:
+        version:
+          type: integer
+          format: int64
+        preferredLocation:
+          type: string
+        allowRemote:
+          type: boolean
+        allowHybrid:
+          type: boolean
+        targetHours:
+          type: integer
+          format: int64
+        minMonthlyBaseCents:
+          type: integer
+          format: int64
+        salaryCurrency:
+          type: string
+        requireBackendPlatform:
+          type: boolean
+        excludeFrontendDuties:
+          type: boolean
+        excludePHPFocused:
+          type: boolean
+        timezone:
+          type: string
+    AgentCredential:
+      type: object
+      required: [id, name, scopes, createdAt, expiresAt, revoked]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        revoked:
+          type: boolean
+    AgentCredentialList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentCredential'
+    CreateAgentCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [name, scopes, expiresAt]
+      properties:
+        name:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        expiresAt:
+          type: string
+          format: date-time
+    CreatedAgentCredential:
+      type: object
+      required: [credential, token]
+      properties:
+        credential:
+          $ref: '#/components/schemas/AgentCredential'
+        token:
+          type: string
+          description: Only returned at creation; store securely.
     HealthResponse:
       type: object
       required: [status, service, version]
@@ -77,7 +350,17 @@ components:
         code:
           type: string
           description: Stable machine-readable error code.
-          enum: [validation_error, not_found, unauthenticated, conflict, internal_error]
+          enum:
+            [
+              validation_error,
+              not_found,
+              unauthenticated,
+              forbidden,
+              csrf_failed,
+              rate_limited,
+              conflict,
+              internal_error,
+            ]
         message:
           type: string
         details:

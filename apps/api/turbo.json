@@ -24,7 +24,8 @@
     "dev": {
       "command": ["go", "run", "./cmd/server"],
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": ["JOBSEEK_DATA_DIR", "JOBSEEK_LISTEN_ADDR", "JOBSEEK_PUBLIC_ORIGIN"]
     },
     "format": { "cache": false }
   }

@@ -32,16 +32,25 @@ nav {
   padding: 1.5rem;
   border-right: 1px solid #d8e2da;
 }
-nav a,
+nav button,
 nav span {
   padding: 0.6rem 0.75rem;
   text-decoration: none;
   border-radius: 0.5rem;
 }
-nav a {
+nav .active {
   background: #dcece1;
   color: #163e32;
   font-weight: 700;
+}
+nav button {
+  text-align: left;
+  background: transparent;
+  color: #18302d;
+}
+nav .sign-out {
+  margin-top: 1rem;
+  color: #7b3333;
 }
 main {
   max-width: 60rem;
@@ -81,9 +90,107 @@ button {
   cursor: pointer;
 }
 button:focus-visible,
-a:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 3px solid #dc9d30;
   outline-offset: 2px;
+}
+.login-page {
+  max-width: 35rem;
+  margin: 2rem auto;
+}
+.login-card {
+  border: 1px solid #d8e2da;
+  border-radius: 0.7rem;
+  background: #fff;
+  padding: 1.6rem;
+}
+form {
+  display: grid;
+  gap: 0.65rem;
+}
+input:not([type='checkbox']),
+select {
+  width: 100%;
+  padding: 0.65rem;
+  border: 1px solid #9eb5a9;
+  border-radius: 0.4rem;
+  font: inherit;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.hint,
+.muted {
+  color: #61716b;
+}
+.hint {
+  font-size: 0.9rem;
+}
+.error {
+  color: #9e3030;
+}
+.token-form {
+  max-width: 32rem;
+}
+fieldset {
+  border: 1px solid #d8e2da;
+  border-radius: 0.5rem;
+  display: grid;
+  gap: 0.45rem;
+}
+.checkbox {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.new-token {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: #ecf5ee;
+  border: 1px solid #aac9b5;
+  border-radius: 0.5rem;
+}
+.new-token code {
+  display: block;
+  overflow-wrap: anywhere;
+  padding: 0.75rem;
+  background: white;
+}
+.button-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.secondary {
+  background: #e5eee8;
+  color: #235d49;
+}
+.agent-list {
+  list-style: none;
+  padding: 0;
+}
+.agent-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid #d8e2da;
+  padding: 0.8rem 0;
+}
+.agent-list p {
+  margin: 0.3rem 0;
+  color: #61716b;
+  font-size: 0.9rem;
+}
+.global-error {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  padding: 0.8rem;
+  background: white;
+  border: 1px solid #9e3030;
 }
 @media (max-width: 650px) {
   .layout {

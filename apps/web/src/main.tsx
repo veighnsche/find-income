@@ -1,14 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { getHealth, type Health } from './api';
+import {
+  createAgentCredential,
+  getHealth,
+  getPreferences,
+  getSession,
+  listAgentCredentials,
+  login,
+  logout,
+  revokeAgentCredential,
+  type AgentCredential,
+  type Health,
+  type Preferences,
+  type Session,
+} from './api';
 import './style.css';
 
-function App() {
+const scopeOptions = [
+  ['preferences:read', 'Read job preferences'],
+  ['opportunities:read', 'Read opportunities'],
+  ['openings:ingest', 'Submit sourced openings'],
+  ['evidence:write', 'Add sourced evidence'],
+  ['actions:write', 'Manage follow-ups'],
+  ['drafts:write', 'Prepare application drafts'],
+  ['judgments:request', 'Request assessments'],
+] as const;
+
+function message(cause: unknown): string {
+  return cause instanceof Error ? cause.message : 'Something went wrong. Try again.';
+}
+
+function ServiceStatus() {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
-
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -17,56 +43,369 @@ function App() {
     getHealth(controller.signal)
       .then(setHealth)
       .catch((cause: unknown) => {
-        if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : 'Could not reach the API.');
-        }
+        if (!controller.signal.aborted) setError(message(cause));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
   }, [retry]);
+  return (
+    <section aria-live="polite" className="status">
+      <h2>Service status</h2>
+      {loading && <p>Checking the API…</p>}
+      {!loading && health && (
+        <p className="success">
+          Connected to {health.service} v{health.version}.
+        </p>
+      )}
+      {!loading && error && (
+        <div role="alert">
+          <p>Could not connect to the dashboard API. {error}</p>
+          <button type="button" onClick={() => setRetry((value) => value + 1)}>
+            Try again
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
 
+function LoginPanel({ onLogin }: { onLogin: (session: Session) => void }) {
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      onLogin(await login(password));
+    } catch (cause) {
+      setError(message(cause));
+    } finally {
+      setPassword('');
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="login-page">
+      <div className="login-card">
+        <p className="eyebrow">Private workspace</p>
+        <h1>Sign in to Jobseek</h1>
+        <p>Use the administrator password configured on this device.</p>
+        <form onSubmit={submit}>
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <button disabled={busy} type="submit">
+            {busy ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
+        <p className="hint">
+          First use: run <code>jobseek setup-admin</code> locally to set your password.
+        </p>
+      </div>
+      <ServiceStatus />
+    </main>
+  );
+}
+
+function Today() {
+  const [preferences, setPreferences] = useState<Preferences | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    getPreferences(controller.signal)
+      .then(setPreferences)
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) setError(message(cause));
+      });
+    return () => controller.abort();
+  }, []);
+  return (
+    <main id="today">
+      <p className="eyebrow">Your workspace</p>
+      <h1>Today</h1>
+      <p>Opportunity tracking will appear here as the service is built.</p>
+      <section className="status" aria-live="polite">
+        <h2>Current search preferences</h2>
+        {!preferences && !error && <p>Loading preferences…</p>}
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
+        {preferences && (
+          <p>
+            {preferences.targetHours} hours/week · at least €
+            {(preferences.minMonthlyBaseCents / 100).toLocaleString('en-US')} gross monthly base ·{' '}
+            {preferences.preferredLocation} or workable remote/hybrid.
+          </p>
+        )}
+      </section>
+      <ServiceStatus />
+    </main>
+  );
+}
+
+function Settings({ session }: { session: Session }) {
+  const [agents, setAgents] = useState<AgentCredential[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [scopes, setScopes] = useState<string[]>(['preferences:read', 'opportunities:read']);
+  const [days, setDays] = useState(30);
+  const [newToken, setNewToken] = useState<string | null>(null);
+
+  async function refresh() {
+    setAgents(await listAgentCredentials());
+  }
+  useEffect(() => {
+    const controller = new AbortController();
+    listAgentCredentials(controller.signal)
+      .then(setAgents)
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) setError(message(cause));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, []);
+  async function create(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setNewToken(null);
+    try {
+      const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+      const created = await createAgentCredential(name, scopes, expiresAt, session.csrfToken);
+      setNewToken(created.token);
+      setName('');
+      await refresh();
+    } catch (cause) {
+      setError(message(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function revoke(id: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await revokeAgentCredential(id, session.csrfToken);
+      await refresh();
+    } catch (cause) {
+      setError(message(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main id="settings">
+      <p className="eyebrow">Owner controls</p>
+      <h1>Settings</h1>
+      <section className="status">
+        <h2>Agent access</h2>
+        <p>
+          Create a separate token for each agent. Its permitted actions and expiry are shown below.
+        </p>
+        <form onSubmit={create} className="token-form">
+          <label htmlFor="agent-name">Agent name</label>
+          <input
+            id="agent-name"
+            required
+            maxLength={80}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Research assistant"
+          />
+          <fieldset>
+            <legend>Permitted actions</legend>
+            {scopeOptions.map(([scope, label]) => (
+              <label className="checkbox" key={scope}>
+                <input
+                  type="checkbox"
+                  checked={scopes.includes(scope)}
+                  onChange={(event) => {
+                    setScopes((current) =>
+                      event.target.checked
+                        ? [...current, scope]
+                        : current.filter((item) => item !== scope),
+                    );
+                  }}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </fieldset>
+          <label htmlFor="agent-expiry">Expires after</label>
+          <select
+            id="agent-expiry"
+            value={days}
+            onChange={(event) => setDays(Number(event.target.value))}
+          >
+            <option value={7}>7 days</option>
+            <option value={30}>30 days</option>
+            <option value={90}>90 days</option>
+          </select>
+          <button type="submit" disabled={busy || scopes.length === 0}>
+            Create token
+          </button>
+        </form>
+        {newToken && (
+          <div className="new-token" role="status">
+            <h3>Copy this token now</h3>
+            <p>It will not appear again after you leave this page.</p>
+            <code>{newToken}</code>
+            <div className="button-row">
+              <button
+                type="button"
+                onClick={() =>
+                  navigator.clipboard
+                    .writeText(newToken)
+                    .catch((cause: unknown) => setError(message(cause)))
+                }
+              >
+                Copy token
+              </button>
+              <button type="button" className="secondary" onClick={() => setNewToken(null)}>
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
+        <h3>Existing agents</h3>
+        {loading && <p>Loading agents…</p>}
+        {!loading && agents.length === 0 && <p>No agents have access yet.</p>}
+        <ul className="agent-list">
+          {agents.map((agent) => (
+            <li key={agent.id}>
+              <div>
+                <strong>{agent.name}</strong>{' '}
+                <span className="muted">
+                  {agent.revoked
+                    ? 'Revoked'
+                    : `Expires ${new Date(agent.expiresAt).toLocaleDateString()}`}
+                </span>
+                <p>{agent.scopes.join(', ')}</p>
+              </div>
+              {!agent.revoked && (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => revoke(agent.id)}
+                >
+                  Revoke
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
+    </main>
+  );
+}
+
+function App() {
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState<'today' | 'settings'>('today');
+  const [signingOut, setSigningOut] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    getSession(controller.signal)
+      .then(setSession)
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) setError(message(cause));
+      });
+    return () => controller.abort();
+  }, []);
+  async function signOut() {
+    if (!session) return;
+    setSigningOut(true);
+    setError(null);
+    try {
+      await logout(session.csrfToken);
+      setSession(null);
+      setPage('today');
+    } catch (cause) {
+      setError(message(cause));
+    } finally {
+      setSigningOut(false);
+    }
+  }
   return (
     <div className="app">
       <header className="topbar">
         <strong>Jobseek</strong>
         <span>Private workspace</span>
       </header>
-      <div className="layout">
-        <nav aria-label="Main navigation">
-          <a href="#today" aria-current="page">
-            Today
-          </a>
-          <span>Opportunities</span>
-          <span>People</span>
-          <span>Applications</span>
-          <span>Settings</span>
-        </nav>
-        <main id="today">
-          <p className="eyebrow">Foundation</p>
-          <h1>Today</h1>
-          <p>
-            The dashboard connection is ready. Opportunity tracking will appear here as the service
-            is built.
-          </p>
-          <section aria-live="polite" className="status">
-            <h2>Service status</h2>
-            {loading && <p>Checking the API…</p>}
-            {!loading && health && (
-              <p className="success">
-                Connected to {health.service} v{health.version}.
-              </p>
-            )}
-            {!loading && error && (
-              <div role="alert">
-                <p>Could not connect to the dashboard API. {error}</p>
-                <button onClick={() => setRetry((value) => value + 1)}>Try again</button>
-              </div>
-            )}
-          </section>
+      {session === undefined && !error && (
+        <main>
+          <p>Checking your session…</p>
         </main>
-      </div>
+      )}
+      {session === undefined && error && (
+        <main role="alert">
+          <p>{error}</p>
+          <button onClick={() => window.location.reload()}>Try again</button>
+        </main>
+      )}
+      {session === null && <LoginPanel onLogin={setSession} />}
+      {session && (
+        <div className="layout">
+          <nav aria-label="Main navigation">
+            <button
+              type="button"
+              className={page === 'today' ? 'active' : 'nav-button'}
+              onClick={() => setPage('today')}
+              aria-current={page === 'today' ? 'page' : undefined}
+            >
+              Today
+            </button>
+            <span>Opportunities</span>
+            <span>People</span>
+            <span>Applications</span>
+            <button
+              type="button"
+              className={page === 'settings' ? 'active' : 'nav-button'}
+              onClick={() => setPage('settings')}
+              aria-current={page === 'settings' ? 'page' : undefined}
+            >
+              Settings
+            </button>
+            <button type="button" className="sign-out" disabled={signingOut} onClick={signOut}>
+              Sign out
+            </button>
+          </nav>
+          {page === 'today' ? <Today /> : <Settings session={session} />}
+          {error && (
+            <p role="alert" className="global-error">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
