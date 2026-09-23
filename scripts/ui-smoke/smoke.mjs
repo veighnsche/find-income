@@ -3,6 +3,7 @@ import { chromium } from 'playwright-core';
 import { startFixture } from './fixture.mjs';
 import { runDeliverySmoke } from './delivery-smoke.mjs';
 import { runRecommendationSmoke } from './recommendation-smoke.mjs';
+import { runInterviewSmoke } from './interview-smoke.mjs';
 
 async function launchBrowser() {
   const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
@@ -422,6 +423,7 @@ async function run() {
     assert.equal(pageErrors.length, 0, `page errors: ${pageErrors.join('; ')}`);
     await runDeliverySmoke(browser);
     await runRecommendationSmoke(browser);
+    await runInterviewSmoke(browser);
     console.log(
       'UI fixture smoke passed: contextual input reports, exact lost-response replay, stale-409 recovery, 390px layout.',
     );

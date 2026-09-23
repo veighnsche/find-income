@@ -195,6 +195,35 @@
   font: inherit;
   line-height: 1.45;
 }
+.interview-input {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1rem 0;
+  font-weight: 700;
+}
+.interview-input textarea {
+  font-weight: 400;
+}
+.interview-brief,
+.interview-debrief,
+.interview-round {
+  border-top: 1px solid #d8e2da;
+  margin-top: 1.2rem;
+  padding-top: 1.2rem;
+  min-width: 0;
+}
+.interview-brief li,
+.interview-debrief li {
+  margin: 0.7rem 0;
+  overflow-wrap: anywhere;
+}
+.interview-citations {
+  margin: 0.35rem 0;
+}
+.interview-detail code,
+.interview-brief code {
+  overflow-wrap: anywhere;
+}
 @media (max-width: 850px) {
   .op-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));

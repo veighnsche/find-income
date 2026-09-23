@@ -53,6 +53,45 @@ export type DeliveryReview = components['schemas']['DeliveryReview'];
 export type DeliveryItem = components['schemas']['DeliveryItem'];
 export type DeliverySendResult = components['schemas']['DeliverySendResult'];
 export type DeliveryReconciliation = components['schemas']['DeliveryReconciliation'];
+export type PrepareInterviewRequest = components['schemas']['PrepareInterviewRequest'];
+export type DebriefInterviewRequest = components['schemas']['DebriefInterviewRequest'];
+export type InterviewCommissionResponse = components['schemas']['InterviewCommissionResponse'];
+export type DebriefInterviewResponse = components['schemas']['DebriefInterviewResponse'];
+export type InterviewView = components['schemas']['InterviewView'];
+export type InterviewDetail = components['schemas']['InterviewDetail'];
+
+export function listInterviews(signal?: AbortSignal): Promise<InterviewView[]> {
+  return request<components['schemas']['InterviewList']>('/interviews', { signal }).then(
+    (page) => page.items,
+  );
+}
+
+export function getInterview(id: string, signal?: AbortSignal): Promise<InterviewDetail> {
+  return request<InterviewDetail>(`/interviews/${encodeURIComponent(id)}`, { signal });
+}
+
+export function prepareInterview(
+  input: PrepareInterviewRequest,
+  csrfToken: string,
+): Promise<InterviewCommissionResponse> {
+  return request<InterviewCommissionResponse>('/interviews/prepare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(input),
+  });
+}
+
+export function debriefInterview(
+  id: string,
+  input: DebriefInterviewRequest,
+  csrfToken: string,
+): Promise<DebriefInterviewResponse> {
+  return request<DebriefInterviewResponse>(`/interviews/${encodeURIComponent(id)}/debrief`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(input),
+  });
+}
 
 export class RequestError extends Error {
   constructor(

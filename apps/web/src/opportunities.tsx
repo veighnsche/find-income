@@ -5,6 +5,7 @@ import { OwnerDecisionControls } from './owner-decision';
 import { OwnerInstructionPanel } from './owner-instruction';
 import { RelationshipsPanel } from './relationships-panel';
 import { ApplicationPackPanel } from './application-pack-panel';
+import { InterviewPanel } from './interview-panel';
 import { ScreeningPanel } from './screening-panel';
 import {
   getOpportunity,
@@ -408,6 +409,12 @@ function OpportunityDetail({
             focusPreparation={focusPreparation}
             session={session}
             onSessionLost={onSessionLost}
+          />
+          <InterviewPanel
+            opportunity={opportunity}
+            session={session}
+            onSessionLost={onSessionLost}
+            onOpenCampaign={onBack}
           />
           <RelationshipsPanel opportunityId={id} session={session} onSessionLost={onSessionLost} />
           <OwnerInstructionPanel

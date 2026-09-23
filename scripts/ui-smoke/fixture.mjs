@@ -272,6 +272,18 @@ export async function startFixture() {
     discoveryReady: false,
     latestCompletedDiscover: null,
     recommendationCards: [],
+    interviews: new Map(),
+    interviewPrepareByKey: new Map(),
+    interviewDebriefByKey: new Map(),
+    failFirstInterviewPrepareResponse: false,
+    failFirstInterviewDebriefResponse: false,
+    rejectNextInterviewPrepare: false,
+    deferInterviewPrepareResponse: false,
+    interviewPrepareResponsePending: false,
+    releaseInterviewPrepare: null,
+    deferInterviewDebriefResponse: false,
+    interviewDebriefResponsePending: false,
+    releaseInterviewDebrief: null,
     delivery: {
       reviews: new Map(),
       keys: new Map(),
@@ -306,6 +318,129 @@ export async function startFixture() {
         return sendJson(res, 200, { status: 'ok', service: 'jobseek-api', version: 'ui-fixture' });
       if (path === '/api/v1/preferences')
         return sendJson(res, 200, { ...profile, version: state.profileVersion });
+      if (path === '/api/v1/interviews' && req.method === 'GET')
+        return sendJson(res, 200, {
+          items: [...state.interviews.values()].map((record) => record.interview).reverse(),
+        });
+      if (path === '/api/v1/interviews/prepare' && req.method === 'POST') {
+        const previous = state.interviewPrepareByKey.get(payload.requestKey);
+        if (previous) return sendJson(res, 200, previous);
+        if (state.rejectNextInterviewPrepare) {
+          state.rejectNextInterviewPrepare = false;
+          return error(res, 409);
+        }
+        if (payload.opportunityId !== opportunity.id || !payload.context?.trim())
+          return error(res, 400);
+        if (
+          ['queued', 'running', 'awaiting_input', 'stopping', 'paused'].includes(state.round.state)
+        )
+          return error(res, 409);
+        const id = `synthetic-interview-${state.interviews.size + 1}`;
+        const roundId = `synthetic-interview-round-${state.interviews.size + 1}`;
+        const view = {
+          id,
+          opportunityId: opportunity.id,
+          opportunityRevision: opportunity.revision,
+          profileVersion: state.profileVersion,
+          context: payload.context,
+          contextSha256: '6'.repeat(64),
+          roundId,
+          current: true,
+          createdAt: time,
+          updatedAt: time,
+        };
+        state.round = {
+          ...round,
+          id: roundId,
+          outcome: 'interview_prepare',
+          intent: 'Prepare one sourced private interview brief',
+          state: 'running',
+          step: 'preparing',
+          deliverableStatus: 'pending',
+          scope: {
+            inputRefs: [`interview:${id}`],
+            resources: [`opportunity:${opportunity.id}`],
+            operations: ['interview_brief_save', 'jev_request'],
+            delegates: ['codex-runner'],
+          },
+          report: {},
+        };
+        state.interviews.set(id, { interview: view, debriefs: [] });
+        const response = { interviewId: id, round: state.round };
+        state.interviewPrepareByKey.set(payload.requestKey, response);
+        if (state.deferInterviewPrepareResponse) {
+          state.interviewPrepareResponsePending = true;
+          await new Promise((resolve) => {
+            state.releaseInterviewPrepare = resolve;
+          });
+          state.interviewPrepareResponsePending = false;
+          state.releaseInterviewPrepare = null;
+        }
+        if (state.failFirstInterviewPrepareResponse) {
+          state.failFirstInterviewPrepareResponse = false;
+          return error(res, 503);
+        }
+        return sendJson(res, 201, response);
+      }
+      if (path.startsWith('/api/v1/interviews/')) {
+        const parts = path.split('/');
+        const id = parts[4];
+        const record = state.interviews.get(id);
+        if (!record) return error(res, 404);
+        if (req.method === 'GET' && parts.length === 5) return sendJson(res, 200, record);
+        if (req.method === 'POST' && parts[5] === 'debrief') {
+          const previous = state.interviewDebriefByKey.get(payload.requestKey);
+          if (previous) return sendJson(res, 200, previous);
+          if (!record.interview.current || !payload.notes?.trim()) return error(res, 409);
+          if (
+            ['queued', 'running', 'awaiting_input', 'stopping', 'paused'].includes(
+              state.round.state,
+            )
+          )
+            return error(res, 409);
+          const debriefId = `synthetic-debrief-${state.interviewDebriefByKey.size + 1}`;
+          const roundId = `synthetic-debrief-round-${state.interviewDebriefByKey.size + 1}`;
+          record.debriefs.unshift({
+            id: debriefId,
+            interviewId: id,
+            notes: payload.notes,
+            roundId,
+            createdAt: time,
+            updatedAt: time,
+          });
+          state.round = {
+            ...round,
+            id: roundId,
+            outcome: 'interview_debrief',
+            intent: 'Record owner-reported debrief',
+            state: 'running',
+            step: 'recording',
+            deliverableStatus: 'pending',
+            scope: {
+              inputRefs: [`debrief:${debriefId}`],
+              resources: [`interview:${id}`],
+              operations: ['interview_debrief_save'],
+              delegates: ['codex-runner'],
+            },
+            report: {},
+          };
+          const response = { debriefId, interviewId: id, round: state.round };
+          state.interviewDebriefByKey.set(payload.requestKey, response);
+          if (state.deferInterviewDebriefResponse) {
+            state.interviewDebriefResponsePending = true;
+            await new Promise((resolve) => {
+              state.releaseInterviewDebrief = resolve;
+            });
+            state.interviewDebriefResponsePending = false;
+            state.releaseInterviewDebrief = null;
+          }
+          if (state.failFirstInterviewDebriefResponse) {
+            state.failFirstInterviewDebriefResponse = false;
+            return error(res, 503);
+          }
+          return sendJson(res, 201, response);
+        }
+      }
       if (path === '/api/v1/delivery/capability')
         return sendJson(res, 200, {
           submissionAvailable: state.delivery.senderAvailable,
@@ -858,6 +993,128 @@ export async function startFixture() {
             ? 'complete'
             : 'partial',
         report,
+      };
+    },
+    completeInterviewBrief({ disposition = 'unresolved', selectedId = 'research' } = {}) {
+      const record = [...state.interviews.values()].at(-1);
+      if (!record) throw new Error('No synthetic interview to complete');
+      const id = record.interview.id;
+      record.interview.brief = {
+        inputSha256: '7'.repeat(64),
+        input: {
+          interviewId: id,
+          opportunityId: opportunity.id,
+          roleTitle: opportunity.title,
+          employerName: company.name,
+          context: [
+            {
+              id: 'owner-invitation',
+              kind: 'invitation',
+              revision: '1',
+              sha256: '8'.repeat(64),
+              body: record.interview.context,
+            },
+          ],
+          careerSources: [
+            {
+              id: 'career-project',
+              name: 'Approved personal project',
+              sha256: '9'.repeat(64),
+              approved: true,
+              body: 'Built a personal research prototype as a learning project.',
+            },
+          ],
+          draft: {
+            focus: [
+              {
+                id: 'research',
+                why: {
+                  text: 'Prepare to discuss the research prototype.',
+                  citations: [
+                    { sourceId: 'career-project', excerpt: 'personal research prototype' },
+                  ],
+                },
+              },
+            ],
+            questions: [
+              {
+                text: 'How will this role use research?',
+                why: {
+                  text: 'The invitation mentions research work.',
+                  citations: [{ sourceId: 'owner-invitation', excerpt: 'research work' }],
+                },
+              },
+            ],
+            examples: [
+              {
+                title: 'Research prototype',
+                experienceKind: 'personal_project',
+                contextBasis: {
+                  sourceId: 'career-project',
+                  excerpt: 'personal research prototype',
+                },
+                situation: {
+                  text: 'A personal learning project.',
+                  citations: [{ sourceId: 'career-project', excerpt: 'learning project' }],
+                },
+                action: {
+                  text: 'Built a research prototype.',
+                  citations: [
+                    { sourceId: 'career-project', excerpt: 'Built a personal research prototype' },
+                  ],
+                },
+                unknownResult: 'Impact is not independently verified.',
+              },
+            ],
+            scheduleClaims: [
+              {
+                startRfc3339: '2026-10-02T11:00:00+02:00',
+                mode: 'video',
+                citation: { sourceId: 'owner-invitation', excerpt: '2026-10-02 at 11:00 by video' },
+              },
+            ],
+            unknowns: ['Meeting link and interviewer names are unconfirmed.'],
+          },
+        },
+      };
+      record.interview.focus = {
+        disposition,
+        inputSha256: 'b'.repeat(64),
+        ...(disposition === 'selected' ? { selectedId } : {}),
+      };
+      state.round = {
+        ...state.round,
+        state: 'completed',
+        revision: state.round.revision + 1,
+        step: 'done',
+        deliverableStatus: 'brief_saved',
+        report: { interviewId: id, focus: disposition },
+      };
+    },
+    completeInterviewDebrief() {
+      const record = [...state.interviews.values()].at(-1);
+      const debrief = record?.debriefs[0];
+      if (!debrief) throw new Error('No synthetic debrief to complete');
+      debrief.attribution = 'owner_reported';
+      debrief.observations = [
+        {
+          kind: 'discussed',
+          detail: {
+            text: 'Discussed the research prototype.',
+            citations: [
+              { sourceId: 'owner_interview_notes', excerpt: 'discussed the research prototype' },
+            ],
+          },
+        },
+      ];
+      debrief.unknowns = ['Hiring decision not reported.'];
+      state.round = {
+        ...state.round,
+        state: 'completed',
+        revision: state.round.revision + 1,
+        step: 'done',
+        deliverableStatus: 'debrief_saved',
+        report: { debriefId: debrief.id },
       };
     },
     close: () =>
