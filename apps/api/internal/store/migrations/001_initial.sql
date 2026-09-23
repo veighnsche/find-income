@@ -466,6 +466,20 @@ CREATE TABLE discovery_candidates (
   UNIQUE(attempt_id,kind,url)
 );
 
+CREATE TABLE application_packs (
+  id TEXT PRIMARY KEY,
+  opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+  opportunity_revision INTEGER NOT NULL,
+  profile_revision INTEGER NOT NULL,
+  version INTEGER NOT NULL,
+  content_sha256 TEXT NOT NULL,
+  manifest_json TEXT NOT NULL,
+  typst_source BLOB NOT NULL,
+  pdf BLOB NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(opportunity_id,version)
+);
+
 -- Both scheduled discoveries and owner submissions enter this same durable
 -- intake. Jobs provide leases/attempt history; this row preserves source and
 -- the exact verified record mapping across retries and process restarts.
