@@ -34,7 +34,7 @@ Runtime SQLite files, attachments, personal PDFs, backups, sessions and secrets 
 
 The foundation lane verified locally on 23 September 2026:
 
-- `pnpm install --frozen-lockfile`, `pnpm check`, `pnpm test`, `pnpm build` and `pnpm format` with the exact host versions above.
+- A clean temporary Git clone passed `pnpm install --frozen-lockfile`, `pnpm check`, `pnpm test` and `pnpm build` with the exact host versions above. `pnpm format` passed in the working checkout.
 - `turbo ls` discovers the native Go module without a JS wrapper. `turbo run api#test`, `turbo run lint --filter=api` and `turbo run build --filter=@jobseek/web` succeed.
 - `pnpm dev` starts both services; `GET http://127.0.0.1:5173/api/v1/health` returns the actual Go JSON response. In a browser the shell displayed the connected status. With the API stopped, the same shell displayed an HTTP 502 error and retry control. Ctrl+C closed both listening ports.
 - A repeated root build returned 5/5 cache hits. After deleting `apps/web/dist` and `apps/api/bin/jobseek`, another cached build restored both outputs. Temporary Go source, `go.mod`, OpenAPI and web source edits caused the expected misses; `GOFLAGS=-trimpath` also changed native Go task hashes. The files were restored afterward.
