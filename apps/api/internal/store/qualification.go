@@ -12,7 +12,7 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/fit"
 )
 
-const qualificationRulesVersion = "qualification-v1"
+const qualificationRulesVersion = "qualification-v2"
 
 // A no-op conditional write takes SQLite's writer reservation before any
 // snapshot reads. Two Store handles then serialize and stale evidence writers
@@ -260,10 +260,21 @@ func roleFactsFromClaims(claims []qualClaim, preferences Preferences) []fit.Role
 }
 
 func hoursFromClaims(claims []qualClaim, target int64) fit.CriterionEvidence {
-	match, mismatch, mention := false, false, false
+	match, mismatch, mention, ambiguous := false, false, false, false
 	matchAuthority, mismatchAuthority := fit.PublishedVacancy, fit.PublishedVacancy
 	for _, claim := range claims {
-		if claim.Criterion != "target_hours_available" || !claim.HoursMin.Valid || !claim.HoursMax.Valid {
+		if claim.Criterion != "target_hours_available" {
+			continue
+		}
+		if claim.Finding == "ambiguous" {
+			ambiguous = true
+			continue
+		}
+		if claim.Finding == "mention_only" {
+			mention = true
+			continue
+		}
+		if !claim.HoursMin.Valid || !claim.HoursMax.Valid {
 			continue
 		}
 		authority := fit.PublishedVacancy
@@ -271,10 +282,6 @@ func hoursFromClaims(claims []qualClaim, target int64) fit.CriterionEvidence {
 			authority = fit.Employer
 		} else if claim.SourceKind == RecruiterStatement {
 			authority = fit.Recruiter
-		}
-		if claim.Finding == "mention_only" || claim.Finding == "ambiguous" {
-			mention = true
-			continue
 		}
 		if target >= claim.HoursMin.Int64 && target <= claim.HoursMax.Int64 {
 			match = true
@@ -293,6 +300,9 @@ func hoursFromClaims(claims []qualClaim, target int64) fit.CriterionEvidence {
 	}
 	if mismatch {
 		return fit.CriterionEvidence{Finding: fit.ConfirmedMismatch, Authority: mismatchAuthority}
+	}
+	if ambiguous {
+		return fit.CriterionEvidence{Finding: fit.Ambiguous}
 	}
 	if match {
 		return fit.CriterionEvidence{Finding: fit.ConfirmedMatch, Authority: matchAuthority}
@@ -314,10 +324,14 @@ func arrangementKey(claim qualClaim) string {
 
 func locationFromClaims(claims []qualClaim, preferences Preferences) fit.CriterionEvidence {
 	var arrangements []qualClaim
+	ambiguous := false
 	owners := map[string][]qualClaim{}
 	for _, claim := range claims {
 		switch claim.Criterion {
 		case "location_arrangement":
+			if claim.Finding == "ambiguous" {
+				ambiguous = true
+			}
 			if claim.ArrangementPattern.Valid && claim.Finding != "mention_only" && claim.Finding != "ambiguous" {
 				arrangements = append(arrangements, claim)
 			}
@@ -329,6 +343,9 @@ func locationFromClaims(claims []qualClaim, preferences Preferences) fit.Criteri
 		}
 	}
 	if len(arrangements) == 0 {
+		if ambiguous {
+			return fit.CriterionEvidence{Finding: fit.Ambiguous}
+		}
 		return fit.CriterionEvidence{Finding: fit.Missing}
 	}
 	key := arrangementKey(arrangements[0])
@@ -366,6 +383,9 @@ func locationFromClaims(claims []qualClaim, preferences Preferences) fit.Criteri
 	if mismatch {
 		return fit.CriterionEvidence{Finding: fit.ConfirmedMismatch, Authority: fit.OwnerVerified}
 	}
+	if ambiguous {
+		return fit.CriterionEvidence{Finding: fit.Ambiguous}
+	}
 	if match {
 		return fit.CriterionEvidence{Finding: fit.ConfirmedMatch, Authority: fit.OwnerVerified}
 	}
@@ -374,10 +394,16 @@ func locationFromClaims(claims []qualClaim, preferences Preferences) fit.Criteri
 
 func actualSalaryFromClaims(claims []qualClaim) (*fit.ActualPay, bool) {
 	var actual *fit.ActualPay
-	conflicting := false
+	conflicting, ambiguous := false, false
 	for _, claim := range claims {
-		if claim.Criterion != "monthly_base_salary" || !directSource(claim.SourceKind) ||
-			!claim.SalaryAmount.Valid || !claim.SalaryHours.Valid {
+		if claim.Criterion != "monthly_base_salary" || !directSource(claim.SourceKind) {
+			continue
+		}
+		if claim.Finding == "ambiguous" {
+			ambiguous = true
+			continue
+		}
+		if !claim.SalaryAmount.Valid || !claim.SalaryHours.Valid {
 			continue
 		}
 		candidate := fit.ActualPay{Currency: claim.SalaryCurrency.String,
@@ -391,6 +417,11 @@ func actualSalaryFromClaims(claims []qualClaim) (*fit.ActualPay, bool) {
 		} else if *actual != candidate {
 			conflicting = true
 		}
+	}
+	if ambiguous {
+		// Do not let an older direct salary or the advertised estimate stand in
+		// for employer terms that are explicitly unresolved now.
+		return nil, true
 	}
 	return actual, conflicting
 }
