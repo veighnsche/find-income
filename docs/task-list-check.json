@@ -64,6 +64,7 @@
   "proposed_next_slices": [
     "Review and integrate isolated I24 interview backend, then contextual UI",
     "Review and integrate isolated I25 offer backend, then contextual UI",
+    "Integrate saved next-action advice after each implemented outcome; current generation runs only after discovery",
     "Actual host/account discovery acceptance when missing owner input arrives",
     "Bounded correspondence/reply integration and exact controlled live delivery acceptance"
   ],

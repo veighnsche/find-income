@@ -192,7 +192,7 @@
       "active_model": "gpt-6-sol",
       "active_effort": "high",
       "review": "Committed 2fdfe7d: recorded choices, guarded current screening/organisation projection and pack relevance; responsibility evaluation has ten complete cases.",
-      "remaining_work": "Verify real useful discovery and recommendation quality. Persisted Jev advice, exact saved evidence/replay, owner-decision attribution and read-only currentness/latest completed retrieval are committed d9679af; synthetic proof does not establish real usefulness."
+      "remaining_work": "Extend saved next-action generation beyond discovery to each implemented outcome, using explicit commissioned scope and only supported actions, then verify real usefulness. Discovery advice/currentness/latest retrieval are committed d9679af; four candidate actions do not establish cross-outcome integration."
     },
     {
       "id": "I11",
@@ -214,7 +214,7 @@
       "active_model": "gpt-6-sol",
       "active_effort": "medium",
       "review": "Core2279c3f independently reviewed with full Go/race checks. UI12b138d root-reviewed with passing lint/TypeScript and production-build Chromium fixture; actual input/pack reports, exact retry, draft persistence and automatic corrected-pack refresh covered.",
-      "remaining_work": "Verify the actual authenticated runtime journey. Contextual UI12b138d and recommendation/delivery UI235441d pass root synthetic browser checks, including fresh-browser recovery and exact action navigation; real runtime acceptance remains open."
+      "remaining_work": "Integrate later outcome results and saved advice as those backend paths land, then verify the authenticated runtime journey. Contextual UI12b138d and recommendation/delivery UI235441d pass root synthetic checks; real runtime acceptance remains open."
     },
     {
       "id": "I12",
