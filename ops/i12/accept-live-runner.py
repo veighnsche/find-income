@@ -14,7 +14,7 @@ import time
 from urllib.parse import urlparse
 
 MAX_FRAME = 1 << 20
-REQUIRED_TOOLS = {"round_context", "round_mutation", "round_evidence_correction", "source_links", "source_discovery", "discovery_candidate_stage"}
+REQUIRED_TOOLS = {"round_context", "round_mutation", "round_evidence_correction", "source_links", "source_discovery", "discovery_candidate_stage", "discovery_official_links", "discovery_board_register", "application_pack_prepare"}
 PROBE = "/var/lib/jobseek-runner/work/i12-accept/probe.sh"
 
 

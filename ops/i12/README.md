@@ -42,11 +42,13 @@ Transfer the code artifacts and the separately pinned runtime binaries to their 
 
 ```sh
 # App host
-/path/to/ops/i12/install-app.sh /path/to/artifacts /private/config/api.env /private/config/Caddyfile /private/config/runner_key /private/config/known_hosts
+/path/to/ops/i12/install-app.sh /path/to/artifacts /private/config/api.env /private/config/Caddyfile /private/config/runner_key /private/config/known_hosts /private/approved-career
 
 # Dedicated runner VM
 /path/to/ops/i12/install-runner.sh /path/to/artifacts CODEX_LINUX_SHA256 /private/config/runner-config.toml /private/config/authorized_keys APP_PRIVATE_IP
 ```
+
+The app installer takes a final private approved-career directory containing exactly the four source files used by the current pack loader: `cv-vince-liem.typ`, `cv-vince-liem.md`, `github-evidence-review.md`, and `portfolio-case-studies.md`. It copies only those regular files to root-owned `/var/lib/jobseek/assets`, readable by the API group and outside the web root. The pack loader verifies their pinned digests before use; a mismatch leaves preparation unavailable. The environment template sets `JOBSEEK_APPROVED_CAREER_ROOT` and `JOBSEEK_TYPST_PATH` explicitly. Do not put the source directory into the public build artifact.
 
 The runner account has no ordinary writable home: only its separate 0700 `state` and `work` dirs are writable. `authorized_keys` forces the launcher and refuses forwarding/PTYS. The launcher checks `SSH_ORIGINAL_COMMAND`, strips SSH environment, uses the fixed App Server binary/hash/paths and starts a `systemd-run --user --pipe` transient service with a fixed unit name (one concurrent connection), `KillMode=control-group`, `ExitType=main`, read-only system/config mount and a 45-minute ceiling. The owner/operator must confirm **on the selected runner VM** that user-systemd's `PrivateUsers`/bind mount properties and cgroup teardown actually work; the host inventory did not prove this. `loginctl enable-linger` enables the runner's user manager. A failed launcher, namespace or cgroup test leaves the isolation flag false. Do not weaken properties to make a failed test pass.
 
