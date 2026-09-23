@@ -21,7 +21,7 @@ chmod 700 "$JOBSEEK_DATA_DIR"
 
 The API also enforces private directory and database file permissions. Keep this path out of source control, build caches, shared folders, and cloud-synced directories.
 
-Configure the local administrator interactively. The terminal hides both password entries; the password is read from stdin and is never a command-line argument. Do not pipe, echo, or put a password into an example command:
+Configure the local administrator interactively; the terminal hides both password entries. Protected programmatic stdin is also supported. Never put a literal password in command arguments or shell history:
 
 ```sh
 ./apps/api/bin/jobseek setup-admin
@@ -45,11 +45,11 @@ Stop both services with Ctrl+C. To use a different terminal later, repeat the `J
 
 The initial setup creates the single local administrator. Sign-in uses a private session cookie; sign out from the dashboard to end the session. In **Settings → Agent access**, create a distinct named token for each agent, select only the scopes it needs, and choose a 7-, 30-, or 90-day expiry. The raw token appears once: copy it directly into the agent's approved secret store. It cannot be shown again. Use **Revoke** in Settings to invalidate it immediately; create a replacement deliberately if needed. Agent credentials cannot administer the dashboard.
 
-The token controls are implemented, but the corresponding opening, evidence, action, draft, and assessment APIs are not yet available. Creating a token does not mean an agent integration is ready. There is no outbound messaging capability.
+The company/opportunity HTTP handlers are being built and reviewed in the shared working tree, but there is no browser workflow yet and the full agent collect/evidence/action/draft/assessment integration is not ready. Creating a token does not mean an end-to-end agent integration is ready. There is no outbound messaging capability.
 
 ## Current scope and checks
 
-The current browser workflow is limited to sign-in, Today preferences, service status, and agent credential controls. Opportunity CRUD is being built and is not yet available in the dashboard; People workflows, Jev assessments, embedded Codex, and Typst/PDF generation are not integrated. Do not enter real opportunity data or personal application assets until those workflows and their acceptance review are complete.
+The current browser workflow is limited to sign-in, stored Today preferences, service status, and agent credential controls. Company/opportunity API work is in progress but not yet available through the browser; People workflows, Jev assessments, embedded Codex, and Typst/PDF generation are not integrated. Personal asset import is not implemented.
 
 Useful repository checks after changes:
 
