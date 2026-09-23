@@ -251,6 +251,40 @@ func TestActionDueAndOverdueAcrossAmsterdamDST(t *testing.T) {
 	}
 }
 
+func TestActionDueRoundTripsStoredAmsterdamInstants(t *testing.T) {
+	ctx := context.Background()
+	s := openJobTestStore(t)
+	cases := []struct {
+		name string
+		at   string
+	}{
+		{"spring after gap", "2026-03-29T03:30:00.123456789+02:00"},
+		{"first autumn 02:30", "2026-10-25T02:30:00.123456789+02:00"},
+		{"second autumn 02:30", "2026-10-25T02:30:00.123456789+01:00"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			created := createActionFixture(t, s, tc.name, ActionDue{At: tc.at, Timezone: "Europe/Amsterdam"})
+			stored, err := s.Action(ctx, created.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			due := stored.Due()
+			if due.At != tc.at || due.Timezone != "Europe/Amsterdam" {
+				t.Fatalf("stored due did not restore named-zone offset: %+v", due)
+			}
+			rescheduled, _, err := s.RescheduleAction(ctx, ownerActor(), stored.ID, stored.Revision, due)
+			if err != nil || rescheduled.DueAt != stored.DueAt || rescheduled.DueTimezone != stored.DueTimezone {
+				t.Fatalf("stored due failed replacement: before=%+v after=%+v err=%v", stored, rescheduled, err)
+			}
+			copied, _, err := s.CreateAction(ctx, ownerActor(), ActionInput{Description: tc.name + " copy", Due: stored.Due()})
+			if err != nil || copied.DueAt != stored.DueAt {
+				t.Fatalf("stored due failed create: copied=%+v err=%v", copied, err)
+			}
+		})
+	}
+}
+
 func TestActionConcurrentStaleWritersAndRestart(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

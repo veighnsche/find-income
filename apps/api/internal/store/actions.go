@@ -108,7 +108,17 @@ func normalizeActionDue(value ActionDue) (ActionDue, error) {
 }
 
 func actionDueFromRecord(record Action) ActionDue {
-	return ActionDue{Date: record.DueDate, At: record.DueAt, Timezone: record.DueTimezone}
+	if record.DueDate != "" {
+		return ActionDue{Date: record.DueDate}
+	}
+	instant, timeErr := time.Parse(recordTimeLayout, record.DueAt)
+	zone, zoneErr := validActionTimezone(record.DueTimezone)
+	if timeErr != nil || zoneErr != nil {
+		// Preserve an invalid legacy row for inspection rather than inventing a
+		// different deadline. New writes always satisfy both validations.
+		return ActionDue{At: record.DueAt, Timezone: record.DueTimezone}
+	}
+	return ActionDue{At: instant.In(zone).Format(time.RFC3339Nano), Timezone: record.DueTimezone}
 }
 
 func validateActionDescription(value string) (string, error) {
@@ -402,6 +412,6 @@ func (s *Store) ListOverdueActions(ctx context.Context, options ActionDueListOpt
 	return s.listDueActions(ctx, options, true)
 }
 
-// DueDate and DueAt are mutually exclusive in the schema; this helper keeps
-// their public replacement shape explicit for callers.
+// DueDate and DueAt are mutually exclusive in the schema. Timed values are
+// formatted in their named zone so this shape can be used for a replacement.
 func (a Action) Due() ActionDue { return actionDueFromRecord(a) }
