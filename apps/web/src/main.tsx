@@ -12,6 +12,7 @@ function App() {
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
+    setHealth(null);
     setError(null);
     getHealth(controller.signal)
       .then(setHealth)
