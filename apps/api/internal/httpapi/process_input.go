@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -87,6 +88,10 @@ func (h *Handler) processInputScope(ctx context.Context, kind, id string, profil
 	default:
 		return store.StartRoundInput{}, store.ErrInvalid
 	}
+	if !slices.Contains(input.Scope.Resources, "campaign:active") {
+		input.Scope.Resources = append(input.Scope.Resources, "campaign:active")
+	}
+	input.Limits.Requests++ // One explicit in-round next-action Jev request.
 	return input, nil
 }
 

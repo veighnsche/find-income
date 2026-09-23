@@ -70,7 +70,7 @@ func TestLatestCompletedDiscoveryRoundReadRoute(t *testing.T) {
 	if string(bytes.TrimSpace(body)) != "null" {
 		t.Fatalf("empty latest completed response = %s", body)
 	}
-	for _, path := range []string{"/rounds/latest-completed", "/rounds/latest-completed?outcome=prepare", "/rounds/latest-completed?outcome=discover&outcome=discover"} {
+	for _, path := range []string{"/rounds/latest-completed", "/rounds/latest-completed?outcome=unsupported", "/rounds/latest-completed?outcome=discover&outcome=discover"} {
 		status, body = h.owner(http.MethodGet, path)
 		requireStatus(t, status, http.StatusBadRequest, body)
 	}
@@ -167,13 +167,27 @@ func TestLatestCompletedOfferReadIsOwnerAndOutcomeScoped(t *testing.T) {
 		if json.Unmarshal(body, &view) != nil || view.ID != expected.ID || view.Outcome != expected.Outcome || view.RequestKey != expected.RequestKey {
 			t.Fatalf("wrong owner/outcome result: %s", body)
 		}
-		if expected.Outcome == "compare_offers" && !bytes.Equal(view.Report, expected.Report) {
-			t.Fatalf("offer report was altered by discovery advice projection: %s", body)
+		if expected.Outcome == "compare_offers" {
+			var projected struct {
+				Code                      string `json:"code"`
+				ComparisonID              string `json:"comparisonId"`
+				RecommendationCurrentness struct {
+					Status string `json:"status"`
+				} `json:"recommendationCurrentness"`
+			}
+			if json.Unmarshal(view.Report, &projected) != nil || projected.Code != "saved" || projected.ComparisonID != "saved-comparison" || projected.RecommendationCurrentness.Status != "unavailable" {
+				t.Fatalf("offer report projection lost result fields: %s", body)
+			}
 		}
 		stored, err := h.db.Round(ctx, expected.ID)
 		if err != nil || !bytes.Equal(stored.Report, expected.Report) || stored.Used != expected.Used || stored.Revision != expected.Revision {
 			t.Fatalf("read changed stored report, allowance or revision: %+v %v", stored, err)
 		}
+	}
+	status, body = h.owner(http.MethodGet, "/rounds/latest-completed?outcome=all")
+	requireStatus(t, status, http.StatusOK, body)
+	if decodeObject(t, body)["id"] != discovery.ID {
+		t.Fatalf("latest all-outcome owner result was not recovered: %s", body)
 	}
 	status, body = h.owner(http.MethodGet, path+"&outcome=discover")
 	requireStatus(t, status, http.StatusBadRequest, body)

@@ -36,7 +36,7 @@ func (h *Handler) compareOffersRound(w http.ResponseWriter, r *http.Request) {
 	}
 	resource := "offer_intake:" + intake.ID
 	if prior, err := h.database.RoundByRequest(r.Context(), actor, body.RequestKey); err == nil {
-		if prior.Outcome != "compare_offers" || len(prior.Scope.Resources) != 1 || prior.Scope.Resources[0] != resource {
+		if prior.Outcome != "compare_offers" || len(prior.Scope.Resources) != 2 || prior.Scope.Resources[0] != resource || prior.Scope.Resources[1] != "campaign:active" {
 			failRound(w, store.ErrRoundIdempotencyConflict)
 			return
 		}
@@ -52,8 +52,8 @@ func (h *Handler) compareOffersRound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input := store.StartRoundInput{RequestKey: body.RequestKey, Intent: "Compare the owner's complete supplied offers and identify a cited qualitative issue to review.", Outcome: "compare_offers", ProfileVersion: profile.Version,
-		Scope:  store.RoundScope{InputRefs: []string{resource}, Resources: []string{resource}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool, store.RoundPrepareOfferComparison, store.RoundJevRequest}, Delegates: []string{"codex-runner"}},
-		Limits: store.RoundAllowance{Requests: 4, Items: 1, Tools: 3, Turns: 1}, Deadline: time.Now().Add(30 * time.Minute).UTC()}
+		Scope:  store.RoundScope{InputRefs: []string{resource}, Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool, store.RoundPrepareOfferComparison, store.RoundJevRequest}, Delegates: []string{"codex-runner"}},
+		Limits: store.RoundAllowance{Requests: 5, Items: 1, Tools: 3, Turns: 1}, Deadline: time.Now().Add(30 * time.Minute).UTC()}
 	round, created, err := h.rounds.Start(r.Context(), actor, input)
 	if err != nil {
 		failRound(w, err)

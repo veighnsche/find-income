@@ -128,5 +128,5 @@ func deliveryRouteRoundScope(round Round, opportunityID string) bool {
 		!scopeAllows(round.Scope, RoundPrepareApplicationPack, "opportunity:"+opportunityID) {
 		return false
 	}
-	return round.Outcome != "process_input" || len(round.Scope.Resources) == 1 && round.Scope.Resources[0] == "opportunity:"+opportunityID
+	return round.Outcome != "process_input" || correctionOpportunityScope(round.Scope.Resources, opportunityID)
 }

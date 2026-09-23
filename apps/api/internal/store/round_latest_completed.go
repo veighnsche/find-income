@@ -6,17 +6,35 @@ import (
 	"errors"
 )
 
-// LatestCompletedRound returns one owner's latest completed round for a supported result view.
+// LatestCompletedRound returns one owner's latest saved supported result,
+// including delivery work that recorded a partial result before failing.
 // Timestamp ties are resolved by creation time and then stable round ID.
 func (s *Store) LatestCompletedRound(ctx context.Context, actor Actor, outcome string) (Round, error) {
-	if !ownerRoundActor(actor) || outcome != "discover" && outcome != "compare_offers" {
+	if !ownerRoundActor(actor) || !supportedLatestOutcome(outcome) {
 		return Round{}, ErrInvalid
 	}
-	round, err := scanRound(s.db.QueryRowContext(ctx, `SELECT `+roundColumns+`
-  FROM rounds WHERE actor_kind=? AND actor_id=? AND outcome=? AND state='completed'
-  ORDER BY completed_at DESC, created_at DESC, id DESC LIMIT 1`, actor.Kind, actor.ID, outcome))
+	query := `SELECT ` + roundColumns + ` FROM rounds WHERE actor_kind=? AND actor_id=? AND
+		(state='completed' OR (state='failed' AND outcome='deliver' AND deliverable_status='submission_unverified' AND report_json IS NOT NULL))`
+	args := []any{actor.Kind, actor.ID}
+	if outcome == "all" {
+		query += ` AND outcome IN ('discover','process_input','prepare','compare_offers','deliver','interview_prepare','interview_debrief')`
+	} else {
+		query += ` AND outcome=?`
+		args = append(args, outcome)
+	}
+	query += ` ORDER BY completed_at DESC, created_at DESC, id DESC LIMIT 1`
+	round, err := scanRound(s.db.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Round{}, ErrNotFound
 	}
 	return round, err
+}
+
+func supportedLatestOutcome(outcome string) bool {
+	switch outcome {
+	case "all", "discover", "process_input", "prepare", "compare_offers", "deliver", "interview_prepare", "interview_debrief":
+		return true
+	default:
+		return false
+	}
 }

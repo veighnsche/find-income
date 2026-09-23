@@ -18,7 +18,7 @@ func (h *Handler) latestCompletedRound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	outcomes := r.URL.Query()["outcome"]
-	if len(outcomes) != 1 || outcomes[0] != "discover" && outcomes[0] != "compare_offers" {
+	if len(outcomes) != 1 || !latestCompletedOutcomeAllowed(outcomes[0]) {
 		failRound(w, store.ErrInvalid)
 		return
 	}
@@ -34,12 +34,21 @@ func (h *Handler) latestCompletedRound(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.roundWithRecommendationCurrentness(r.Context(), round))
 }
 
+func latestCompletedOutcomeAllowed(outcome string) bool {
+	switch outcome {
+	case "all", "discover", "process_input", "prepare", "compare_offers", "deliver", "interview_prepare", "interview_debrief":
+		return true
+	default:
+		return false
+	}
+}
+
 // roundWithRecommendationCurrentness is called only after the existing
 // getRound owner authorization. It adds a transient read-only verdict to the
 // response copy of Report; the stored report remains immutable.
 func (h *Handler) roundWithRecommendationCurrentness(ctx context.Context, round store.Round) roundResponse {
 	view := roundModel(round)
-	if round.Outcome != "discover" || len(round.Report) == 0 {
+	if !latestCompletedOutcomeAllowed(round.Outcome) || round.Outcome == "all" || len(round.Report) == 0 {
 		return view
 	}
 	var report map[string]json.RawMessage

@@ -2067,16 +2067,34 @@ func (e ListOpportunitiesParamsKind) Valid() bool {
 
 // Defines values for GetLatestCompletedRoundParamsOutcome.
 const (
-	CompareOffers GetLatestCompletedRoundParamsOutcome = "compare_offers"
-	Discover      GetLatestCompletedRoundParamsOutcome = "discover"
+	All              GetLatestCompletedRoundParamsOutcome = "all"
+	CompareOffers    GetLatestCompletedRoundParamsOutcome = "compare_offers"
+	Deliver          GetLatestCompletedRoundParamsOutcome = "deliver"
+	Discover         GetLatestCompletedRoundParamsOutcome = "discover"
+	InterviewDebrief GetLatestCompletedRoundParamsOutcome = "interview_debrief"
+	InterviewPrepare GetLatestCompletedRoundParamsOutcome = "interview_prepare"
+	Prepare          GetLatestCompletedRoundParamsOutcome = "prepare"
+	ProcessInput     GetLatestCompletedRoundParamsOutcome = "process_input"
 )
 
 // Valid indicates whether the value is a known member of the GetLatestCompletedRoundParamsOutcome enum.
 func (e GetLatestCompletedRoundParamsOutcome) Valid() bool {
 	switch e {
+	case All:
+		return true
 	case CompareOffers:
 		return true
+	case Deliver:
+		return true
 	case Discover:
+		return true
+	case InterviewDebrief:
+		return true
+	case InterviewPrepare:
+		return true
+	case Prepare:
+		return true
+	case ProcessInput:
 		return true
 	default:
 		return false
