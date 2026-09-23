@@ -584,12 +584,13 @@
       "selection_reason": "Sol Medium performs the defined integrated review; Luna Low handles the final factual documentation pass. No extra full audit of unchanged components.",
       "status": "partial",
       "remaining_work": "Run the complete supported journey and final recovery checks, then update operating documentation from observed outcomes.",
-      "active_slice": "Bounded read-only client/server journey audit; real owner walkthrough remains pending",
-      "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
+      "active_slice": "Correct three confirmed client/server recovery/control defects in main web/smoke",
+      "thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
       "host_id": "local",
       "active_model": "gpt-6-sol",
       "active_effort": "medium",
-      "active_selection_reason": "Bounded cross-layer contract and control audit against actual code, without repeating backend authority reviews or trusting fixture shapes."
+      "active_selection_reason": "Defined UI recovery corrections across current components and browser fixtures; no backend redesign or live calls.",
+      "review": "Read-only actual client/server audit found lost rejection disposition on reload, unsupported delivery Resume on Home, and blocked exact historical debrief retry. Root confirmed handler/UI mismatch; Sol Medium correction dispatched. Live owner walkthrough remains open."
     }
   ],
   "execution_guide": "/Users/vince/Projects/find-income/dashboard/docs/implementation-tasks.md",

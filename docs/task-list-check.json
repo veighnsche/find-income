@@ -7,7 +7,7 @@
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
     "I10 isolated cross-outcome saved advice integration, Sol High",
-    "I27 bounded read-only actual client/server journey audit, Sol Medium"
+    "I27 three main web client/server corrections, Sol Medium"
   ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",
@@ -62,7 +62,8 @@
     "discovery_review": "All3 findings closed in bounded independent recheck. New-employer fixture uses11/10/14/3 from public-search phase; initial direction decision is outside fixture and adds one request. No real discovery quality claim.",
     "discovery_context_budget": "Committedcd2f9ab: saved real requests/responses verified byte-for-byte, old1200 rejection/new10000 unresolved acceptance offline;24KiB pre-call and full-excerpt default-batch regressions pass. Actual usage4645 across2 calls, both abstentions.",
     "delivery_ui": "Committed235441d after root synthetic delivery/recommendation Chromium checks, including Stop while Send is pending, stable retry identity, partial history, currentness and fresh-browser retrieval.",
-    "delivery_authority": "All three historical findings closed by independent bounded recheck. Role/source/company and cosmetic matrices, complete/incomplete/invalid capture production Lazy/Resume recovery, and successful authenticated HTTP Send/replay passed with fake sender. No live acceptance."
+    "delivery_authority": "All three historical findings closed by independent bounded recheck. Role/source/company and cosmetic matrices, complete/incomplete/invalid capture production Lazy/Resume recovery, and successful authenticated HTTP Send/replay passed with fake sender. No live acceptance.",
+    "client_server_audit": "Source trace confirmed three UI recovery/control defects; correction dispatched with reload, actual delivery refusal and historical debrief replay cases. No live acceptance."
   },
   "protected_artifacts_unchanged_prior_check": 44,
   "proposed_next_slices": [
