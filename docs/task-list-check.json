@@ -6,8 +6,9 @@
   "models_valid": true,
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
-    "I08/I10 substantial neutral-candidate discovery",
-    "I21 exact approval and bounded delivery integration"
+    "I08/I10 local request-context measurement; implementation frozen",
+    "I13 independent substantial-discovery review",
+    "I21 exact approval/delivery corrections"
   ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",

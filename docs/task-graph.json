@@ -210,11 +210,11 @@
       "status": "partial",
       "thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
       "host_id": "local",
-      "active_slice": "I11-B committed; worker idle",
+      "active_slice": "Reviewed and committed12b138d; available for I21 web handoff",
       "active_model": "gpt-6-sol",
       "active_effort": "medium",
-      "review": "Committed 8c8b66d: pack controls/versions/PDF/citations, relationships and screening; browser fixtures and root check/test/build pass.",
-      "remaining_work": "Implement reliable commissioned processing for contextual instructions and owner-pasted vacancies/links, including pack correction; distinguish ending paused work from Resume; verify actual runtime journey. Saved-input browser fixtures alone are insufficient."
+      "review": "Core2279c3f independently reviewed with full Go/race checks. UI12b138d root-reviewed with passing lint/TypeScript and production-build Chromium fixture; actual input/pack reports, exact retry, draft persistence and automatic corrected-pack refresh covered.",
+      "remaining_work": "Verify the actual authenticated runtime journey for contextual input and corrected packs. Core2279c3f and UI12b138d implement commissioning, explicit paused replacement, exact replay and production results; synthetic fixtures do not establish live acceptance."
     },
     {
       "id": "I12",
@@ -257,8 +257,8 @@
       "acceptance": "Coordinator resolves findings and the reviewer verifies only changed/problematic boundaries. No live discovery acceptance until consequential boundary issues are resolved. Do not repeat an unlimited repository audit or broadly retest unchanged code.",
       "selection_reason": "This is the concentrated security-sensitive review; Astra High is justified here rather than for every implementation task.",
       "status": "partial",
-      "remaining_work": "Run selected-runner wrapper, real ChatGPT account, required live MCP and exact native handler-denial acceptance from docs/native-tool-boundary.md. Offline synthetic evidence does not establish selected-host isolation.",
-      "active_slice": "I13 core/native corrections committed; selected-host acceptance pending",
+      "remaining_work": "Review new substantial-discovery authority/recovery changes, then actual selected-host/account isolation evidence. Earlier core findings were corrected at7310026 and native boundary reviewed at a22afa7; live acceptance remains open.",
+      "active_slice": "Independent read-only substantial-discovery authority/recovery review",
       "review": "Core authority corrections independently reviewed at7310026. Native boundary committeda22afa7; root runtime package suite, exact saved-rollout baseline/negative parser checks and config/shell checks passed.",
       "thread_id": "01a0cfc1-3fa3-7371-ad63-26f41a796309",
       "host_id": "local",

@@ -33,6 +33,7 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 | I08/I10 substantial discovery | Sol High | Neutral candidate acquisition, Jev choice before verification, useful continuation within one finite commission and durable per-source recovery. |
 | I11 contextual-input UI | Sol Medium | Reviewed and committed12b138d; worker available for the I21 web contract handoff. |
 | I21 exact approval/delivery | Sol High | Delivery service/store/API, initial schema, operation registry, HTTP/contracts and startup composition; no discovery engine or web edits. |
+| I13 discovery review | Astra High | Read-only review of frozen discovery selection, phase recovery and allowance boundaries. |
 
 Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; contextual input and shared pack transaction integration committed2279c3f after independent correction review, full Go suite and race-enabled recovery tests. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. Contextual-input UI is committed12b138d after root lint/TypeScript and production-build browser checks; real runtime acceptance remains open. The web writer is available for I21; interview helpers are committed7299c54 after root review/tests, and the I25 offer helpers are reviewed and committed in de84e23; both domain slices still need commissioned persistence/UI integration. Four live workers maximum.
 
@@ -280,7 +281,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I05, I06.
 
-**Remaining work:** Implement reliable commissioned processing for contextual instructions and owner-pasted vacancies/links, including pack correction; distinguish ending paused work from Resume; verify actual runtime journey. Saved-input browser fixtures alone are insufficient.
+**Remaining work:** Verify the actual authenticated runtime journey for contextual input and corrected packs. Core2279c3f and UI12b138d implement commissioning, explicit paused replacement, exact replay and production results; synthetic fixtures do not establish live acceptance.
 
 **Task scope:** Reuse contextual-recovery work. Build the known-answer brief, named Start/Stop/Resume, partial sourced cards, preserved selection and one context-bound instruction/URL/full-text input against stable DTOs. Remove manual source/preference/record forms and inactive navigation. Use stored recommendations supplied by I10 when integrated.
 
@@ -306,7 +307,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Astra / High · Dependencies: I05, I06, I07, I10, I11, I12.
 
-**Remaining work:** Review minimal corrections for all four findings, then actual host/account isolation evidence; passing package tests did not cover these production paths.
+**Remaining work:** Review new substantial-discovery authority/recovery changes, then actual selected-host/account isolation evidence. Earlier core findings were corrected at7310026 and native boundary reviewed at a22afa7; live acceptance remains open.
 
 **Task scope:** Use a fresh bounded reviewer context: requirements, exact diff, interfaces and raw test evidence, without implementer conclusions. Review authority, limits, idle/restart behaviour, runner containment and uncertain dispatch. Read-only; report actionable failures with a reproduction or exact violated invariant.
 
