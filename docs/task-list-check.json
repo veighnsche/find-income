@@ -7,8 +7,8 @@
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
     "I24 isolated recovery phase-separation correction, Sol High",
-    "I25 frozen 2209289 independent authority review, Astra Medium",
-    "I25 main contextual offer UI, Sol Medium"
+    "I25 main contextual offer UI, Sol Medium",
+    "I10 isolated cross-outcome saved advice integration, Sol High"
   ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",
@@ -37,17 +37,18 @@
     "Committedcd2f9ab: substantial discovery after independent three-finding recheck, measured token-envelope regressions and root full Go suite; live discovery usefulness remains open.",
     "Committedd9679af: reviewed delivery/currentness/recommendation backend; full root Go suite and both generated-contract checks pass.",
     "Committed235441d: exact delivery and saved advice UI; root lint/TypeScript and production-build Chromium smoke pass, including fresh-browser read-only recovery.",
-    "Committed54b7977: sourced interview/debrief UI and exact retry/control behavior; root lint/TypeScript and production-build Chromium pass. Main backend routes await corrected isolated integration."
+    "Committed54b7977: sourced interview/debrief UI and exact retry/control behavior; root lint/TypeScript and production-build Chromium pass. Main backend routes await corrected isolated integration.",
+    "Committed7ee48d3: I25 commissioned sourced offer backend after independent frozen and shared-recovery rechecks; six reviewed hashes match, root full Go suite and both generated checks pass. UI/live quality remain open."
   ],
   "documentation_validated_at": "2026-09-24",
-  "code_checkpoint": "867f480",
+  "code_checkpoint": "7ee48d3",
   "root_validation": {
     "check": "passed at 8c8b66d after OpenAPI formatting",
     "test": "passed full Go API suite; web runner has no test files; controlled I11 browser fixture reviewed",
     "build": "passed at 8c8b66d",
     "e2e": "pnpm e2e now runs real headless browser fixture smoke; root passed after permitted macOS sandbox escalation. Synthetic HTTP only; no live API/runtime acceptance.",
     "latest_slices": "d9679af backend: root full Go suite and both generated-contract checks passed; all13 independently rechecked delivery hashes matched. 235441d web: root lint/TypeScript and pnpm e2e passed.",
-    "active_integration": "I24 recovery correction runs in its detached worktree while I25 frozen backend receives independent read-only review. Main interview UI is frozen and root-verified; delivery/recommendation code is committed.",
+    "active_integration": "I24 recovery correction and I10 cross-outcome advice run in separate detached worktrees; I25 web owns only main web/smoke. Reviewed backend7ee48d3 is committed.",
     "recovery": "Five current-format synthetic tests and shell syntax pass at3bcbd42; no real data or host touched.",
     "delivery": "Root synthetic SMTP protocol suite passes after non-ASCII/bounds and uncertain-positive-reply corrections; no real send.",
     "native_probe": "Saved synthetic Linux 0.153.4 evidence verifier passed: read-only native writes and private-state diagnostics denied, trusted fake-transport lifecycle worked; no real account/MCP/wrapper acceptance.",
@@ -55,7 +56,7 @@
     "interview": "Contract c55f562 remains interface-only. UI committed54b7977. Root web lint/TypeScript and production-build Chromium smoke passed both digest and held-response Stop corrections. Backend61a5d0b not accepted: independent P1/P2 recovery findings reproduced; phase-separation correction dispatched.",
     "native_boundary": "a22afa7: root codex/codexrunner/codexservice suite, archived native-rollout parser positive/four negatives and runtime config/shell checks pass. Exact observed raw synthetic records saved. Real host/account/MCP still unverified.",
     "contextual_input": "Committed2279c3f: independent recheck closed all3 findings. Root full Go suite and targeted race-enabled real Stop/Resume, deduplicated URL replay and deadline expiry tests passed. Generated contracts match. Synthetic providers only; live acceptance open.",
-    "offers": "Isolated2209289 frozen and under independent review. Worker reports serial full Go suite, vet, generated check and web lint passing; root has not accepted integration. Contextual UI and real offer evaluation remain. Contract867f480 publishes stable owner DTO only; both generated checks and HTTP compile pass. Main runtime routes remain unwired; Sol Medium web task consumes this interface.",
+    "offers": "Backend7ee48d3 reviewed and committed: root full Go suite, generated checks, six independently reviewed file hashes passed. Shared recovery review covers declined-worker delivery Lazy fallback, captured/missing offer result, unknown parent and stale generation. UI and real offer evaluation remain.",
     "contextual_ui": "Committed12b138d: root lint/TypeScript and production-build Chromium smoke pass. Actual inputReport/packReport, exact lost-response replay, stale409 recovery, selected older pack retention and automatic new-version refresh verified with synthetic HTTP. Earlier draft assertion failed during list/detail refresh; explicit readiness and same-node/value/storage assertions now pass with one fill. Live runtime acceptance remains open.",
     "discovery_review": "All3 findings closed in bounded independent recheck. New-employer fixture uses11/10/14/3 from public-search phase; initial direction decision is outside fixture and adds one request. No real discovery quality claim.",
     "discovery_context_budget": "Committedcd2f9ab: saved real requests/responses verified byte-for-byte, old1200 rejection/new10000 unresolved acceptance offline;24KiB pre-call and full-excerpt default-batch regressions pass. Actual usage4645 across2 calls, both abstentions.",
