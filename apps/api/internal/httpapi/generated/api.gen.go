@@ -768,16 +768,19 @@ func (e OwnerDecisionInputDecision) Valid() bool {
 
 // Defines values for OwnerInstructionTargetKind.
 const (
-	OwnerInstructionTargetKindCampaign     OwnerInstructionTargetKind = "campaign"
-	OwnerInstructionTargetKindEvidence     OwnerInstructionTargetKind = "evidence"
-	OwnerInstructionTargetKindOpportunity  OwnerInstructionTargetKind = "opportunity"
-	OwnerInstructionTargetKindProfile      OwnerInstructionTargetKind = "profile"
-	OwnerInstructionTargetKindRelationship OwnerInstructionTargetKind = "relationship"
+	OwnerInstructionTargetKindApplicationPack OwnerInstructionTargetKind = "application_pack"
+	OwnerInstructionTargetKindCampaign        OwnerInstructionTargetKind = "campaign"
+	OwnerInstructionTargetKindEvidence        OwnerInstructionTargetKind = "evidence"
+	OwnerInstructionTargetKindOpportunity     OwnerInstructionTargetKind = "opportunity"
+	OwnerInstructionTargetKindProfile         OwnerInstructionTargetKind = "profile"
+	OwnerInstructionTargetKindRelationship    OwnerInstructionTargetKind = "relationship"
 )
 
 // Valid indicates whether the value is a known member of the OwnerInstructionTargetKind enum.
 func (e OwnerInstructionTargetKind) Valid() bool {
 	switch e {
+	case OwnerInstructionTargetKindApplicationPack:
+		return true
 	case OwnerInstructionTargetKindCampaign:
 		return true
 	case OwnerInstructionTargetKindEvidence:
@@ -795,16 +798,19 @@ func (e OwnerInstructionTargetKind) Valid() bool {
 
 // Defines values for OwnerInstructionInputTargetKind.
 const (
-	OwnerInstructionInputTargetKindCampaign     OwnerInstructionInputTargetKind = "campaign"
-	OwnerInstructionInputTargetKindEvidence     OwnerInstructionInputTargetKind = "evidence"
-	OwnerInstructionInputTargetKindOpportunity  OwnerInstructionInputTargetKind = "opportunity"
-	OwnerInstructionInputTargetKindProfile      OwnerInstructionInputTargetKind = "profile"
-	OwnerInstructionInputTargetKindRelationship OwnerInstructionInputTargetKind = "relationship"
+	OwnerInstructionInputTargetKindApplicationPack OwnerInstructionInputTargetKind = "application_pack"
+	OwnerInstructionInputTargetKindCampaign        OwnerInstructionInputTargetKind = "campaign"
+	OwnerInstructionInputTargetKindEvidence        OwnerInstructionInputTargetKind = "evidence"
+	OwnerInstructionInputTargetKindOpportunity     OwnerInstructionInputTargetKind = "opportunity"
+	OwnerInstructionInputTargetKindProfile         OwnerInstructionInputTargetKind = "profile"
+	OwnerInstructionInputTargetKindRelationship    OwnerInstructionInputTargetKind = "relationship"
 )
 
 // Valid indicates whether the value is a known member of the OwnerInstructionInputTargetKind enum.
 func (e OwnerInstructionInputTargetKind) Valid() bool {
 	switch e {
+	case OwnerInstructionInputTargetKindApplicationPack:
+		return true
 	case OwnerInstructionInputTargetKindCampaign:
 		return true
 	case OwnerInstructionInputTargetKindEvidence:
@@ -856,6 +862,36 @@ func (e PatchOpportunityRequestWorkPattern) Valid() bool {
 	case PatchOpportunityRequestWorkPatternRemote:
 		return true
 	case PatchOpportunityRequestWorkPatternUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProcessInputRequestTargetKind.
+const (
+	ProcessInputRequestTargetKindApplicationPack ProcessInputRequestTargetKind = "application_pack"
+	ProcessInputRequestTargetKindCampaign        ProcessInputRequestTargetKind = "campaign"
+	ProcessInputRequestTargetKindEvidence        ProcessInputRequestTargetKind = "evidence"
+	ProcessInputRequestTargetKindOpportunity     ProcessInputRequestTargetKind = "opportunity"
+	ProcessInputRequestTargetKindProfile         ProcessInputRequestTargetKind = "profile"
+	ProcessInputRequestTargetKindRelationship    ProcessInputRequestTargetKind = "relationship"
+)
+
+// Valid indicates whether the value is a known member of the ProcessInputRequestTargetKind enum.
+func (e ProcessInputRequestTargetKind) Valid() bool {
+	switch e {
+	case ProcessInputRequestTargetKindApplicationPack:
+		return true
+	case ProcessInputRequestTargetKindCampaign:
+		return true
+	case ProcessInputRequestTargetKindEvidence:
+		return true
+	case ProcessInputRequestTargetKindOpportunity:
+		return true
+	case ProcessInputRequestTargetKindProfile:
+		return true
+	case ProcessInputRequestTargetKindRelationship:
 		return true
 	default:
 		return false
@@ -2625,8 +2661,32 @@ type PreferencesResponse struct {
 
 // PrepareRoundRequest Owner selects an existing sourced opportunity; the server derives all pack details and authority.
 type PrepareRoundRequest struct {
-	OpportunityId string `json:"opportunityId"`
-	RequestKey    string `json:"requestKey"`
+	OpportunityId string              `json:"opportunityId"`
+	ReplacePaused *ReplacePausedRound `json:"replacePaused,omitempty"`
+	RequestKey    string              `json:"requestKey"`
+}
+
+// ProcessInputRequest defines model for ProcessInputRequest.
+type ProcessInputRequest struct {
+	ExpectedRevision int64                         `json:"expectedRevision"`
+	OriginalText     *string                       `json:"originalText,omitempty"`
+	ReplacePaused    *ReplacePausedRound           `json:"replacePaused,omitempty"`
+	RequestKey       string                        `json:"requestKey"`
+	SourceUrl        *string                       `json:"sourceUrl,omitempty"`
+	TargetId         string                        `json:"targetId"`
+	TargetKind       ProcessInputRequestTargetKind `json:"targetKind"`
+	Text             *string                       `json:"text,omitempty"`
+}
+
+// ProcessInputRequestTargetKind defines model for ProcessInputRequest.TargetKind.
+type ProcessInputRequestTargetKind string
+
+// ProcessInputResponse defines model for ProcessInputResponse.
+type ProcessInputResponse struct {
+	IngestionId     *string `json:"ingestionId,omitempty"`
+	InstructionId   *string `json:"instructionId,omitempty"`
+	ReplacedRoundId *string `json:"replacedRoundId,omitempty"`
+	Round           Round   `json:"round"`
 }
 
 // QualificationCriterion defines model for QualificationCriterion.
@@ -2899,6 +2959,12 @@ type RelationshipSource struct {
 	SourceRef     *string   `json:"sourceRef,omitempty"`
 }
 
+// ReplacePausedRound defines model for ReplacePausedRound.
+type ReplacePausedRound struct {
+	ExpectedRevision int64  `json:"expectedRevision"`
+	RoundId          string `json:"roundId"`
+}
+
 // RescheduleActionRequest defines model for RescheduleActionRequest.
 type RescheduleActionRequest struct {
 	// Due Exactly date or at plus timezone is required; the server rejects mixed or incomplete shapes.
@@ -2945,27 +3011,29 @@ type RoleCriterionViewMode string
 
 // Round defines model for Round.
 type Round struct {
-	CompletedAt            *time.Time             `json:"completedAt,omitempty"`
-	CreatedAt              time.Time              `json:"createdAt"`
-	Cursor                 map[string]interface{} `json:"cursor"`
-	Deadline               time.Time              `json:"deadline"`
-	DeliverableStatus      string                 `json:"deliverableStatus"`
-	Generation             int64                  `json:"generation"`
-	Id                     string                 `json:"id"`
-	Intent                 string                 `json:"intent"`
-	Limits                 RoundAllowance         `json:"limits"`
-	Outcome                string                 `json:"outcome"`
-	ProfileVersion         int64                  `json:"profileVersion"`
-	ReconciliationRequired bool                   `json:"reconciliationRequired"`
-	Report                 map[string]interface{} `json:"report"`
-	Revision               int64                  `json:"revision"`
-	Scope                  RoundScope             `json:"scope"`
-	State                  RoundState             `json:"state"`
-	Step                   string                 `json:"step"`
-	StopReason             string                 `json:"stopReason"`
-	Unresolved             []interface{}          `json:"unresolved"`
-	UpdatedAt              time.Time              `json:"updatedAt"`
-	Used                   RoundAllowance         `json:"used"`
+	CompletedAt             *time.Time             `json:"completedAt,omitempty"`
+	CreatedAt               time.Time              `json:"createdAt"`
+	Cursor                  map[string]interface{} `json:"cursor"`
+	Deadline                time.Time              `json:"deadline"`
+	DeliverableStatus       string                 `json:"deliverableStatus"`
+	EffectiveProfileVersion int64                  `json:"effectiveProfileVersion"`
+	Generation              int64                  `json:"generation"`
+	Id                      string                 `json:"id"`
+	Intent                  string                 `json:"intent"`
+	Limits                  RoundAllowance         `json:"limits"`
+	OriginalProfileVersion  int64                  `json:"originalProfileVersion"`
+	Outcome                 string                 `json:"outcome"`
+	ProfileVersion          int64                  `json:"profileVersion"`
+	ReconciliationRequired  bool                   `json:"reconciliationRequired"`
+	Report                  map[string]interface{} `json:"report"`
+	Revision                int64                  `json:"revision"`
+	Scope                   RoundScope             `json:"scope"`
+	State                   RoundState             `json:"state"`
+	Step                    string                 `json:"step"`
+	StopReason              string                 `json:"stopReason"`
+	Unresolved              []interface{}          `json:"unresolved"`
+	UpdatedAt               time.Time              `json:"updatedAt"`
+	Used                    RoundAllowance         `json:"used"`
 }
 
 // RoundState defines model for Round.State.
@@ -3235,7 +3303,8 @@ type SessionResponseActorKind string
 
 // StartRoundRequest Owner Start sends only a durable click idempotency key; the server chooses the current outcome, profile, scope, allowance and deadline.
 type StartRoundRequest struct {
-	RequestKey string `json:"requestKey"`
+	ReplacePaused *ReplacePausedRound `json:"replacePaused,omitempty"`
+	RequestKey    string              `json:"requestKey"`
 }
 
 // StatementSourceInput defines model for StatementSourceInput.
@@ -3510,6 +3579,9 @@ type StartRoundJSONRequestBody = StartRoundRequest
 
 // PrepareRoundJSONRequestBody defines body for PrepareRound for application/json ContentType.
 type PrepareRoundJSONRequestBody = PrepareRoundRequest
+
+// ProcessOwnerInputJSONRequestBody defines body for ProcessOwnerInput for application/json ContentType.
+type ProcessOwnerInputJSONRequestBody = ProcessInputRequest
 
 // ApplyRoundMutationJSONRequestBody defines body for ApplyRoundMutation for application/json ContentType.
 type ApplyRoundMutationJSONRequestBody = RoundMutationRequest

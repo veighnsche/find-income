@@ -26,20 +26,6 @@ func (h *Handler) defaultRoundInput(ctx context.Context, requestKey string) (sto
 	}
 	resources := []string{"campaign:active", "profile:current", "discovery:himalayas"}
 	inputRefs := []string{"profile:current", "campaign:active"}
-	instructions, err := h.database.OwnerInstructions(ctx, "")
-	if err != nil {
-		return store.StartRoundInput{}, err
-	}
-	for _, instruction := range instructions {
-		if instruction.RoundID == "" && (instruction.TargetKind == "profile" &&
-			instruction.TargetID == "current" && instruction.ExpectedRevision == profile.Version ||
-			instruction.TargetKind == "evidence" || instruction.TargetKind == "opportunity" || instruction.TargetKind == "relationship") {
-			inputRefs = append(inputRefs, "instruction:"+instruction.ID)
-			if instruction.TargetKind == "relationship" {
-				resources = append(resources, "relationship:"+instruction.TargetID)
-			}
-		}
-	}
 	for _, board := range boards {
 		if board.Enabled && board.VerifiedAt != "" {
 			resources = append(resources, "board:"+board.ID)
@@ -66,19 +52,21 @@ func (h *Handler) defaultRoundInput(ctx context.Context, requestKey string) (sto
 		Intent:  "Discover source-linked work opportunities for the current owner profile.",
 		Outcome: "discover", ProfileVersion: profile.Version,
 		Scope: store.RoundScope{InputRefs: inputRefs,
-			Resources: resources, Operations: []string{store.RoundCreateCompany, store.RoundCreateOpportunity, store.RoundSaveSourceOpportunity, store.RoundCorrectPreferences, store.RoundCorrectEvidence, store.RoundCorrectOpportunity, store.RoundRelationshipCounterpartyCreate, store.RoundRelationshipEventCreate, store.RoundRelationshipRouteCreate, store.RoundRelationshipCorrect, store.RoundStageDiscovery, store.RoundRegisterDiscoveryBoard, store.RoundCollectorPage, store.RoundSearchSource, store.RoundFetchSource, store.RoundJevRequest, store.RoundCodexTurn, store.RoundContextTool},
+			Resources: resources, Operations: []string{store.RoundCreateCompany, store.RoundCreateOpportunity, store.RoundSaveSourceOpportunity, store.RoundRelationshipCounterpartyCreate, store.RoundRelationshipEventCreate, store.RoundRelationshipRouteCreate, store.RoundStageDiscovery, store.RoundRegisterDiscoveryBoard, store.RoundCollectorPage, store.RoundSearchSource, store.RoundFetchSource, store.RoundJevRequest, store.RoundCodexTurn, store.RoundContextTool},
 			Delegates: []string{"codex-runner"}},
 		Limits:   store.RoundAllowance{Requests: 16, Items: 10, Tools: 18, Turns: 4},
 		Deadline: time.Now().Add(30 * time.Minute).UTC()}, nil
 }
 
 type roundStartRequest struct {
-	RequestKey string `json:"requestKey"`
+	RequestKey    string                        `json:"requestKey"`
+	ReplacePaused *generated.ReplacePausedRound `json:"replacePaused,omitempty"`
 }
 
 type prepareRoundRequest struct {
-	RequestKey    string `json:"requestKey"`
-	OpportunityID string `json:"opportunityId"`
+	RequestKey    string                        `json:"requestKey"`
+	OpportunityID string                        `json:"opportunityId"`
+	ReplacePaused *generated.ReplacePausedRound `json:"replacePaused,omitempty"`
 }
 
 func (h *Handler) prepareRound(w http.ResponseWriter, r *http.Request) {
@@ -90,14 +78,14 @@ func (h *Handler) prepareRound(w http.ResponseWriter, r *http.Request) {
 	if !decodeRecordJSON(w, r, &body) {
 		return
 	}
-	if body.RequestKey == "" || len(body.RequestKey) > 200 || strings.TrimSpace(body.RequestKey) != body.RequestKey || body.OpportunityID == "" || len(body.OpportunityID) > 128 || strings.TrimSpace(body.OpportunityID) != body.OpportunityID {
+	if body.RequestKey == "" || len(body.RequestKey) > 200 || strings.TrimSpace(body.RequestKey) != body.RequestKey || body.OpportunityID == "" || len(body.OpportunityID) > 128 || strings.TrimSpace(body.OpportunityID) != body.OpportunityID || body.ReplacePaused != nil && (body.ReplacePaused.RoundId == "" || body.ReplacePaused.ExpectedRevision < 1) {
 		failRound(w, store.ErrInvalid)
 		return
 	}
 	actor := store.Actor{Kind: p.Kind, ID: p.ID}
 	previous, err := h.database.RoundByRequest(r.Context(), actor, body.RequestKey)
 	if err == nil {
-		if previous.Outcome != "prepare" || len(previous.Scope.Resources) != 1 || previous.Scope.Resources[0] != "opportunity:"+body.OpportunityID {
+		if previous.Outcome != "prepare" || len(previous.Scope.Resources) != 1 || previous.Scope.Resources[0] != "opportunity:"+body.OpportunityID || !replacementMatches(previous.Scope.InputRefs, body.ReplacePaused) {
 			failRound(w, store.ErrRoundIdempotencyConflict)
 			return
 		}
@@ -134,7 +122,16 @@ func (h *Handler) prepareRound(w http.ResponseWriter, r *http.Request) {
 	input := store.StartRoundInput{RequestKey: body.RequestKey, Intent: "Prepare a private application pack for the selected sourced opportunity.", Outcome: "prepare", ProfileVersion: profile.Version,
 		Scope:  store.RoundScope{InputRefs: []string{"profile:current", "opportunity:" + opportunity.ID}, Resources: []string{"opportunity:" + opportunity.ID}, Operations: []string{store.RoundCodexTurn, store.RoundJevRequest, store.RoundPrepareApplicationPack, store.RoundContextTool}, Delegates: []string{"codex-runner"}},
 		Limits: store.RoundAllowance{Requests: 7, Items: 1, Tools: 3, Turns: 1}, Deadline: time.Now().Add(30 * time.Minute).UTC()}
-	round, created, err := h.rounds.Start(r.Context(), actor, input)
+	if body.ReplacePaused != nil {
+		input.Scope.InputRefs = append(input.Scope.InputRefs, replacementRef(body.ReplacePaused.RoundId, body.ReplacePaused.ExpectedRevision))
+	}
+	var round store.Round
+	var created bool
+	if body.ReplacePaused == nil {
+		round, created, err = h.rounds.Start(r.Context(), actor, input)
+	} else {
+		round, created, err = h.rounds.ReplacePaused(r.Context(), actor, body.ReplacePaused.RoundId, body.ReplacePaused.ExpectedRevision, input)
+	}
 	if err != nil {
 		failRound(w, err)
 		return
@@ -147,31 +144,33 @@ func (h *Handler) prepareRound(w http.ResponseWriter, r *http.Request) {
 }
 
 type roundResponse struct {
-	ID                     string               `json:"id"`
-	Intent                 string               `json:"intent"`
-	Outcome                string               `json:"outcome"`
-	ProfileVersion         int64                `json:"profileVersion"`
-	Scope                  store.RoundScope     `json:"scope"`
-	State                  store.RoundState     `json:"state"`
-	Revision               int64                `json:"revision"`
-	Generation             int64                `json:"generation"`
-	Deadline               time.Time            `json:"deadline"`
-	Limits                 store.RoundAllowance `json:"limits"`
-	Used                   store.RoundAllowance `json:"used"`
-	Step                   string               `json:"step"`
-	Cursor                 json.RawMessage      `json:"cursor"`
-	Unresolved             json.RawMessage      `json:"unresolved"`
-	Report                 json.RawMessage      `json:"report"`
-	StopReason             string               `json:"stopReason"`
-	DeliverableStatus      string               `json:"deliverableStatus"`
-	ReconciliationRequired bool                 `json:"reconciliationRequired"`
-	CreatedAt              string               `json:"createdAt"`
-	UpdatedAt              string               `json:"updatedAt"`
-	CompletedAt            string               `json:"completedAt,omitempty"`
+	ID                      string               `json:"id"`
+	Intent                  string               `json:"intent"`
+	Outcome                 string               `json:"outcome"`
+	OriginalProfileVersion  int64                `json:"originalProfileVersion"`
+	EffectiveProfileVersion int64                `json:"effectiveProfileVersion"`
+	ProfileVersion          int64                `json:"profileVersion"`
+	Scope                   store.RoundScope     `json:"scope"`
+	State                   store.RoundState     `json:"state"`
+	Revision                int64                `json:"revision"`
+	Generation              int64                `json:"generation"`
+	Deadline                time.Time            `json:"deadline"`
+	Limits                  store.RoundAllowance `json:"limits"`
+	Used                    store.RoundAllowance `json:"used"`
+	Step                    string               `json:"step"`
+	Cursor                  json.RawMessage      `json:"cursor"`
+	Unresolved              json.RawMessage      `json:"unresolved"`
+	Report                  json.RawMessage      `json:"report"`
+	StopReason              string               `json:"stopReason"`
+	DeliverableStatus       string               `json:"deliverableStatus"`
+	ReconciliationRequired  bool                 `json:"reconciliationRequired"`
+	CreatedAt               string               `json:"createdAt"`
+	UpdatedAt               string               `json:"updatedAt"`
+	CompletedAt             string               `json:"completedAt,omitempty"`
 }
 
 func roundModel(r store.Round) roundResponse {
-	return roundResponse{ID: r.ID, Intent: r.Intent, Outcome: r.Outcome, ProfileVersion: r.ProfileVersion,
+	return roundResponse{ID: r.ID, Intent: r.Intent, Outcome: r.Outcome, OriginalProfileVersion: r.InitialProfileVersion, EffectiveProfileVersion: r.ProfileVersion, ProfileVersion: r.ProfileVersion,
 		Scope: r.Scope, State: r.State, Revision: r.Revision, Generation: r.Generation,
 		Deadline: r.Deadline, Limits: r.Limits, Used: r.Used, Step: r.Step, Cursor: r.Cursor,
 		Unresolved: r.Unresolved, Report: r.Report, StopReason: r.StopReason,
@@ -287,13 +286,17 @@ func (h *Handler) startRound(w http.ResponseWriter, r *http.Request) {
 	if !decodeRecordJSON(w, r, &body) {
 		return
 	}
-	if body.RequestKey == "" || len(body.RequestKey) > 200 || strings.TrimSpace(body.RequestKey) != body.RequestKey {
+	if body.RequestKey == "" || len(body.RequestKey) > 200 || strings.TrimSpace(body.RequestKey) != body.RequestKey || body.ReplacePaused != nil && (body.ReplacePaused.RoundId == "" || body.ReplacePaused.ExpectedRevision < 1) {
 		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "A bounded requestKey is required.")
 		return
 	}
 	actor := store.Actor{Kind: p.Kind, ID: p.ID}
 	previous, err := h.database.RoundByRequest(r.Context(), actor, body.RequestKey)
 	if err == nil {
+		if previous.Outcome != "discover" || !replacementMatches(previous.Scope.InputRefs, body.ReplacePaused) {
+			failRound(w, store.ErrRoundIdempotencyConflict)
+			return
+		}
 		writeJSON(w, http.StatusOK, roundModel(previous))
 		return
 	}
@@ -306,7 +309,16 @@ func (h *Handler) startRound(w http.ResponseWriter, r *http.Request) {
 		failRound(w, err)
 		return
 	}
-	round, created, err := h.rounds.Start(r.Context(), actor, input)
+	if body.ReplacePaused != nil {
+		input.Scope.InputRefs = append(input.Scope.InputRefs, replacementRef(body.ReplacePaused.RoundId, body.ReplacePaused.ExpectedRevision))
+	}
+	var round store.Round
+	var created bool
+	if body.ReplacePaused == nil {
+		round, created, err = h.rounds.Start(r.Context(), actor, input)
+	} else {
+		round, created, err = h.rounds.ReplacePaused(r.Context(), actor, body.ReplacePaused.RoundId, body.ReplacePaused.ExpectedRevision, input)
+	}
 	if err != nil {
 		failRound(w, err)
 		return

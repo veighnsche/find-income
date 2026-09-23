@@ -125,6 +125,7 @@ type Round struct {
 	RequestKey             string
 	Intent                 string
 	Outcome                string
+	InitialProfileVersion  int64
 	ProfileVersion         int64
 	Scope                  RoundScope
 	State                  RoundState
@@ -145,7 +146,7 @@ type Round struct {
 	CompletedAt            string
 }
 
-const roundColumns = `id,actor_kind,actor_id,request_key,intent,outcome,profile_version,
+const roundColumns = `id,actor_kind,actor_id,request_key,intent,outcome,initial_profile_version,profile_version,
   scope_json,state,revision,generation,deadline_at,request_limit,item_limit,tool_limit,turn_limit,
   requests_used,items_used,tools_used,turns_used,step,cursor_json,unresolved_json,report_json,
   stop_reason,deliverable_status,reconciliation_required,created_at,updated_at,completed_at`
@@ -156,7 +157,7 @@ func scanRound(row rowScanner) (Round, error) {
 	var reconcile int
 	var completed sql.NullString
 	err := row.Scan(&r.ID, &r.Actor.Kind, &r.Actor.ID, &r.RequestKey, &r.Intent, &r.Outcome,
-		&r.ProfileVersion, &scopeJSON, &r.State, &r.Revision, &r.Generation, &deadline,
+		&r.InitialProfileVersion, &r.ProfileVersion, &scopeJSON, &r.State, &r.Revision, &r.Generation, &deadline,
 		&r.Limits.Requests, &r.Limits.Items, &r.Limits.Tools, &r.Limits.Turns,
 		&r.Used.Requests, &r.Used.Items, &r.Used.Tools, &r.Used.Turns,
 		&r.Step, &cursor, &unresolved, &report, &r.StopReason, &r.DeliverableStatus,
@@ -277,11 +278,11 @@ func (s *Store) StartRound(ctx context.Context, actor Actor, input StartRoundInp
 		return Round{}, false, ErrConflict
 	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO rounds
-  (id,actor_kind,actor_id,request_key,request_sha256,intent,outcome,profile_version,scope_json,
+  (id,actor_kind,actor_id,request_key,request_sha256,intent,outcome,initial_profile_version,profile_version,scope_json,
    state,revision,generation,deadline_at,request_limit,item_limit,tool_limit,turn_limit,created_at,updated_at)
-  VALUES (?,?,?,?,?,?,?,?,?,'queued',1,1,?,?,?,?,?,?,?)
+  VALUES (?,?,?,?,?,?,?,?,?,?,'queued',1,1,?,?,?,?,?,?,?)
   ON CONFLICT(actor_kind,actor_id,request_key) DO NOTHING`, id, actor.Kind, actor.ID,
-		input.RequestKey, digest, input.Intent, input.Outcome, input.ProfileVersion, string(scopeJSON),
+		input.RequestKey, digest, input.Intent, input.Outcome, input.ProfileVersion, input.ProfileVersion, string(scopeJSON),
 		input.Deadline.UTC().Format(time.RFC3339Nano), input.Limits.Requests, input.Limits.Items,
 		input.Limits.Tools, input.Limits.Turns, utcNow(), utcNow())
 	if err != nil {

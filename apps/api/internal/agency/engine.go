@@ -39,17 +39,49 @@ type Engine struct {
 	Runtime     Runtime
 	Decisions   Decisions
 	Collector   SourceCollector
+	InputReader OwnerSourceReader
 	PackSources PackSourceLoader
 	Context     context.Context
 	mu          sync.Mutex
-	active      map[string]context.CancelFunc
+	active      map[string]*activeWorker
+}
+
+type activeWorker struct {
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+func (e *Engine) workerDone(id string, worker *activeWorker) {
+	e.mu.Lock()
+	if e.active[id] == worker {
+		delete(e.active, id)
+	}
+	close(worker.done)
+	e.mu.Unlock()
+}
+
+// WaitRoundStopped is the handoff barrier between a cancelled generation and
+// Resume. It never activates or changes the paused round itself.
+func (e *Engine) WaitRoundStopped(ctx context.Context, id string) error {
+	e.mu.Lock()
+	worker := e.active[id]
+	e.mu.Unlock()
+	if worker == nil {
+		return nil
+	}
+	select {
+	case <-worker.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (e *Engine) CheckRound(ctx context.Context, outcome string) error {
 	if outcome == "prepare" {
 		return e.checkPrepare(ctx)
 	}
-	if e == nil || e.Store == nil || e.Runtime == nil || e.Decisions == nil || e.Collector == nil || outcome != "discover" {
+	if e == nil || e.Store == nil || e.Runtime == nil || e.Decisions == nil || e.Collector == nil || outcome != "discover" && outcome != "process_input" {
 		return errors.New("commissioned discovery unavailable")
 	}
 	if err := e.Runtime.CheckRound(ctx, outcome); err != nil {
@@ -62,13 +94,16 @@ func (e *Engine) LaunchRound(_ context.Context, r store.Round) error {
 	if r.Outcome == "prepare" {
 		return e.launchPrepare(r)
 	}
+	if r.Outcome == "process_input" {
+		return e.launchInput(r)
+	}
 	if e == nil || e.Store == nil || e.Runtime == nil || e.Decisions == nil || e.Collector == nil || r.State != store.RoundRunning || r.Outcome != "discover" {
 		return store.ErrInvalid
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.active == nil {
-		e.active = map[string]context.CancelFunc{}
+		e.active = map[string]*activeWorker{}
 	}
 	if _, exists := e.active[r.ID]; exists {
 		return store.ErrConflict
@@ -78,10 +113,11 @@ func (e *Engine) LaunchRound(_ context.Context, r store.Round) error {
 		base = context.Background()
 	}
 	ctx, cancel := context.WithDeadline(base, r.Deadline)
-	e.active[r.ID] = cancel
+	worker := &activeWorker{cancel: cancel, done: make(chan struct{})}
+	e.active[r.ID] = worker
 	go func() {
 		defer cancel()
-		defer func() { e.mu.Lock(); delete(e.active, r.ID); e.mu.Unlock() }()
+		defer e.workerDone(r.ID, worker)
 		e.run(ctx, r)
 	}()
 	return nil
@@ -89,10 +125,10 @@ func (e *Engine) LaunchRound(_ context.Context, r store.Round) error {
 
 func (e *Engine) CancelRound(id string) {
 	e.mu.Lock()
-	cancel := e.active[id]
+	worker := e.active[id]
 	e.mu.Unlock()
-	if cancel != nil {
-		cancel()
+	if worker != nil {
+		worker.cancel()
 	}
 }
 

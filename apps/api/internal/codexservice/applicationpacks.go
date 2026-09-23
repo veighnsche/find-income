@@ -245,6 +245,7 @@ func (s *Service) applicationPackPrepareTool(ctx context.Context, args applicati
 			ContentSHA256: prepared.SHA256, ManifestJSON: prepared.ManifestJSON, TypstSource: prepared.TypstSource, PDF: prepared.PDF}}
 	if correction != nil {
 		mutation.OwnerInstructionID = correction.OwnerInstructionID
+		mutation.ApplicationPack.PriorPackID = correction.PriorPackID
 	}
 	result, created, err := s.db.ApplyRoundMutation(ctx, authority.Actor, args.RoundID, mutation)
 	if err != nil {

@@ -80,16 +80,17 @@ func (e *Engine) launchPrepareWithCorrection(r store.Round, correction *packCorr
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.active == nil {
-		e.active = map[string]context.CancelFunc{}
+		e.active = map[string]*activeWorker{}
 	}
 	if _, exists := e.active[r.ID]; exists {
 		cancel()
 		return store.ErrConflict
 	}
-	e.active[r.ID] = cancel
+	worker := &activeWorker{cancel: cancel, done: make(chan struct{})}
+	e.active[r.ID] = worker
 	go func() {
 		defer cancel()
-		defer func() { e.mu.Lock(); delete(e.active, r.ID); e.mu.Unlock() }()
+		defer e.workerDone(r.ID, worker)
 		e.runPrepareWithCorrection(ctx, r, correction)
 	}()
 	return nil

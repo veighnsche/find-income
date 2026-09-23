@@ -92,6 +92,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rounds/process-input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save one contextual owner input and commission its bounded record work
+         * @description The target identity and revision come from the visible record. An exact request key resumes the same saved input and round. A paused replacement requires the owner to name the exact paused round and revision.
+         */
+        post: operations["processOwnerInput"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rounds/{id}": {
         parameters: {
             query?: never;
@@ -1193,11 +1213,37 @@ export interface components {
         /** @description Owner Start sends only a durable click idempotency key; the server chooses the current outcome, profile, scope, allowance and deadline. */
         StartRoundRequest: {
             requestKey: string;
+            replacePaused?: components["schemas"]["ReplacePausedRound"];
         };
         /** @description Owner selects an existing sourced opportunity; the server derives all pack details and authority. */
         PrepareRoundRequest: {
             requestKey: string;
             opportunityId: string;
+            replacePaused?: components["schemas"]["ReplacePausedRound"];
+        };
+        ProcessInputRequest: {
+            requestKey: string;
+            /** @enum {string} */
+            targetKind: "campaign" | "profile" | "opportunity" | "evidence" | "relationship" | "application_pack";
+            targetId: string;
+            /** Format: int64 */
+            expectedRevision: number;
+            text?: string;
+            /** Format: uri */
+            sourceUrl?: string;
+            originalText?: string;
+            replacePaused?: components["schemas"]["ReplacePausedRound"];
+        };
+        ReplacePausedRound: {
+            roundId: string;
+            /** Format: int64 */
+            expectedRevision: number;
+        };
+        ProcessInputResponse: {
+            round: components["schemas"]["Round"];
+            instructionId?: string;
+            ingestionId?: string;
+            replacedRoundId?: string;
         };
         RoundCapability: {
             canStart: boolean;
@@ -1211,6 +1257,10 @@ export interface components {
             id: string;
             intent: string;
             outcome: string;
+            /** Format: int64 */
+            originalProfileVersion: number;
+            /** Format: int64 */
+            effectiveProfileVersion: number;
             /** Format: int64 */
             profileVersion: number;
             scope: components["schemas"]["RoundScope"];
@@ -1287,7 +1337,7 @@ export interface components {
         OwnerInstructionInput: {
             requestKey: string;
             /** @enum {string} */
-            targetKind: "campaign" | "profile" | "opportunity" | "evidence" | "relationship";
+            targetKind: "campaign" | "profile" | "opportunity" | "evidence" | "relationship" | "application_pack";
             targetId: string;
             /** Format: int64 */
             expectedRevision: number;
@@ -2674,6 +2724,42 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    processOwnerInput: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessInputRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing saved input and round */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessInputResponse"];
+                };
+            };
+            /** @description Input saved and round commissioned */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessInputResponse"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
             409: components["responses"]["Conflict"];
             503: components["responses"]["Unavailable"];
         };

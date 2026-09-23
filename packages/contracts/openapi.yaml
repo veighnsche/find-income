@@ -92,6 +92,31 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /rounds/process-input:
+    post:
+      operationId: processOwnerInput
+      summary: Save one contextual owner input and commission its bounded record work
+      description: The target identity and revision come from the visible record. An exact request key resumes the same saved input and round. A paused replacement requires the owner to name the exact paused round and revision.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProcessInputRequest' }
+      responses:
+        '200':
+          description: Existing saved input and round
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProcessInputResponse' }
+        '201':
+          description: Input saved and round commissioned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProcessInputResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /rounds/{id}:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     get:
@@ -1224,6 +1249,7 @@ components:
       required: [requestKey]
       properties:
         requestKey: { type: string, minLength: 1, maxLength: 200 }
+        replacePaused: { $ref: '#/components/schemas/ReplacePausedRound' }
     PrepareRoundRequest:
       type: object
       additionalProperties: false
@@ -1232,6 +1258,35 @@ components:
       properties:
         requestKey: { type: string, minLength: 1, maxLength: 200 }
         opportunityId: { type: string, minLength: 1 }
+        replacePaused: { $ref: '#/components/schemas/ReplacePausedRound' }
+    ProcessInputRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey, targetKind, targetId, expectedRevision]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        targetKind: { type: string, enum: [campaign, profile, opportunity, evidence, relationship, application_pack] }
+        targetId: { type: string, minLength: 1 }
+        expectedRevision: { type: integer, format: int64, minimum: 1 }
+        text: { type: string, minLength: 1, maxLength: 20000 }
+        sourceUrl: { type: string, format: uri }
+        originalText: { type: string, minLength: 1, maxLength: 200000 }
+        replacePaused: { $ref: '#/components/schemas/ReplacePausedRound' }
+    ReplacePausedRound:
+      type: object
+      additionalProperties: false
+      required: [roundId, expectedRevision]
+      properties:
+        roundId: { type: string, minLength: 1 }
+        expectedRevision: { type: integer, format: int64, minimum: 1 }
+    ProcessInputResponse:
+      type: object
+      required: [round]
+      properties:
+        round: { $ref: '#/components/schemas/Round' }
+        instructionId: { type: string }
+        ingestionId: { type: string }
+        replacedRoundId: { type: string }
     RoundCapability:
       type: object
       required: [canStart, reason, intent, outcome, limits, sourceCount]
@@ -1249,6 +1304,8 @@ components:
           id,
           intent,
           outcome,
+          originalProfileVersion,
+          effectiveProfileVersion,
           profileVersion,
           scope,
           state,
@@ -1271,6 +1328,8 @@ components:
         id: { type: string }
         intent: { type: string }
         outcome: { type: string }
+        originalProfileVersion: { type: integer, format: int64 }
+        effectiveProfileVersion: { type: integer, format: int64 }
         profileVersion: { type: integer, format: int64 }
         scope: { $ref: '#/components/schemas/RoundScope' }
         state:
@@ -1360,7 +1419,7 @@ components:
       required: [requestKey, targetKind, targetId, expectedRevision, text]
       properties:
         requestKey: { type: string, minLength: 1, maxLength: 200 }
-        targetKind: { type: string, enum: [campaign, profile, opportunity, evidence, relationship] }
+        targetKind: { type: string, enum: [campaign, profile, opportunity, evidence, relationship, application_pack] }
         targetId: { type: string }
         expectedRevision: { type: integer, format: int64, minimum: 1 }
         roundId: { type: string }

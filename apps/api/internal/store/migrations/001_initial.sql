@@ -303,6 +303,7 @@ CREATE TABLE rounds (
   request_sha256 TEXT NOT NULL,
   intent TEXT NOT NULL CHECK (length(trim(intent)) BETWEEN 1 AND 2000),
   outcome TEXT NOT NULL CHECK (length(trim(outcome)) BETWEEN 1 AND 100),
+  initial_profile_version INTEGER NOT NULL REFERENCES preferences_versions(version),
   profile_version INTEGER NOT NULL REFERENCES preferences_versions(version),
   scope_json TEXT NOT NULL CHECK (json_valid(scope_json)),
   state TEXT NOT NULL CHECK (state IN ('queued','running','awaiting_input','stopping','paused','completed','failed')),
@@ -337,7 +338,7 @@ CREATE TABLE owner_instructions (
   actor_id TEXT NOT NULL,
   request_key TEXT NOT NULL,
   request_sha256 TEXT NOT NULL,
-  target_kind TEXT NOT NULL CHECK (target_kind IN ('campaign','profile','opportunity','evidence','relationship')),
+  target_kind TEXT NOT NULL CHECK (target_kind IN ('campaign','profile','opportunity','evidence','relationship','application_pack')),
   target_id TEXT NOT NULL,
   expected_revision INTEGER NOT NULL CHECK (expected_revision > 0),
   round_id TEXT REFERENCES rounds(id),
@@ -604,6 +605,17 @@ CREATE INDEX ingestion_requests_recent_idx ON ingestion_requests(created_at,id);
 CREATE INDEX ingestion_requests_job_idx ON ingestion_requests(job_id);
 CREATE INDEX ingestion_requests_opportunity_idx ON ingestion_requests(opportunity_id);
 CREATE INDEX ingestion_requests_source_opening_idx ON ingestion_requests(source_opening_id,created_at);
+
+-- A contextual vacancy commission keeps its original owner request identity
+-- even when source deduplication points several commissions at one ingestion.
+CREATE TABLE owner_input_sources (
+  actor_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  request_sha256 TEXT NOT NULL,
+  ingestion_id TEXT NOT NULL REFERENCES ingestion_requests(id),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (actor_id,request_key)
+);
 
 CREATE TABLE ingestion_dispatch_history (
   ingestion_id TEXT NOT NULL REFERENCES ingestion_requests(id),

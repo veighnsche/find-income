@@ -129,7 +129,9 @@ func validRoundMutation(input RoundMutationInput) bool {
 			input.SourceOpportunity.ExpectedRevision == input.ExpectedRevision &&
 			input.ResourceID == "source-opening:"+input.SourceOpportunity.SourceOpeningID
 	case RoundPrepareApplicationPack:
-		return input.ApplicationPack != nil && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.ResourceID == "opportunity:"+input.ApplicationPack.OpportunityID && input.ExpectedRevision == input.ApplicationPack.ExpectedOpportunityRevision
+		return input.ApplicationPack != nil && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil &&
+			(input.ApplicationPack.PriorPackID == "") == (input.OwnerInstructionID == "") &&
+			input.ResourceID == "opportunity:"+input.ApplicationPack.OpportunityID && input.ExpectedRevision == input.ApplicationPack.ExpectedOpportunityRevision
 	case RoundRelationshipCounterpartyCreate:
 		return input.Relationship != nil && input.Relationship.Counterparty != nil && presentRelationshipInput(*input.Relationship) == 1 && input.Relationship.Counterparty.ID == "" && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.ResourceID == "campaign:active"
 	case RoundRelationshipEventCreate:
@@ -306,6 +308,18 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 				return RoundMutationResult{}, false, err
 			}
 			if staged == 0 && !scopeHas(round.Scope.InputRefs, input.ResourceID) {
+				var ownerIngestionID string
+				ownerErr := tx.QueryRowContext(ctx, `SELECT i.id FROM source_openings so
+				  JOIN ingestion_requests i ON i.id=so.current_ingestion_id
+				  WHERE so.id=? AND i.origin='owner' AND i.actor_kind=? AND i.actor_id=?
+				    AND i.source_id IS NULL AND length(trim(i.original_text))>0`,
+					input.SourceOpportunity.SourceOpeningID, round.Actor.Kind, round.Actor.ID).Scan(&ownerIngestionID)
+				if ownerErr != nil && !errors.Is(ownerErr, sql.ErrNoRows) {
+					return RoundMutationResult{}, false, ownerErr
+				}
+				if ownerErr == nil && scopeHas(round.Scope.InputRefs, "ingestion:"+ownerIngestionID) {
+					break
+				}
 				var priorBoardResource string
 				err := tx.QueryRowContext(ctx, `SELECT a.resource_id FROM source_sightings ss
 				  JOIN source_openings so ON so.id=ss.source_opening_id AND so.current_ingestion_id=ss.ingestion_id
@@ -410,6 +424,11 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 			return RoundMutationResult{}, false, ErrFenced
 		}
 	}
+	if input.Operation == RoundPrepareApplicationPack {
+		if err := checkRoundPackCorrectionTx(ctx, tx, round, input); err != nil {
+			return RoundMutationResult{}, false, err
+		}
+	}
 	if input.Operation == RoundCreateCompany {
 		if input.ExpectedRevision != profileVersion {
 			return RoundMutationResult{}, false, ErrConflict
@@ -508,7 +527,7 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 			return RoundMutationResult{}, false, err
 		}
 	}
-	if input.Operation == RoundCorrectPreferences || input.Operation == RoundCorrectOpportunity || input.Operation == RoundRelationshipCorrect {
+	if input.Operation == RoundCorrectPreferences || input.Operation == RoundCorrectOpportunity || input.Operation == RoundRelationshipCorrect || input.Operation == RoundPrepareApplicationPack && input.OwnerInstructionID != "" {
 		if _, err = tx.ExecContext(ctx, `INSERT INTO owner_instruction_applications(audit_id,instruction_id) VALUES (?,?)`, auditID, input.OwnerInstructionID); err != nil {
 			return RoundMutationResult{}, false, err
 		}

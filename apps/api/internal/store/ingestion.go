@@ -259,6 +259,9 @@ func submitIngestionTx(ctx context.Context, tx *sql.Tx, actor Actor, input Inges
 	}
 	now := time.Now().UTC()
 	identity, canonical := ingestionIdentity(input)
+	if input.Origin == "owner" && identity == "" && strings.TrimSpace(input.OriginalText) != "" {
+		identity = "owner-paste:" + actor.ID + ":" + input.IdempotencyKey
+	}
 	contentSHA := sourceDigest(input.OriginalText)
 	observedAt := jobTime(now)
 	if input.DiscoveredAt != "" {

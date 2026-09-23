@@ -17,6 +17,7 @@ type ApplicationPackMutationInput struct {
 	OpportunityID               string `json:"opportunityId"`
 	ExpectedOpportunityRevision int64  `json:"expectedOpportunityRevision"`
 	ExpectedProfileRevision     int64  `json:"expectedProfileRevision"`
+	PriorPackID                 string `json:"priorPackId,omitempty"`
 	ContentSHA256               string `json:"contentSha256"`
 	ManifestJSON                []byte `json:"manifestJson"`
 	TypstSource                 []byte `json:"typstSource"`

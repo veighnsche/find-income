@@ -134,6 +134,15 @@ func (s *Service) roundContextTool(ctx context.Context, args roundContextArgs) (
 			return nil, store.ErrFenced
 		}
 		resourceID = r.Scope.Resources[0]
+	case "process_input":
+		if len(r.Scope.Resources) == 0 || len(r.Scope.InputRefs) == 0 {
+			return nil, store.ErrFenced
+		}
+		resourceID = r.Scope.Resources[0]
+		if !strings.HasPrefix(resourceID, "campaign:") && !strings.HasPrefix(resourceID, "profile:") &&
+			!strings.HasPrefix(resourceID, "opportunity:") && !strings.HasPrefix(resourceID, "evidence:") && !strings.HasPrefix(resourceID, "relationship:") {
+			return nil, store.ErrFenced
+		}
 	default:
 		return nil, store.ErrFenced
 	}

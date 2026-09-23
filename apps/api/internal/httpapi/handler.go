@@ -69,6 +69,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/rounds/capability", h.roundCapability)
 	mux.HandleFunc("POST /api/v1/rounds", h.startRound)
 	mux.HandleFunc("POST /api/v1/rounds/prepare", h.prepareRound)
+	mux.HandleFunc("POST /api/v1/rounds/process-input", h.processInput)
 	mux.HandleFunc("GET /api/v1/rounds/{id}", h.getRound)
 	mux.HandleFunc("GET /api/v1/rounds/{id}/results", h.roundResults)
 	mux.HandleFunc("GET /api/v1/rounds/{id}/cards", h.roundCards)

@@ -15,6 +15,10 @@ type Readiness interface {
 	CheckRound(context.Context, string) error
 }
 
+type InputReadiness interface {
+	CheckRoundInput(context.Context, store.Actor, store.StartRoundInput) error
+}
+
 type Canceller interface {
 	CancelDispatch(context.Context, string) error
 }
@@ -33,6 +37,10 @@ type Reconciler interface {
 type Worker interface {
 	LaunchRound(context.Context, store.Round) error
 	CancelRound(string)
+}
+
+type WorkerDrainer interface {
+	WaitRoundStopped(context.Context, string) error
 }
 
 type Service struct {
@@ -59,6 +67,16 @@ func (s *Service) ready(ctx context.Context, outcome string) error {
 	return s.Readiness.CheckRound(ctx, outcome)
 }
 
+func (s *Service) readyInput(ctx context.Context, actor store.Actor, input store.StartRoundInput) error {
+	if err := s.ready(ctx, input.Outcome); err != nil {
+		return err
+	}
+	if scoped, ok := s.Readiness.(InputReadiness); ok {
+		return scoped.CheckRoundInput(ctx, actor, input)
+	}
+	return nil
+}
+
 // Start checks capability before creating new work. An identical request
 // returns its durable round even if the runtime later becomes unavailable.
 func (s *Service) Start(ctx context.Context, actor store.Actor, input store.StartRoundInput) (store.Round, bool, error) {
@@ -82,11 +100,38 @@ func (s *Service) Start(ctx context.Context, actor store.Actor, input store.Star
 		}
 	}
 	if errors.Is(err, store.ErrNotFound) {
-		if err := s.ready(ctx, input.Outcome); err != nil {
+		if err := s.readyInput(ctx, actor, input); err != nil {
 			return store.Round{}, false, err
 		}
 	}
 	r, created, err := s.Store.StartRound(ctx, actor, input)
+	if err != nil || !created {
+		return r, created, err
+	}
+	r, err = s.Store.ActivateRound(ctx, actor, r.ID)
+	if err != nil {
+		return r, true, err
+	}
+	if err := s.Worker.LaunchRound(ctx, r); err != nil {
+		failed, finishErr := s.Store.FinishRound(ctx, actor, r.ID, store.RoundFailed, "worker_unavailable", "none", json.RawMessage(`{"code":"worker_unavailable"}`))
+		if finishErr != nil {
+			return r, true, errors.Join(ErrNotReady, err, finishErr)
+		}
+		return failed, true, errors.Join(ErrNotReady, err)
+	}
+	return r, true, nil
+}
+
+// ReplacePaused closes the exact owner-named paused commission and starts the
+// replacement in one store transaction. Execution begins only after commit.
+func (s *Service) ReplacePaused(ctx context.Context, actor store.Actor, pausedID string, expectedRevision int64, input store.StartRoundInput) (store.Round, bool, error) {
+	if s == nil || s.Store == nil || actor.Kind != "administrator" || actor.ID == "" {
+		return store.Round{}, false, store.ErrInvalid
+	}
+	if err := s.readyInput(ctx, actor, input); err != nil {
+		return store.Round{}, false, err
+	}
+	r, created, err := s.Store.ReplacePausedRound(ctx, actor, pausedID, expectedRevision, input)
 	if err != nil || !created {
 		return r, created, err
 	}
@@ -151,6 +196,11 @@ func (s *Service) Resume(ctx context.Context, actor store.Actor, roundID string)
 	}
 	if r.State != store.RoundPaused {
 		return store.Round{}, store.ErrFenced
+	}
+	if drainer, ok := s.Worker.(WorkerDrainer); ok {
+		if err := drainer.WaitRoundStopped(ctx, roundID); err != nil {
+			return store.Round{}, err
+		}
 	}
 	if !time.Now().Before(r.Deadline) {
 		if err := s.expireDeadline(ctx, roundID); err != nil {
