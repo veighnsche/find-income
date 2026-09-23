@@ -7,7 +7,6 @@
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
     "I08/I10 substantial neutral-candidate discovery",
-    "I11 actual contextual-input reports",
     "I21 exact approval and bounded delivery integration"
   ],
   "implementation_acceptance": [
@@ -32,10 +31,11 @@
     "Root reviewed sourced interview/debrief and Jev focus helpers; focused interviewprep/jev tests passed at7299c54.",
     "Core authority corrections independently reviewed at7310026. Native boundary committeda22afa7; root runtime package suite, exact saved-rollout baseline/negative parser checks and config/shell checks passed.",
     "Root reviewed exact pay/range calculations, unsupported-currency preservation and recomputed Jev input/result binding; offercomparison/jev tests passed.",
-    "Committed2279c3f after independent three-finding correction recheck, root full Go suite, targeted race tests and generated-contract verification."
+    "Committed2279c3f after independent three-finding correction recheck, root full Go suite, targeted race tests and generated-contract verification.",
+    "Committed12b138d: contextual input UI, exact request replay, production reports and automatic corrected-pack refresh; root lint/TypeScript and browser fixture pass."
   ],
   "documentation_validated_at": "2026-09-23",
-  "code_checkpoint": "2279c3f",
+  "code_checkpoint": "12b138d",
   "root_validation": {
     "check": "passed at 8c8b66d after OpenAPI formatting",
     "test": "passed full Go API suite; web runner has no test files; controlled I11 browser fixture reviewed",
@@ -51,7 +51,7 @@
     "native_boundary": "a22afa7: root codex/codexrunner/codexservice suite, archived native-rollout parser positive/four negatives and runtime config/shell checks pass. Exact observed raw synthetic records saved. Real host/account/MCP still unverified.",
     "contextual_input": "Committed2279c3f: independent recheck closed all3 findings. Root full Go suite and targeted race-enabled real Stop/Resume, deduplicated URL replay and deadline expiry tests passed. Generated contracts match. Synthetic providers only; live acceptance open.",
     "offers": "Root offercomparison/jev tests passed after exact numeric context/recomputed binding and unsupported-currency corrections. Commissioned execution/persistence/UI still pending.",
-    "contextual_ui": "Root web lint/TypeScript and production-build browser smoke passed for exact lost-response and stale409 recovery. Production-report comparison found fixture invented summary; actual appliedChanges/report.unresolved rendering correction now assigned before UI commit."
+    "contextual_ui": "Committed12b138d: root lint/TypeScript and production-build Chromium smoke pass. Actual inputReport/packReport, exact lost-response replay, stale409 recovery, selected older pack retention and automatic new-version refresh verified with synthetic HTTP. Earlier draft assertion failed during list/detail refresh; explicit readiness and same-node/value/storage assertions now pass with one fill. Live runtime acceptance remains open."
   },
   "protected_artifacts_unchanged_prior_check": 44,
   "proposed_next_slices": [
