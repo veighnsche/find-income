@@ -8,8 +8,7 @@
   "dispatched": [
     "I08/I10 three reviewed discovery corrections",
     "I21 backend delivery/route/Stop integration",
-    "I21 exact-review web integration",
-    "I10 bounded real Jev context-budget evaluation"
+    "I21 exact-review web integration"
   ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",
@@ -54,7 +53,8 @@
     "contextual_input": "Committed2279c3f: independent recheck closed all3 findings. Root full Go suite and targeted race-enabled real Stop/Resume, deduplicated URL replay and deadline expiry tests passed. Generated contracts match. Synthetic providers only; live acceptance open.",
     "offers": "Root offercomparison/jev tests passed after exact numeric context/recomputed binding and unsupported-currency corrections. Commissioned execution/persistence/UI still pending.",
     "contextual_ui": "Committed12b138d: root lint/TypeScript and production-build Chromium smoke pass. Actual inputReport/packReport, exact lost-response replay, stale409 recovery, selected older pack retention and automatic new-version refresh verified with synthetic HTTP. Earlier draft assertion failed during list/detail refresh; explicit readiness and same-node/value/storage assertions now pass with one fill. Live runtime acceptance remains open.",
-    "discovery_review": "Independent review completed with3 P2 findings and one executed failing recovery overlay; corrections assigned. No live/provider readiness claim;1200-total-token cap remains unverified."
+    "discovery_review": "Independent review completed with3 P2 findings and one executed failing recovery overlay; corrections assigned. No live/provider readiness claim;1200-total-token cap remains unverified.",
+    "discovery_context_budget": "Root inspected saved raw bytes, recomputed SHA256, and matched actual Jev usage. Exactly2 HTTP200 calls reported4645 tokens total; both would exceed1200. Correction assigned; no additional calls."
   },
   "protected_artifacts_unchanged_prior_check": 44,
   "proposed_next_slices": [
@@ -70,6 +70,15 @@
     "provider_hard_cap": false,
     "scope": "Current synthetic next-outcome and neutral-lead request shapes; measure actual provider input/output usage; no account/scrape/delivery calls.",
     "evidence_path": "implementation-notes/implementation/I10-context-budget/",
-    "status": "active"
+    "status": "completed; cap correction assigned",
+    "calls": 2,
+    "reported_input_tokens": 4404,
+    "reported_output_tokens": 241,
+    "reported_total_tokens": 4645,
+    "observed_totals": [
+      2961,
+      1684
+    ],
+    "current_cap_result": "Both valid complete responses exceed1200; both choices unresolved. No general decision-quality claim."
   }
 }
