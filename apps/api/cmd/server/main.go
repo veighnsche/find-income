@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -22,6 +23,9 @@ import (
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
+	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
+	"github.com/veighnsche/find-income-dashboard/api/internal/jobs"
+	"github.com/veighnsche/find-income-dashboard/api/internal/organisation"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
@@ -62,16 +66,73 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	jevConfig := jev.DefaultConfig()
+	jevConfig.Enabled = strings.TrimSpace(os.Getenv(jev.CredentialEnvironmentVariable)) != ""
+	organisationWorker, err := newOrganisationWorker(database, jevConfig, nil)
+	if err != nil {
+		return fmt.Errorf("configure organisation worker: %w", err)
+	}
+	options.OrganisationAvailable = organisationWorker != nil
 	server := newAPIServer(addr, newHandler(database, service, options))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
 	log.Printf("jobseek API listening on %s", addr)
-	if err := serveUntil(ctx, server, listener); err != nil {
+	if err := serveWithWorker(ctx, server, listener, organisationWorker); err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
 	return nil
+}
+
+// No credential means no worker claims: queued organisation jobs remain
+// pending until the server is configured with a valid provider key.
+func newOrganisationWorker(database *store.Store, cfg jev.Config, httpClient *http.Client) (*jobs.Worker, error) {
+	if !cfg.Enabled {
+		return nil, nil
+	}
+	client, err := jev.NewFromEnvironment(cfg, httpClient)
+	if err != nil {
+		return nil, err
+	}
+	return &jobs.Worker{
+		Queue: database, ID: fmt.Sprintf("organisation-%d", os.Getpid()),
+		Handlers:     map[string]jobs.Handler{store.OrganisationJobKind: organisation.Handler(database, client)},
+		PollInterval: time.Second, LeaseDuration: time.Minute,
+	}, nil
+}
+
+// The worker and HTTP server share cancellation, and both must finish before
+// run closes the store. An unexpected worker error shuts down HTTP too.
+func serveWithWorker(ctx context.Context, server *http.Server, listener net.Listener, worker *jobs.Worker) error {
+	if worker == nil {
+		return serveUntil(ctx, server, listener)
+	}
+	serviceCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	workerDone := make(chan error, 1)
+	serverDone := make(chan error, 1)
+	go func() { workerDone <- worker.Run(serviceCtx) }()
+	go func() { serverDone <- serveUntil(serviceCtx, server, listener) }()
+	select {
+	case workerErr := <-workerDone:
+		cancel()
+		serverErr := <-serverDone
+		if workerErr != nil {
+			return fmt.Errorf("organisation worker: %w", workerErr)
+		}
+		return serverErr
+	case serverErr := <-serverDone:
+		cancel()
+		workerErr := <-workerDone
+		if serverErr != nil {
+			return serverErr
+		}
+		if workerErr != nil {
+			return fmt.Errorf("organisation worker: %w", workerErr)
+		}
+		return nil
+	}
 }
 
 func newAPIServer(addr string, handler http.Handler) *http.Server {
