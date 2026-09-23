@@ -7,6 +7,54 @@ import (
 	"time"
 )
 
+// Defines values for AdvertisedCompensationBasis.
+const (
+	AdvertisedCompensationBasisBase      AdvertisedCompensationBasis = "base"
+	AdvertisedCompensationBasisInclusive AdvertisedCompensationBasis = "inclusive"
+	AdvertisedCompensationBasisUnknown   AdvertisedCompensationBasis = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the AdvertisedCompensationBasis enum.
+func (e AdvertisedCompensationBasis) Valid() bool {
+	switch e {
+	case AdvertisedCompensationBasisBase:
+		return true
+	case AdvertisedCompensationBasisInclusive:
+		return true
+	case AdvertisedCompensationBasisUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdvertisedCompensationPeriod.
+const (
+	AdvertisedCompensationPeriodHour    AdvertisedCompensationPeriod = "hour"
+	AdvertisedCompensationPeriodMonth   AdvertisedCompensationPeriod = "month"
+	AdvertisedCompensationPeriodProject AdvertisedCompensationPeriod = "project"
+	AdvertisedCompensationPeriodUnknown AdvertisedCompensationPeriod = "unknown"
+	AdvertisedCompensationPeriodYear    AdvertisedCompensationPeriod = "year"
+)
+
+// Valid indicates whether the value is a known member of the AdvertisedCompensationPeriod enum.
+func (e AdvertisedCompensationPeriod) Valid() bool {
+	switch e {
+	case AdvertisedCompensationPeriodHour:
+		return true
+	case AdvertisedCompensationPeriodMonth:
+		return true
+	case AdvertisedCompensationPeriodProject:
+		return true
+	case AdvertisedCompensationPeriodUnknown:
+		return true
+	case AdvertisedCompensationPeriodYear:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ApiErrorCode.
 const (
 	ApiErrorCodeConflict        ApiErrorCode = "conflict"
@@ -43,6 +91,66 @@ func (e ApiErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for CompanyDuplicateReason.
+const (
+	SameName    CompanyDuplicateReason = "same_name"
+	SameWebsite CompanyDuplicateReason = "same_website"
+)
+
+// Valid indicates whether the value is a known member of the CompanyDuplicateReason enum.
+func (e CompanyDuplicateReason) Valid() bool {
+	switch e {
+	case SameName:
+		return true
+	case SameWebsite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateOpportunityRequestKind.
+const (
+	CreateOpportunityRequestKindEmployment CreateOpportunityRequestKind = "employment"
+	CreateOpportunityRequestKindProject    CreateOpportunityRequestKind = "project"
+)
+
+// Valid indicates whether the value is a known member of the CreateOpportunityRequestKind enum.
+func (e CreateOpportunityRequestKind) Valid() bool {
+	switch e {
+	case CreateOpportunityRequestKindEmployment:
+		return true
+	case CreateOpportunityRequestKindProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateOpportunityRequestWorkPattern.
+const (
+	CreateOpportunityRequestWorkPatternHybrid  CreateOpportunityRequestWorkPattern = "hybrid"
+	CreateOpportunityRequestWorkPatternOnsite  CreateOpportunityRequestWorkPattern = "onsite"
+	CreateOpportunityRequestWorkPatternRemote  CreateOpportunityRequestWorkPattern = "remote"
+	CreateOpportunityRequestWorkPatternUnknown CreateOpportunityRequestWorkPattern = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the CreateOpportunityRequestWorkPattern enum.
+func (e CreateOpportunityRequestWorkPattern) Valid() bool {
+	switch e {
+	case CreateOpportunityRequestWorkPatternHybrid:
+		return true
+	case CreateOpportunityRequestWorkPatternOnsite:
+		return true
+	case CreateOpportunityRequestWorkPatternRemote:
+		return true
+	case CreateOpportunityRequestWorkPatternUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthResponseService.
 const (
 	JobseekApi HealthResponseService = "jobseek-api"
@@ -73,20 +181,231 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
-// Defines values for SessionResponseActorKind.
+// Defines values for OpportunityKind.
 const (
-	Administrator SessionResponseActorKind = "administrator"
+	OpportunityKindEmployment OpportunityKind = "employment"
+	OpportunityKindProject    OpportunityKind = "project"
 )
 
-// Valid indicates whether the value is a known member of the SessionResponseActorKind enum.
-func (e SessionResponseActorKind) Valid() bool {
+// Valid indicates whether the value is a known member of the OpportunityKind enum.
+func (e OpportunityKind) Valid() bool {
 	switch e {
-	case Administrator:
+	case OpportunityKindEmployment:
+		return true
+	case OpportunityKindProject:
 		return true
 	default:
 		return false
 	}
 }
+
+// Defines values for OpportunityWorkPattern.
+const (
+	OpportunityWorkPatternHybrid  OpportunityWorkPattern = "hybrid"
+	OpportunityWorkPatternOnsite  OpportunityWorkPattern = "onsite"
+	OpportunityWorkPatternRemote  OpportunityWorkPattern = "remote"
+	OpportunityWorkPatternUnknown OpportunityWorkPattern = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the OpportunityWorkPattern enum.
+func (e OpportunityWorkPattern) Valid() bool {
+	switch e {
+	case OpportunityWorkPatternHybrid:
+		return true
+	case OpportunityWorkPatternOnsite:
+		return true
+	case OpportunityWorkPatternRemote:
+		return true
+	case OpportunityWorkPatternUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OpportunityDuplicateReason.
+const (
+	SameCompanyTitle OpportunityDuplicateReason = "same_company_title"
+	SameSourceUrl    OpportunityDuplicateReason = "same_source_url"
+)
+
+// Valid indicates whether the value is a known member of the OpportunityDuplicateReason enum.
+func (e OpportunityDuplicateReason) Valid() bool {
+	switch e {
+	case SameCompanyTitle:
+		return true
+	case SameSourceUrl:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PatchOpportunityRequestKind.
+const (
+	PatchOpportunityRequestKindEmployment PatchOpportunityRequestKind = "employment"
+	PatchOpportunityRequestKindProject    PatchOpportunityRequestKind = "project"
+)
+
+// Valid indicates whether the value is a known member of the PatchOpportunityRequestKind enum.
+func (e PatchOpportunityRequestKind) Valid() bool {
+	switch e {
+	case PatchOpportunityRequestKindEmployment:
+		return true
+	case PatchOpportunityRequestKindProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PatchOpportunityRequestWorkPattern.
+const (
+	PatchOpportunityRequestWorkPatternHybrid  PatchOpportunityRequestWorkPattern = "hybrid"
+	PatchOpportunityRequestWorkPatternOnsite  PatchOpportunityRequestWorkPattern = "onsite"
+	PatchOpportunityRequestWorkPatternRemote  PatchOpportunityRequestWorkPattern = "remote"
+	PatchOpportunityRequestWorkPatternUnknown PatchOpportunityRequestWorkPattern = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the PatchOpportunityRequestWorkPattern enum.
+func (e PatchOpportunityRequestWorkPattern) Valid() bool {
+	switch e {
+	case PatchOpportunityRequestWorkPatternHybrid:
+		return true
+	case PatchOpportunityRequestWorkPatternOnsite:
+		return true
+	case PatchOpportunityRequestWorkPatternRemote:
+		return true
+	case PatchOpportunityRequestWorkPatternUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RecordChangeActorKind.
+const (
+	RecordChangeActorKindAdministrator RecordChangeActorKind = "administrator"
+	RecordChangeActorKindAgent         RecordChangeActorKind = "agent"
+)
+
+// Valid indicates whether the value is a known member of the RecordChangeActorKind enum.
+func (e RecordChangeActorKind) Valid() bool {
+	switch e {
+	case RecordChangeActorKindAdministrator:
+		return true
+	case RecordChangeActorKindAgent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RecordChangeEntityKind.
+const (
+	RecordChangeEntityKindCompany     RecordChangeEntityKind = "company"
+	RecordChangeEntityKindOpportunity RecordChangeEntityKind = "opportunity"
+)
+
+// Valid indicates whether the value is a known member of the RecordChangeEntityKind enum.
+func (e RecordChangeEntityKind) Valid() bool {
+	switch e {
+	case RecordChangeEntityKindCompany:
+		return true
+	case RecordChangeEntityKindOpportunity:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RecordChangeSnapshotState.
+const (
+	Captured              RecordChangeSnapshotState = "captured"
+	UnavailableHistorical RecordChangeSnapshotState = "unavailable_historical"
+)
+
+// Valid indicates whether the value is a known member of the RecordChangeSnapshotState enum.
+func (e RecordChangeSnapshotState) Valid() bool {
+	switch e {
+	case Captured:
+		return true
+	case UnavailableHistorical:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SessionResponseActorKind.
+const (
+	SessionResponseActorKindAdministrator SessionResponseActorKind = "administrator"
+)
+
+// Valid indicates whether the value is a known member of the SessionResponseActorKind enum.
+func (e SessionResponseActorKind) Valid() bool {
+	switch e {
+	case SessionResponseActorKindAdministrator:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRecordChangesParamsEntityKind.
+const (
+	ListRecordChangesParamsEntityKindCompany     ListRecordChangesParamsEntityKind = "company"
+	ListRecordChangesParamsEntityKindOpportunity ListRecordChangesParamsEntityKind = "opportunity"
+)
+
+// Valid indicates whether the value is a known member of the ListRecordChangesParamsEntityKind enum.
+func (e ListRecordChangesParamsEntityKind) Valid() bool {
+	switch e {
+	case ListRecordChangesParamsEntityKindCompany:
+		return true
+	case ListRecordChangesParamsEntityKindOpportunity:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListOpportunitiesParamsKind.
+const (
+	ListOpportunitiesParamsKindEmployment ListOpportunitiesParamsKind = "employment"
+	ListOpportunitiesParamsKindProject    ListOpportunitiesParamsKind = "project"
+)
+
+// Valid indicates whether the value is a known member of the ListOpportunitiesParamsKind enum.
+func (e ListOpportunitiesParamsKind) Valid() bool {
+	switch e {
+	case ListOpportunitiesParamsKindEmployment:
+		return true
+	case ListOpportunitiesParamsKindProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// AdvertisedCompensation Advertised inputs only. No inferred or employer-confirmed actual-hours pay.
+type AdvertisedCompensation struct {
+	Basis        *AdvertisedCompensationBasis `json:"basis,omitempty"`
+	BenefitsText *string                      `json:"benefitsText,omitempty"`
+
+	// Currency Uppercase three-letter code or unknown.
+	Currency       *string                       `json:"currency,omitempty"`
+	MaxAmountCents *int64                        `json:"maxAmountCents,omitempty"`
+	MinAmountCents *int64                        `json:"minAmountCents,omitempty"`
+	Period         *AdvertisedCompensationPeriod `json:"period,omitempty"`
+	ReferenceHours *int64                        `json:"referenceHours,omitempty"`
+}
+
+// AdvertisedCompensationBasis defines model for AdvertisedCompensation.Basis.
+type AdvertisedCompensationBasis string
+
+// AdvertisedCompensationPeriod defines model for AdvertisedCompensation.Period.
+type AdvertisedCompensationPeriod string
 
 // AgentCredential defines model for AgentCredential.
 type AgentCredential struct {
@@ -114,12 +433,87 @@ type ApiError struct {
 // ApiErrorCode Stable machine-readable error code.
 type ApiErrorCode string
 
+// ArchiveRequest defines model for ArchiveRequest.
+type ArchiveRequest struct {
+	ExpectedRevision int64 `json:"expectedRevision"`
+}
+
+// Company defines model for Company.
+type Company struct {
+	ArchivedAt *time.Time `json:"archivedAt,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	Id         string     `json:"id"`
+	Name       string     `json:"name"`
+	Notes      string     `json:"notes"`
+	Revision   int64      `json:"revision"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
+	Website    string     `json:"website"`
+}
+
+// CompanyDuplicate defines model for CompanyDuplicate.
+type CompanyDuplicate struct {
+	Company Company                `json:"company"`
+	Reason  CompanyDuplicateReason `json:"reason"`
+}
+
+// CompanyDuplicateReason defines model for CompanyDuplicate.Reason.
+type CompanyDuplicateReason string
+
+// CompanyMutation The saved revision and immutable change reference. Read the detail or list for advisory duplicate warnings.
+type CompanyMutation struct {
+	ChangeId string  `json:"changeId"`
+	Company  Company `json:"company"`
+}
+
+// CompanyPage defines model for CompanyPage.
+type CompanyPage struct {
+	Items      []CompanyView `json:"items"`
+	NextCursor *string       `json:"nextCursor,omitempty"`
+}
+
+// CompanyView defines model for CompanyView.
+type CompanyView struct {
+	Company          Company            `json:"company"`
+	LikelyDuplicates []CompanyDuplicate `json:"likelyDuplicates"`
+}
+
 // CreateAgentCredentialRequest defines model for CreateAgentCredentialRequest.
 type CreateAgentCredentialRequest struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 	Name      string    `json:"name"`
 	Scopes    []string  `json:"scopes"`
 }
+
+// CreateCompanyRequest defines model for CreateCompanyRequest.
+type CreateCompanyRequest struct {
+	Name    string  `json:"name"`
+	Notes   *string `json:"notes,omitempty"`
+	Website *string `json:"website,omitempty"`
+}
+
+// CreateOpportunityRequest Provide sourceUrl or originalText; notes are separate from the source. No actor or confirmed-pay fields are accepted.
+type CreateOpportunityRequest struct {
+	CompanyId string `json:"companyId"`
+
+	// Compensation Advertised inputs only. No inferred or employer-confirmed actual-hours pay.
+	Compensation *AdvertisedCompensation              `json:"compensation,omitempty"`
+	DeadlineOn   *string                              `json:"deadlineOn,omitempty"`
+	Kind         CreateOpportunityRequestKind         `json:"kind"`
+	LocationText *string                              `json:"locationText,omitempty"`
+	Notes        *string                              `json:"notes,omitempty"`
+	OriginalText *string                              `json:"originalText,omitempty"`
+	PostedOn     *string                              `json:"postedOn,omitempty"`
+	SourceUrl    *string                              `json:"sourceUrl,omitempty"`
+	Stage        string                               `json:"stage"`
+	Title        string                               `json:"title"`
+	WorkPattern  *CreateOpportunityRequestWorkPattern `json:"workPattern,omitempty"`
+}
+
+// CreateOpportunityRequestKind defines model for CreateOpportunityRequest.Kind.
+type CreateOpportunityRequestKind string
+
+// CreateOpportunityRequestWorkPattern defines model for CreateOpportunityRequest.WorkPattern.
+type CreateOpportunityRequestWorkPattern string
 
 // CreatedAgentCredential defines model for CreatedAgentCredential.
 type CreatedAgentCredential struct {
@@ -152,6 +546,99 @@ type LoginRequest struct {
 	Password *string `json:"password,omitempty"`
 }
 
+// Opportunity defines model for Opportunity.
+type Opportunity struct {
+	ArchivedAt *time.Time `json:"archivedAt,omitempty"`
+	CompanyId  string     `json:"companyId"`
+
+	// Compensation Advertised inputs only. No inferred or employer-confirmed actual-hours pay.
+	Compensation AdvertisedCompensation `json:"compensation"`
+	CreatedAt    time.Time              `json:"createdAt"`
+
+	// DeadlineOn Calendar date YYYY-MM-DD or empty.
+	DeadlineOn   string          `json:"deadlineOn"`
+	Id           string          `json:"id"`
+	Kind         OpportunityKind `json:"kind"`
+	LocationText string          `json:"locationText"`
+	Notes        string          `json:"notes"`
+	OriginalText string          `json:"originalText"`
+
+	// PostedOn Calendar date YYYY-MM-DD or empty.
+	PostedOn    string                 `json:"postedOn"`
+	Revision    int64                  `json:"revision"`
+	SourceUrl   string                 `json:"sourceUrl"`
+	Stage       string                 `json:"stage"`
+	Title       string                 `json:"title"`
+	UpdatedAt   time.Time              `json:"updatedAt"`
+	WorkPattern OpportunityWorkPattern `json:"workPattern"`
+}
+
+// OpportunityKind defines model for Opportunity.Kind.
+type OpportunityKind string
+
+// OpportunityWorkPattern defines model for Opportunity.WorkPattern.
+type OpportunityWorkPattern string
+
+// OpportunityDuplicate defines model for OpportunityDuplicate.
+type OpportunityDuplicate struct {
+	Opportunity Opportunity                `json:"opportunity"`
+	Reason      OpportunityDuplicateReason `json:"reason"`
+}
+
+// OpportunityDuplicateReason defines model for OpportunityDuplicate.Reason.
+type OpportunityDuplicateReason string
+
+// OpportunityMutation The saved revision and immutable change reference. Read the detail or list for advisory duplicate warnings.
+type OpportunityMutation struct {
+	ChangeId    string      `json:"changeId"`
+	Opportunity Opportunity `json:"opportunity"`
+}
+
+// OpportunityPage defines model for OpportunityPage.
+type OpportunityPage struct {
+	Items      []OpportunityView `json:"items"`
+	NextCursor *string           `json:"nextCursor,omitempty"`
+}
+
+// OpportunityView defines model for OpportunityView.
+type OpportunityView struct {
+	LikelyDuplicates []OpportunityDuplicate `json:"likelyDuplicates"`
+	Opportunity      Opportunity            `json:"opportunity"`
+}
+
+// PatchCompanyRequest defines model for PatchCompanyRequest.
+type PatchCompanyRequest struct {
+	ExpectedRevision int64   `json:"expectedRevision"`
+	Name             *string `json:"name,omitempty"`
+	Notes            *string `json:"notes,omitempty"`
+	Website          *string `json:"website,omitempty"`
+}
+
+// PatchOpportunityRequest Omitted fields are unchanged and top-level null is invalid. Optional strings clear with an empty string. Omit compensation to preserve it; an empty compensation object resets advertised inputs to unknown.
+type PatchOpportunityRequest struct {
+	CompanyId *string `json:"companyId,omitempty"`
+
+	// Compensation Advertised inputs only. No inferred or employer-confirmed actual-hours pay.
+	Compensation     *AdvertisedCompensation             `json:"compensation,omitempty"`
+	DeadlineOn       *string                             `json:"deadlineOn,omitempty"`
+	ExpectedRevision int64                               `json:"expectedRevision"`
+	Kind             *PatchOpportunityRequestKind        `json:"kind,omitempty"`
+	LocationText     *string                             `json:"locationText,omitempty"`
+	Notes            *string                             `json:"notes,omitempty"`
+	OriginalText     *string                             `json:"originalText,omitempty"`
+	PostedOn         *string                             `json:"postedOn,omitempty"`
+	SourceUrl        *string                             `json:"sourceUrl,omitempty"`
+	Stage            *string                             `json:"stage,omitempty"`
+	Title            *string                             `json:"title,omitempty"`
+	WorkPattern      *PatchOpportunityRequestWorkPattern `json:"workPattern,omitempty"`
+}
+
+// PatchOpportunityRequestKind defines model for PatchOpportunityRequest.Kind.
+type PatchOpportunityRequestKind string
+
+// PatchOpportunityRequestWorkPattern defines model for PatchOpportunityRequest.WorkPattern.
+type PatchOpportunityRequestWorkPattern string
+
 // PreferencesResponse defines model for PreferencesResponse.
 type PreferencesResponse struct {
 	AllowHybrid            bool   `json:"allowHybrid"`
@@ -167,6 +654,40 @@ type PreferencesResponse struct {
 	Version                int64  `json:"version"`
 }
 
+// RecordChange defines model for RecordChange.
+type RecordChange struct {
+	ActorId        string                 `json:"actorId"`
+	ActorKind      RecordChangeActorKind  `json:"actorKind"`
+	ChangeId       string                 `json:"changeId"`
+	EntityId       string                 `json:"entityId"`
+	EntityKind     RecordChangeEntityKind `json:"entityKind"`
+	OccurredAt     time.Time              `json:"occurredAt"`
+	Operation      string                 `json:"operation"`
+	RevisionAfter  *int64                 `json:"revisionAfter,omitempty"`
+	RevisionBefore *int64                 `json:"revisionBefore,omitempty"`
+	Sequence       int64                  `json:"sequence"`
+
+	// Snapshot Immutable event-time company or opportunity snapshot when captured.
+	Snapshot      *map[string]interface{}   `json:"snapshot,omitempty"`
+	SnapshotState RecordChangeSnapshotState `json:"snapshotState"`
+}
+
+// RecordChangeActorKind defines model for RecordChange.ActorKind.
+type RecordChangeActorKind string
+
+// RecordChangeEntityKind defines model for RecordChange.EntityKind.
+type RecordChangeEntityKind string
+
+// RecordChangeSnapshotState defines model for RecordChange.SnapshotState.
+type RecordChangeSnapshotState string
+
+// RecordChangePage defines model for RecordChangePage.
+type RecordChangePage struct {
+	Items      []RecordChange `json:"items"`
+	NextCursor *string        `json:"nextCursor,omitempty"`
+	Watermark  int64          `json:"watermark"`
+}
+
 // SessionResponse defines model for SessionResponse.
 type SessionResponse struct {
 	ActorId   string                   `json:"actorId"`
@@ -177,6 +698,18 @@ type SessionResponse struct {
 
 // SessionResponseActorKind defines model for SessionResponse.ActorKind.
 type SessionResponseActorKind string
+
+// Cursor defines model for Cursor.
+type Cursor = string
+
+// IncludeArchived defines model for IncludeArchived.
+type IncludeArchived = bool
+
+// Limit defines model for Limit.
+type Limit = int
+
+// RecordId defines model for RecordId.
+type RecordId = string
 
 // Conflict defines model for Conflict.
 type Conflict = ErrorEnvelope
@@ -199,8 +732,57 @@ type Unauthenticated = ErrorEnvelope
 // ValidationError defines model for ValidationError.
 type ValidationError = ErrorEnvelope
 
+// ListRecordChangesParams defines parameters for ListRecordChanges.
+type ListRecordChangesParams struct {
+	Limit      *Limit                             `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor     *Cursor                            `form:"cursor,omitempty" json:"cursor,omitempty"`
+	After      *int64                             `form:"after,omitempty" json:"after,omitempty"`
+	EntityKind *ListRecordChangesParamsEntityKind `form:"entityKind,omitempty" json:"entityKind,omitempty"`
+}
+
+// ListRecordChangesParamsEntityKind defines parameters for ListRecordChanges.
+type ListRecordChangesParamsEntityKind string
+
+// ListCompaniesParams defines parameters for ListCompanies.
+type ListCompaniesParams struct {
+	Limit           *Limit           `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor          *Cursor          `form:"cursor,omitempty" json:"cursor,omitempty"`
+	IncludeArchived *IncludeArchived `form:"includeArchived,omitempty" json:"includeArchived,omitempty"`
+}
+
+// ListOpportunitiesParams defines parameters for ListOpportunities.
+type ListOpportunitiesParams struct {
+	Limit           *Limit                       `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor          *Cursor                      `form:"cursor,omitempty" json:"cursor,omitempty"`
+	IncludeArchived *IncludeArchived             `form:"includeArchived,omitempty" json:"includeArchived,omitempty"`
+	CompanyId       *string                      `form:"companyId,omitempty" json:"companyId,omitempty"`
+	Stage           *string                      `form:"stage,omitempty" json:"stage,omitempty"`
+	Kind            *ListOpportunitiesParamsKind `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
+// ListOpportunitiesParamsKind defines parameters for ListOpportunities.
+type ListOpportunitiesParamsKind string
+
 // CreateAgentCredentialJSONRequestBody defines body for CreateAgentCredential for application/json ContentType.
 type CreateAgentCredentialJSONRequestBody = CreateAgentCredentialRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
+
+// CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
+type CreateCompanyJSONRequestBody = CreateCompanyRequest
+
+// PatchCompanyJSONRequestBody defines body for PatchCompany for application/json ContentType.
+type PatchCompanyJSONRequestBody = PatchCompanyRequest
+
+// ArchiveCompanyJSONRequestBody defines body for ArchiveCompany for application/json ContentType.
+type ArchiveCompanyJSONRequestBody = ArchiveRequest
+
+// CreateOpportunityJSONRequestBody defines body for CreateOpportunity for application/json ContentType.
+type CreateOpportunityJSONRequestBody = CreateOpportunityRequest
+
+// PatchOpportunityJSONRequestBody defines body for PatchOpportunity for application/json ContentType.
+type PatchOpportunityJSONRequestBody = PatchOpportunityRequest
+
+// ArchiveOpportunityJSONRequestBody defines body for ArchiveOpportunity for application/json ContentType.
+type ArchiveOpportunityJSONRequestBody = ArchiveRequest

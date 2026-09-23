@@ -129,6 +129,192 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List companies in stable creation order
+         * @description Bearer credentials require opportunities:read. Cursor is bound to the archived filter.
+         */
+        get: operations["listCompanies"];
+        put?: never;
+        /**
+         * Create a company
+         * @description Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token. Actor identity is derived from the credential.
+         */
+        post: operations["createCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read a company and likely duplicate warnings
+         * @description Bearer credentials require opportunities:read.
+         */
+        get: operations["getCompany"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch a company at its expected revision
+         * @description Omitted fields are unchanged; an empty optional string clears it. Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token.
+         */
+        patch: operations["patchCompany"];
+        trace?: never;
+    };
+    "/companies/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a company at its expected revision
+         * @description Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token.
+         */
+        post: operations["archiveCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List opportunities in stable creation order
+         * @description Bearer credentials require opportunities:read. Cursor is bound to all filters.
+         */
+        get: operations["listOpportunities"];
+        put?: never;
+        /**
+         * Save an opportunity with its original source
+         * @description Source URL or original vacancy text is required. Bearer credentials require opportunities:write. The separate openings:ingest scope grants no arbitrary edit access. Cookie mutations require Origin and X-CSRF-Token. Actor and confirmed-pay fields cannot be supplied. Read the saved detail or list for advisory duplicate warnings.
+         */
+        post: operations["createOpportunity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read an opportunity and likely duplicate warnings
+         * @description Bearer credentials require opportunities:read.
+         */
+        get: operations["getOpportunity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch an opportunity at its expected revision
+         * @description Omitted fields are unchanged; an empty optional string clears it. Omitted compensation preserves the current advertised inputs; a supplied compensation object replaces all of them, and an empty object resets them to unknown. Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token. Read the saved detail or list for advisory duplicate warnings.
+         */
+        patch: operations["patchOpportunity"];
+        trace?: never;
+    };
+    "/opportunities/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive an opportunity at its expected revision
+         * @description Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token.
+         */
+        post: operations["archiveOpportunity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a finite changed-since batch with historical snapshots
+         * @description Bearer credentials require opportunities:read. Start with after=0; follow nextCursor until empty, then use watermark as after for the next poll. A cursor freezes an upper sequence so later writes cannot enter the current batch.
+         */
+        get: operations["listRecordChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/changes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read one immutable audited record change
+         * @description Bearer credentials require opportunities:read.
+         */
+        get: operations["getRecordChange"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -205,6 +391,181 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        Company: {
+            id: string;
+            name: string;
+            website: string;
+            notes: string;
+            /** Format: date-time */
+            archivedAt?: string;
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CompanyDuplicate: {
+            company: components["schemas"]["Company"];
+            /** @enum {string} */
+            reason: "same_website" | "same_name";
+        };
+        CompanyView: {
+            company: components["schemas"]["Company"];
+            likelyDuplicates: components["schemas"]["CompanyDuplicate"][];
+        };
+        /** @description The saved revision and immutable change reference. Read the detail or list for advisory duplicate warnings. */
+        CompanyMutation: {
+            company: components["schemas"]["Company"];
+            changeId: string;
+        };
+        CompanyPage: {
+            items: components["schemas"]["CompanyView"][];
+            nextCursor?: string;
+        };
+        CreateCompanyRequest: {
+            name: string;
+            website?: string;
+            notes?: string;
+        };
+        PatchCompanyRequest: {
+            /** Format: int64 */
+            expectedRevision: number;
+            name?: string;
+            website?: string;
+            notes?: string;
+        };
+        ArchiveRequest: {
+            /** Format: int64 */
+            expectedRevision: number;
+        };
+        /** @description Advertised inputs only. No inferred or employer-confirmed actual-hours pay. */
+        AdvertisedCompensation: {
+            /** @description Uppercase three-letter code or unknown. */
+            currency?: string;
+            /** Format: int64 */
+            minAmountCents?: number;
+            /** Format: int64 */
+            maxAmountCents?: number;
+            /** @enum {string} */
+            period?: "month" | "year" | "hour" | "project" | "unknown";
+            /** Format: int64 */
+            referenceHours?: number;
+            /** @enum {string} */
+            basis?: "base" | "inclusive" | "unknown";
+            benefitsText?: string;
+        };
+        Opportunity: {
+            id: string;
+            companyId: string;
+            title: string;
+            /** @enum {string} */
+            kind: "employment" | "project";
+            sourceUrl: string;
+            originalText: string;
+            notes: string;
+            stage: string;
+            /** @enum {string} */
+            workPattern: "unknown" | "onsite" | "hybrid" | "remote";
+            locationText: string;
+            /** @description Calendar date YYYY-MM-DD or empty. */
+            postedOn: string;
+            /** @description Calendar date YYYY-MM-DD or empty. */
+            deadlineOn: string;
+            /** Format: date-time */
+            archivedAt?: string;
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            compensation: components["schemas"]["AdvertisedCompensation"];
+        };
+        OpportunityDuplicate: {
+            opportunity: components["schemas"]["Opportunity"];
+            /** @enum {string} */
+            reason: "same_source_url" | "same_company_title";
+        };
+        OpportunityView: {
+            opportunity: components["schemas"]["Opportunity"];
+            likelyDuplicates: components["schemas"]["OpportunityDuplicate"][];
+        };
+        /** @description The saved revision and immutable change reference. Read the detail or list for advisory duplicate warnings. */
+        OpportunityMutation: {
+            opportunity: components["schemas"]["Opportunity"];
+            changeId: string;
+        };
+        OpportunityPage: {
+            items: components["schemas"]["OpportunityView"][];
+            nextCursor?: string;
+        };
+        /** @description Provide sourceUrl or originalText; notes are separate from the source. No actor or confirmed-pay fields are accepted. */
+        CreateOpportunityRequest: {
+            companyId: string;
+            title: string;
+            /** @enum {string} */
+            kind: "employment" | "project";
+            sourceUrl?: string;
+            originalText?: string;
+            notes?: string;
+            stage: string;
+            /** @enum {string} */
+            workPattern?: "unknown" | "onsite" | "hybrid" | "remote";
+            locationText?: string;
+            postedOn?: string;
+            deadlineOn?: string;
+            compensation?: components["schemas"]["AdvertisedCompensation"];
+        };
+        /** @description Omitted fields are unchanged and top-level null is invalid. Optional strings clear with an empty string. Omit compensation to preserve it; an empty compensation object resets advertised inputs to unknown. */
+        PatchOpportunityRequest: {
+            /** Format: int64 */
+            expectedRevision: number;
+            companyId?: string;
+            title?: string;
+            /** @enum {string} */
+            kind?: "employment" | "project";
+            sourceUrl?: string;
+            originalText?: string;
+            notes?: string;
+            stage?: string;
+            /** @enum {string} */
+            workPattern?: "unknown" | "onsite" | "hybrid" | "remote";
+            locationText?: string;
+            postedOn?: string;
+            deadlineOn?: string;
+            compensation?: components["schemas"]["AdvertisedCompensation"];
+        };
+        RecordChange: {
+            /** Format: int64 */
+            sequence: number;
+            changeId: string;
+            /** @enum {string} */
+            entityKind: "company" | "opportunity";
+            entityId: string;
+            operation: string;
+            /** @enum {string} */
+            actorKind: "administrator" | "agent";
+            actorId: string;
+            /** Format: int64 */
+            revisionBefore?: number;
+            /** Format: int64 */
+            revisionAfter?: number;
+            /** Format: date-time */
+            occurredAt: string;
+            /** @enum {string} */
+            snapshotState: "captured" | "unavailable_historical";
+            /** @description Immutable event-time company or opportunity snapshot when captured. */
+            snapshot?: {
+                [key: string]: unknown;
+            };
+        };
+        RecordChangePage: {
+            items: components["schemas"]["RecordChange"][];
+            nextCursor?: string;
+            /** Format: int64 */
+            watermark: number;
+        };
     };
     responses: {
         /** @description Invalid request */
@@ -271,7 +632,12 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        RecordId: string;
+        Limit: number;
+        Cursor: string;
+        IncludeArchived: boolean;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -456,6 +822,344 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listCompanies: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                includeArchived?: components["parameters"]["IncludeArchived"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Company page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyPage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved company and immutable change reference */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Company detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated company and immutable change reference */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    archiveCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Archived company and immutable change reference */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listOpportunities: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                includeArchived?: components["parameters"]["IncludeArchived"];
+                companyId?: string;
+                stage?: string;
+                kind?: "employment" | "project";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Opportunity page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpportunityPage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createOpportunity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOpportunityRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved opportunity and immutable change reference */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpportunityMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getOpportunity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Opportunity detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpportunityView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchOpportunity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchOpportunityRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated opportunity and immutable change reference */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpportunityMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    archiveOpportunity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Archived opportunity and immutable change reference */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpportunityMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listRecordChanges: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                after?: number;
+                entityKind?: "company" | "opportunity";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Finite change batch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordChangePage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getRecordChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recorded change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordChange"];
+                };
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];

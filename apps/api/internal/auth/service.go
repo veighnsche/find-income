@@ -133,13 +133,14 @@ func (s *Service) Logout(ctx context.Context, p Principal) error {
 }
 
 var allowedScopes = map[string]bool{
-	"preferences:read":   true,
-	"opportunities:read": true,
-	"openings:ingest":    true,
-	"evidence:write":     true,
-	"actions:write":      true,
-	"drafts:write":       true,
-	"judgments:request":  true,
+	"preferences:read":    true,
+	"opportunities:read":  true,
+	"opportunities:write": true,
+	"openings:ingest":     true,
+	"evidence:write":      true,
+	"actions:write":       true,
+	"drafts:write":        true,
+	"judgments:request":   true,
 }
 
 func AllowedScopes() []string {

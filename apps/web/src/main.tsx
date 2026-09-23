@@ -20,6 +20,7 @@ import './style.css';
 const scopeOptions = [
   ['preferences:read', 'Read job preferences'],
   ['opportunities:read', 'Read opportunities'],
+  ['opportunities:write', 'Edit companies and opportunities'],
   ['openings:ingest', 'Submit sourced openings'],
   ['evidence:write', 'Add sourced evidence'],
   ['actions:write', 'Manage follow-ups'],

@@ -154,7 +154,275 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /companies:
+    get:
+      operationId: listCompanies
+      summary: List companies in stable creation order
+      description: Bearer credentials require opportunities:read. Cursor is bound to the archived filter.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/IncludeArchived'
+      responses:
+        '200':
+          description: Company page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createCompany
+      summary: Create a company
+      description: Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token. Actor identity is derived from the credential.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCompanyRequest' }
+      responses:
+        '201':
+          description: Saved company and immutable change reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /companies/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: getCompany
+      summary: Read a company and likely duplicate warnings
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      description: Bearer credentials require opportunities:read.
+      responses:
+        '200':
+          description: Company detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyView' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: patchCompany
+      summary: Patch a company at its expected revision
+      description: Omitted fields are unchanged; an empty optional string clears it. Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchCompanyRequest' }
+      responses:
+        '200':
+          description: Updated company and immutable change reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{id}/archive:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    post:
+      operationId: archiveCompany
+      summary: Archive a company at its expected revision
+      description: Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ArchiveRequest' }
+      responses:
+        '200':
+          description: Archived company and immutable change reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /opportunities:
+    get:
+      operationId: listOpportunities
+      summary: List opportunities in stable creation order
+      description: Bearer credentials require opportunities:read. Cursor is bound to all filters.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/IncludeArchived'
+        - name: companyId
+          in: query
+          schema: { type: string }
+        - name: stage
+          in: query
+          schema: { type: string }
+        - name: kind
+          in: query
+          schema: { type: string, enum: [employment, project] }
+      responses:
+        '200':
+          description: Opportunity page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OpportunityPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createOpportunity
+      summary: Save an opportunity with its original source
+      description: Source URL or original vacancy text is required. Bearer credentials require opportunities:write. The separate openings:ingest scope grants no arbitrary edit access. Cookie mutations require Origin and X-CSRF-Token. Actor and confirmed-pay fields cannot be supplied. Read the saved detail or list for advisory duplicate warnings.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOpportunityRequest' }
+      responses:
+        '201':
+          description: Saved opportunity and immutable change reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OpportunityMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /opportunities/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: getOpportunity
+      summary: Read an opportunity and likely duplicate warnings
+      description: Bearer credentials require opportunities:read.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Opportunity detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OpportunityView' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: patchOpportunity
+      summary: Patch an opportunity at its expected revision
+      description: Omitted fields are unchanged; an empty optional string clears it. Omitted compensation preserves the current advertised inputs; a supplied compensation object replaces all of them, and an empty object resets them to unknown. Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token. Read the saved detail or list for advisory duplicate warnings.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchOpportunityRequest' }
+      responses:
+        '200':
+          description: Updated opportunity and immutable change reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OpportunityMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /opportunities/{id}/archive:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    post:
+      operationId: archiveOpportunity
+      summary: Archive an opportunity at its expected revision
+      description: Bearer credentials require opportunities:write. Cookie mutations require Origin and X-CSRF-Token.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ArchiveRequest' }
+      responses:
+        '200':
+          description: Archived opportunity and immutable change reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OpportunityMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /changes:
+    get:
+      operationId: listRecordChanges
+      summary: Read a finite changed-since batch with historical snapshots
+      description: Bearer credentials require opportunities:read. Start with after=0; follow nextCursor until empty, then use watermark as after for the next poll. A cursor freezes an upper sequence so later writes cannot enter the current batch.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: after
+          in: query
+          schema: { type: integer, format: int64, minimum: 0, default: 0 }
+        - name: entityKind
+          in: query
+          schema: { type: string, enum: [company, opportunity] }
+      responses:
+        '200':
+          description: Finite change batch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecordChangePage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /changes/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: getRecordChange
+      summary: Read one immutable audited record change
+      description: Bearer credentials require opportunities:read.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Recorded change
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecordChange' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
+  parameters:
+    RecordId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    IncludeArchived:
+      name: includeArchived
+      in: query
+      schema: { type: boolean, default: false }
   securitySchemes:
     cookieAuth:
       type: apiKey
@@ -366,3 +634,223 @@ components:
         details:
           type: object
           additionalProperties: true
+    Company:
+      type: object
+      required: [id, name, website, notes, revision, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        website: { type: string }
+        notes: { type: string }
+        archivedAt: { type: string, format: date-time }
+        revision: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CompanyDuplicate:
+      type: object
+      required: [company, reason]
+      properties:
+        company: { $ref: '#/components/schemas/Company' }
+        reason: { type: string, enum: [same_website, same_name] }
+    CompanyView:
+      type: object
+      required: [company, likelyDuplicates]
+      properties:
+        company: { $ref: '#/components/schemas/Company' }
+        likelyDuplicates:
+          type: array
+          items: { $ref: '#/components/schemas/CompanyDuplicate' }
+    CompanyMutation:
+      type: object
+      description: The saved revision and immutable change reference. Read the detail or list for advisory duplicate warnings.
+      required: [company, changeId]
+      properties:
+        company: { $ref: '#/components/schemas/Company' }
+        changeId: { type: string }
+    CompanyPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CompanyView' }
+        nextCursor: { type: string }
+    CreateCompanyRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        website: { type: string, maxLength: 2048 }
+        notes: { type: string, maxLength: 10000 }
+    PatchCompanyRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision]
+      properties:
+        expectedRevision: { type: integer, format: int64, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        website: { type: string, maxLength: 2048 }
+        notes: { type: string, maxLength: 10000 }
+    ArchiveRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision]
+      properties:
+        expectedRevision: { type: integer, format: int64, minimum: 1 }
+    AdvertisedCompensation:
+      type: object
+      additionalProperties: false
+      description: Advertised inputs only. No inferred or employer-confirmed actual-hours pay.
+      properties:
+        currency: { type: string, description: Uppercase three-letter code or unknown. }
+        minAmountCents: { type: integer, format: int64, minimum: 0 }
+        maxAmountCents: { type: integer, format: int64, minimum: 0 }
+        period: { type: string, enum: [month, year, hour, project, unknown] }
+        referenceHours: { type: integer, format: int64, minimum: 1, maximum: 168 }
+        basis: { type: string, enum: [base, inclusive, unknown] }
+        benefitsText: { type: string, maxLength: 10000 }
+    Opportunity:
+      type: object
+      required:
+        [
+          id,
+          companyId,
+          title,
+          kind,
+          sourceUrl,
+          originalText,
+          notes,
+          stage,
+          workPattern,
+          locationText,
+          postedOn,
+          deadlineOn,
+          revision,
+          createdAt,
+          updatedAt,
+          compensation,
+        ]
+      properties:
+        id: { type: string }
+        companyId: { type: string }
+        title: { type: string }
+        kind: { type: string, enum: [employment, project] }
+        sourceUrl: { type: string }
+        originalText: { type: string }
+        notes: { type: string }
+        stage: { type: string }
+        workPattern: { type: string, enum: [unknown, onsite, hybrid, remote] }
+        locationText: { type: string }
+        postedOn: { type: string, description: Calendar date YYYY-MM-DD or empty. }
+        deadlineOn: { type: string, description: Calendar date YYYY-MM-DD or empty. }
+        archivedAt: { type: string, format: date-time }
+        revision: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        compensation: { $ref: '#/components/schemas/AdvertisedCompensation' }
+    OpportunityDuplicate:
+      type: object
+      required: [opportunity, reason]
+      properties:
+        opportunity: { $ref: '#/components/schemas/Opportunity' }
+        reason: { type: string, enum: [same_source_url, same_company_title] }
+    OpportunityView:
+      type: object
+      required: [opportunity, likelyDuplicates]
+      properties:
+        opportunity: { $ref: '#/components/schemas/Opportunity' }
+        likelyDuplicates:
+          type: array
+          items: { $ref: '#/components/schemas/OpportunityDuplicate' }
+    OpportunityMutation:
+      type: object
+      description: The saved revision and immutable change reference. Read the detail or list for advisory duplicate warnings.
+      required: [opportunity, changeId]
+      properties:
+        opportunity: { $ref: '#/components/schemas/Opportunity' }
+        changeId: { type: string }
+    OpportunityPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OpportunityView' }
+        nextCursor: { type: string }
+    CreateOpportunityRequest:
+      type: object
+      description: Provide sourceUrl or originalText; notes are separate from the source. No actor or confirmed-pay fields are accepted.
+      additionalProperties: false
+      required: [companyId, title, kind, stage]
+      properties:
+        companyId: { type: string }
+        title: { type: string, maxLength: 300 }
+        kind: { type: string, enum: [employment, project] }
+        sourceUrl: { type: string, maxLength: 2048 }
+        originalText: { type: string, maxLength: 200000 }
+        notes: { type: string, maxLength: 10000 }
+        stage: { type: string }
+        workPattern: { type: string, enum: [unknown, onsite, hybrid, remote] }
+        locationText: { type: string, maxLength: 500 }
+        postedOn: { type: string }
+        deadlineOn: { type: string }
+        compensation: { $ref: '#/components/schemas/AdvertisedCompensation' }
+    PatchOpportunityRequest:
+      type: object
+      description: Omitted fields are unchanged and top-level null is invalid. Optional strings clear with an empty string. Omit compensation to preserve it; an empty compensation object resets advertised inputs to unknown.
+      additionalProperties: false
+      required: [expectedRevision]
+      properties:
+        expectedRevision: { type: integer, format: int64, minimum: 1 }
+        companyId: { type: string }
+        title: { type: string, maxLength: 300 }
+        kind: { type: string, enum: [employment, project] }
+        sourceUrl: { type: string, maxLength: 2048 }
+        originalText: { type: string, maxLength: 200000 }
+        notes: { type: string, maxLength: 10000 }
+        stage: { type: string }
+        workPattern: { type: string, enum: [unknown, onsite, hybrid, remote] }
+        locationText: { type: string, maxLength: 500 }
+        postedOn: { type: string }
+        deadlineOn: { type: string }
+        compensation: { $ref: '#/components/schemas/AdvertisedCompensation' }
+    RecordChange:
+      type: object
+      required:
+        [
+          sequence,
+          changeId,
+          entityKind,
+          entityId,
+          operation,
+          actorKind,
+          actorId,
+          occurredAt,
+          snapshotState,
+        ]
+      properties:
+        sequence: { type: integer, format: int64 }
+        changeId: { type: string }
+        entityKind: { type: string, enum: [company, opportunity] }
+        entityId: { type: string }
+        operation: { type: string }
+        actorKind: { type: string, enum: [administrator, agent] }
+        actorId: { type: string }
+        revisionBefore: { type: integer, format: int64 }
+        revisionAfter: { type: integer, format: int64 }
+        occurredAt: { type: string, format: date-time }
+        snapshotState: { type: string, enum: [captured, unavailable_historical] }
+        snapshot:
+          type: object
+          additionalProperties: true
+          description: Immutable event-time company or opportunity snapshot when captured.
+    RecordChangePage:
+      type: object
+      required: [items, watermark]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RecordChange' }
+        nextCursor: { type: string }
+        watermark: { type: integer, format: int64 }

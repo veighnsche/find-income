@@ -44,6 +44,18 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/agent-credentials", h.listAgents)
 	mux.HandleFunc("POST /api/v1/agent-credentials", h.createAgent)
 	mux.HandleFunc("POST /api/v1/agent-credentials/{id}/revoke", h.revokeAgent)
+	mux.HandleFunc("GET /api/v1/companies", h.listCompanies)
+	mux.HandleFunc("POST /api/v1/companies", h.createCompany)
+	mux.HandleFunc("GET /api/v1/companies/{id}", h.getCompany)
+	mux.HandleFunc("PATCH /api/v1/companies/{id}", h.patchCompany)
+	mux.HandleFunc("POST /api/v1/companies/{id}/archive", h.archiveCompany)
+	mux.HandleFunc("GET /api/v1/opportunities", h.listOpportunities)
+	mux.HandleFunc("POST /api/v1/opportunities", h.createOpportunity)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}", h.getOpportunity)
+	mux.HandleFunc("PATCH /api/v1/opportunities/{id}", h.patchOpportunity)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/archive", h.archiveOpportunity)
+	mux.HandleFunc("GET /api/v1/changes", h.listChanges)
+	mux.HandleFunc("GET /api/v1/changes/{id}", h.getChange)
 	mux.HandleFunc("/api/v1/", h.privateNotFound)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
@@ -89,7 +101,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{Name: auth.SessionCookie, Value: session.Token, Path: "/api/v1",
 		HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteStrictMode, Expires: session.ExpiresAt})
-	writeJSON(w, http.StatusOK, generated.SessionResponse{ActorKind: generated.Administrator, ActorId: "owner",
+	writeJSON(w, http.StatusOK, generated.SessionResponse{ActorKind: generated.SessionResponseActorKindAdministrator, ActorId: "owner",
 		CsrfToken: session.CSRFToken, ExpiresAt: session.ExpiresAt})
 }
 
@@ -98,7 +110,7 @@ func (h *Handler) session(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, generated.SessionResponse{ActorKind: generated.Administrator, ActorId: principal.ID,
+	writeJSON(w, http.StatusOK, generated.SessionResponse{ActorKind: generated.SessionResponseActorKindAdministrator, ActorId: principal.ID,
 		CsrfToken: principal.CSRFToken, ExpiresAt: principal.ExpiresAt})
 }
 
