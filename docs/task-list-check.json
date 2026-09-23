@@ -6,7 +6,8 @@
   "models_valid": true,
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
-    "I10 isolated cross-outcome saved advice integration, Sol High"
+    "I10 isolated cross-outcome saved advice integration, Sol High",
+    "I27 bounded read-only actual client/server journey audit, Sol Medium"
   ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",
@@ -48,7 +49,7 @@
     "build": "passed at 8c8b66d",
     "e2e": "pnpm e2e now runs real headless browser fixture smoke; root passed after permitted macOS sandbox escalation. Synthetic HTTP only; no live API/runtime acceptance.",
     "latest_slices": "d9679af backend: root full Go suite and both generated-contract checks passed; all13 independently rechecked delivery hashes matched. 235441d web: root lint/TypeScript and pnpm e2e passed.",
-    "active_integration": "I10 cross-outcome advice active in /private/tmp/find-income-i10-advice, incorporating committedc85a617 interviews. Interview/offer writers and reviewer idle; main feature changes are committed.",
+    "active_integration": "I10 cross-outcome advice active in /private/tmp/find-income-i10-advice, incorporating committedc85a617 interviews. Interview/offer writers and reviewer idle; main feature changes are committed. Concurrent I27 read-only client/server audit checks actual contract/control integration; no live acceptance.",
     "recovery": "Five current-format synthetic tests and shell syntax pass at3bcbd42; no real data or host touched.",
     "delivery": "Root synthetic SMTP protocol suite passes after non-ASCII/bounds and uncertain-positive-reply corrections; no real send.",
     "native_probe": "Saved synthetic Linux 0.153.4 evidence verifier passed: read-only native writes and private-state diagnostics denied, trusted fake-transport lifecycle worked; no real account/MCP/wrapper acceptance.",

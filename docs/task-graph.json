@@ -581,8 +581,14 @@
       "scope": "Exercise the implemented search\u2192pack\u2192approved controlled delivery\u2192reply\u2192interview/offer journey, narrow-screen review, external-agent scope and final current-format recovery. Record optional I17 disposition separately. Have Luna Low update operating docs from verified commands/outcomes after the technical review, without rerunning tests or changing acceptance.",
       "acceptance": "Coordinator reviews exact code state, root checks and real-versus-fixture boundaries. Every control produces a useful bounded outcome and stops. No manual row work, chat, hidden autonomous activity or fictional delivery remains. Docs describe actual capabilities and unresolved external prerequisites.",
       "selection_reason": "Sol Medium performs the defined integrated review; Luna Low handles the final factual documentation pass. No extra full audit of unchanged components.",
-      "status": "waiting",
-      "remaining_work": "Run the complete supported journey and final recovery checks, then update operating documentation from observed outcomes."
+      "status": "partial",
+      "remaining_work": "Run the complete supported journey and final recovery checks, then update operating documentation from observed outcomes.",
+      "active_slice": "Bounded read-only client/server journey audit; real owner walkthrough remains pending",
+      "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
+      "host_id": "local",
+      "active_model": "gpt-6-sol",
+      "active_effort": "medium",
+      "active_selection_reason": "Bounded cross-layer contract and control audit against actual code, without repeating backend authority reviews or trusting fixture shapes."
     }
   ],
   "execution_guide": "/Users/vince/Projects/find-income/dashboard/docs/implementation-tasks.md",
