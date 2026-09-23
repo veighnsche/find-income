@@ -482,7 +482,7 @@
       "selection_reason": "Existing evidence and known outcome boundaries fit Sol Medium.",
       "status": "partial",
       "remaining_work": "Finish commissioned backend integration in /private/tmp/find-income-i24-backend at base b4f1080; review and integrate its isolated commit after main delivery stabilises. Then add concise contextual UI and verify real quality cases.",
-      "active_slice": "Isolated commissioned interview backend and concurrent main UI against stable c55f562 contract",
+      "active_slice": "Frozen isolated backend61a5d0b awaits recovery authority review; main UI corrects root digest/pending-POST findings",
       "thread_id": "01a0cfa3-1a77-7b21-af23-7e2bafefad41",
       "host_id": "local",
       "active_model": "gpt-6-sol",
@@ -493,7 +493,11 @@
       "active_selection_reason": "Cross-file controller/runtime/persistence integration can proceed independently while main delivery authority files remain frozen.",
       "ui_thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
       "ui_model": "gpt-6-sol",
-      "ui_effort": "medium"
+      "ui_effort": "medium",
+      "isolated_commit": "61a5d0b",
+      "review_thread_id": "01a0ce8e-4c6e-7c93-b63c-1084063ba7c0",
+      "review_model": "gpt-6-astra",
+      "review_effort": "high"
     },
     {
       "id": "I25",

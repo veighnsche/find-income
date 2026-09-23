@@ -6,8 +6,8 @@
   "models_valid": true,
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
-    "I24 isolated commissioned interview backend",
-    "I24 main interview UI",
+    "I24 recovery authority review and three technical Jev consultations",
+    "I24 main UI digest and pending-POST corrections",
     "I25 isolated commissioned offer backend"
   ],
   "implementation_acceptance": [
@@ -87,5 +87,14 @@
       1684
     ],
     "current_cap_result": "Both valid responses exceeded the former1200 limit and abstained. Committed offline regressions validate them under the new10000 reported-token limit; no general decision-quality claim."
+  },
+  "interview_recovery_consultation": {
+    "maximum_calls": 3,
+    "automatic_retries": 0,
+    "reported_token_target": 30000,
+    "provider_hard_cap": false,
+    "scope": "Technical authority design facts only; no personal CV or offer text",
+    "status": "in_progress",
+    "evidence_path": "implementation-notes/implementation/I24-recovery-design/"
   }
 }
