@@ -480,12 +480,15 @@
       "selection_reason": "Existing evidence and known outcome boundaries fit Sol Medium.",
       "status": "partial",
       "remaining_work": "Integrate commissioned Codex execution, bounded Jev capture/charging, immutable persistence and concise UI; separately review real quality cases. Domain helpers alone are not interview acceptance.",
-      "active_slice": "I24 domain committed7299c54; integration pending",
-      "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
+      "active_slice": "Commissioned interview backend integration in isolated checkout; UI follows contract handoff",
+      "thread_id": "01a0cfa3-1a77-7b21-af23-7e2bafefad41",
       "host_id": "local",
       "active_model": "gpt-6-sol",
-      "active_effort": "medium",
-      "review": "Root reviewed sourced interview/debrief and Jev focus helpers; focused interviewprep/jev tests passed at7299c54."
+      "active_effort": "high",
+      "review": "Root reviewed sourced interview/debrief and Jev focus helpers; focused interviewprep/jev tests passed at7299c54.",
+      "worktree": "/private/tmp/find-income-i24-backend",
+      "worktree_base": "b4f1080",
+      "active_selection_reason": "Cross-file controller/runtime/persistence integration can proceed independently while main delivery authority files remain frozen."
     },
     {
       "id": "I25",

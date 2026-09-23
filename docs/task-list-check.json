@@ -6,9 +6,9 @@
   "models_valid": true,
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
-    "I21 web delivery control/replay corrections",
     "I22 independent backend delivery authority review",
-    "I10 persisted cross-outcome recommendation"
+    "I10 persisted cross-outcome recommendation",
+    "I24 isolated commissioned interview backend"
   ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",
@@ -55,7 +55,8 @@
     "offers": "Root offercomparison/jev tests passed after exact numeric context/recomputed binding and unsupported-currency corrections. Commissioned execution/persistence/UI still pending.",
     "contextual_ui": "Committed12b138d: root lint/TypeScript and production-build Chromium smoke pass. Actual inputReport/packReport, exact lost-response replay, stale409 recovery, selected older pack retention and automatic new-version refresh verified with synthetic HTTP. Earlier draft assertion failed during list/detail refresh; explicit readiness and same-node/value/storage assertions now pass with one fill. Live runtime acceptance remains open.",
     "discovery_review": "All3 findings closed in bounded independent recheck. New-employer fixture uses11/10/14/3 from public-search phase; initial direction decision is outside fixture and adds one request. No real discovery quality claim.",
-    "discovery_context_budget": "Committedcd2f9ab: saved real requests/responses verified byte-for-byte, old1200 rejection/new10000 unresolved acceptance offline;24KiB pre-call and full-excerpt default-batch regressions pass. Actual usage4645 across2 calls, both abstentions."
+    "discovery_context_budget": "Committedcd2f9ab: saved real requests/responses verified byte-for-byte, old1200 rejection/new10000 unresolved acceptance offline;24KiB pre-call and full-excerpt default-batch regressions pass. Actual usage4645 across2 calls, both abstentions.",
+    "delivery_ui": "Root lint/TypeScript and pnpm e2e pass after pending-Send Stop, known Prepare rejection revision, exact same-review lost-request recovery and partial-batch close/history corrections. Synthetic HTTP only; web frozen until backend authority review is resolved."
   },
   "protected_artifacts_unchanged_prior_check": 44,
   "proposed_next_slices": [
