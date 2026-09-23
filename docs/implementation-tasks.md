@@ -264,7 +264,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I05, I07, I08, I09.
 
-**Remaining work:** Integrate Jev discovery-lead choice and saved next-outcome advice; verify live acquisition effects and currentness. Broader decision classes are not covered by the responsibility evaluation.
+**Remaining work:** Complete Jev selection among neutral discovered leads and useful continuation within one finite commissioned outcome; the current engine stops after one extraction. Verify contextual-input organisation and current decision reuse, then real useful discovery. Retained-batch continuity alone is not substantial-round acceptance. See [remaining outcome gap](/Users/vince/Projects/find-income/implementation-notes/implementation/I10-round-outcome-gap.md).
 
 **Task scope:** Integrate durable assessments and bounded candidate selection with the controller and acquisition services. Include organisation, factual scope, lead/research priority and next useful implemented outcome. Persist full request/response, versions, options, source support and usage; treat facts and require/avoid/prefer policy separately.
 
