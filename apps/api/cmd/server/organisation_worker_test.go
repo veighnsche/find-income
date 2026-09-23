@@ -35,7 +35,7 @@ func TestOrganisationWorkerStartsProcessesAndJoinsOnShutdown(t *testing.T) {
 	}
 	defer database.Close()
 	owner := store.Actor{Kind: "administrator", ID: "owner"}
-	_, err = database.UpdateOrganisationCategories(ctx, 0, []store.OrganisationCategory{
+	_, err = database.UpdateOrganisationCategories(ctx, 1, []store.OrganisationCategory{
 		{ID: "research", Description: "Vacancies for user research work."},
 		{ID: "operations", Description: "Vacancies for running services."},
 	}, owner)
