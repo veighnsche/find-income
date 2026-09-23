@@ -1,6 +1,6 @@
 # Recruitment agency — full task list and concurrent execution guide
 
-Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. Current ownership, reviewed checkpoints and remaining acceptance are recorded below; historical test passes do not establish completion of the evolving worktree.
+Updated 24 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. Current ownership, reviewed checkpoints and remaining acceptance are recorded below; historical test passes do not establish completion of the evolving worktree.
 
 **Current position: 5 tasks accepted, 15 partial, 2 active tasks, 5 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20, I24–I26. I21 and I22 are active. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
@@ -30,14 +30,14 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I10 next-action recommendation | Sol High | Current supported actions, charged Jev decision during useful commissioned discovery, persisted report and replay; no schema/HTTP/web edits. |
-| I21 delivery UI | Sol High | Exact message/PDF review, selected batch, approval/dispatch recovery and synthetic browser checks; web/smoke ownership only. |
+| I10 next-action recommendation | Sol High | Charged Jev advice during commissioned discovery, persisted report/replay, and a new read-only HTTP currentness helper. I21 alone applies the existing GET handler call; no schema or web edits. |
+| I11 saved recommendation UI | Sol Medium | Consume saved advice and the server currentness verdict, navigate exact targets, move technical evidence into details, and preserve the root-tested delivery controls; web/smoke only. |
 | I21 exact approval/delivery | Sol High | Delivery service/store/API, initial schema, operation registry, HTTP/contracts and startup composition; no discovery engine or web edits. |
 | I22 delivery review | Astra High | Review complete: one P1 and two P2 findings; bounded recheck follows source-binding, local recovery and HTTP response corrections. |
 | I24 interview backend | Sol High | Isolated checkout /private/tmp/find-income-i24-backend at b4f1080; commissioned runtime/store/API integration; no main or web edits. |
 | I10 context-budget evaluation | Sol Medium | Completed: two HTTP200 calls,4645 reported tokens; both valid abstentions exceeded1200. Core owns the bounded cap correction. |
 
-Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; contextual input and shared pack transaction integration committed2279c3f after independent correction review, full Go suite and race-enabled recovery tests. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. Contextual-input UI is committed12b138d after root lint/TypeScript and production-build browser checks; real runtime acceptance remains open. The web writer is implementing I21 exact delivery review concurrently; interview helpers are committed7299c54 after root review/tests, and the I25 offer helpers are reviewed and committed in de84e23; both domain slices still need commissioned persistence/UI integration. Four live workers maximum.
+Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; contextual input and shared pack transaction integration committed2279c3f after independent correction review, full Go suite and race-enabled recovery tests. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. Contextual-input UI is committed12b138d after root lint/TypeScript and production-build browser checks; real runtime acceptance remains open. The web writer has passed root synthetic delivery checks and is integrating the saved home recommendation; interview helpers are committed7299c54 after root review/tests, and the I25 offer helpers are reviewed and committed in de84e23; both domain slices still need commissioned persistence/UI integration. Four live workers maximum.
 
 Reviewed checkpoints: API `2fdfe7d`, deployment `717ef93`, UI `8c8b66d`. Root `pnpm check`, `pnpm test`, `pnpm build` pass after contract formatting. Web has no automated test files; controlled browser interactions and screenshots were reviewed. The e2e placeholder is replaced by browser fixture smoke in a2726ed; root pnpm e2e passed.
 
@@ -47,7 +47,7 @@ I14 retained ten completed responsibility cases (seven real, three synthetic) an
 
 I24 has a separate detached checkout at `/private/tmp/find-income-i24-backend` so its initial schema/controller/API work does not mutate files frozen for I22. Its reviewed commit will be integrated after main delivery review; any conflicts will be resolved directly, with no compatibility path. One writer per physical checkout/path remains enforced.
 
-Discovery has explicitly released shared initial schema, HTTP/OpenAPI/generated contracts, startup and the operation-cost registry to I21; it retains discovery engine, candidate/verification/cursor files and Codex discovery integration. I21 composes routing separately and publishes DTOs for the web writer. It also owns the narrow codexservice/applicationpacks.go preparation hook and its tests; discovery retains engine.go/tools.go. The separate context evaluation used exactly two Jev calls and zero retries:2961 and1684 reported tokens,4645 total against a12000 target. Both valid responses abstained and exceed the current1200 cap; core is correcting that measured defect. This target was not a provider hardcap; usage is separate from prior I14 evaluation.
+Discovery has explicitly released shared initial schema, HTTP/OpenAPI/generated contracts, startup and the operation-cost registry to I21; it retains discovery engine, candidate/verification/cursor files and Codex discovery integration. I21 composes routing separately and publishes DTOs for the web writer. It also owns the narrow codexservice/applicationpacks.go preparation hook and its tests; discovery retains engine.go/tools.go. The separate context evaluation used exactly two Jev calls and zero retries:2961 and1684 reported tokens,4645 total against a12000 target. Both valid responses abstained and exceeded the former1200 cap; cd2f9ab corrected that measured defect with a10000 reported-token ceiling and24KiB request preflight. This target was not a provider hardcap; usage is separate from prior I14 evaluation.
 
 ### Initial wave ownership and handoff record
 
@@ -406,7 +406,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I12, I15.
 
-**Remaining work:** Integrate exact approval and durable intent in I21; verify a real sender account and bounded receipt lookup; controlled live delivery requires I22 authorization and evidence. No product send endpoint exists yet.
+**Remaining work:** Finish reviewed I21 integration and verify a real sender account. The implemented adapter truthfully reports receipt lookup unsupported; controlled live delivery needs exact owner authorization and I22 evidence. The send endpoint is implemented but unaccepted pending corrections.
 
 **Task scope:** Implement a verified employer-accepted email or supported candidate-portal route with exact required fields/attachments, bounded tool actions and read-only receipt lookup. Portal delivery must not wait for an email adapter. Exercise fake destination paths before real external action.
 
@@ -420,7 +420,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 - [ ] **In progress** · GPT-6 Sol / High · Dependencies: I15, I20.
 
-**Remaining work:** Implement exact-material approval, bounded delivery intent, per-item outcomes and uncertainty reconciliation.
+**Remaining work:** Correct the three I22 findings: substantive pack/source binding before review, local captured-Jev reconciliation through production Resume without extra charge, and nested HTTP Round serialization. Then freeze for bounded recheck and commit the reviewed backend/contracts/UI; live acceptance remains open.
 
 **Task scope:** Implement one-item and small exact-batch review, immutable approved material/destination, send intent, preflight substantive route checks, per-item outcomes and reconciliation under remaining allowance. New material invalidates affected approval; cosmetic changes alone do not.
 
@@ -432,7 +432,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 - [ ] **In progress** · GPT-6 Astra / High · Dependencies: I21.
 
-**Remaining work:** Independently review delivery authority and validate a specifically authorized controlled send; code review alone does not establish live delivery.
+**Remaining work:** Recheck the three corrected findings against production coordinator and HTTP regressions, then validate a specifically authorized controlled live send. Saved independent reproductions establish defects, not delivery acceptance.
 
 **Task scope:** Review the exact send/approval/reconciliation diff independently, using requirements and raw evidence without earlier verdicts. Verify only a specifically approved controlled destination or actual reviewed batch; no employer outreach follows merely from this task’s existence.
 
@@ -456,7 +456,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I15, I18.
 
-**Remaining work:** Domain helpers committed7299c54 after root source review and passing interviewprep/jev tests. Integrate commissioned Codex execution, bounded Jev capture/charging, immutable persistence/UI and separately reviewed quality cases; no interview acceptance yet.
+**Remaining work:** Finish commissioned backend integration in /private/tmp/find-income-i24-backend at base b4f1080; review and integrate its isolated commit after main delivery stabilises. Then add concise contextual UI and verify real quality cases.
 
 **Task scope:** Implement one-interview preparation using employer/context evidence and truthful examples, plus contextual debrief capture. Accept owner-supplied complete interview context without requiring inbox or calendar integration.
 

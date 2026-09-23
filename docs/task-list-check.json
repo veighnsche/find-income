@@ -44,8 +44,8 @@
     "test": "passed full Go API suite; web runner has no test files; controlled I11 browser fixture reviewed",
     "build": "passed at 8c8b66d",
     "e2e": "pnpm e2e now runs real headless browser fixture smoke; root passed after permitted macOS sandbox escalation. Synthetic HTTP only; no live API/runtime acceptance.",
-    "latest_slices": "Root full go test ./... -count=1 passed on frozen discovery and I21 backend snapshot. A later narrow same-review recovery/config-loss change passed worker deliveryservice/httpapi tests; independent I22 review is active.",
-    "active_integration": "Core I13 corrections committed7310026 after independent review and root exact replay/import tests. Pack correction preparation committed1c8417f; process_input/schema/transaction integration active.",
+    "latest_slices": "Root full Go suite passed the frozen discovery/I21 snapshot. Independent I22 review then reproduced three uncovered defects; corrections are active. This earlier pass does not accept the changing backend.",
+    "active_integration": "Contextual core2279c3f and UI12b138d are committed. I10 recommendation, I11 recommendation UI, I21 delivery corrections, and isolated I24 interview backend are active.",
     "recovery": "Five current-format synthetic tests and shell syntax pass at3bcbd42; no real data or host touched.",
     "delivery": "Root synthetic SMTP protocol suite passes after non-ASCII/bounds and uncertain-positive-reply corrections; no real send.",
     "native_probe": "Saved synthetic Linux 0.153.4 evidence verifier passed: read-only native writes and private-state diagnostics denied, trusted fake-transport lifecycle worked; no real account/MCP/wrapper acceptance.",
@@ -57,14 +57,15 @@
     "contextual_ui": "Committed12b138d: root lint/TypeScript and production-build Chromium smoke pass. Actual inputReport/packReport, exact lost-response replay, stale409 recovery, selected older pack retention and automatic new-version refresh verified with synthetic HTTP. Earlier draft assertion failed during list/detail refresh; explicit readiness and same-node/value/storage assertions now pass with one fill. Live runtime acceptance remains open.",
     "discovery_review": "All3 findings closed in bounded independent recheck. New-employer fixture uses11/10/14/3 from public-search phase; initial direction decision is outside fixture and adds one request. No real discovery quality claim.",
     "discovery_context_budget": "Committedcd2f9ab: saved real requests/responses verified byte-for-byte, old1200 rejection/new10000 unresolved acceptance offline;24KiB pre-call and full-excerpt default-batch regressions pass. Actual usage4645 across2 calls, both abstentions.",
-    "delivery_ui": "Root lint/TypeScript and pnpm e2e pass after pending-Send Stop, known Prepare rejection revision, exact same-review lost-request recovery and partial-batch close/history corrections. Synthetic HTTP only; web frozen until backend authority review is resolved.",
+    "delivery_ui": "Root lint/TypeScript and pnpm e2e passed pending-Send Stop, known Prepare rejection revision, same-review lost-request recovery, and partial-batch history corrections. Synthetic HTTP only. Web now integrates recommendation UI; delivery authority remains under correction.",
     "delivery_authority": "I22 independent review found1 P1 stale pre-review pack binding and2 P2 captured-Jev production Resume/HTTP Round serialization failures, with saved temporary reproductions. Corrections assigned; no delivery acceptance."
   },
   "protected_artifacts_unchanged_prior_check": 44,
   "proposed_next_slices": [
-    "Native-tool isolation correction",
-    "Commissioned contextual input and pack correction",
-    "Jev discovery-lead choice"
+    "Bounded delivery correction recheck and coherent commit",
+    "Review persisted recommendation and currentness/UI integration",
+    "Review and merge isolated interview backend, then contextual UI",
+    "Commissioned offer integration; real host/account and correspondence acceptance when owner inputs arrive"
   ],
   "goal_status": "active",
   "context_budget_evaluation": {
@@ -74,7 +75,7 @@
     "provider_hard_cap": false,
     "scope": "Current synthetic next-outcome and neutral-lead request shapes; measure actual provider input/output usage; no account/scrape/delivery calls.",
     "evidence_path": "implementation-notes/implementation/I10-context-budget/",
-    "status": "completed; cap correction assigned",
+    "status": "completed; cap correction committed cd2f9ab",
     "calls": 2,
     "reported_input_tokens": 4404,
     "reported_output_tokens": 241,
@@ -83,6 +84,6 @@
       2961,
       1684
     ],
-    "current_cap_result": "Both valid complete responses exceed1200; both choices unresolved. No general decision-quality claim."
+    "current_cap_result": "Both valid responses exceeded the former1200 limit and abstained. Committed offline regressions validate them under the new10000 reported-token limit; no general decision-quality claim."
   }
 }
