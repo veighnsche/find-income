@@ -21,10 +21,20 @@ func currentEvidenceVersion(t *testing.T, s *Store, opportunityID string) int64 
 	return version
 }
 
+func currentInputVersions(t *testing.T, s *Store, opportunityID string) QualificationInputVersions {
+	t.Helper()
+	versions, err := s.QualificationInputVersions(context.Background(), opportunityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return versions
+}
+
 func addStatementFixture(t *testing.T, s *Store, opportunityID, text string) EvidenceSource {
 	t.Helper()
 	source, _, err := s.AddEvidenceSource(context.Background(), ownerActor(), SourceInput{
-		OpportunityID: opportunityID, Statement: &StatementInput{SpeakerAffiliation: "employer_representative",
+		OpportunityID: opportunityID, ExpectedContextVersion: currentInputVersions(t, s, opportunityID).ContextVersion,
+		Statement: &StatementInput{SpeakerAffiliation: "employer_representative",
 			SpeakerName: "R. Example", SpeakerRole: "Hiring manager", SpeakerOrganisation: "Harbour Systems",
 			Channel: "meeting", OccurredAt: "2026-09-23T10:00:00Z", OriginalText: text},
 	})
@@ -80,8 +90,11 @@ func TestSourcedQualificationConflictSupersessionAndPreferenceRefresh(t *testing
 	addClaimFixture(t, s, opportunity.ID, source, "monthly_base_salary", "actual_pay_terms", "explicit_match",
 		"EUR 4500 gross monthly base at 32 hours.", nil, nil, nil,
 		&ActualSalaryFacts{Currency: "EUR", Period: "month", Basis: "base", AmountCents: 450000, ActualWeeklyHours: 32})
+	versions := currentInputVersions(t, s, opportunity.ID)
 	ownerSource, _, err := s.AddEvidenceSource(ctx, ownerActor(), SourceInput{OpportunityID: opportunity.ID,
-		OwnerObservation: &OwnerInput{OccurredAt: "2026-09-23T11:00:00Z", OriginalText: "Remote Netherlands is workable."}})
+		ExpectedContextVersion: versions.ContextVersion,
+		OwnerObservation: &OwnerInput{OccurredAt: "2026-09-23T11:00:00Z", OriginalText: "Remote Netherlands is workable.",
+			ExpectedPreferencesVersion: versions.PreferencesVersion}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,10 +115,18 @@ func TestSourcedQualificationConflictSupersessionAndPreferenceRefresh(t *testing
 		!view.Current.Salary.Conflicting || view.Current.Salary.Estimate != nil {
 		t.Fatalf("salary conflict: %+v err=%v", view, err)
 	}
+	repeated, _, err := s.EvaluateCurrent(ctx, ownerActor(), opportunity.ID)
+	if err != nil || repeated.Overall != fit.NeedsRequalification || !repeated.Salary.Conflicting {
+		t.Fatalf("repeated evaluation erased requalification: %+v err=%v", repeated, err)
+	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE evidence SET observed_value='fabricated' WHERE id=?`, conflict.ID); err == nil {
 		t.Fatal("immutable evidence updated")
 	}
 	correctionSource := addStatementFixture(t, s, opportunity.ID, "Correction: EUR 4500 gross monthly base at 32 hours.")
+	view, err = s.Qualification(ctx, opportunity.ID)
+	if err != nil || view.Current == nil || view.Current.Overall != fit.NeedsRequalification {
+		t.Fatalf("unrelated source erased requalification: %+v err=%v", view, err)
+	}
 	_, _, err = s.SupersedeEvidence(ctx, ownerActor(), conflict.ID, EvidenceInput{
 		OpportunityID: opportunity.ID, SourceID: correctionSource.ID,
 		Criterion: "monthly_base_salary", Finding: "explicit_match", ObservedValue: "actual_pay_terms",
@@ -164,7 +185,8 @@ func TestEvidenceContextRoundTripsAndSourceValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, _, err := s.AddEvidenceSource(ctx, ownerActor(), SourceInput{OpportunityID: opportunity.ID,
-		Statement: &StatementInput{SpeakerAffiliation: "employer_representative", OriginalText: "Backend role"}}); !errors.Is(err, ErrInvalid) {
+		ExpectedContextVersion: currentInputVersions(t, s, opportunity.ID).ContextVersion,
+		Statement:              &StatementInput{SpeakerAffiliation: "employer_representative", OriginalText: "Backend role"}}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("empty attribution accepted: %v", err)
 	}
 	source := addStatementFixture(t, s, opportunity.ID, "Backend scope confirmed.")
@@ -174,13 +196,25 @@ func TestEvidenceContextRoundTripsAndSourceValidation(t *testing.T) {
 	if err != nil || before.Current == nil || len(before.Current.SourceClaimIDs) != 1 {
 		t.Fatalf("initial claim: %+v err=%v", before, err)
 	}
+	preparedContext := currentInputVersions(t, s, opportunity.ID)
+	preparedStatement := &StatementInput{SpeakerAffiliation: "employer_representative",
+		SpeakerName: "R. Example", SpeakerRole: "Hiring manager", SpeakerOrganisation: "Harbour Systems",
+		Channel: "meeting", OccurredAt: "2026-09-23T10:00:00Z", OriginalText: "Prepared before company reassignment."}
 	companyID := companyB.ID
 	if _, _, err := s.PatchOpportunity(ctx, ownerActor(), opportunity.ID, OpportunityPatch{ExpectedRevision: 1, CompanyID: &companyID}); err != nil {
 		t.Fatal(err)
 	}
+	if _, _, err := s.AddEvidenceSource(ctx, ownerActor(), SourceInput{OpportunityID: opportunity.ID,
+		ExpectedContextVersion: preparedContext.ContextVersion, Statement: preparedStatement}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("prepared A statement silently rebound to B: %v", err)
+	}
 	companyID = companyA.ID
 	if _, _, err := s.PatchOpportunity(ctx, ownerActor(), opportunity.ID, OpportunityPatch{ExpectedRevision: 2, CompanyID: &companyID}); err != nil {
 		t.Fatal(err)
+	}
+	if _, _, err := s.AddEvidenceSource(ctx, ownerActor(), SourceInput{OpportunityID: opportunity.ID,
+		ExpectedContextVersion: preparedContext.ContextVersion, Statement: preparedStatement}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("A-B-A resurrected prepared statement: %v", err)
 	}
 	afterCompany, err := s.Qualification(ctx, opportunity.ID)
 	if err != nil || afterCompany.Current == nil || len(afterCompany.Current.SourceClaimIDs) != 0 {
@@ -211,9 +245,14 @@ func TestEvidenceContextRoundTripsAndSourceValidation(t *testing.T) {
 	newSource := addStatementFixture(t, s, opportunity.ID, "Backend scope still confirmed.")
 	newClaim := addClaimFixture(t, s, opportunity.ID, newSource, "backend_platform", "backend_primary", "explicit_match",
 		newSource.OriginalText, nil, nil, nil, nil)
+	notesContext := currentInputVersions(t, s, opportunity.ID)
 	notes := "Call tomorrow"
 	if _, _, err := s.PatchOpportunity(ctx, ownerActor(), opportunity.ID, OpportunityPatch{ExpectedRevision: 5, Notes: &notes}); err != nil {
 		t.Fatal(err)
+	}
+	if _, _, err := s.AddEvidenceSource(ctx, ownerActor(), SourceInput{OpportunityID: opportunity.ID,
+		ExpectedContextVersion: notesContext.ContextVersion, Statement: preparedStatement}); err != nil {
+		t.Fatalf("notes edit invalidated same-context prepared statement: %v", err)
 	}
 	afterNotes, err := s.Qualification(ctx, opportunity.ID)
 	if err != nil || afterNotes.Current == nil || len(afterNotes.Current.SourceClaimIDs) != 1 ||
@@ -372,8 +411,10 @@ func TestMigrationPreservesLegacyBranchingEvidence(t *testing.T) {
 	for _, pair := range [][2]string{{"legacy-parent", ""}, {"legacy-child-a", "legacy-parent"}, {"legacy-child-b", "legacy-parent"}} {
 		if _, err := db.ExecContext(ctx, `INSERT INTO evidence
   (id,opportunity_id,criterion,observed_value,confirmation_state,source_kind,
-   observed_at,supersedes_id,created_at) VALUES (?,?, 'backend_platform','legacy claim',
-   'confirmed','user', '2026-01-01T00:00:00Z',?, '2026-01-01T00:00:00Z')`,
+   source_url,source_contact_text,observed_at,supersedes_id,created_at)
+  VALUES (?,?, 'backend_platform','legacy claim',
+   'confirmed','user','https://legacy.example/source','Legacy recruiter',
+   '2026-01-01T00:00:00Z',?, '2026-01-01T00:00:00Z')`,
 			pair[0], "legacy-opportunity", optionalText(pair[1])); err != nil {
 			t.Fatal(err)
 		}
@@ -399,6 +440,11 @@ func TestMigrationPreservesLegacyBranchingEvidence(t *testing.T) {
 	view, err := s.Qualification(ctx, "legacy-opportunity")
 	if err != nil || view.Current == nil || view.Current.Overall == fit.Qualified || len(view.Current.SourceClaimIDs) != 0 {
 		t.Fatalf("legacy unverified claim qualified: %+v err=%v", view, err)
+	}
+	legacy, err := s.Evidence(ctx, "legacy-parent")
+	if err != nil || !legacy.Legacy || legacy.HasSpan || legacy.SourceKind != "user" ||
+		legacy.SourceURL != "https://legacy.example/source" || legacy.SourceContactText != "Legacy recruiter" {
+		t.Fatalf("legacy provenance hidden or trusted: %+v err=%v", legacy, err)
 	}
 	history, err := s.ListQualificationHistory(ctx, "legacy-opportunity", "", 10)
 	if err != nil || len(history.Items) != 2 || !history.Items[0].Legacy ||

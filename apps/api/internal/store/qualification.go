@@ -12,7 +12,7 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/fit"
 )
 
-const qualificationRulesVersion = "qualification-v1"
+const qualificationRulesVersion = "qualification-v2"
 
 // A no-op conditional write takes SQLite's writer reservation before any
 // snapshot reads. Two Store handles then serialize and stale evidence writers
@@ -41,6 +41,7 @@ type Evaluation struct {
 	EvidenceVersion     int64
 	ContextVersion      int64
 	PreferencesVersion  int64
+	RulesVersion        string
 	Overall             fit.OverallState
 	Criteria            []fit.CriterionResult
 	Salary              fit.SalaryResult
@@ -61,6 +62,42 @@ type QualificationView struct {
 	Status           string // not_assessed, current, or outdated
 	Current          *Evaluation
 	LatestHistorical *Evaluation
+}
+
+// QualificationInputVersions is a current, single-statement projection for
+// optimistic source/evidence writes and conflict responses. It is not the
+// immutable tuple captured by a completed mutation or evaluation.
+type QualificationInputVersions struct {
+	OpportunityID       string
+	OpportunityRevision int64
+	CompanyID           string
+	OpportunityKind     string
+	MaterialVersion     int64
+	EvidenceVersion     int64
+	ContextVersion      int64
+	PreferencesVersion  int64
+	RulesVersion        string
+}
+
+func (s *Store) QualificationInputVersions(ctx context.Context, opportunityID string) (QualificationInputVersions, error) {
+	if opportunityID == "" {
+		return QualificationInputVersions{}, ErrInvalid
+	}
+	var value QualificationInputVersions
+	err := s.db.QueryRowContext(ctx, `SELECT o.id,o.revision,o.company_id,o.kind,
+  v.material_version,v.evidence_version,v.context_version,p.version
+  FROM opportunities o JOIN qualification_input_versions v ON v.opportunity_id=o.id
+  JOIN preferences_current p ON p.singleton=1 WHERE o.id=?`, opportunityID).Scan(
+		&value.OpportunityID, &value.OpportunityRevision, &value.CompanyID, &value.OpportunityKind,
+		&value.MaterialVersion, &value.EvidenceVersion, &value.ContextVersion, &value.PreferencesVersion)
+	if errors.Is(err, sql.ErrNoRows) {
+		return QualificationInputVersions{}, ErrNotFound
+	}
+	if err != nil {
+		return QualificationInputVersions{}, err
+	}
+	value.RulesVersion = qualificationRulesVersion
+	return value, nil
 }
 
 type qualClaim struct {
@@ -131,7 +168,7 @@ func directSource(kind EvidenceSourceKind) bool {
 }
 
 func criterionFromClaims(claims []qualClaim, name string) fit.CriterionEvidence {
-	match, mismatch, mention := false, false, false
+	match, mismatch, mention, ambiguous := false, false, false, false
 	matchAuthority, mismatchAuthority := fit.UserInference, fit.UserInference
 	for _, claim := range claims {
 		if claim.Criterion != name {
@@ -152,8 +189,10 @@ func criterionFromClaims(claims []qualClaim, name string) fit.CriterionEvidence 
 		case "explicit_mismatch":
 			mismatch = true
 			mismatchAuthority = authority
-		case "mention_only", "ambiguous":
+		case "mention_only":
 			mention = true
+		case "ambiguous":
+			ambiguous = true
 		}
 	}
 	if match && mismatch {
@@ -161,6 +200,9 @@ func criterionFromClaims(claims []qualClaim, name string) fit.CriterionEvidence 
 	}
 	if mismatch {
 		return fit.CriterionEvidence{Finding: fit.ConfirmedMismatch, Authority: mismatchAuthority}
+	}
+	if ambiguous {
+		return fit.CriterionEvidence{Finding: fit.Ambiguous, Authority: fit.UserInference}
 	}
 	if match {
 		return fit.CriterionEvidence{Finding: fit.ConfirmedMatch, Authority: matchAuthority}
@@ -224,7 +266,7 @@ func arrangementKey(claim qualClaim) string {
 		claim.ArrangementRemote.String, days}, "\x00")
 }
 
-func locationFromClaims(claims []qualClaim, preferenceVersion int64) fit.CriterionEvidence {
+func locationFromClaims(claims []qualClaim, preferences Preferences) fit.CriterionEvidence {
 	var arrangements []qualClaim
 	owners := map[string][]qualClaim{}
 	for _, claim := range claims {
@@ -235,7 +277,7 @@ func locationFromClaims(claims []qualClaim, preferenceVersion int64) fit.Criteri
 			}
 		case "location_workable":
 			if claim.SourceKind == OwnerObservation && claim.OwnerArrangementID.Valid &&
-				claim.OwnerPreferencesVersion.Valid && claim.OwnerPreferencesVersion.Int64 == preferenceVersion {
+				claim.OwnerPreferencesVersion.Valid && claim.OwnerPreferencesVersion.Int64 == preferences.Version {
 				owners[claim.OwnerArrangementID.String] = append(owners[claim.OwnerArrangementID.String], claim)
 			}
 		}
@@ -248,6 +290,10 @@ func locationFromClaims(claims []qualClaim, preferenceVersion int64) fit.Criteri
 		if arrangementKey(arrangement) != key {
 			return fit.CriterionEvidence{Finding: fit.Conflicting}
 		}
+	}
+	if arrangements[0].ArrangementPattern.String == "remote" && !preferences.AllowRemote ||
+		arrangements[0].ArrangementPattern.String == "hybrid" && !preferences.AllowHybrid {
+		return fit.CriterionEvidence{Finding: fit.ConfirmedMismatch, Authority: fit.OwnerVerified}
 	}
 	match, mismatch := false, false
 	for _, arrangement := range arrangements {
@@ -315,7 +361,7 @@ func scanEvaluation(row rowScanner) (Evaluation, error) {
 	var criteriaJSON, salaryJSON, claimJSON string
 	err := row.Scan(&result.ID, &result.OpportunityID, &result.OpportunityRevision,
 		&result.MaterialVersion, &result.EvidenceVersion, &result.ContextVersion,
-		&result.PreferencesVersion, &result.Overall, &criteriaJSON, &salaryJSON,
+		&result.PreferencesVersion, &result.RulesVersion, &result.Overall, &criteriaJSON, &salaryJSON,
 		&claimJSON, &result.CreatedAt, &result.Actor.Kind, &result.Actor.ID)
 	if err != nil {
 		return Evaluation{}, err
@@ -346,7 +392,7 @@ func scanEvaluation(row rowScanner) (Evaluation, error) {
 }
 
 const evaluationColumns = `id,opportunity_id,opportunity_revision,material_version,
-  evidence_version,context_version,preferences_version,overall_state,
+  evidence_version,context_version,preferences_version,rules_version,overall_state,
   criterion_results_json,salary_json,source_claims_json,created_at,actor_kind,actor_id`
 
 func evaluateCurrentTx(ctx context.Context, tx *sql.Tx, actor Actor, opportunityID, causeEvidenceID string) (Evaluation, error) {
@@ -378,19 +424,20 @@ func evaluateCurrentTx(ctx context.Context, tx *sql.Tx, actor Actor, opportunity
 	if err != nil {
 		return Evaluation{}, err
 	}
-	var previous string
-	err = tx.QueryRowContext(ctx, `SELECT overall_state FROM qualification_evaluations
-  WHERE opportunity_id=? ORDER BY created_at DESC,id DESC LIMIT 1`, opportunityID).Scan(&previous)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	var previouslyQualified int
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM qualification_evaluations
+  WHERE opportunity_id=? AND context_version=? AND material_version IS NOT NULL
+    AND overall_state='qualified')`, opportunityID, contextVersion).Scan(&previouslyQualified)
+	if err != nil {
 		return Evaluation{}, err
 	}
 	criteria := fit.Criteria{BackendPlatform: criterionFromClaims(claims, "backend_platform"),
 		NoFrontendDuties:   criterionFromClaims(claims, "no_frontend_duties"),
 		NoPHPFocusedDuties: criterionFromClaims(claims, "no_php_focused_duties"),
 		HoursAvailable:     hoursFromClaims(claims, preference.TargetHours),
-		LocationWorkable:   locationFromClaims(claims, preference.Version)}
+		LocationWorkable:   locationFromClaims(claims, preference)}
 	report, err := fit.Evaluate(policyFromPreferences(preference), compensationForFit(opportunity, claims),
-		criteria, previous == string(fit.Qualified))
+		criteria, previouslyQualified == 1)
 	if err != nil {
 		return Evaluation{}, err
 	}
@@ -412,7 +459,8 @@ func evaluateCurrentTx(ctx context.Context, tx *sql.Tx, actor Actor, opportunity
 	}
 	result = Evaluation{ID: id, OpportunityID: opportunityID, OpportunityRevision: opportunity.Revision,
 		MaterialVersion: materialVersion, EvidenceVersion: evidenceVersion, ContextVersion: contextVersion,
-		PreferencesVersion: preference.Version, Overall: report.Overall, Criteria: report.Criteria,
+		PreferencesVersion: preference.Version, RulesVersion: qualificationRulesVersion,
+		Overall: report.Overall, Criteria: report.Criteria,
 		Salary: report.Salary, SourceRefs: refs, SourceClaimIDs: claimIDs, CreatedAt: utcNow(), Actor: actor}
 	_, err = tx.ExecContext(ctx, `INSERT INTO qualification_evaluations
   (id,opportunity_id,opportunity_revision,preferences_version,overall_state,
@@ -481,14 +529,14 @@ func (s *Store) qualificationView(ctx context.Context, opportunityID string) (Qu
 	// from opposite sides of a concurrent mutation.
 	current, err := scanEvaluation(s.db.QueryRowContext(ctx, `SELECT e.id,e.opportunity_id,e.opportunity_revision,
   e.material_version,e.evidence_version,e.context_version,e.preferences_version,
-  e.overall_state,e.criterion_results_json,e.salary_json,e.source_claims_json,
+  e.rules_version,e.overall_state,e.criterion_results_json,e.salary_json,e.source_claims_json,
   e.created_at,e.actor_kind,e.actor_id
   FROM qualification_current c JOIN qualification_evaluations e ON e.id=c.evaluation_id
   JOIN qualification_input_versions v ON v.opportunity_id=c.opportunity_id
   JOIN preferences_current p ON p.singleton=1
   WHERE c.opportunity_id=? AND e.material_version=v.material_version
     AND e.evidence_version=v.evidence_version AND e.context_version=v.context_version
-    AND e.preferences_version=p.version`, opportunityID))
+    AND e.preferences_version=p.version AND e.rules_version=?`, opportunityID, qualificationRulesVersion))
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return view, err
 	}
@@ -552,7 +600,7 @@ func (s *Store) ReevaluatePending(ctx context.Context, limit int) (int, error) {
     JOIN preferences_current p ON p.singleton=1
     WHERE c.opportunity_id=? AND e.material_version=v.material_version
       AND e.evidence_version=v.evidence_version AND e.context_version=v.context_version
-      AND e.preferences_version=p.version)`, id, id)
+      AND e.preferences_version=p.version AND e.rules_version=?)`, id, id, qualificationRulesVersion)
 			if err != nil {
 				return processed, err
 			}
@@ -584,7 +632,7 @@ func (s *Store) ListQualificationHistory(ctx context.Context, opportunityID, cur
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT id,opportunity_id,opportunity_revision,
   COALESCE(material_version,0),COALESCE(evidence_version,0),COALESCE(context_version,0),
-  preferences_version,overall_state,criterion_results_json,COALESCE(salary_json,'{}'),
+  preferences_version,COALESCE(rules_version,''),overall_state,criterion_results_json,COALESCE(salary_json,'{}'),
   COALESCE(source_claims_json,'[]'),created_at,COALESCE(actor_kind,''),COALESCE(actor_id,'')
   FROM qualification_evaluations WHERE opportunity_id=? AND
   (created_at>? OR (created_at=? AND id>?)) ORDER BY created_at,id LIMIT ?`,

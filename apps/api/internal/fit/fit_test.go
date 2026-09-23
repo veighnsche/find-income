@@ -179,3 +179,22 @@ func TestSourcedActualPayIndependentOfAdvertisementAndConflict(t *testing.T) {
 		t.Fatalf("prior qualified conflict: %+v %v", report, err)
 	}
 }
+
+func TestMaterialAmbiguityNeedsRequalification(t *testing.T) {
+	confirmed := CriterionEvidence{Finding: ConfirmedMatch, Authority: Employer}
+	facts := Criteria{BackendPlatform: confirmed, NoFrontendDuties: confirmed,
+		NoPHPFocusedDuties: confirmed, HoursAvailable: confirmed, LocationWorkable: confirmed}
+	facts.NoFrontendDuties = CriterionEvidence{Finding: Ambiguous, Authority: UserInference}
+	pay := Compensation{Kind: Employment, Currency: "unknown", Period: UnknownPeriod, Basis: UnknownBasis,
+		SourcedActual: &ActualPay{Currency: "EUR", Period: Monthly, Basis: Base, AmountCents: 450000, WeeklyHours: 32}}
+	report, err := Evaluate(DefaultPolicy(), pay, facts, true)
+	if err != nil || report.Overall != NeedsRequalification || !report.Criteria[1].Conflicting ||
+		report.Criteria[1].State != Unknown {
+		t.Fatalf("material ambiguity after qualification: %+v %v", report, err)
+	}
+	facts.NoFrontendDuties = CriterionEvidence{Finding: ConfirmedMismatch, Authority: PublishedVacancy}
+	report, err = Evaluate(DefaultPolicy(), pay, facts, true)
+	if err != nil || report.Overall != Unsuitable {
+		t.Fatalf("explicit exclusion hidden by prior qualification: %+v %v", report, err)
+	}
+}

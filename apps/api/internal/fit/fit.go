@@ -27,6 +27,7 @@ const (
 	ConfirmedMismatch Finding = "confirmed_mismatch"
 	Missing           Finding = "missing"
 	Conflicting       Finding = "conflicting"
+	Ambiguous         Finding = "ambiguous"
 	MentionOnly       Finding = "mention_only"
 )
 
@@ -335,6 +336,11 @@ func evaluateCriterion(name string, fact CriterionEvidence) CriterionResult {
 	if fact.Finding == Conflicting {
 		result.Conflicting = true
 		result.Reason = "Sources conflict; the requirement needs clarification."
+		return result
+	}
+	if fact.Finding == Ambiguous {
+		result.Conflicting = true
+		result.Reason = "Material ambiguity in an active source needs clarification."
 		return result
 	}
 	if fact.Finding == MentionOnly {

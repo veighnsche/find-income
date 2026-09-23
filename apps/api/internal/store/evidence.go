@@ -35,15 +35,17 @@ type StatementInput struct {
 }
 
 type OwnerInput struct {
-	OccurredAt   string
-	OriginalText string
+	OccurredAt                 string
+	OriginalText               string
+	ExpectedPreferencesVersion int64
 }
 
 type SourceInput struct {
-	OpportunityID    string
-	VacancyChangeID  *string
-	Statement        *StatementInput
-	OwnerObservation *OwnerInput
+	OpportunityID          string
+	ExpectedContextVersion int64
+	VacancyChangeID        *string
+	Statement              *StatementInput
+	OwnerObservation       *OwnerInput
 }
 
 type EvidenceSource struct {
@@ -92,7 +94,7 @@ func validateSourceInput(input SourceInput, actor Actor) error {
 	if input.OwnerObservation != nil {
 		variants++
 	}
-	if input.OpportunityID == "" || variants != 1 {
+	if input.OpportunityID == "" || input.ExpectedContextVersion < 1 || variants != 1 {
 		return fmt.Errorf("%w: one evidence source variant required", ErrInvalid)
 	}
 	if input.VacancyChangeID != nil && *input.VacancyChangeID == "" {
@@ -111,7 +113,7 @@ func validateSourceInput(input SourceInput, actor Actor) error {
 	}
 	if observation := input.OwnerObservation; observation != nil {
 		if actor.Kind != "administrator" || !boundedNonempty(observation.OriginalText, 20000) ||
-			!validInstant(observation.OccurredAt) {
+			!validInstant(observation.OccurredAt) || observation.ExpectedPreferencesVersion < 1 {
 			return fmt.Errorf("%w: owner observation requires owner and dated text", ErrInvalid)
 		}
 	}
@@ -177,6 +179,9 @@ func (s *Store) AddEvidenceSource(ctx context.Context, actor Actor, input Source
 		if err != nil {
 			return Change{}, err
 		}
+		if source.ContextVersion != input.ExpectedContextVersion {
+			return Change{}, ErrConflict
+		}
 		switch {
 		case input.VacancyChangeID != nil:
 			var snapshotJSON string
@@ -227,6 +232,9 @@ func (s *Store) AddEvidenceSource(ctx context.Context, actor Actor, input Source
 			if err := tx.QueryRowContext(ctx, `SELECT version FROM preferences_current WHERE singleton=1`).Scan(
 				&source.OwnerPreferencesVersion); err != nil {
 				return Change{}, err
+			}
+			if source.OwnerPreferencesVersion != input.OwnerObservation.ExpectedPreferencesVersion {
+				return Change{}, ErrConflict
 			}
 		}
 		if !utf8.ValidString(source.OriginalText) {
@@ -299,11 +307,18 @@ type Evidence struct {
 	ID                         string
 	OpportunityID              string
 	SourceID                   string
+	SourceKind                 string
+	SourceURL                  string
+	SourceContactText          string
+	Legacy                     bool
 	Criterion                  string
 	Finding                    string
 	ObservedValue              string
 	ConfirmationState          string
 	SourceExcerpt              string
+	SpanStart                  int
+	SpanEnd                    int
+	HasSpan                    bool
 	ExcerptSHA256              string
 	ObservedAt                 string
 	SupersedesID               string
@@ -472,7 +487,7 @@ func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, 
 	item := Evidence{ID: id, OpportunityID: input.OpportunityID, SourceID: input.SourceID,
 		Criterion: input.Criterion, Finding: input.Finding, ObservedValue: strings.TrimSpace(input.ObservedValue),
 		SupersedesID: priorID, CreatedAt: utcNow(), Hours: input.Hours, Arrangement: input.Arrangement,
-		Salary: input.Salary}
+		Salary: input.Salary, SpanStart: input.SpanStart, SpanEnd: input.SpanEnd, HasSpan: true}
 	changeID, err := s.WriteAudited(ctx, actor, func(tx *sql.Tx) (Change, error) {
 		if err := lockQualificationInput(ctx, tx, input.OpportunityID); err != nil {
 			return Change{}, err
@@ -505,6 +520,7 @@ func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, 
 			source.CompanyID != companyID || source.OpportunityKind != opportunityKind {
 			return Change{}, ErrConflict
 		}
+		item.SourceKind, item.SourceURL, item.SourceContactText = string(source.SourceKind), source.SourceURL, source.SpeakerName
 		if source.SourceKind == OwnerObservation && input.Criterion != "location_workable" ||
 			input.Criterion == "location_workable" && (source.SourceKind != OwnerObservation || actor.Kind != "administrator") ||
 			input.Criterion == "monthly_base_salary" &&
@@ -736,18 +752,23 @@ func decodeEvidenceCursor(value, scope string) (evidenceCursor, error) {
 
 func scanEvidence(row rowScanner) (Evidence, error) {
 	var item Evidence
-	var sourceID, finding, supersedes, excerptDigest sql.NullString
-	var min, max, hard, days, ownerPreference, salaryAmount, salaryHours sql.NullInt64
+	var sourceID, finding, supersedes, excerptDigest, sourceURL, contact sql.NullString
+	var min, max, hard, days, ownerPreference, salaryAmount, salaryHours, spanStart, spanEnd sql.NullInt64
 	var pattern, location, remote, arrangementID, salaryCurrency, salaryPeriod, salaryBasis sql.NullString
 	err := row.Scan(&item.ID, &item.OpportunityID, &item.Criterion, &item.ObservedValue,
 		&item.ConfirmationState, &item.SourceExcerpt, &item.ObservedAt, &supersedes,
-		&item.CreatedAt, &sourceID, &finding, &excerptDigest, &min, &max, &hard, &pattern, &location,
+		&item.CreatedAt, &sourceID, &item.SourceKind, &sourceURL, &contact,
+		&finding, &spanStart, &spanEnd, &excerptDigest, &min, &max, &hard, &pattern, &location,
 		&remote, &days, &arrangementID, &ownerPreference, &salaryCurrency,
 		&salaryPeriod, &salaryBasis, &salaryAmount, &salaryHours)
 	if err != nil {
 		return Evidence{}, err
 	}
 	item.SourceID, item.Finding, item.SupersedesID = sourceID.String, finding.String, supersedes.String
+	item.SourceURL, item.SourceContactText, item.Legacy = sourceURL.String, contact.String, !sourceID.Valid
+	if spanStart.Valid && spanEnd.Valid {
+		item.SpanStart, item.SpanEnd, item.HasSpan = int(spanStart.Int64), int(spanEnd.Int64), true
+	}
 	item.ExcerptSHA256 = excerptDigest.String
 	if min.Valid && max.Valid {
 		item.Hours = &HoursAvailability{MinWeekly: min.Int64, MaxWeekly: max.Int64, HardBounds: hard.Valid && hard.Int64 == 1}
@@ -766,7 +787,8 @@ func scanEvidence(row rowScanner) (Evidence, error) {
 }
 
 const evidenceColumns = `id,opportunity_id,criterion,observed_value,confirmation_state,
-  COALESCE(source_excerpt,''),observed_at,supersedes_id,created_at,source_id,finding,excerpt_sha256,
+  COALESCE(source_excerpt,''),observed_at,supersedes_id,created_at,source_id,
+  source_kind,source_url,source_contact_text,finding,span_start,span_end,excerpt_sha256,
   hours_min,hours_max,hours_hard,arrangement_pattern,arrangement_location,
   arrangement_remote_geography,arrangement_onsite_days,owner_arrangement_evidence_id,
   owner_preferences_version,salary_currency,salary_period,salary_basis,
