@@ -281,7 +281,7 @@ CREATE TABLE ingestion_requests (
   UNIQUE (actor_kind,actor_id,idempotency_key),
   CHECK (length(original_text) <= 200000),
   CHECK (source_url IS NOT NULL OR length(trim(original_text)) > 0),
-  CHECK (status <> 'completed' OR (opportunity_id IS NOT NULL AND record_change_id IS NOT NULL)),
+  CHECK (status <> 'completed' OR (opportunity_id IS NOT NULL AND record_change_id IS NOT NULL AND source_id IS NOT NULL)),
   CHECK (status <> 'needs_text' OR source_url IS NOT NULL)
 );
 

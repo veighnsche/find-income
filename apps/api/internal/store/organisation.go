@@ -152,9 +152,9 @@ func (s *Store) UpdateOrganisationCategories(ctx context.Context, expectedVersio
 	if len(next) > 0 {
 		rows, err := tx.QueryContext(ctx, `SELECT i.id,o.id,o.company_id,o.kind,COALESCE(o.source_url,''),
   o.original_text,i.source_id FROM ingestion_requests i JOIN opportunities o ON o.id=i.opportunity_id
-  WHERE i.status='completed' AND i.source_id IS NOT NULL AND o.archived_at IS NULL
+  WHERE i.opportunity_id IS NOT NULL AND i.source_id IS NOT NULL AND o.archived_at IS NULL
     AND i.id=(SELECT i2.id FROM ingestion_requests i2 WHERE i2.opportunity_id=o.id
-      AND i2.status='completed' AND i2.source_id IS NOT NULL
+      AND i2.source_id IS NOT NULL
       ORDER BY i2.created_at DESC,i2.id DESC LIMIT 1)`)
 		if err != nil {
 			return OrganisationCategorySet{}, err

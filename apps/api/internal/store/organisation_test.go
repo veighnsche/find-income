@@ -28,6 +28,9 @@ func TestOrganisationCategoriesQueueCompletedIntakesAndCheckVersion(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.CompleteIngestionProcessing(ctx, claim); err != nil {
+		t.Fatal(err)
+	}
 	if applied, err := s.CompleteJob(ctx, claim, JobResult{Ref: opportunity.ID}, time.Now()); err != nil || !applied {
 		t.Fatalf("complete: %v %v", applied, err)
 	}
@@ -92,6 +95,9 @@ func TestDistinctIntakesReuseMatchingOrganisationJob(t *testing.T) {
 		claim := claimIngestionJob(t, s)
 		if err := s.RecordIngestionResult(ctx, claim, opportunity.ID, changeID); err != nil {
 			t.Fatalf("map %s: %v", key, err)
+		}
+		if err := s.CompleteIngestionProcessing(ctx, claim); err != nil {
+			t.Fatalf("finish processing %s: %v", key, err)
 		}
 		if applied, err := s.CompleteJob(ctx, claim, JobResult{Ref: opportunity.ID}, time.Now()); err != nil || !applied {
 			t.Fatalf("complete %s: %v %v", key, applied, err)

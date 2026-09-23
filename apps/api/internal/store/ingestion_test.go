@@ -96,6 +96,9 @@ func TestIngestionPersistsSourceAndRequiresTrustedRecordMapping(t *testing.T) {
 	if err := s.RecordIngestionResult(ctx, claim, other.ID, otherChange); !errors.Is(err, ErrConflict) {
 		t.Fatalf("result rebound: %v", err)
 	}
+	if err := s.CompleteIngestionProcessing(ctx, claim); err != nil {
+		t.Fatal(err)
+	}
 	if applied, err := s.CompleteJob(ctx, claim, JobResult{Ref: opportunity.ID}, time.Now().UTC()); err != nil || !applied {
 		t.Fatalf("job completion: %v %v", applied, err)
 	}
@@ -243,6 +246,9 @@ func TestSaveIngestionOpportunityIsAtomicAndIdempotent(t *testing.T) {
 	}
 	if companies != 1 || opportunities != 1 {
 		t.Fatalf("duplicate extraction: companies=%d opportunities=%d", companies, opportunities)
+	}
+	if err := s.CompleteIngestionProcessing(ctx, claim); err != nil {
+		t.Fatal(err)
 	}
 	read, err := s.Ingestion(ctx, intake.ID)
 	if err != nil || read.Status != "completed" || read.OpportunityID != opportunity.ID || read.RecordChangeID != changeID || read.SourceID == "" {

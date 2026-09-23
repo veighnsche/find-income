@@ -26,7 +26,8 @@ func (s *Store) AddIngestionEvidence(ctx context.Context, claim Job, input Evide
 	guard := func(tx *sql.Tx) error {
 		var liveID string
 		err := tx.QueryRowContext(ctx, `SELECT i.id FROM ingestion_requests i JOIN jobs j ON j.id=i.job_id
-  WHERE i.id=? AND i.job_id=? AND i.status='completed' AND i.opportunity_id=? AND i.source_id=?
+  WHERE i.id=? AND i.job_id=? AND i.status IN ('pending','processing')
+    AND i.opportunity_id=? AND i.source_id=?
     AND j.kind=? AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?`,
 			ingestionID, claim.ID, input.OpportunityID, input.SourceID, IngestionJobKind,
 			claim.LeaseToken, claim.AttemptCount, jobTime(time.Now())).Scan(&liveID)

@@ -292,8 +292,8 @@ func (s *Store) ListIngestions(ctx context.Context, cursorValue string, requeste
 }
 
 // RetryIngestion starts a new job for an existing terminal request. A URL-only
-// request may gain pasted full text after needs_text; the original URL and
-// idempotency identity remain attached to the same request.
+// request may gain pasted full text after needs_text. If record persistence
+// succeeded but later processing failed, the saved mapping remains intact.
 func (s *Store) RetryIngestion(ctx context.Context, actor Actor, id string, fullText *string) (IngestionRequest, error) {
 	if id == "" || !requiredActor(actor) {
 		return IngestionRequest{}, ErrInvalid
@@ -317,13 +317,15 @@ func (s *Store) RetryIngestion(ctx context.Context, actor Actor, id string, full
 	if actor != item.Actor && actor.Kind != "administrator" {
 		return IngestionRequest{}, ErrInvalid
 	}
-	if item.Status != "failed" && item.Status != "needs_text" ||
-		(item.JobState != JobFailed && item.JobState != JobSucceeded && item.JobState != JobCancelled) {
+	partialSave := item.JobState == JobFailed &&
+		item.OpportunityID != "" && item.RecordChangeID != "" && item.SourceID != ""
+	if !partialSave && item.Status != "failed" && item.Status != "needs_text" ||
+		!partialSave && item.JobState != JobFailed && item.JobState != JobSucceeded && item.JobState != JobCancelled {
 		return IngestionRequest{}, ErrConflict
 	}
 	text := item.OriginalText
 	if fullText != nil {
-		if item.SourceURL == "" || item.OriginalText != "" && item.OriginalText != *fullText ||
+		if partialSave || item.SourceURL == "" || item.OriginalText != "" && item.OriginalText != *fullText ||
 			!boundedNonempty(*fullText, 200000) {
 			return IngestionRequest{}, ErrInvalid
 		}
@@ -500,7 +502,15 @@ func (s *Store) RecordIngestionResult(ctx context.Context, claim Job, opportunit
 	if err != nil {
 		return err
 	}
-	if item.Status == "completed" {
+	if err := recordIngestionResultTx(ctx, tx, claim, item, opportunityID, recordChangeID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func recordIngestionResultTx(ctx context.Context, tx *sql.Tx, claim Job, item IngestionRequest, opportunityID, recordChangeID string) error {
+	var err error
+	if item.OpportunityID != "" {
 		if item.OpportunityID == opportunityID && item.RecordChangeID == recordChangeID {
 			return nil
 		}
@@ -568,7 +578,7 @@ func (s *Store) RecordIngestionResult(ctx context.Context, claim Job, opportunit
 	} else if err != nil {
 		return err
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE ingestion_requests SET status='completed',original_text=?,opportunity_id=?,
+	result, err := tx.ExecContext(ctx, `UPDATE ingestion_requests SET status='processing',original_text=?,opportunity_id=?,
   record_change_id=?,source_id=?,safe_error_code=NULL,updated_at=? WHERE id=? AND job_id=?
   AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=ingestion_requests.job_id
     AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?)`,
@@ -590,7 +600,7 @@ func (s *Store) RecordIngestionResult(ctx context.Context, claim Job, opportunit
 		currentURL, currentText, sourceID); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 type IngestionRecordInput struct {
@@ -635,7 +645,7 @@ func (s *Store) SaveIngestionOpportunity(ctx context.Context, claim Job, input I
 	if err != nil {
 		return Opportunity{}, "", err
 	}
-	if item.Status == "completed" {
+	if item.OpportunityID != "" {
 		record, err := scanOpportunity(tx.QueryRowContext(ctx, `SELECT `+opportunityColumns+opportunityFrom+` WHERE o.id=?`, item.OpportunityID))
 		return record, item.RecordChangeID, err
 	}
@@ -650,6 +660,23 @@ func (s *Store) SaveIngestionOpportunity(ctx context.Context, claim Job, input I
 	}
 	if err != nil {
 		return Opportunity{}, "", err
+	}
+	match, found, err := findMatchingOpportunity(ctx, tx, item.SourceURL, item.OriginalText)
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	if found {
+		if err := recordIngestionResultTx(ctx, tx, claim, item, match.OpportunityID, match.RecordChangeID); err != nil {
+			return Opportunity{}, "", err
+		}
+		record, err := scanOpportunity(tx.QueryRowContext(ctx, `SELECT `+opportunityColumns+opportunityFrom+` WHERE o.id=?`, match.OpportunityID))
+		if err != nil {
+			return Opportunity{}, "", err
+		}
+		if err := tx.Commit(); err != nil {
+			return Opportunity{}, "", err
+		}
+		return record, match.RecordChangeID, nil
 	}
 	actor := Actor{Kind: "system", ID: "ingestion:" + item.ID}
 	companyID := input.ExistingCompanyID
@@ -732,7 +759,7 @@ func (s *Store) SaveIngestionOpportunity(ctx context.Context, claim Job, input I
 	if err != nil {
 		return Opportunity{}, "", err
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE ingestion_requests SET status='completed',opportunity_id=?,
+	result, err := tx.ExecContext(ctx, `UPDATE ingestion_requests SET status='processing',opportunity_id=?,
   record_change_id=?,source_id=?,safe_error_code=NULL,updated_at=? WHERE id=? AND job_id=? AND opportunity_id IS NULL
   AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=ingestion_requests.job_id
     AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?)`,
@@ -763,4 +790,30 @@ func (s *Store) SaveIngestionOpportunity(ctx context.Context, claim Job, input I
 		PostedOn: opportunityInput.PostedOn, DeadlineOn: opportunityInput.DeadlineOn, Revision: 1,
 		CreatedAt: now, UpdatedAt: now, Compensation: opportunityInput.Compensation}
 	return record, changeID, nil
+}
+
+// CompleteIngestionProcessing records that the active Codex turn finished its
+// work after a sourced record was saved. The worker still settles the leased
+// job separately; a saved opportunity alone never proves processing success.
+func (s *Store) CompleteIngestionProcessing(ctx context.Context, claim Job) error {
+	if claim.Kind != IngestionJobKind || claim.ID == "" || claim.LeaseToken == "" || claim.AttemptCount < 1 {
+		return ErrInvalid
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE ingestion_requests SET status='completed',safe_error_code=NULL,updated_at=?
+  WHERE job_id=? AND opportunity_id IS NOT NULL AND record_change_id IS NOT NULL
+    AND source_id IS NOT NULL AND status IN ('pending','processing','completed')
+    AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=ingestion_requests.job_id
+      AND j.kind=? AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?)`,
+		utcNow(), claim.ID, IngestionJobKind, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now()))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrConflict
+	}
+	return nil
 }

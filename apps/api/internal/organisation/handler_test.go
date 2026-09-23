@@ -72,6 +72,9 @@ func setupOrganisedIntake(t *testing.T) (*store.Store, store.IngestionRequest, s
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.CompleteIngestionProcessing(ctx, claim); err != nil {
+		t.Fatal(err)
+	}
 	if applied, err := s.CompleteJob(ctx, claim, store.JobResult{Ref: opportunity.ID}, time.Now()); err != nil || !applied {
 		t.Fatalf("ingestion complete: %v %v", applied, err)
 	}

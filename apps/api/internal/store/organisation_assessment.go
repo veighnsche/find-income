@@ -44,7 +44,7 @@ func (s *Store) OrganisationSnapshotForJob(ctx context.Context, claim Job) (Orga
   JOIN organisation_categories_current c ON c.singleton=1
   JOIN organisation_category_versions v ON v.version=c.version
   JOIN jobs j ON j.id=i.organisation_job_id
-  WHERE i.id=? AND o.id=? AND i.status='completed' AND o.archived_at IS NULL
+  WHERE i.id=? AND o.id=? AND i.source_id IS NOT NULL AND o.archived_at IS NULL
     AND j.id=? AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?`,
 		payload.IngestionID, payload.OpportunityID, claim.ID, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now())).
 		Scan(&snapshot.IngestionID, &snapshot.OpportunityID, &snapshot.SourceID, &snapshot.SourceURL, &snapshot.OriginalText,
@@ -297,7 +297,7 @@ func (s *Store) Organisation(ctx context.Context, opportunityID string) (Organis
 	err = s.db.QueryRowContext(ctx, `SELECT i.source_id,o.company_id,o.kind,COALESCE(o.source_url,''),o.original_text,
   COALESCE(i.organisation_job_id,''),COALESCE(j.state,''),COALESCE(j.result_ref,'') FROM ingestion_requests i
   JOIN opportunities o ON o.id=i.opportunity_id LEFT JOIN jobs j ON j.id=i.organisation_job_id
-  WHERE o.id=? AND i.status='completed' AND i.source_id IS NOT NULL
+  WHERE o.id=? AND i.source_id IS NOT NULL
   ORDER BY i.created_at DESC,i.id DESC LIMIT 1`, opportunityID).
 		Scan(&sourceID, &companyID, &kind, &url, &text, &jobID, &jobState, &jobResult)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -372,7 +372,7 @@ func (s *Store) OrganisationSummaries(ctx context.Context, opportunityIDs []stri
   COALESCE(a.category_id,''),EXISTS(SELECT 1 FROM organisation_assessments h WHERE h.opportunity_id=o.id)
   FROM opportunities o
   LEFT JOIN ingestion_requests i ON i.id=(SELECT i2.id FROM ingestion_requests i2
-    WHERE i2.opportunity_id=o.id AND i2.status='completed' AND i2.source_id IS NOT NULL
+    WHERE i2.opportunity_id=o.id AND i2.source_id IS NOT NULL
     ORDER BY i2.created_at DESC,i2.id DESC LIMIT 1)
   LEFT JOIN jobs j ON j.id=i.organisation_job_id
   LEFT JOIN organisation_current c ON c.opportunity_id=o.id

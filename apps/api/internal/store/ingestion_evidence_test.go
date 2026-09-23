@@ -52,6 +52,9 @@ func TestIngestionEvidenceIsBoundToLiveClaimAndSavedSource(t *testing.T) {
 	if _, _, err := s.AddIngestionEvidence(ctx, claim, input); !errors.Is(err, ErrConflict) {
 		t.Fatalf("repeated evidence version appended duplicate: %v", err)
 	}
+	if err := s.CompleteIngestionProcessing(ctx, claim); err != nil {
+		t.Fatal(err)
+	}
 	if applied, err := s.CompleteJob(ctx, claim, JobResult{Ref: opportunity.ID}, time.Now()); err != nil || !applied {
 		t.Fatalf("finish intake: %v %v", applied, err)
 	}
