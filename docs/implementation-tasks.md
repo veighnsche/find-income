@@ -2,7 +2,7 @@
 
 Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. API/contracts are committed in `2fdfe7d`, deployment configuration in `717ef93`, and web review in `8c8b66d`. Root check/test/build pass. Core corrections and immutable pack-correction preparation are committed; commissioned input integration and native runner configuration now run concurrently.
 
-**Current position: 5 tasks accepted, 14 partial, 1 active task, 7 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I12, I14, I15, I13, I18, I20, I24, I26. Active: I25. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 14 partial, 1 active task, 7 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20, I24, I26. Active: I25. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -115,7 +115,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 | I10 | Wire Jev source, research and shortlist decisions | Partial | I05, I07, I08, I09 | GPT-6 Sol / High |
 | I11 | Deliver the brief, round home and contextual correction | Partial | I05, I06 | GPT-6 Sol / Medium |
 | I12 | Establish the real private app and isolated runner | Partial | I02, I05, I06 | GPT-6 Sol / High |
-| I13 | Independently review round and runner authority | In progress | I05, I06, I07, I10, I11, I12 | GPT-6 Astra / High |
+| I13 | Independently review round and runner authority | Partial | I05, I06, I07, I10, I11, I12 | GPT-6 Astra / High |
 | I14 | Prove real discovery and initial Jev usefulness | Partial | I03, I08, I10, I11, I12, I13 | GPT-6 Sol / Medium |
 | I15 | Build one truthful Typst application pack | Partial | I05, I06, I09, I11 | GPT-6 Sol / Medium |
 | I16 | Accept the first useful recruitment result | Not started | I14, I15 | GPT-6 Sol / Medium |

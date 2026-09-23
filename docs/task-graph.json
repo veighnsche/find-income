@@ -343,7 +343,7 @@
       "scope": "Implement Ashby or another specifically justified source gap using the existing research and same round/identity/cursor contract. Keep this task conditional on recorded coverage misses; it never gates I15/I16.",
       "acceptance": "Observed missing source coverage improves under bounded fixtures/live comparison; complete-array endpoints respect item continuation. If current coverage is sufficient, leave this task deferred with evidence instead of building unused adapters.",
       "selection_reason": "A bounded connector over stable interfaces fits Sol Medium; no model can claim a measurable gain without the comparison.",
-      "status": "waiting",
+      "status": "conditional",
       "remaining_work": "Only implement additional source coverage after an observed I14 miss justifies it; otherwise mark deferred with the reason."
     },
     {
