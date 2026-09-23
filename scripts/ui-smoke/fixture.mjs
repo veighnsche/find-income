@@ -46,6 +46,7 @@ const company = {
 };
 const round = {
   id: 'synthetic-prepare-1',
+  requestKey: 'synthetic-prepare-key',
   intent: 'Prepare a private application pack for the selected sourced opportunity.',
   outcome: 'prepare',
   profileVersion: 7,
@@ -278,6 +279,14 @@ export async function startFixture() {
     failFirstInterviewPrepareResponse: false,
     failFirstInterviewDebriefResponse: false,
     rejectNextInterviewPrepare: false,
+    offerRequestsByKey: new Map(),
+    offerComparison: null,
+    latestCompletedOffer: null,
+    failFirstOfferResponse: false,
+    rejectNextOfferRequest: false,
+    deferOfferResponse: false,
+    offerResponsePending: false,
+    releaseOfferResponse: null,
     deferInterviewPrepareResponse: false,
     interviewPrepareResponsePending: false,
     releaseInterviewPrepare: null,
@@ -302,11 +311,80 @@ export async function startFixture() {
     requests: [],
   };
   const server = createServer(async (req, res) => {
-    const path = new URL(req.url, 'http://127.0.0.1').pathname;
+    const url = new URL(req.url, 'http://127.0.0.1');
+    const path = url.pathname;
     try {
       if (!path.startsWith('/api/v1/')) return await serveStatic(res, path);
       const payload = req.method === 'POST' ? await bodyJson(req) : undefined;
-      state.requests.push({ method: req.method, path, payload });
+      state.requests.push({ method: req.method, path, query: url.search, payload });
+      if (path === '/api/v1/rounds/compare-offers' && req.method === 'POST') {
+        const prior = state.offerRequestsByKey.get(payload.requestKey);
+        if (prior) return sendJson(res, 200, prior);
+        if (state.rejectNextOfferRequest) {
+          state.rejectNextOfferRequest = false;
+          return error(res, 409);
+        }
+        if (
+          !Array.isArray(payload.offers) ||
+          payload.offers.length < 1 ||
+          payload.offers.length > 5 ||
+          payload.offers.some((offer) => !offer.trim())
+        )
+          return error(res, 400);
+        if (
+          ['queued', 'running', 'awaiting_input', 'stopping', 'paused'].includes(state.round.state)
+        )
+          return error(res, 409);
+        const intakeId = `synthetic-offer-intake-${state.offerRequestsByKey.size + 1}`;
+        state.round = {
+          ...round,
+          id: `synthetic-offer-round-${state.offerRequestsByKey.size + 1}`,
+          requestKey: payload.requestKey,
+          outcome: 'compare_offers',
+          intent: 'Compare the complete supplied offers',
+          state: 'running',
+          step: 'extracting',
+          deliverableStatus: 'pending',
+          scope: {
+            inputRefs: [`offer_intake:${intakeId}`],
+            resources: [`offer_intake:${intakeId}`],
+            operations: ['offer_comparison.prepare', 'jev_request'],
+            delegates: ['codex-runner'],
+          },
+          report: {},
+        };
+        const response = { round: state.round, intakeId };
+        state.offerRequestsByKey.set(payload.requestKey, response);
+        state.offerInput = payload;
+        if (state.deferOfferResponse) {
+          state.offerResponsePending = true;
+          await new Promise((resolve) => {
+            state.releaseOfferResponse = resolve;
+          });
+          state.offerResponsePending = false;
+          state.releaseOfferResponse = null;
+        }
+        if (state.failFirstOfferResponse) {
+          state.failFirstOfferResponse = false;
+          return error(res, 503);
+        }
+        return sendJson(res, 201, response);
+      }
+      if (path.startsWith('/api/v1/offer-comparisons/')) {
+        const requested = path.startsWith('/api/v1/offer-comparisons/by-round/')
+          ? path.slice('/api/v1/offer-comparisons/by-round/'.length)
+          : path.slice('/api/v1/offer-comparisons/'.length);
+        const found =
+          state.offerComparison &&
+          (state.offerComparison.id === requested || state.offerComparison.roundId === requested);
+        if (!found) return error(res, 404);
+        const json = JSON.stringify(state.offerComparison).replaceAll(
+          '"9007199254740993"',
+          '9007199254740993',
+        );
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(json);
+      }
       if (path === '/api/v1/auth/session')
         return sendJson(res, 200, {
           actorKind: 'administrator',
@@ -352,6 +430,7 @@ export async function startFixture() {
         state.round = {
           ...round,
           id: roundId,
+          requestKey: payload.requestKey,
           outcome: 'interview_prepare',
           intent: 'Prepare one sourced private interview brief',
           state: 'running',
@@ -411,6 +490,7 @@ export async function startFixture() {
           state.round = {
             ...round,
             id: roundId,
+            requestKey: payload.requestKey,
             outcome: 'interview_debrief',
             intent: 'Record owner-reported debrief',
             state: 'running',
@@ -629,7 +709,13 @@ export async function startFixture() {
           sourceCount: 0,
         });
       if (path === '/api/v1/rounds/latest-completed')
-        return sendJson(res, 200, state.latestCompletedDiscover);
+        return sendJson(
+          res,
+          200,
+          url.searchParams.get('outcome') === 'compare_offers'
+            ? state.latestCompletedOffer
+            : state.latestCompletedDiscover,
+        );
       if (path === `/api/v1/rounds/${state.round.id}`) return sendJson(res, 200, state.round);
       if (
         path.startsWith('/api/v1/rounds/') &&
@@ -994,6 +1080,144 @@ export async function startFixture() {
             : 'partial',
         report,
       };
+    },
+    completeOfferComparison({ tradeoffStatus = 'unresolved', current = true } = {}) {
+      const input = state.offerInput;
+      if (!input) throw new Error('No synthetic offer intake to complete');
+      const intakeId = state.round.scope.inputRefs[0].slice('offer_intake:'.length);
+      const sources = input.offers.map((body, index) => ({
+        id: `offer-source-${index + 1}`,
+        offerId: `offer-${index + 1}`,
+        kind: 'owner_offer',
+        revision: '1',
+        sha256: `${index + 1}`.repeat(64),
+        body,
+      }));
+      const cited = (index, excerpt) => ({ sourceId: sources[index].id, excerpt });
+      const offers = input.offers.map((_, index) => ({
+        id: `offer-${index + 1}`,
+        employer:
+          ['Example Labs', 'Research Studio', 'Project Client'][index] || `Offer ${index + 1}`,
+        employerCitation: cited(
+          index,
+          ['Example Labs', 'Research Studio', 'Project Client'][index] || `Offer ${index + 1}`,
+        ),
+        engagement: index === 2 ? 'project' : 'employment',
+        engagementCitation: cited(index, index === 2 ? 'contract project' : 'employment'),
+        pay: {
+          amountKind: 'exact',
+          minCents: index === 0 ? '9007199254740993' : 600000,
+          currency: index === 2 ? 'USD' : 'EUR',
+          period: 'month',
+          basis: index === 2 ? 'project fee' : 'gross salary',
+          citation: cited(index, index === 2 ? 'USD 7,000' : 'gross EUR'),
+        },
+        hours: {
+          weeklyHundredths: index === 2 ? undefined : 3200,
+          ...(index === 2 ? {} : { citation: cited(index, '32 hours') }),
+        },
+        holiday: {
+          treatment: index === 2 ? 'unknown' : 'included',
+          ...(index === 2 ? {} : { rateBps: 800 }),
+          citation: cited(
+            index,
+            index === 2 ? 'holiday terms are unspecified' : 'holiday included',
+          ),
+        },
+        unknowns: index === 2 ? ['Project delivery costs are unknown.'] : [],
+      }));
+      const exact = (numerator, denominator = 1) => ({ numerator, denominator });
+      const views = offers.map((offer, index) => ({
+        offerId: offer.id,
+        engagement: offer.engagement,
+        currency: offer.pay.currency,
+        period: offer.pay.period,
+        basis: offer.pay.basis,
+        weeklyHoursHundredths: offer.hours.weeklyHundredths,
+        holidayTreatment: offer.holiday.treatment,
+        reported: { kind: 'exact', min: exact(index === 0 ? '9007199254740993' : '600000') },
+        monthlyEquivalent:
+          index === 0 ? { kind: 'exact', min: exact('9007199254740993', '2') } : undefined,
+        monthlyAssumption: index === 0 ? 'Server supplied exact rational' : undefined,
+      }));
+      const pay = [
+        {
+          leftId: 'offer-1',
+          rightId: 'offer-2',
+          status: 'comparable',
+          reason: 'Same currency and employment basis.',
+          currency: 'EUR',
+          period: 'month',
+          left: views[0].reported,
+          right: views[1].reported,
+          deltaRightMinusLeft: { kind: 'exact', min: exact('-9007199254140993', '2') },
+        },
+        ...(offers.length > 2
+          ? [
+              {
+                leftId: 'offer-1',
+                rightId: 'offer-3',
+                status: 'project_economics',
+                reason: 'Project costs and delivery basis are unknown.',
+              },
+            ]
+          : []),
+      ];
+      const alternative = {
+        id: 'clarify-project-costs',
+        kind: 'clarify',
+        why: {
+          text: 'Clarify the project delivery costs.',
+          citations: [cited(2, 'contract project')],
+        },
+      };
+      const tradeoff =
+        tradeoffStatus === 'selected' || tradeoffStatus === 'unresolved'
+          ? {
+              comparison: { inputSha256: 'a'.repeat(64) },
+              ...(tradeoffStatus === 'selected' ? { alternative } : {}),
+              selection: {
+                disposition: tradeoffStatus,
+                ...(tradeoffStatus === 'selected' ? { selected_id: alternative.id } : {}),
+                input_sha256: 'b'.repeat(64),
+                request_snapshot: { sample_probability: 0.125 },
+                provider_result: {
+                  probability: 0.72,
+                  confidence: 1.2e-7,
+                  tiny_exponent: 2e-30,
+                  note: 'JSON text with 123.45, 7e3, a quote " and a slash \\ remains source text',
+                },
+              },
+            }
+          : undefined;
+      state.offerComparison = {
+        id: 'synthetic-offer-comparison-1',
+        intakeId,
+        roundId: state.round.id,
+        comparison: {
+          input: { sources, offers, alternatives: offers.length > 2 ? [alternative] : [] },
+          inputSha256: 'a'.repeat(64),
+          views,
+          pay,
+          missing:
+            offers.length > 2 ? [{ offerId: 'offer-3', terms: ['Tax treatment not stated.'] }] : [],
+        },
+        tradeoffStatus,
+        ...(tradeoff ? { tradeoff } : {}),
+        current,
+        createdAt: time,
+      };
+      if (state.offerComparison.tradeoff)
+        state.offerComparison.tradeoff.comparison = state.offerComparison.comparison;
+      state.round = {
+        ...state.round,
+        state: 'completed',
+        revision: state.round.revision + 1,
+        step: 'done',
+        deliverableStatus: 'comparison_saved',
+        report: { comparisonId: state.offerComparison.id },
+      };
+      state.latestCompletedOffer = state.round;
     },
     completeInterviewBrief({ disposition = 'unresolved', selectedId = 'research' } = {}) {
       const record = [...state.interviews.values()].at(-1);

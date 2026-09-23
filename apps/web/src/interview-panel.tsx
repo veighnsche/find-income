@@ -376,9 +376,17 @@ export function InterviewPanel({
         const chosen = id && own.some((item) => item.id === id) ? id : own[0]?.id || '';
         const saved = chosen ? await getInterview(chosen) : null;
         let ownRound: Round | null = null;
+        const prepareRequest = readPrepare(opportunity.id);
+        const debriefRequest = saved ? readDebrief(saved.interview.id) : null;
+        const pendingKeys = [prepareRequest?.requestKey, debriefRequest?.requestKey].filter(
+          (key): key is string => Boolean(key),
+        );
+        const matchesPending =
+          !active || pendingKeys.length === 0 || pendingKeys.includes(active.requestKey);
         if (
           active &&
           saved &&
+          matchesPending &&
           (active.scope.inputRefs.includes(`interview:${saved.interview.id}`) ||
             saved.debriefs.some((item) => active.scope.inputRefs.includes(`debrief:${item.id}`)))
         )
@@ -386,7 +394,8 @@ export function InterviewPanel({
         const savedRoundId =
           saved?.debriefs.filter((item) => item.roundId).at(-1)?.roundId ||
           saved?.interview.roundId;
-        if (!ownRound && savedRoundId) ownRound = await getRound(savedRoundId);
+        if (!ownRound && savedRoundId && (savedRoundId !== active?.id || matchesPending))
+          ownRound = await getRound(savedRoundId);
         if (version !== readVersion.current) return false;
         setInterviews(own);
         setSelectedId(chosen);

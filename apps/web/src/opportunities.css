@@ -224,6 +224,29 @@
 .interview-brief code {
   overflow-wrap: anywhere;
 }
+.offer-input-list,
+.offer-result-grid {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+}
+.offer-result-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+.offer-result-item,
+.offer-round {
+  border-top: 1px solid #d8e2da;
+  padding-top: 1rem;
+  min-width: 0;
+}
+.offer-result-item h5 {
+  margin: 0 0 0.5rem;
+}
+.offer-result code,
+.offer-result-item,
+.offer-citation {
+  overflow-wrap: anywhere;
+}
 @media (max-width: 850px) {
   .op-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));

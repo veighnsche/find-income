@@ -168,6 +168,14 @@ export async function runInterviewSmoke(browser) {
     heldResponse.state.deferInterviewPrepareResponse = true;
     heldResponse.state.failFirstInterviewPrepareResponse = true;
     await panel.getByRole('button', { name: 'Prepare interview brief' }).click();
+    const heldPrepare = heldResponse.state.requests.find(
+      (request) => request.path === '/api/v1/interviews/prepare',
+    ).payload;
+    heldResponse.state.round.requestKey = 'another-interview-request';
+    await panel.getByRole('button', { name: 'Refresh interviews' }).click();
+    await panel.getByText(/Another interview prepare round is running/).waitFor();
+    assert.equal(await panel.getByRole('button', { name: 'Stop interview work' }).count(), 0);
+    heldResponse.state.round.requestKey = heldPrepare.requestKey;
     await panel.getByRole('button', { name: 'Refresh interviews' }).click();
     await panel.getByRole('button', { name: 'Stop interview work' }).waitFor();
     assert.equal(heldResponse.state.interviewPrepareResponsePending, true);

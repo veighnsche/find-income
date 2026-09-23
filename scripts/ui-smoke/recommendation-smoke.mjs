@@ -157,7 +157,11 @@ export async function runRecommendationSmoke(browser) {
     const { context, page, agency } = await openHome(browser, discover);
     await agency.getByRole('button', { name: 'Find more sourced opportunities' }).waitFor();
     assert.equal(
-      discover.state.requests.some((request) => request.path === '/api/v1/rounds/latest-completed'),
+      discover.state.requests.some(
+        (request) =>
+          request.path === '/api/v1/rounds/latest-completed' &&
+          request.query === '?outcome=discover',
+      ),
       false,
       'remembered round takes precedence',
     );

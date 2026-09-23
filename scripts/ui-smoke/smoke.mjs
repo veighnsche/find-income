@@ -4,6 +4,7 @@ import { startFixture } from './fixture.mjs';
 import { runDeliverySmoke } from './delivery-smoke.mjs';
 import { runRecommendationSmoke } from './recommendation-smoke.mjs';
 import { runInterviewSmoke } from './interview-smoke.mjs';
+import { runOfferComparisonSmoke } from './offer-comparison-smoke.mjs';
 
 async function launchBrowser() {
   const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
@@ -424,6 +425,7 @@ async function run() {
     await runDeliverySmoke(browser);
     await runRecommendationSmoke(browser);
     await runInterviewSmoke(browser);
+    await runOfferComparisonSmoke(browser);
     console.log(
       'UI fixture smoke passed: contextual input reports, exact lost-response replay, stale-409 recovery, 390px layout.',
     );

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ProcessInputReport } from './process-input-report';
+import { OfferComparisonPanel } from './offer-comparison-panel';
 import {
   checkRecommendationTarget,
   readHomeRecommendation,
@@ -44,6 +45,7 @@ function roundTitle(outcome: string): string {
   if (outcome === 'discover') return 'Find my next opportunities';
   if (outcome === 'prepare') return 'Prepare an application';
   if (outcome === 'process_input') return 'Handle your input';
+  if (outcome === 'compare_offers') return 'Compare whole offers';
   return outcome.replaceAll('_', ' ');
 }
 
@@ -821,6 +823,7 @@ export function AgencyHome({
           !loading && <p>Campaign brief unavailable. Refresh to try again.</p>
         )}
       </section>
+      <OfferComparisonPanel session={session} onSessionLost={onSessionLost} />
       {round?.outcome === 'prepare' && (
         <section className="op-card" aria-label="Application preparation">
           <h2>Application preparation</h2>
