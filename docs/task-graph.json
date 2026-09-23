@@ -422,7 +422,7 @@
       "remaining_work": "Implement exact-material approval, bounded delivery intent, per-item outcomes and uncertainty reconciliation.",
       "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
       "host_id": "local",
-      "active_slice": "Backend exact delivery/route/Stop integration plus concurrent exact-review UI",
+      "active_slice": "Correct immutable pack source binding, local captured-Jev Resume and HTTP send Round model",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
       "web_thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
@@ -445,9 +445,10 @@
       "remaining_work": "Independently review delivery authority and validate a specifically authorized controlled send; code review alone does not establish live delivery.",
       "thread_id": "01a0ce8e-4c6e-7c93-b63c-1084063ba7c0",
       "host_id": "local",
-      "active_slice": "Independent frozen backend delivery authority review",
+      "active_slice": "Review complete with1 P1 and2 P2 findings; scoped corrections assigned",
       "active_model": "gpt-6-astra",
-      "active_effort": "high"
+      "active_effort": "high",
+      "review": "Executed service and production-coordinator overlays reproduced stale pre-review pack acceptance and captured-Jev Resume failure; HTTP Send nested Round serialization mismatch also reproduced. No live send; delivery not accepted."
     },
     {
       "id": "I23",

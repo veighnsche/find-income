@@ -33,7 +33,7 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 | I10 next-action recommendation | Sol High | Current supported actions, charged Jev decision during useful commissioned discovery, persisted report and replay; no schema/HTTP/web edits. |
 | I21 delivery UI | Sol High | Exact message/PDF review, selected batch, approval/dispatch recovery and synthetic browser checks; web/smoke ownership only. |
 | I21 exact approval/delivery | Sol High | Delivery service/store/API, initial schema, operation registry, HTTP/contracts and startup composition; no discovery engine or web edits. |
-| I22 delivery review | Astra High | Independent review of frozen exact-approval, route, Stop/recovery and SMTP boundaries. |
+| I22 delivery review | Astra High | Review complete: one P1 and two P2 findings; bounded recheck follows source-binding, local recovery and HTTP response corrections. |
 | I24 interview backend | Sol High | Isolated checkout /private/tmp/find-income-i24-backend at b4f1080; commissioned runtime/store/API integration; no main or web edits. |
 | I10 context-budget evaluation | Sol Medium | Completed: two HTTP200 calls,4645 reported tokens; both valid abstentions exceeded1200. Core owns the bounded cap correction. |
 
