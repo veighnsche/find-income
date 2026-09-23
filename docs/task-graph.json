@@ -146,10 +146,10 @@
       "acceptance": "Deterministic source fixtures exercise discovered official links beyond the seeds, redirected/inaccessible pages and allowance exhaustion without manual board entry. A real non-seed result is verified later in I14. Search snippets alone are not vacancy evidence.",
       "selection_reason": "One verified acquisition path with established boundaries is Sol Medium; escalate if the feasibility record exposes a genuinely different integration problem.",
       "status": "partial",
-      "remaining_work": "Have Jev choose among bounded neutral discovery leads, then verify a real non-seed official opening in I14. Existing source verification and registration are implemented.",
+      "remaining_work": "Verify a real non-seed official opening through the authenticated runtime in I14. Neutral lead selection, official verification and bounded new-employer persistence are reviewed and committedcd2f9ab.",
       "thread_id": "01a0cf13-2c03-73f2-b074-6c73d7120ebe",
       "host_id": "local",
-      "active_slice": "Correct reviewed fresh-employer path allowance and neutral-research recovery",
+      "active_slice": "Reviewed and committedcd2f9ab; real non-seed runtime acceptance remains",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
       "review": "Committed 2fdfe7d: exact company-detail provenance, bounded official one-hop reads and atomic supported board registration; fixtures pass."
@@ -188,11 +188,11 @@
       "status": "partial",
       "thread_id": "01a0cf13-2c03-73f2-b074-6c73d7120ebe",
       "host_id": "local",
-      "active_slice": "Correct reviewed next-outcome assessment omissions and recovery",
+      "active_slice": "Substantial discovery committedcd2f9ab; cross-outcome recommendation remains",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
       "review": "Committed 2fdfe7d: recorded choices, guarded current screening/organisation projection and pack relevance; responsibility evaluation has ten complete cases.",
-      "remaining_work": "Complete Jev selection among neutral discovered leads and useful continuation within one finite commissioned outcome; the current engine stops after one extraction. Verify contextual-input organisation and current decision reuse, then real useful discovery. Retained-batch continuity alone is not substantial-round acceptance. Integrate persisted cross-outcome agency recommendations during commissioned work; current discovery continuation is not the home recommendation."
+      "remaining_work": "Integrate persisted cross-outcome agency recommendations during commissioned work and verify real useful discovery. Neutral lead choice, multiple saved-source continuation, recovery and measured token-cap correction are committedcd2f9ab; two real budget-check responses abstained."
     },
     {
       "id": "I11",
@@ -258,8 +258,8 @@
       "selection_reason": "This is the concentrated security-sensitive review; Astra High is justified here rather than for every implementation task.",
       "status": "partial",
       "remaining_work": "Review new substantial-discovery authority/recovery changes, then actual selected-host/account isolation evidence. Earlier core findings were corrected at7310026 and native boundary reviewed at a22afa7; live acceptance remains open.",
-      "active_slice": "Independent review complete; waiting for three scoped discovery corrections",
-      "review": "New discovery review records3 P2 findings: reconciled research rejected, fresh-employer item budget overrun, silent assessment-summary omissions. Targeted existing tests passed; temporary recovery overlay failed. Prior native/live boundaries unchanged.",
+      "active_slice": "Discovery correction recheck complete; live host boundary remains",
+      "review": "All3 substantial-discovery findings closed in bounded independent recheck; measured10000-token/24KiB envelope checks pass. Root full Go suite passes on the integrated frozen snapshot. Actual selected-host/account isolation remains open.",
       "thread_id": "01a0cfc1-3fa3-7371-ad63-26f41a796309",
       "host_id": "local",
       "active_model": "gpt-6-astra",
@@ -441,8 +441,13 @@
       "scope": "Review the exact send/approval/reconciliation diff independently, using requirements and raw evidence without earlier verdicts. Verify only a specifically approved controlled destination or actual reviewed batch; no employer outreach follows merely from this task\u2019s existence.",
       "acceptance": "No stale or unapproved material is sent and uncertain outcomes cannot duplicate submission on retry/restart. Coordinator verifies corrections and actual receipt evidence; if no destination is authorised, code review may finish but live delivery acceptance remains pending.",
       "selection_reason": "Astra High is reserved for this second concentrated external-action authority review, not routine message drafting.",
-      "status": "waiting",
-      "remaining_work": "Independently review delivery authority and validate a specifically authorized controlled send; code review alone does not establish live delivery."
+      "status": "in_progress",
+      "remaining_work": "Independently review delivery authority and validate a specifically authorized controlled send; code review alone does not establish live delivery.",
+      "thread_id": "01a0ce8e-4c6e-7c93-b63c-1084063ba7c0",
+      "host_id": "local",
+      "active_slice": "Independent frozen backend delivery authority review",
+      "active_model": "gpt-6-astra",
+      "active_effort": "high"
     },
     {
       "id": "I23",

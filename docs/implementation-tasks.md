@@ -2,7 +2,7 @@
 
 Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. Current ownership, reviewed checkpoints and remaining acceptance are recorded below; historical test passes do not establish completion of the evolving worktree.
 
-**Current position: 5 tasks accepted, 15 partial, 1 active task, 6 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20, I24–I26. I21 is active; I08/I10 partial implementations also remain active. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 15 partial, 2 active tasks, 5 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20, I24–I26. I21 and I22 are active. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -30,10 +30,10 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I08/I10 substantial discovery | Sol High | Three reviewed corrections: reconciled neutral-search recovery, fresh-employer full-path allowance and explicit assessment omissions. |
+| I08/I10 substantial discovery | Sol High | Reviewed and committedcd2f9ab; worker idle until next owned integration slice. |
 | I21 delivery UI | Sol High | Exact message/PDF review, selected batch, approval/dispatch recovery and synthetic browser checks; web/smoke ownership only. |
 | I21 exact approval/delivery | Sol High | Delivery service/store/API, initial schema, operation registry, HTTP/contracts and startup composition; no discovery engine or web edits. |
-| I13 discovery review | Astra High | Review complete with three P2 findings; bounded correction recheck follows the implementation handoff. |
+| I22 delivery review | Astra High | Independent review of frozen exact-approval, route, Stop/recovery and SMTP boundaries. |
 | I10 context-budget evaluation | Sol Medium | Completed: two HTTP200 calls,4645 reported tokens; both valid abstentions exceeded1200. Core owns the bounded cap correction. |
 
 Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; contextual input and shared pack transaction integration committed2279c3f after independent correction review, full Go suite and race-enabled recovery tests. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. Contextual-input UI is committed12b138d after root lint/TypeScript and production-build browser checks; real runtime acceptance remains open. The web writer is implementing I21 exact delivery review concurrently; interview helpers are committed7299c54 after root review/tests, and the I25 offer helpers are reviewed and committed in de84e23; both domain slices still need commissioned persistence/UI integration. Four live workers maximum.
@@ -128,7 +128,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 | I19 | Connect bounded read-only correspondence | Not started | I12, I18 | GPT-6 Sol / Medium |
 | I20 | Implement one supported application delivery route | Partial | I12, I15 | GPT-6 Sol / High |
 | I21 | Bind exact approval to bounded delivery | In progress | I15, I20 | GPT-6 Sol / High |
-| I22 | Review delivery authority and verify a controlled send | Not started | I21 | GPT-6 Astra / High |
+| I22 | Review delivery authority and verify a controlled send | In progress | I21 | GPT-6 Astra / High |
 | I23 | Process replies and prepare follow-ups | Not started | I09, I19 | GPT-6 Sol / Medium |
 | I24 | Prepare interviews from actual context | Partial | I15, I18 | GPT-6 Sol / Medium |
 | I25 | Compare real offer terms without invented certainty | Partial | I01, I09, I18 | GPT-6 Sol / Medium |
@@ -240,7 +240,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I06, I07.
 
-**Remaining work:** Have Jev choose among bounded neutral discovery leads, then verify a real non-seed official opening in I14. Existing source verification and registration are implemented.
+**Remaining work:** Verify a real non-seed official opening through the authenticated runtime in I14. Neutral lead selection, official verification and bounded new-employer persistence are reviewed and committedcd2f9ab.
 
 **Task scope:** Implement the smallest verified bounded search/career-link path from I02 alongside Lever. Produce persisted source candidates and exact employer evidence, with operation limits, unsupported-source reporting and continuation. This is candidate acquisition; I10 wires Jev selection. Do not require Ashby/general custom-site coverage to finish it.
 
@@ -268,7 +268,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I05, I07, I08, I09.
 
-**Remaining work:** Complete Jev selection among neutral discovered leads and useful continuation within one finite commissioned outcome; the current engine stops after one extraction. Verify contextual-input organisation and current decision reuse, then real useful discovery. Retained-batch continuity alone is not substantial-round acceptance. See [remaining outcome gap](/Users/vince/Projects/find-income/implementation-notes/implementation/I10-round-outcome-gap.md).
+**Remaining work:** Integrate persisted cross-outcome agency recommendations during commissioned work and verify real useful discovery. Neutral lead choice, multiple saved-source continuation, recovery and measured token-cap correction are committedcd2f9ab; two real budget-check responses abstained.
 
 **Task scope:** Integrate durable assessments and bounded candidate selection with the controller and acquisition services. Include organisation, factual scope, lead/research priority and next useful implemented outcome. Persist full request/response, versions, options, source support and usage; treat facts and require/avoid/prefer policy separately.
 
@@ -427,7 +427,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 ### I22 — Review delivery authority and verify a controlled send
 
-- [ ] **Not started** · GPT-6 Astra / High · Dependencies: I21.
+- [ ] **In progress** · GPT-6 Astra / High · Dependencies: I21.
 
 **Remaining work:** Independently review delivery authority and validate a specifically authorized controlled send; code review alone does not establish live delivery.
 
