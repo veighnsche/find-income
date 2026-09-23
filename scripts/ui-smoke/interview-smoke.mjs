@@ -74,6 +74,7 @@ export async function runInterviewSmoke(browser) {
     assert.equal(debriefs().length, 1);
     assert.deepEqual(Object.keys(debriefs()[0].payload).sort(), ['notes', 'requestKey']);
     assert.equal(debriefs()[0].payload.notes, notes);
+    fixture.state.interviews.get('synthetic-interview-1').interview.current = false;
     await page.reload({ waitUntil: 'networkidle' });
     const afterReload = page.getByRole('region', { name: 'Interview preparation' });
     assert.equal(
@@ -81,10 +82,15 @@ export async function runInterviewSmoke(browser) {
       notes,
     );
     assert.equal(debriefs().length, 1);
+    assert.equal(
+      await afterReload.getByRole('button', { name: 'Recover same debrief request' }).isEnabled(),
+      true,
+    );
     await afterReload.getByRole('button', { name: 'Recover same debrief request' }).click();
     await afterReload.getByText(/Debrief commissioned/).waitFor();
     assert.equal(debriefs().length, 2);
     assert.deepEqual(debriefs()[1].payload, debriefs()[0].payload);
+    fixture.state.interviews.get('synthetic-interview-1').interview.current = true;
     fixture.completeInterviewDebrief();
     await afterReload.getByRole('button', { name: 'Refresh interviews' }).click();
     await afterReload.getByText(/Observations are attributed to your reported notes/).waitFor();
@@ -94,8 +100,12 @@ export async function runInterviewSmoke(browser) {
     );
     assert.match(await afterReload.innerText(), /Discussed the research prototype/);
     assert.match(await afterReload.innerText(), /Hiring decision not reported/);
-    await afterReload.getByText('Original debrief notes and audit').click();
-    assert.match(await afterReload.innerText(), new RegExp(notes.replaceAll('.', '\\.')));
+    await afterReload.getByText('Reading saved interviews…').waitFor({ state: 'detached' });
+    const auditSummary = afterReload.getByText('Original debrief notes and audit');
+    const audit = auditSummary.locator('..');
+    if ((await audit.getAttribute('open')) === null) await auditSummary.click();
+    await audit.locator('pre').waitFor({ state: 'visible' });
+    assert.equal(await audit.locator('pre').innerText(), notes);
 
     // The list/detail route is the record lookup, even after local request IDs are gone.
     await page.evaluate(() => {

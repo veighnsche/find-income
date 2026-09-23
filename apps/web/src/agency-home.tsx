@@ -9,6 +9,7 @@ import {
 } from './home-recommendation';
 import {
   getActiveRound,
+  getDeliveryReview,
   getLatestCompletedDiscoveryRound,
   getRoundCards,
   getRoundCapability,
@@ -31,11 +32,20 @@ import {
 
 const lastRoundKey = 'jobseek.last-round';
 const startKey = 'jobseek.pending-round-start';
+const startRejectionKey = 'jobseek.pending-round-start-rejected';
 function readPendingStart(): StartRoundRequest | null {
   try {
     return JSON.parse(localStorage.getItem(startKey) || 'null') as StartRoundRequest | null;
   } catch {
     return null;
+  }
+}
+function readRejectedStart(): boolean {
+  try {
+    const pending = readPendingStart();
+    return Boolean(pending && localStorage.getItem(startRejectionKey) === pending.requestKey);
+  } catch {
+    return false;
   }
 }
 const activeStates = new Set<Round['state']>(['queued', 'running', 'awaiting_input', 'stopping']);
@@ -72,6 +82,67 @@ function SafeSource({ value }: { value: string }) {
   return <span>Source link unavailable</span>;
 }
 
+function DeliveryPausedRecovery({
+  round,
+  onOpenOpportunity,
+  onSessionLost,
+}: {
+  round: Round;
+  onOpenOpportunity: (id: string) => void;
+  onSessionLost: () => void;
+}) {
+  const reviewId = round.scope.inputRefs
+    .find((ref) => ref.startsWith('delivery_review:'))
+    ?.slice('delivery_review:'.length);
+  const [review, setReview] = useState<Awaited<ReturnType<typeof getDeliveryReview>> | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!reviewId) return;
+    const controller = new AbortController();
+    void getDeliveryReview(reviewId, controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted) setReview(value);
+      })
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        if (isUnauthenticated(cause)) onSessionLost();
+        else setError(`${message(cause)} The saved delivery review is unavailable.`);
+      });
+    return () => controller.abort();
+  }, [reviewId, onSessionLost]);
+  return (
+    <div className="agency-next" role="region" aria-label="Paused delivery recovery">
+      <p>
+        This delivery commission cannot resume. Review its exact saved items and use Close
+        unresolved commission from that review when ready. A receipt check may be unavailable.
+      </p>
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
+      {review?.items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className="secondary"
+          onClick={() => {
+            try {
+              localStorage.setItem('jobseek.delivery-review-id', review.id);
+            } catch {
+              /* The saved review remains server readable. */
+            }
+            onOpenOpportunity(item.opportunityId);
+          }}
+        >
+          Open saved delivery review for {item.title}
+        </button>
+      ))}
+      {!review && !error && <p>Reading the saved delivery review…</p>}
+    </div>
+  );
+}
+
 export function AgencyHome({
   session,
   onSessionLost,
@@ -101,7 +172,7 @@ export function AgencyHome({
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingStart, setPendingStart] = useState<StartRoundRequest | null>(readPendingStart);
-  const [staleStart, setStaleStart] = useState(false);
+  const [staleStart, setStaleStart] = useState(readRejectedStart);
   const [adviceCheck, setAdviceCheck] = useState<{ key: string; reason: string | null } | null>(
     null,
   );
@@ -269,7 +340,12 @@ export function AgencyHome({
   }, [round?.id, round?.state, refresh]);
 
   async function act(operation: 'stop' | 'resume') {
-    if (!round || mutationInFlight.current) return;
+    if (
+      !round ||
+      mutationInFlight.current ||
+      (operation === 'resume' && round.outcome === 'deliver')
+    )
+      return;
     mutationInFlight.current = true;
     invalidateRead();
     setBusy(true);
@@ -303,6 +379,7 @@ export function AgencyHome({
         : undefined;
     if (
       mutationInFlight.current ||
+      (pendingStart && staleStart) ||
       (!pendingStart &&
         (!(capability?.canStart || (replacePaused && capability?.reason === 'round_active')) ||
           (round && activeStates.has(round.state))))
@@ -314,6 +391,11 @@ export function AgencyHome({
     setActionError(null);
     setStaleStart(false);
     try {
+      localStorage.removeItem(startRejectionKey);
+    } catch {
+      /* In-page rejection state remains. */
+    }
+    try {
       let input = pendingStart;
       if (!input) {
         input = { requestKey: crypto.randomUUID(), ...(replacePaused ? { replacePaused } : {}) };
@@ -323,13 +405,22 @@ export function AgencyHome({
       const created = await startRound(input, session.csrfToken);
       if (mounted.current) setRound(created);
       localStorage.removeItem(startKey);
+      localStorage.removeItem(startRejectionKey);
       setPendingStart(null);
     } catch (cause) {
       if (isUnauthenticated(cause)) onSessionLost();
-      else if (cause instanceof RequestError && cause.status === 409) {
+      else if (cause instanceof RequestError && [400, 403, 409, 422].includes(cause.status)) {
         setStaleStart(true);
+        try {
+          const pending = readPendingStart();
+          if (pending) localStorage.setItem(startRejectionKey, pending.requestKey);
+        } catch {
+          /* In-page rejection state remains. */
+        }
         setActionError(
-          'This Start request was rejected because the paused work changed. Review current work before starting a new request.',
+          cause.status === 409
+            ? 'This Start request was rejected because the paused work changed. Review current work before starting a new request.'
+            : `${message(cause)} The server rejected this Start request. Review current work before starting a new request.`,
         );
       } else if (mounted.current)
         setActionError(
@@ -352,6 +443,7 @@ export function AgencyHome({
       return;
     }
     localStorage.removeItem(startKey);
+    localStorage.removeItem(startRejectionKey);
     setPendingStart(null);
     setStaleStart(false);
     setActionError(
@@ -555,7 +647,7 @@ export function AgencyHome({
                   Stop this round
                 </button>
               )}
-              {paused && (
+              {paused && round.outcome !== 'deliver' && (
                 <button type="button" disabled={busy} onClick={() => void act('resume')}>
                   {round.reconciliationRequired
                     ? 'Resume and check uncertain work'
@@ -563,13 +655,21 @@ export function AgencyHome({
                 </button>
               )}
             </div>
-            {paused && round.reconciliationRequired && (
+            {paused && round.outcome === 'deliver' && (
+              <DeliveryPausedRecovery
+                key={round.id}
+                round={round}
+                onOpenOpportunity={onOpenOpportunity}
+                onSessionLost={onSessionLost}
+              />
+            )}
+            {paused && round.outcome !== 'deliver' && round.reconciliationRequired && (
               <p className="hint">
                 Resume asks the server to reconcile uncertain work before any new step. Page refresh
                 does not restart the round.
               </p>
             )}
-            {paused && !capability?.canStart && (
+            {paused && round.outcome !== 'deliver' && !capability?.canStart && (
               <p className="hint">
                 {round.outcome === 'prepare' ? 'Application preparation' : 'Discovery'} execution is
                 currently unavailable. Resume may leave this round paused; saved results and
@@ -742,12 +842,15 @@ export function AgencyHome({
         {pendingStart && (
           <div className="agency-next">
             <p>
-              The earlier discovery Start response was not confirmed. Retry its saved request to
-              check the same commission.
+              {staleStart
+                ? 'The server rejected this saved discovery Start request. Review current work before starting a new request.'
+                : 'The earlier discovery Start response was not confirmed. Retry its saved request to check the same commission.'}
             </p>
-            <button type="button" disabled={busy} onClick={() => void start()}>
-              Retry same discovery request
-            </button>
+            {!staleStart && (
+              <button type="button" disabled={busy} onClick={() => void start()}>
+                Retry same discovery request
+              </button>
+            )}
             {staleStart && (
               <button
                 type="button"

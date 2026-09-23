@@ -219,6 +219,25 @@ export async function runDeliverySmoke(browser) {
       (request) => request.path === '/api/v1/delivery/reviews' && request.method === 'POST',
     ).payload.requestKey;
     unsupported.state.delivery.routeSupported = true;
+    const beforeReload = unsupported.state.requests.filter(
+      (request) => request.path === '/api/v1/delivery/reviews' && request.method === 'POST',
+    ).length;
+    await page.reload({ waitUntil: 'networkidle' });
+    const reloaded = page.getByRole('region', { name: 'Application delivery' });
+    await reloaded
+      .getByRole('button', { name: 'Review rejection and start a new Prepare request' })
+      .waitFor();
+    assert.equal(
+      await reloaded.getByRole('button', { name: 'Recover saved Prepare request' }).count(),
+      0,
+    );
+    assert.equal(
+      unsupported.state.requests.filter(
+        (request) => request.path === '/api/v1/delivery/reviews' && request.method === 'POST',
+      ).length,
+      beforeReload,
+      'known 422 reload does not retry delivery Prepare',
+    );
     await delivery
       .getByRole('button', { name: 'Review rejection and start a new Prepare request' })
       .click();

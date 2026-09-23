@@ -513,7 +513,7 @@ export function InterviewPanel({
   async function debrief() {
     if (
       !detail ||
-      !detail.interview.current ||
+      (!pendingDebrief && !detail.interview.current) ||
       commissionInFlight.current ||
       controlInFlight.current ||
       (!pendingDebrief &&
@@ -783,7 +783,8 @@ export function InterviewPanel({
           {!detail.interview.current && (
             <p className="error">
               This interview context is stale after a role or profile change. Saved brief and notes
-              remain readable; debrief commission is unavailable.
+              remain readable. New debrief work is unavailable; an exact pending request can still
+              be recovered.
             </p>
           )}
           {pendingDebrief && (
@@ -805,11 +806,7 @@ export function InterviewPanel({
               </button>
             )}
             {pendingDebrief && !debriefRejected && (
-              <button
-                type="button"
-                disabled={busy || !detail.interview.current}
-                onClick={() => void debrief()}
-              >
+              <button type="button" disabled={busy} onClick={() => void debrief()}>
                 Recover same debrief request
               </button>
             )}

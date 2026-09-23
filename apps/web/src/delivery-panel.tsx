@@ -29,6 +29,7 @@ const batchKey = 'jobseek.delivery-batch';
 const reviewKey = 'jobseek.delivery-review-id';
 const historyKey = 'jobseek.delivery-review-history';
 const prepareKey = 'jobseek.delivery-prepare-request';
+const prepareRejectionKey = 'jobseek.delivery-prepare-rejected';
 const sendKey = 'jobseek.delivery-send-requested';
 const pollMs = 5000;
 type BatchEntry = { packId: string; opportunityId: string; title: string; version: number };
@@ -217,7 +218,10 @@ export function DeliveryPanel({
   const [busy, setBusy] = useState(false);
   const [sendPending, setSendPending] = useState(false);
   const [statusRead, setStatusRead] = useState(false);
-  const [prepareRejected, setPrepareRejected] = useState(false);
+  const [prepareRejected, setPrepareRejected] = useState(() => {
+    const pending = readPendingPrepare();
+    return Boolean(pending && readValue(prepareRejectionKey) === pending.requestKey);
+  });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [sendRequested, setSendRequested] = useState(() => readValue(sendKey));
@@ -302,6 +306,7 @@ export function DeliveryPanel({
     if (
       inFlight.current ||
       reviewId ||
+      (pendingPrepare && prepareRejected) ||
       packIds.length < 1 ||
       packIds.length > 3 ||
       (pendingPrepare && pendingPrepare.packIds.join('\0') !== packIds.join('\0'))
@@ -312,6 +317,7 @@ export function DeliveryPanel({
     setError('');
     setNotice('');
     setPrepareRejected(false);
+    saveValue(prepareRejectionKey, '');
     try {
       const input = pendingPrepare || { requestKey: crypto.randomUUID(), packIds };
       saveValue(prepareKey, JSON.stringify(input));
@@ -319,6 +325,7 @@ export function DeliveryPanel({
       const prepared = await prepareDeliveryReview(input, session.csrfToken);
       rememberReview(prepared.id);
       saveValue(prepareKey, '');
+      saveValue(prepareRejectionKey, '');
       setPendingPrepare(null);
       setReview(prepared);
       setRound(null);
@@ -326,8 +333,13 @@ export function DeliveryPanel({
     } catch (cause) {
       if (isUnauthenticated(cause)) onSessionLost();
       else {
-        const rejected = cause instanceof RequestError && [400, 409, 422].includes(cause.status);
+        const rejected =
+          cause instanceof RequestError && [400, 403, 409, 422].includes(cause.status);
         setPrepareRejected(rejected);
+        if (rejected) {
+          const pending = readPendingPrepare();
+          if (pending) saveValue(prepareRejectionKey, pending.requestKey);
+        }
         setError(
           rejected
             ? `${message(cause)} The server rejected this Prepare request. Review current packs and routes before starting a revised request.`
@@ -344,6 +356,7 @@ export function DeliveryPanel({
     if (!pendingPrepare || !prepareRejected || inFlight.current) return;
     if (!(await refresh())) return;
     saveValue(prepareKey, '');
+    saveValue(prepareRejectionKey, '');
     setPendingPrepare(null);
     setPrepareRejected(false);
     setNotice(

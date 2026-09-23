@@ -5,6 +5,7 @@ import { runDeliverySmoke } from './delivery-smoke.mjs';
 import { runRecommendationSmoke } from './recommendation-smoke.mjs';
 import { runInterviewSmoke } from './interview-smoke.mjs';
 import { runOfferComparisonSmoke } from './offer-comparison-smoke.mjs';
+import { runI27CorrectionsSmoke } from './i27-corrections-smoke.mjs';
 
 async function launchBrowser() {
   const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
@@ -354,10 +355,25 @@ async function run() {
     await replaceDiscovery.waitFor();
     fixture.state.staleNextDiscovery = true;
     await replaceDiscovery.click();
+    await agency.getByRole('button', { name: 'Review work and start a new request' }).waitFor();
+    const rejectedCount = fixture.state.requests.filter(
+      (item) => item.method === 'POST' && item.path === '/api/v1/rounds',
+    ).length;
+    await page.reload({ waitUntil: 'networkidle' });
+    await agency.getByRole('button', { name: 'Review work and start a new request' }).waitFor();
+    assert.equal(
+      await agency.getByRole('button', { name: 'Retry same discovery request' }).count(),
+      0,
+    );
+    assert.equal(
+      fixture.state.requests.filter(
+        (item) => item.method === 'POST' && item.path === '/api/v1/rounds',
+      ).length,
+      rejectedCount,
+      'known 409 reload does not retry discovery',
+    );
     await agency.getByRole('button', { name: 'Review work and start a new request' }).click();
-    await agency
-      .getByRole('button', { name: 'Retry same discovery request' })
-      .waitFor({ state: 'detached' });
+    await page.waitForFunction(() => localStorage.getItem('jobseek.pending-round-start') === null);
     const rejectedDiscovery = fixture.state.requests
       .filter((item) => item.method === 'POST' && item.path === '/api/v1/rounds')
       .at(-1).payload;
@@ -426,6 +442,7 @@ async function run() {
     await runRecommendationSmoke(browser);
     await runInterviewSmoke(browser);
     await runOfferComparisonSmoke(browser);
+    await runI27CorrectionsSmoke(browser);
     console.log(
       'UI fixture smoke passed: contextual input reports, exact lost-response replay, stale-409 recovery, 390px layout.',
     );

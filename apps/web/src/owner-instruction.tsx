@@ -14,7 +14,11 @@ import {
 } from './api';
 
 type Target = Pick<ProcessInputRequest, 'targetKind' | 'targetId' | 'expectedRevision'>;
-type Draft = { text: string; pending: ProcessInputRequest | null };
+type Draft = {
+  text: string;
+  pending: ProcessInputRequest | null;
+  rejectedRequestKey?: string;
+};
 const working = new Set<Round['state']>(['queued', 'running', 'awaiting_input', 'stopping']);
 function draftKey(target: Target) {
   return `jobseek.process-input.${target.targetKind}.${target.targetId}`;
@@ -94,7 +98,9 @@ export function OwnerInstructionPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
-  const [reviseAllowed, setReviseAllowed] = useState(false);
+  const reviseAllowed = Boolean(
+    draft.pending && draft.rejectedRequestKey === draft.pending.requestKey,
+  );
   const lastSettled = useRef('');
   const onSettledRef = useRef(onRoundSettled);
   onSettledRef.current = onRoundSettled;
@@ -108,7 +114,6 @@ export function OwnerInstructionPanel({
   useEffect(() => {
     setDraft(readDraft(key));
     setAccepted(false);
-    setReviseAllowed(false);
     setError(null);
     setRoundLoading(true);
     const controller = new AbortController();
@@ -158,7 +163,14 @@ export function OwnerInstructionPanel({
     }
   }
   async function submit() {
-    if (busy || roundLoading || !draft.text.trim() || (roundError && !draft.pending)) return;
+    if (
+      busy ||
+      roundLoading ||
+      !draft.text.trim() ||
+      reviseAllowed ||
+      (roundError && !draft.pending)
+    )
+      return;
     if (!draft.pending && round && working.has(round.state)) {
       setError('Agency work is already running. Stop it before commissioning different work.');
       return;
@@ -169,9 +181,8 @@ export function OwnerInstructionPanel({
         : undefined;
     setBusy(true);
     setError(null);
-    setReviseAllowed(false);
+    let input = draft.pending;
     try {
-      let input = draft.pending;
       if (!input) {
         input = {
           ...target,
@@ -179,7 +190,7 @@ export function OwnerInstructionPanel({
           ...material(draft.text, target.targetKind),
           ...(replacement ? { replacePaused: replacement } : {}),
         };
-        save({ ...draft, pending: input });
+        save({ ...draft, pending: input, rejectedRequestKey: undefined });
       }
       const response = await processInput(input, session.csrfToken);
       setRound(response.round);
@@ -194,12 +205,12 @@ export function OwnerInstructionPanel({
     } catch (cause) {
       if (isUnauthenticated(cause)) onSessionLost();
       else if (cause instanceof RequestError && cause.status === 409) {
-        setReviseAllowed(true);
+        if (input) save({ ...draft, pending: input, rejectedRequestKey: input.requestKey });
         setError(
           'The target or paused round changed. Refresh the record and review before a new request.',
         );
       } else if (cause instanceof RequestError && cause.status >= 400 && cause.status < 500) {
-        setReviseAllowed(true);
+        if (input) save({ ...draft, pending: input, rejectedRequestKey: input.requestKey });
         setError(`${cause.message} Review the material and revise it before submitting again.`);
       } else
         setError(
@@ -259,8 +270,9 @@ export function OwnerInstructionPanel({
       />
       {draft.pending && (
         <p className="hint">
-          This submitted text and request identity are held for the same-request retry. Check work
-          status or retry before editing a new request.
+          {reviseAllowed
+            ? 'The server rejected this exact request. Refresh work status and explicitly revise the saved text before a new request.'
+            : 'This submitted text and request identity are held for the same-request retry. Check work status or retry before editing a new request.'}
         </p>
       )}
       {roundError && (
@@ -307,25 +319,27 @@ export function OwnerInstructionPanel({
         </p>
       )}
       <div className="button-row">
-        <button
-          type="button"
-          disabled={
-            busy ||
-            roundLoading ||
-            !draft.text.trim() ||
-            Boolean(roundError && !draft.pending) ||
-            Boolean(!draft.pending && round && working.has(round.state))
-          }
-          onClick={() => void submit()}
-        >
-          {busy
-            ? 'Working…'
-            : draft.pending
-              ? 'Retry same request'
-              : replace
-                ? `End paused work and ${label.toLowerCase()}`
-                : label}
-        </button>
+        {!reviseAllowed && (
+          <button
+            type="button"
+            disabled={
+              busy ||
+              roundLoading ||
+              !draft.text.trim() ||
+              Boolean(roundError && !draft.pending) ||
+              Boolean(!draft.pending && round && working.has(round.state))
+            }
+            onClick={() => void submit()}
+          >
+            {busy
+              ? 'Working…'
+              : draft.pending
+                ? 'Retry same request'
+                : replace
+                  ? `End paused work and ${label.toLowerCase()}`
+                  : label}
+          </button>
+        )}
         {round && working.has(round.state) && round.state !== 'stopping' && (
           <button
             type="button"
@@ -352,7 +366,7 @@ export function OwnerInstructionPanel({
             className="secondary"
             disabled={busy || roundLoading}
             onClick={() => {
-              save({ ...draft, pending: null });
+              save({ ...draft, pending: null, rejectedRequestKey: undefined });
               setError(null);
             }}
           >
