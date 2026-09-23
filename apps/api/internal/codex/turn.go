@@ -93,8 +93,8 @@ func (c *TurnController) Run(ctx context.Context, text string, hooks TurnHooks) 
 				continue
 			}
 			if signal.attention {
-				out.State, out.Code = "needs_attention", "runtime_request_requires_owner"
-				return out, nil
+				out.State, out.Code = "uncertain", "native_request_rejected"
+				return out, ErrUnsupported
 			}
 			out.State, out.Code, settled = signal.status, "turn_"+signal.status, true
 			return out, nil
@@ -122,6 +122,13 @@ func (c *TurnController) pump(stop <-chan struct{}, done chan<- struct{}, signal
 				}
 				if json.Unmarshal(event.Request.Params, &p) != nil || p.ThreadID == "" || p.TurnID == "" {
 					fail(ErrMalformedFrame)
+					return
+				}
+				rejectCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				rejectErr := c.client.RejectNativeRequest(rejectCtx, event.Request.Token)
+				cancel()
+				if rejectErr != nil && !errors.Is(rejectErr, ErrStaleRequest) {
+					fail(rejectErr)
 					return
 				}
 				signal = turnSignal{threadID: p.ThreadID, turnID: p.TurnID, attention: true}

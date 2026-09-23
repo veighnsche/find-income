@@ -13,7 +13,21 @@ The runner's dedicated Codex configuration uses ChatGPT login and a required `jo
 ```toml
 forced_login_method = "chatgpt"
 cli_auth_credentials_store = "file"
-approvals_reviewer = "user"
+web_search = "disabled"
+default_permissions = "jobseek-native"
+approval_policy = "never"
+
+[permissions.jobseek-native.filesystem]
+":root" = "deny"
+":minimal" = "read"
+"/var/lib/jobseek-runner/state" = "deny"
+"/etc/jobseek/runner-config.toml" = "deny"
+
+[permissions.jobseek-native.filesystem.":workspace_roots"]
+"." = "read"
+
+[permissions.jobseek-native.network]
+enabled = false
 
 [mcp_servers.jobseek]
 url = "https://PRIVATE-DASHBOARD/api/v1/codex/mcp"
@@ -24,7 +38,7 @@ enabled_tools = ["round_context", "round_mutation", "round_evidence_correction",
 Authorization = "Bearer DEDICATED-BRIDGE-SECRET"
 ```
 
-The [official Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp) documents required HTTP servers and headers. This exact private configuration has not been tested on the selected runner.
+This excerpt shows the native boundary; the installable template in `ops/i12/runner-config.toml.template` also disables native shell, exec, image, browser, computer, app, plugin and multi-agent features and lists the full required MCP tool set. The [official Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp) documents required HTTP servers and headers. This exact private configuration has not been tested on the selected runner.
 
 ## Authority and bounded work
 

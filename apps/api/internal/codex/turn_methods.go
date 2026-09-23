@@ -17,10 +17,8 @@ func (c *Client) StartThread(ctx context.Context, instructions, model string) (T
 	err := c.call(ctx, "thread/start", struct {
 		DeveloperInstructions string `json:"developerInstructions"`
 		Model                 string `json:"model"`
-		Sandbox               string `json:"sandbox"`
 		ApprovalPolicy        string `json:"approvalPolicy"`
-		ApprovalsReviewer     string `json:"approvalsReviewer"`
-	}{instructions, model, "workspace-write", "on-request", "user"}, &result, false)
+	}{instructions, model, "never"}, &result, false)
 	if err == nil && result.Thread.ID == "" {
 		c.fail(ErrMalformedFrame)
 		err = ErrMalformedFrame

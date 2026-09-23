@@ -12,11 +12,11 @@ import (
 )
 
 // CheckRound is the rounds.Start/Resume readiness gate for commissioned
-// discovery and preparation. It checks the live connection, ChatGPT account, selected
+// discovery, preparation and process input. It checks the live connection, ChatGPT account, selected
 // model/effort, quota and required MCP tools, but starts no work. The caller
 // must still explicitly commission ExecuteRoundTurn through the work loop.
 func (s *Service) CheckRound(ctx context.Context, outcome string) error {
-	if s == nil || ctx == nil || outcome != "discover" && outcome != "prepare" {
+	if s == nil || ctx == nil || outcome != "discover" && outcome != "prepare" && outcome != "process_input" {
 		return ErrUnavailable
 	}
 	if outcome == "prepare" {

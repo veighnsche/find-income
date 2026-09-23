@@ -361,3 +361,18 @@ func (c *Client) ReplyUserInput(ctx context.Context, token RequestToken, answers
 		Answers map[string]Answer `json:"answers"`
 	}{answers})
 }
+
+// RejectNativeRequest closes a native approval or input prompt without giving
+// the model authority or exposing its question to the dashboard.
+func (c *Client) RejectNativeRequest(ctx context.Context, token RequestToken) error {
+	return c.respondFrame(ctx, token, []string{"item/commandExecution/requestApproval", "item/fileChange/requestApproval", "item/tool/requestUserInput"}, struct {
+		ID    json.RawMessage `json:"id"`
+		Error struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}{json.RawMessage(token.id), struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}{-32601, "Native request unavailable"}})
+}

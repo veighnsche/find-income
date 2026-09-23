@@ -49,6 +49,24 @@ func replyThread(t *testing.T, p *peer) {
 	}
 	p.result(t, r, `{"thread":{"id":"thread-a"}}`)
 }
+
+func TestThreadStartLeavesNamedProfileActive(t *testing.T) {
+	c, p := setup(t, Options{})
+	initialize(t, c, p)
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.StartThread(context.Background(), "Synthetic guarded turn", "test-model")
+		done <- err
+	}()
+	r := p.read(t)
+	if string(r["method"]) != `"thread/start"` || string(r["params"]) != `{"developerInstructions":"Synthetic guarded turn","model":"test-model","approvalPolicy":"never"}` {
+		t.Fatalf("thread start overrides named profile or native approvals: %s", r["params"])
+	}
+	p.result(t, r, `{"thread":{"id":"thread-a"}}`)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
 func replyTurn(t *testing.T, p *peer) map[string]json.RawMessage {
 	t.Helper()
 	r := p.read(t)
@@ -113,5 +131,26 @@ func TestTurnControllerCancellationInterruptsAndCloses(t *testing.T) {
 	result := receiveTurn(t, done)
 	if !errors.Is(result.err, context.Canceled) || result.out.State != "uncertain" || c.Err() == nil {
 		t.Fatalf("outcome %+v", result)
+	}
+}
+
+func TestTurnControllerRejectsNativeInputWithoutOwnerChat(t *testing.T) {
+	c, p, controller := turnSetup(t)
+	done := launchTurn(controller, context.Background(), turnHooks())
+	replyThread(t, p)
+	replyTurn(t, p)
+	p.write(t, `{"id":"native-question","method":"item/tool/requestUserInput","params":{"threadId":"thread-a","turnId":"turn-a","itemId":"item-a","questions":[{"id":"q1","question":"Synthetic prompt"}]}}`)
+	rejection := p.read(t)
+	if string(rejection["id"]) != `"native-question"` || string(rejection["error"]) != `{"code":-32601,"message":"Native request unavailable"}` {
+		t.Fatalf("native input was not denied: %s", rejection)
+	}
+	interrupt := p.read(t)
+	if string(interrupt["method"]) != `"turn/interrupt"` {
+		t.Fatalf("rejected turn was not interrupted: %s", interrupt)
+	}
+	p.result(t, interrupt, `{}`)
+	result := receiveTurn(t, done)
+	if !errors.Is(result.err, ErrUnsupported) || result.out.State != "uncertain" || result.out.Code != "native_request_rejected" || c.Err() == nil {
+		t.Fatalf("native input gained owner authority: %+v", result)
 	}
 }

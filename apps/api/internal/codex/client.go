@@ -466,6 +466,13 @@ func (c *Client) requestValid(token RequestToken) bool {
 }
 
 func (c *Client) respond(ctx context.Context, token RequestToken, allowed []string, result any) error {
+	return c.respondFrame(ctx, token, allowed, struct {
+		ID     json.RawMessage `json:"id"`
+		Result any             `json:"result"`
+	}{json.RawMessage(token.id), result})
+}
+
+func (c *Client) respondFrame(ctx context.Context, token RequestToken, allowed []string, frame any) error {
 	ctx, cancel := context.WithTimeout(ctx, c.opts.Timeout)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
@@ -490,17 +497,14 @@ func (c *Client) respond(ctx context.Context, token RequestToken, allowed []stri
 	r.replying = true
 	c.requests[token.id] = r
 	c.mu.Unlock()
-	err := c.send(ctx, struct {
-		ID     json.RawMessage `json:"id"`
-		Result any             `json:"result"`
-	}{json.RawMessage(token.id), result}, &token)
+	err := c.send(ctx, frame, &token)
 	c.mu.Lock()
 	if current, exists := c.requests[token.id]; exists && current.token == token {
 		delete(c.requests, token.id)
 	}
 	c.mu.Unlock()
-	// Failed/uncertain approval sends are not retryable. Invalidate connection so
-	// the runtime and dashboard cannot disagree about whether permission was given.
+	// Failed/uncertain native-request replies are not retryable. Invalidate the
+	// connection so the runtime cannot assume a request was resolved.
 	if err != nil && err != ErrStaleRequest {
 		c.fail(ErrUnavailable)
 	}

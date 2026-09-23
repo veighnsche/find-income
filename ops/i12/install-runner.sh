@@ -18,6 +18,7 @@ if grep -Eq 'PRIVATE_APP_FQDN|REPLACE_FROM_SECRET_STORE|APP_PRIVATE_IP|REPLACE_W
   echo 'runner configuration still contains placeholders' >&2
   exit 2
 fi
+python3 "$(dirname "$0")/check-runtime-tools.py" "$config"
 printf '%s  %s\n' "$codex_sha" "$artifacts/bin/codex" | sha256sum -c --status -
 [ "$("$artifacts/bin/codex" --version)" = 'codex-cli 0.153.4' ] || exit 2
 python3 - "$keys" "$app_ip" <<'PY'
@@ -44,6 +45,10 @@ install -o root -g jobseek-runner -m 0640 "$config" /etc/jobseek/runner-config.t
 install -o root -g root -m 0644 "$keys" /var/lib/jobseek-runner/.ssh/authorized_keys
 runuser -u jobseek-runner -- test -r /var/lib/jobseek-runner/.ssh/authorized_keys || { echo 'runner account cannot read authorized_keys' >&2; exit 2; }
 install -o root -g root -m 0755 "$(dirname "$0")/runner-launcher.sh" /usr/local/libexec/jobseek-runner-launch
+install -o root -g root -m 0755 "$(dirname "$0")/accept-native-profile.sh" /usr/local/libexec/jobseek-accept-native-profile
+install -o root -g root -m 0755 "$(dirname "$0")/native-permission-probe.py" /usr/local/libexec/jobseek-native-permission-probe
+install -o root -g root -m 0755 "$(dirname "$0")/accept-native-rollout.py" /usr/local/libexec/jobseek-accept-native-rollout
+install -o root -g root -m 0755 "$(dirname "$0")/accept-canary.sh" /usr/local/libexec/jobseek-accept-canary
 printf '%s\n' "$codex_sha" > /etc/jobseek/codex.sha256
 chown root:root /etc/jobseek/codex.sha256
 chmod 0644 /etc/jobseek/codex.sha256

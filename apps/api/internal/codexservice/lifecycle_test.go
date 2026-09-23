@@ -188,6 +188,37 @@ func TestCheckRoundRequiresSupportedReadyConnectionWithoutDispatch(t *testing.T)
 		t.Fatalf("unreadable quota passed: %v", err)
 	}
 }
+
+func TestProcessInputReadinessRequiresRuntimeButNotPackConfiguration(t *testing.T) {
+	s, _ := testService(t, testConfig())
+	f := installRuntime(t, s)
+	ctx := boundedContext(t)
+	// The general input path covers profile and vacancy decisions, so Typst
+	// and pack source paths are not prerequisites for this outcome.
+	if err := s.CheckRound(ctx, "process_input"); err != nil {
+		t.Fatalf("ready process input unavailable without pack configuration: %v", err)
+	}
+	if f.count("thread/start") != 0 || f.count("turn/start") != 0 {
+		t.Fatal("process input readiness dispatched a provider turn")
+	}
+	f.mu.Lock()
+	f.limitFails = true
+	f.mu.Unlock()
+	if err := s.CheckRound(ctx, "process_input"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("process input passed with unavailable quota: %v", err)
+	}
+	f.mu.Lock()
+	f.limitFails = false
+	f.account = false
+	f.mu.Unlock()
+	if err := s.CheckRound(ctx, "process_input"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("process input passed without ChatGPT account: %v", err)
+	}
+	if f.count("thread/start") != 0 || f.count("turn/start") != 0 {
+		t.Fatal("unavailable process input dispatched a provider turn")
+	}
+}
+
 func submitFixture(t *testing.T, db *store.Store, key string) store.IngestionRequest {
 	t.Helper()
 	item, _, err := db.SubmitIngestion(context.Background(), store.Actor{Kind: "administrator", ID: "owner"}, store.IngestionInput{Origin: "owner", OriginalText: "Synthetic vacancy " + key, IdempotencyKey: key})
