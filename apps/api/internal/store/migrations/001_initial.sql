@@ -250,6 +250,43 @@ CREATE TABLE job_attempts (
       OR (outcome <> 'running' AND finished_at IS NOT NULL))
 );
 
+-- Both scheduled discoveries and owner submissions enter this same durable
+-- intake. Jobs provide leases/attempt history; this row preserves source and
+-- the exact verified record mapping across retries and process restarts.
+CREATE TABLE ingestion_requests (
+  id TEXT PRIMARY KEY,
+  origin TEXT NOT NULL CHECK (origin IN ('collector','owner')),
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL CHECK (length(idempotency_key) BETWEEN 1 AND 200),
+  submission_sha256 TEXT NOT NULL,
+  source_url TEXT,
+  original_text TEXT NOT NULL DEFAULT '',
+  connector_id TEXT,
+  external_id TEXT,
+  discovered_at TEXT,
+  status TEXT NOT NULL CHECK (status IN ('pending','processing','completed','needs_text','failed')),
+  job_id TEXT NOT NULL REFERENCES jobs(id),
+  attempts_started INTEGER NOT NULL DEFAULT 1 CHECK (attempts_started > 0),
+  dispatch_started INTEGER NOT NULL DEFAULT 0 CHECK (dispatch_started IN (0,1)),
+  codex_thread_id TEXT,
+  codex_turn_id TEXT,
+  opportunity_id TEXT REFERENCES opportunities(id),
+  record_change_id TEXT REFERENCES record_changes(audit_id),
+  safe_error_code TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (actor_kind,actor_id,idempotency_key),
+  CHECK (length(original_text) <= 200000),
+  CHECK (source_url IS NOT NULL OR length(trim(original_text)) > 0),
+  CHECK (status <> 'completed' OR (opportunity_id IS NOT NULL AND record_change_id IS NOT NULL)),
+  CHECK (status <> 'needs_text' OR source_url IS NOT NULL)
+);
+
+CREATE INDEX ingestion_requests_recent_idx ON ingestion_requests(created_at,id);
+CREATE INDEX ingestion_requests_job_idx ON ingestion_requests(job_id);
+CREATE INDEX ingestion_requests_opportunity_idx ON ingestion_requests(opportunity_id);
+
 CREATE TABLE record_changes (
   sequence INTEGER PRIMARY KEY AUTOINCREMENT,
   audit_id TEXT NOT NULL UNIQUE REFERENCES audit_changes(id),

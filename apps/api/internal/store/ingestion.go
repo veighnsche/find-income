@@ -1,0 +1,696 @@
+package store
+
+import (
+	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+const IngestionJobKind = "opportunity.ingest"
+
+type IngestionInput struct {
+	Origin         string // owner or collector
+	SourceURL      string
+	OriginalText   string
+	ConnectorID    string
+	ExternalID     string
+	DiscoveredAt   string
+	IdempotencyKey string
+}
+
+type IngestionRequest struct {
+	ID               string
+	Origin           string
+	Actor            Actor
+	IdempotencyKey   string
+	SubmissionSHA256 string
+	SourceURL        string
+	OriginalText     string
+	ConnectorID      string
+	ExternalID       string
+	DiscoveredAt     string
+	Status           string // pending, processing, completed, needs_text, failed
+	JobID            string
+	JobState         JobState
+	AttemptsStarted  int64
+	DispatchStarted  bool
+	CodexThreadID    string
+	CodexTurnID      string
+	OpportunityID    string
+	RecordChangeID   string
+	SafeErrorCode    string
+	CreatedAt        string
+	UpdatedAt        string
+}
+
+type IngestionPage struct {
+	Items      []IngestionRequest
+	NextCursor string
+}
+
+func validateIngestionInput(actor Actor, input *IngestionInput) error {
+	input.SourceURL = strings.TrimSpace(input.SourceURL)
+	input.ConnectorID = strings.TrimSpace(input.ConnectorID)
+	input.ExternalID = strings.TrimSpace(input.ExternalID)
+	input.IdempotencyKey = strings.TrimSpace(input.IdempotencyKey)
+	if !requiredActor(actor) || len(input.IdempotencyKey) < 1 || len(input.IdempotencyKey) > 200 ||
+		!utf8.ValidString(input.OriginalText) || len(input.OriginalText) > 200000 ||
+		(input.SourceURL == "" && strings.TrimSpace(input.OriginalText) == "") {
+		return fmt.Errorf("%w: bounded source and idempotency key required", ErrInvalid)
+	}
+	if input.SourceURL != "" {
+		if err := validateWebURL(input.SourceURL); err != nil {
+			return err
+		}
+	}
+	switch input.Origin {
+	case "owner":
+		if actor.Kind != "administrator" || input.ConnectorID != "" || input.ExternalID != "" || input.DiscoveredAt != "" {
+			return fmt.Errorf("%w: owner submission fields", ErrInvalid)
+		}
+	case "collector":
+		if actor.Kind != "system" || !boundedNonempty(input.ConnectorID, 80) ||
+			!boundedNonempty(input.ExternalID, 300) ||
+			(input.DiscoveredAt != "" && !validInstant(input.DiscoveredAt)) {
+			return fmt.Errorf("%w: collector identity and source required", ErrInvalid)
+		}
+	default:
+		return fmt.Errorf("%w: unknown ingestion origin", ErrInvalid)
+	}
+	return nil
+}
+
+func ingestionDigest(input IngestionInput) string {
+	encoded, _ := json.Marshal(struct {
+		Origin, SourceURL, OriginalText, ConnectorID, ExternalID string
+	}{input.Origin, input.SourceURL, input.OriginalText, input.ConnectorID, input.ExternalID})
+	sum := sha256.Sum256(encoded)
+	return hex.EncodeToString(sum[:])
+}
+
+func insertIngestionJob(ctx context.Context, tx *sql.Tx, actor Actor, intakeID string, attempt int64, now time.Time) (string, error) {
+	jobID, err := randomID()
+	if err != nil {
+		return "", err
+	}
+	payload, _ := json.Marshal(struct {
+		IngestionID string `json:"ingestionId"`
+	}{intakeID})
+	payloadHash := sha256.Sum256(payload)
+	jobKey := fmt.Sprintf("ingestion:%s:%d", intakeID, attempt)
+	fingerprintInput, _ := json.Marshal(struct {
+		Kind        string          `json:"kind"`
+		Payload     json.RawMessage `json:"payload"`
+		MaxAttempts int             `json:"maxAttempts"`
+		Scheduled   string          `json:"scheduled"`
+	}{IngestionJobKind, payload, 3, ""})
+	requestHash := sha256.Sum256(fingerprintInput)
+	_, err = tx.ExecContext(ctx, `INSERT INTO jobs
+  (id,kind,payload_json,payload_sha256,actor_kind,actor_id,idempotency_key,request_sha256,
+   state,max_attempts,available_at,created_at,updated_at)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, jobID, IngestionJobKind, string(payload), hex.EncodeToString(payloadHash[:]),
+		actor.Kind, actor.ID, jobKey, hex.EncodeToString(requestHash[:]), JobQueued, 3, jobTime(now), jobTime(now), jobTime(now))
+	if err != nil {
+		return "", err
+	}
+	if err := writeJobAudit(ctx, tx, actor, "job.enqueue", jobID, now); err != nil {
+		return "", err
+	}
+	return jobID, nil
+}
+
+func writeIngestionAudit(ctx context.Context, tx *sql.Tx, actor Actor, operation, id string) error {
+	auditID, err := randomID()
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO audit_changes
+  (id,actor_kind,actor_id,operation,entity_kind,entity_id,occurred_at)
+  VALUES (?,?,?,?,?,?,?)`, auditID, actor.Kind, actor.ID, operation, "ingestion", id, utcNow())
+	return err
+}
+
+// SubmitIngestion persists the exact submitted source and the queue item in
+// one transaction. Repeating the same actor/key/input returns the original ID.
+func (s *Store) SubmitIngestion(ctx context.Context, actor Actor, input IngestionInput) (IngestionRequest, bool, error) {
+	if err := validateIngestionInput(actor, &input); err != nil {
+		return IngestionRequest{}, false, err
+	}
+	digest := ingestionDigest(input)
+	id, err := randomID()
+	if err != nil {
+		return IngestionRequest{}, false, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return IngestionRequest{}, false, err
+	}
+	defer tx.Rollback()
+	// Reserve the SQLite writer before the idempotency read across Store handles.
+	if _, err = tx.ExecContext(ctx, `UPDATE ingestion_requests SET id=id WHERE id=?`, id); err != nil {
+		return IngestionRequest{}, false, err
+	}
+	var existingID, existingDigest string
+	err = tx.QueryRowContext(ctx, `SELECT id,submission_sha256 FROM ingestion_requests
+  WHERE actor_kind=? AND actor_id=? AND idempotency_key=?`, actor.Kind, actor.ID, input.IdempotencyKey).
+		Scan(&existingID, &existingDigest)
+	if err == nil {
+		if existingDigest != digest {
+			return IngestionRequest{}, false, ErrJobIdempotencyConflict
+		}
+		item, err := scanIngestion(tx.QueryRowContext(ctx, `SELECT `+ingestionColumns+`
+  FROM ingestion_requests i JOIN jobs j ON j.id=i.job_id WHERE i.id=?`, existingID))
+		return item, false, err
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return IngestionRequest{}, false, err
+	}
+	now := time.Now().UTC()
+	jobID, err := insertIngestionJob(ctx, tx, actor, id, 1, now)
+	if err != nil {
+		return IngestionRequest{}, false, err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO ingestion_requests
+  (id,origin,actor_kind,actor_id,idempotency_key,submission_sha256,source_url,original_text,
+   connector_id,external_id,discovered_at,status,job_id,created_at,updated_at)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, input.Origin, actor.Kind, actor.ID, input.IdempotencyKey, digest,
+		optionalText(input.SourceURL), input.OriginalText, optionalText(input.ConnectorID), optionalText(input.ExternalID),
+		optionalText(input.DiscoveredAt), "pending", jobID, jobTime(now), jobTime(now))
+	if err != nil {
+		return IngestionRequest{}, false, err
+	}
+	if err = writeIngestionAudit(ctx, tx, actor, "ingestion.submit", id); err != nil {
+		return IngestionRequest{}, false, err
+	}
+	item, err := scanIngestion(tx.QueryRowContext(ctx, `SELECT `+ingestionColumns+`
+  FROM ingestion_requests i JOIN jobs j ON j.id=i.job_id WHERE i.id=?`, id))
+	if err != nil {
+		return IngestionRequest{}, false, err
+	}
+	if err = tx.Commit(); err != nil {
+		return IngestionRequest{}, false, err
+	}
+	return item, true, nil
+}
+
+const ingestionColumns = `i.id,i.origin,i.actor_kind,i.actor_id,i.idempotency_key,i.submission_sha256,
+  i.source_url,i.original_text,i.connector_id,i.external_id,i.discovered_at,i.status,i.job_id,
+  i.attempts_started,i.dispatch_started,i.codex_thread_id,i.codex_turn_id,i.opportunity_id,i.record_change_id,
+  i.safe_error_code,i.created_at,i.updated_at,j.state,j.last_error_code`
+
+func scanIngestion(row rowScanner) (IngestionRequest, error) {
+	var item IngestionRequest
+	var sourceURL, connectorID, externalID, discoveredAt, threadID, turnID, opportunityID, changeID, errorCode, jobError sql.NullString
+	err := row.Scan(&item.ID, &item.Origin, &item.Actor.Kind, &item.Actor.ID, &item.IdempotencyKey, &item.SubmissionSHA256,
+		&sourceURL, &item.OriginalText, &connectorID, &externalID, &discoveredAt, &item.Status, &item.JobID,
+		&item.AttemptsStarted, &item.DispatchStarted, &threadID, &turnID, &opportunityID, &changeID, &errorCode, &item.CreatedAt, &item.UpdatedAt,
+		&item.JobState, &jobError)
+	if err != nil {
+		return IngestionRequest{}, err
+	}
+	item.SourceURL, item.ConnectorID, item.ExternalID, item.DiscoveredAt = sourceURL.String, connectorID.String, externalID.String, discoveredAt.String
+	item.CodexThreadID, item.CodexTurnID, item.OpportunityID, item.RecordChangeID = threadID.String, turnID.String, opportunityID.String, changeID.String
+	if item.Status != "completed" && item.Status != "needs_text" {
+		switch item.JobState {
+		case JobRunning:
+			item.Status = "processing"
+		case JobFailed, JobCancelled:
+			item.Status = "failed"
+		default:
+			item.Status = "pending"
+		}
+	}
+	item.SafeErrorCode = errorCode.String
+	if item.Status == "failed" && jobError.Valid {
+		item.SafeErrorCode = jobError.String
+	}
+	return item, nil
+}
+
+func (s *Store) Ingestion(ctx context.Context, id string) (IngestionRequest, error) {
+	if id == "" {
+		return IngestionRequest{}, ErrInvalid
+	}
+	item, err := scanIngestion(s.db.QueryRowContext(ctx, `SELECT `+ingestionColumns+`
+  FROM ingestion_requests i JOIN jobs j ON j.id=i.job_id WHERE i.id=?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return IngestionRequest{}, ErrNotFound
+	}
+	return item, err
+}
+
+func (s *Store) ListIngestions(ctx context.Context, cursorValue string, requestedLimit int) (IngestionPage, error) {
+	limit, err := boundedListLimit(requestedLimit)
+	if err != nil {
+		return IngestionPage{}, err
+	}
+	scope := recordListScope("ingestions")
+	cursor, err := decodeEvidenceCursor(cursorValue, scope)
+	if err != nil {
+		return IngestionPage{}, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT `+ingestionColumns+`
+  FROM ingestion_requests i JOIN jobs j ON j.id=i.job_id
+  WHERE i.created_at>? OR (i.created_at=? AND i.id>?)
+  ORDER BY i.created_at,i.id LIMIT ?`, cursor.CreatedAt, cursor.CreatedAt, cursor.ID, limit+1)
+	if err != nil {
+		return IngestionPage{}, err
+	}
+	defer rows.Close()
+	page := IngestionPage{Items: make([]IngestionRequest, 0, limit)}
+	for rows.Next() {
+		item, err := scanIngestion(rows)
+		if err != nil {
+			return IngestionPage{}, err
+		}
+		page.Items = append(page.Items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return IngestionPage{}, err
+	}
+	if len(page.Items) > limit {
+		page.Items = page.Items[:limit]
+		last := page.Items[len(page.Items)-1]
+		page.NextCursor = encodeEvidenceCursor(evidenceCursor{Version: 1, CreatedAt: last.CreatedAt, ID: last.ID, Scope: scope})
+	}
+	return page, nil
+}
+
+// RetryIngestion starts a new job for an existing terminal request. A URL-only
+// request may gain pasted full text after needs_text; the original URL and
+// idempotency identity remain attached to the same request.
+func (s *Store) RetryIngestion(ctx context.Context, actor Actor, id string, fullText *string) (IngestionRequest, error) {
+	if id == "" || !requiredActor(actor) {
+		return IngestionRequest{}, ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return IngestionRequest{}, err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `UPDATE ingestion_requests SET id=id WHERE id=?`, id); err != nil {
+		return IngestionRequest{}, err
+	}
+	item, err := scanIngestion(tx.QueryRowContext(ctx, `SELECT `+ingestionColumns+`
+  FROM ingestion_requests i JOIN jobs j ON j.id=i.job_id WHERE i.id=?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return IngestionRequest{}, ErrNotFound
+	}
+	if err != nil {
+		return IngestionRequest{}, err
+	}
+	if actor != item.Actor && actor.Kind != "administrator" {
+		return IngestionRequest{}, ErrInvalid
+	}
+	if item.Status != "failed" && item.Status != "needs_text" ||
+		(item.JobState != JobFailed && item.JobState != JobSucceeded && item.JobState != JobCancelled) {
+		return IngestionRequest{}, ErrConflict
+	}
+	text := item.OriginalText
+	if fullText != nil {
+		if item.SourceURL == "" || item.OriginalText != "" && item.OriginalText != *fullText ||
+			!boundedNonempty(*fullText, 200000) {
+			return IngestionRequest{}, ErrInvalid
+		}
+		text = *fullText
+	}
+	if item.Status == "needs_text" && strings.TrimSpace(text) == "" {
+		return IngestionRequest{}, ErrInvalid
+	}
+	now := time.Now().UTC()
+	jobID, err := insertIngestionJob(ctx, tx, item.Actor, id, item.AttemptsStarted+1, now)
+	if err != nil {
+		return IngestionRequest{}, err
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE ingestion_requests SET original_text=?,status='pending',job_id=?,
+  attempts_started=attempts_started+1,dispatch_started=0,codex_thread_id=NULL,codex_turn_id=NULL,
+  safe_error_code=NULL,updated_at=? WHERE id=?`, text, jobID, jobTime(now), id)
+	if err != nil {
+		return IngestionRequest{}, err
+	}
+	if err = writeIngestionAudit(ctx, tx, actor, "ingestion.retry", id); err != nil {
+		return IngestionRequest{}, err
+	}
+	item, err = scanIngestion(tx.QueryRowContext(ctx, `SELECT `+ingestionColumns+`
+  FROM ingestion_requests i JOIN jobs j ON j.id=i.job_id WHERE i.id=?`, id))
+	if err != nil {
+		return IngestionRequest{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return IngestionRequest{}, err
+	}
+	return item, nil
+}
+
+// A running job may bind dispatch identifiers only while its lease is active.
+// Repeated binds with the same IDs are idempotent; different IDs conflict.
+func (s *Store) BeginIngestionDispatch(ctx context.Context, claim Job) error {
+	if claim.ID == "" || claim.LeaseToken == "" {
+		return ErrInvalid
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE ingestion_requests SET dispatch_started=1,status='processing',updated_at=?
+  WHERE job_id=? AND dispatch_started=0 AND status='pending'
+    AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=ingestion_requests.job_id
+      AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?)`,
+		utcNow(), claim.ID, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now()))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrConflict
+	}
+	return nil
+}
+
+func (s *Store) BindIngestionThread(ctx context.Context, claim Job, threadID string) error {
+	if claim.ID == "" || claim.LeaseToken == "" || !boundedNonempty(threadID, 200) {
+		return ErrInvalid
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE ingestion_requests SET codex_thread_id=?,status='processing',updated_at=?
+  WHERE job_id=? AND status='processing' AND dispatch_started=1
+    AND (codex_thread_id IS NULL OR codex_thread_id=?)
+    AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=ingestion_requests.job_id
+      AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?)`,
+		threadID, utcNow(), claim.ID, threadID, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now()))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrConflict
+	}
+	return nil
+}
+
+func (s *Store) BindIngestionTurn(ctx context.Context, claim Job, threadID, turnID string) error {
+	if claim.ID == "" || claim.LeaseToken == "" || !boundedNonempty(threadID, 200) || !boundedNonempty(turnID, 200) {
+		return ErrInvalid
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE ingestion_requests SET codex_turn_id=?,status='processing',updated_at=?
+  WHERE job_id=? AND status='processing' AND dispatch_started=1 AND codex_thread_id=?
+    AND (codex_turn_id IS NULL OR codex_turn_id=?)
+    AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=ingestion_requests.job_id
+      AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?)`,
+		turnID, utcNow(), claim.ID, threadID, turnID, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now()))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrConflict
+	}
+	return nil
+}
+
+// MarkIngestionNeedsText records an honest terminal intake outcome when a URL
+// cannot yield full vacancy text. The worker should then complete its job.
+func (s *Store) MarkIngestionNeedsText(ctx context.Context, claim Job) error {
+	if claim.ID == "" || claim.LeaseToken == "" {
+		return ErrInvalid
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE ingestion_requests SET status='needs_text',safe_error_code='needs_text',updated_at=?
+  WHERE job_id=? AND source_url IS NOT NULL AND length(trim(original_text))=0
+    AND status IN ('pending','processing')
+    AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=ingestion_requests.job_id
+      AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?)`,
+		utcNow(), claim.ID, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now()))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrConflict
+	}
+	return nil
+}
+
+// AttachIngestionText persists a fetched vacancy body for a URL-only intake.
+// A pasted body is immutable, and a repeated identical fetch is harmless.
+func (s *Store) AttachIngestionText(ctx context.Context, claim Job, fullText string) error {
+	if claim.ID == "" || claim.LeaseToken == "" || !boundedNonempty(fullText, 200000) {
+		return ErrInvalid
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE ingestion_requests SET original_text=?,updated_at=?
+  WHERE job_id=? AND source_url IS NOT NULL AND status IN ('pending','processing')
+    AND (original_text='' OR original_text=?)
+    AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=ingestion_requests.job_id
+      AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?)`,
+		fullText, utcNow(), claim.ID, fullText, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now()))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrConflict
+	}
+	return nil
+}
+
+// RecordIngestionResult links a pre-existing opportunity change whose captured
+// source matches the request. New records should use SaveIngestionOpportunity
+// so record creation and intake mapping are atomic.
+func (s *Store) RecordIngestionResult(ctx context.Context, claim Job, opportunityID, recordChangeID string) error {
+	if claim.ID == "" || claim.LeaseToken == "" || opportunityID == "" || recordChangeID == "" {
+		return ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `UPDATE ingestion_requests SET id=id WHERE job_id=?`, claim.ID); err != nil {
+		return err
+	}
+	item, err := scanIngestion(tx.QueryRowContext(ctx, `SELECT `+ingestionColumns+`
+  FROM ingestion_requests i JOIN jobs j ON j.id=i.job_id WHERE i.job_id=?`, claim.ID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if item.Status == "completed" {
+		if item.OpportunityID == opportunityID && item.RecordChangeID == recordChangeID {
+			return nil
+		}
+		return ErrConflict
+	}
+	if item.Status == "needs_text" {
+		return ErrConflict
+	}
+	var snapshotJSON string
+	err = tx.QueryRowContext(ctx, `SELECT snapshot_json FROM record_changes
+  WHERE audit_id=? AND entity_kind='opportunity' AND entity_id=? AND snapshot_state='captured'`,
+		recordChangeID, opportunityID).Scan(&snapshotJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrInvalid
+	}
+	if err != nil {
+		return err
+	}
+	var snapshot struct {
+		SourceURL    string `json:"sourceUrl"`
+		OriginalText string `json:"originalText"`
+	}
+	if err = json.Unmarshal([]byte(snapshotJSON), &snapshot); err != nil {
+		return err
+	}
+	if strings.TrimSpace(snapshot.OriginalText) == "" ||
+		item.SourceURL != "" && snapshot.SourceURL != item.SourceURL ||
+		item.OriginalText != "" && snapshot.OriginalText != item.OriginalText {
+		return ErrInvalid
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE ingestion_requests SET status='completed',original_text=?,opportunity_id=?,
+  record_change_id=?,safe_error_code=NULL,updated_at=? WHERE id=? AND job_id=?
+  AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=ingestion_requests.job_id
+    AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?)`,
+		snapshot.OriginalText, opportunityID, recordChangeID, utcNow(), item.ID, claim.ID, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now()))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrConflict
+	}
+	if err = writeIngestionAudit(ctx, tx, item.Actor, "ingestion.complete", item.ID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+type IngestionRecordInput struct {
+	ExistingCompanyID string
+	NewCompany        *CompanyInput
+	Opportunity       OpportunityInput
+}
+
+func writeIngestedRecordAudit(ctx context.Context, tx *sql.Tx, actor Actor, operation, kind, id string) (string, error) {
+	auditID, err := randomID()
+	if err != nil {
+		return "", err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO audit_changes
+  (id,actor_kind,actor_id,operation,entity_kind,entity_id,revision_after,occurred_at)
+  VALUES (?,?,?,?,?,?,1,?)`, auditID, actor.Kind, actor.ID, operation, kind, id, utcNow())
+	return auditID, err
+}
+
+// SaveIngestionOpportunity is the trusted record-writing bridge for one
+// extracted vacancy. Company/opportunity creation, source snapshot and intake
+// mapping commit together; a crash before commit cannot orphan a duplicate.
+// The submitted/fetched source is forced onto the opportunity and stage is
+// discovered, regardless of model-provided values.
+func (s *Store) SaveIngestionOpportunity(ctx context.Context, claim Job, input IngestionRecordInput) (Opportunity, string, error) {
+	if claim.ID == "" || claim.LeaseToken == "" || (input.ExistingCompanyID == "") == (input.NewCompany == nil) {
+		return Opportunity{}, "", ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `UPDATE ingestion_requests SET id=id WHERE job_id=?`, claim.ID); err != nil {
+		return Opportunity{}, "", err
+	}
+	item, err := scanIngestion(tx.QueryRowContext(ctx, `SELECT `+ingestionColumns+`
+  FROM ingestion_requests i JOIN jobs j ON j.id=i.job_id WHERE i.job_id=?`, claim.ID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Opportunity{}, "", ErrNotFound
+	}
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	if item.Status == "completed" {
+		record, err := scanOpportunity(tx.QueryRowContext(ctx, `SELECT `+opportunityColumns+opportunityFrom+` WHERE o.id=?`, item.OpportunityID))
+		return record, item.RecordChangeID, err
+	}
+	if item.Status == "needs_text" || strings.TrimSpace(item.OriginalText) == "" {
+		return Opportunity{}, "", ErrConflict
+	}
+	var live int
+	err = tx.QueryRowContext(ctx, `SELECT 1 FROM jobs WHERE id=? AND state='running' AND lease_token=?
+  AND attempt_count=? AND lease_until>?`, claim.ID, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now())).Scan(&live)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Opportunity{}, "", ErrConflict
+	}
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	actor := Actor{Kind: "system", ID: "ingestion:" + item.ID}
+	companyID := input.ExistingCompanyID
+	if input.NewCompany != nil {
+		companyInput := *input.NewCompany
+		companyInput.Notes = ""
+		companyInput, err = validateCompany(companyInput)
+		if err != nil {
+			return Opportunity{}, "", err
+		}
+		companyID, err = randomID()
+		if err != nil {
+			return Opportunity{}, "", err
+		}
+		now := recordNow()
+		_, err = tx.ExecContext(ctx, `INSERT INTO companies
+  (id,name,website,notes,revision,created_at,updated_at) VALUES (?,?,?,?,1,?,?)`,
+			companyID, companyInput.Name, optionalText(companyInput.Website), "", now, now)
+		if err != nil {
+			return Opportunity{}, "", err
+		}
+		if _, err = writeIngestedRecordAudit(ctx, tx, actor, "company.create", "company", companyID); err != nil {
+			return Opportunity{}, "", err
+		}
+	} else {
+		err = tx.QueryRowContext(ctx, `SELECT 1 FROM companies WHERE id=? AND archived_at IS NULL`, companyID).Scan(&live)
+		if errors.Is(err, sql.ErrNoRows) {
+			return Opportunity{}, "", ErrInvalid
+		}
+		if err != nil {
+			return Opportunity{}, "", err
+		}
+	}
+	opportunityInput := input.Opportunity
+	opportunityInput.CompanyID = companyID
+	opportunityInput.SourceURL = item.SourceURL
+	opportunityInput.OriginalText = item.OriginalText
+	opportunityInput.Stage = "discovered"
+	opportunityInput.Notes = ""
+	opportunityInput, err = validateOpportunity(opportunityInput)
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	opportunityID, err := randomID()
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	now := recordNow()
+	_, err = tx.ExecContext(ctx, `INSERT INTO opportunities
+  (id,company_id,title,kind,source_url,original_text,notes,stage,work_pattern,location_text,
+   posted_on,deadline_on,revision,created_at,updated_at)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`, opportunityID, companyID, opportunityInput.Title,
+		opportunityInput.Kind, optionalText(opportunityInput.SourceURL), opportunityInput.OriginalText, "",
+		opportunityInput.Stage, opportunityInput.WorkPattern, opportunityInput.LocationText,
+		optionalText(opportunityInput.PostedOn), optionalText(opportunityInput.DeadlineOn), now, now)
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	if err = writeAdvertisedCompensation(ctx, tx, opportunityID, opportunityInput.Compensation); err != nil {
+		return Opportunity{}, "", err
+	}
+	changeID, err := writeIngestedRecordAudit(ctx, tx, actor, "opportunity.create", "opportunity", opportunityID)
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE ingestion_requests SET status='completed',opportunity_id=?,
+  record_change_id=?,safe_error_code=NULL,updated_at=? WHERE id=? AND job_id=? AND opportunity_id IS NULL
+  AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=ingestion_requests.job_id
+    AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?)`,
+		opportunityID, changeID, utcNow(), item.ID, claim.ID, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now()))
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	if count != 1 {
+		return Opportunity{}, "", ErrConflict
+	}
+	if err = writeIngestionAudit(ctx, tx, actor, "ingestion.complete", item.ID); err != nil {
+		return Opportunity{}, "", err
+	}
+	if err = tx.Commit(); err != nil {
+		return Opportunity{}, "", err
+	}
+	record := Opportunity{ID: opportunityID, CompanyID: companyID, Title: opportunityInput.Title,
+		Kind: opportunityInput.Kind, SourceURL: opportunityInput.SourceURL, OriginalText: opportunityInput.OriginalText,
+		Stage: opportunityInput.Stage, WorkPattern: opportunityInput.WorkPattern, LocationText: opportunityInput.LocationText,
+		PostedOn: opportunityInput.PostedOn, DeadlineOn: opportunityInput.DeadlineOn, Revision: 1,
+		CreatedAt: now, UpdatedAt: now, Compensation: opportunityInput.Compensation}
+	return record, changeID, nil
+}
