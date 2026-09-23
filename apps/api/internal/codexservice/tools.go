@@ -119,10 +119,28 @@ func (s *Service) roundContextTool(ctx context.Context, args roundContextArgs) (
 	if err != nil {
 		return nil, err
 	}
+	r, err := s.db.Round(ctx, args.RoundID)
+	if err != nil {
+		return nil, err
+	}
+	resourceID := "campaign:active"
+	switch r.Outcome {
+	case "discover":
+		if !scopeContains(r.Scope.Resources, resourceID) {
+			return nil, store.ErrFenced
+		}
+	case "prepare":
+		if len(r.Scope.Resources) != 1 || !strings.HasPrefix(r.Scope.Resources[0], "opportunity:") || len(r.Scope.Resources[0]) == len("opportunity:") {
+			return nil, store.ErrFenced
+		}
+		resourceID = r.Scope.Resources[0]
+	default:
+		return nil, store.ErrFenced
+	}
 	cost, _ := store.RoundOperationCost(store.RoundContextTool)
 	attempt, created, err := s.db.ReserveRoundAttempt(ctx, authority.Actor, args.RoundID,
 		store.RoundAttemptInput{RequestKey: args.RequestKey, Operation: store.RoundContextTool,
-			ResourceID: "campaign:active", Cost: cost, BoundCapability: args.Capability})
+			ResourceID: resourceID, Cost: cost, BoundCapability: args.Capability})
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +157,7 @@ func (s *Service) roundContextTool(ctx context.Context, args roundContextArgs) (
 	if _, err := s.db.MarkRoundDispatched(ctx, args.RoundID, attempt.ID); err != nil {
 		return nil, err
 	}
-	r, err := s.db.Round(ctx, args.RoundID)
+	r, err = s.db.Round(ctx, args.RoundID)
 	if err != nil {
 		return nil, err
 	}

@@ -15,6 +15,42 @@ type RoundCollectorAcquisitionInput struct {
 	MaxItems        int
 }
 
+// LatestRoundCollectorContinuation returns the last published batch for one
+// owner's board. A completed latest batch intentionally hides older cursors.
+// ImportRoundCollectorCursor still checks its terminal state and uncertainty.
+func (s *Store) LatestRoundCollectorContinuation(ctx context.Context, actor Actor, boardID string) (string, json.RawMessage, error) {
+	if !ownerRoundActor(actor) || boardID == "" {
+		return "", nil, ErrInvalid
+	}
+	var attemptID string
+	var payload []byte
+	err := s.db.QueryRowContext(ctx, `SELECT b.attempt_id,b.payload_json FROM round_collector_batches b
+	  JOIN round_attempts a ON a.id=b.attempt_id
+	  JOIN rounds r ON r.id=b.round_id
+	  WHERE r.actor_kind=? AND r.actor_id=? AND a.operation=? AND a.resource_id=? AND a.state='succeeded'
+	  ORDER BY b.created_at DESC,b.attempt_id DESC LIMIT 1`, actor.Kind, actor.ID, RoundCollectorPage, "board:"+boardID).Scan(&attemptID, &payload)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil, ErrNotFound
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	var batch struct {
+		Next *struct {
+			BoardID    string            `json:"boardId"`
+			Pending    []json.RawMessage `json:"pending"`
+			EndOfBoard bool              `json:"endOfBoard"`
+		} `json:"next"`
+	}
+	if err := json.Unmarshal(payload, &batch); err != nil {
+		return "", nil, err
+	}
+	if batch.Next == nil || batch.Next.BoardID != boardID || batch.Next.EndOfBoard && len(batch.Next.Pending) == 0 {
+		return "", nil, ErrNotFound
+	}
+	return attemptID, json.RawMessage(payload), nil
+}
+
 // ReserveCollectorAcquisition turns concrete page/item capacity into a
 // server-calculated charge. MaxPages=0 can only drain buffered items from the
 // previous staged batch; it never authorizes another provider request.
@@ -120,12 +156,14 @@ func (s *Store) ImportRoundCollectorCursor(ctx context.Context, actor Actor, new
 		return Round{}, ErrFenced
 	}
 	var cursor struct {
-		AttemptID string `json:"collectorBatchAttemptId"`
+		AttemptID         string `json:"collectorBatchAttemptId"`
+		ImportedAttemptID string `json:"importedCollectorAttemptId"`
 	}
 	if err := json.Unmarshal(r.Cursor, &cursor); err != nil {
 		return Round{}, err
 	}
-	if cursor.AttemptID != "" {
+	replayImport := cursor.AttemptID == priorAttemptID && cursor.ImportedAttemptID == priorAttemptID && r.Step == "collector_cursor_imported"
+	if cursor.AttemptID != "" && !replayImport {
 		return Round{}, ErrConflict
 	}
 	var existing int
@@ -173,6 +211,9 @@ func (s *Store) ImportRoundCollectorCursor(ctx context.Context, actor Actor, new
 	}
 	if unresolved != 0 {
 		return Round{}, ErrUncertain
+	}
+	if replayImport {
+		return r, tx.Commit()
 	}
 	now := utcNow()
 	encoded, _ := json.Marshal(struct {

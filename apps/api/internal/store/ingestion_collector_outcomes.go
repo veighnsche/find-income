@@ -22,6 +22,30 @@ type CollectorSourceOutcome struct {
 	Current         bool
 }
 
+// OldestPendingCollectorBatch points to the next saved batch with current
+// source text that has never been mapped. The original round and exact batch
+// remain the evidence; no new provider request is needed to review it.
+func (s *Store) OldestPendingCollectorBatch(ctx context.Context, actor Actor, boardID string) (string, string, error) {
+	if !ownerRoundActor(actor) || boardID == "" {
+		return "", "", ErrInvalid
+	}
+	var roundID, attemptID string
+	err := s.db.QueryRowContext(ctx, `SELECT b.round_id,b.attempt_id FROM round_collector_batches b
+	  JOIN round_attempts a ON a.id=b.attempt_id AND a.round_id=b.round_id
+	  JOIN rounds r ON r.id=b.round_id
+	  JOIN source_sightings ss ON ss.collector_attempt_id=a.id
+	  JOIN source_openings so ON so.id=ss.source_opening_id AND so.current_ingestion_id=ss.ingestion_id
+	  JOIN ingestion_requests i ON i.id=ss.ingestion_id
+	  WHERE r.actor_kind=? AND r.actor_id=? AND r.state IN ('completed','failed')
+	    AND a.operation=? AND a.resource_id=? AND a.state='succeeded'
+	    AND ss.decision IN ('new','changed') AND i.source_id IS NULL
+	  ORDER BY b.created_at,b.attempt_id LIMIT 1`, actor.Kind, actor.ID, RoundCollectorPage, "board:"+boardID).Scan(&roundID, &attemptID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", ErrNotFound
+	}
+	return roundID, attemptID, err
+}
+
 func (s *Store) RoundCollectorOutcomes(ctx context.Context, roundID, attemptID string) ([]CollectorSourceOutcome, error) {
 	if roundID == "" || attemptID == "" {
 		return nil, ErrInvalid

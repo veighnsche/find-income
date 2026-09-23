@@ -130,3 +130,64 @@ func TestServiceFakeWorkerStopThenResumeRetainsAllowance(t *testing.T) {
 		t.Fatalf("retry escaped allowance: %v", err)
 	}
 }
+
+func TestExpiredPausedRoundIsTerminalBeforeResumeOrNewStart(t *testing.T) {
+	for _, action := range []string{"resume", "start"} {
+		t.Run(action, func(t *testing.T) {
+			ctx := context.Background()
+			db, err := store.Open(ctx, t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			profile, err := db.CurrentPreferences(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			owner := store.Actor{Kind: "administrator", ID: "owner"}
+			worker := &fakeWorker{}
+			svc := &Service{Store: db, Readiness: &fakeReady{}, Worker: worker}
+			input := store.StartRoundInput{RequestKey: "expiring", Intent: "Inspect a source", Outcome: "discover", ProfileVersion: profile.Version,
+				Scope:  store.RoundScope{Resources: []string{"source:a"}, Operations: []string{store.RoundFetchSource}},
+				Limits: store.RoundAllowance{Requests: 2, Tools: 2}, Deadline: time.Now().Add(100 * time.Millisecond)}
+			round, _, err := svc.Start(ctx, owner, input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			attempt, _, err := svc.Reserve(ctx, owner, round.ID, store.RoundAttemptInput{RequestKey: "fetch", Operation: store.RoundFetchSource, ResourceID: "source:a"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.Dispatch(ctx, round.ID, attempt.ID); err != nil {
+				t.Fatal(err)
+			}
+			paused, err := svc.Stop(ctx, owner, round.ID)
+			if err != nil || paused.State != store.RoundPaused {
+				t.Fatalf("stop: %+v %v", paused, err)
+			}
+			time.Sleep(time.Until(input.Deadline) + 10*time.Millisecond)
+			if action == "resume" {
+				if _, err := svc.Resume(ctx, owner, round.ID); !errors.Is(err, store.ErrExpired) {
+					t.Fatalf("resume after deadline: %v", err)
+				}
+			}
+			input.RequestKey = "after-expiry"
+			input.Deadline = time.Now().Add(time.Hour)
+			next, created, err := svc.Start(ctx, owner, input)
+			if err != nil || !created || next.ID == round.ID {
+				t.Fatalf("new commission: %+v %v %v", next, created, err)
+			}
+			terminal, err := db.Round(ctx, round.ID)
+			if err != nil || terminal.State != store.RoundFailed || terminal.StopReason != "deadline_reached" || !terminal.ReconciliationRequired || terminal.Used != paused.Used {
+				t.Fatalf("expired evidence: %+v %v", terminal, err)
+			}
+			uncertain, err := db.RoundAttempt(ctx, attempt.ID)
+			if err != nil || uncertain.State != store.AttemptUncertain || uncertain.ID != attempt.ID {
+				t.Fatalf("uncertain dispatch retained: %+v %v", uncertain, err)
+			}
+			if len(worker.launched) != 2 {
+				t.Fatalf("unexpected dispatches: %v", worker.launched)
+			}
+		})
+	}
+}

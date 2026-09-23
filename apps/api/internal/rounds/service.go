@@ -45,6 +45,13 @@ type Service struct {
 
 var ErrNotReady = errors.New("round capability unavailable")
 
+func (s *Service) expireDeadline(ctx context.Context, roundID string) error {
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	_, err := s.Store.ExpireRound(cleanup, roundID)
+	return err
+}
+
 func (s *Service) ready(ctx context.Context, outcome string) error {
 	if s == nil || s.Store == nil || s.Readiness == nil || s.Worker == nil {
 		return ErrNotReady
@@ -58,9 +65,21 @@ func (s *Service) Start(ctx context.Context, actor store.Actor, input store.Star
 	if s == nil || s.Store == nil {
 		return store.Round{}, false, ErrNotReady
 	}
+	if actor.Kind != "administrator" || actor.ID == "" {
+		return store.Round{}, false, store.ErrInvalid
+	}
 	_, err := s.Store.RoundByRequest(ctx, actor, input.RequestKey)
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return store.Round{}, false, err
+	}
+	active, activeErr := s.Store.ActiveRound(ctx)
+	if activeErr != nil && !errors.Is(activeErr, store.ErrNotFound) {
+		return store.Round{}, false, activeErr
+	}
+	if activeErr == nil && !time.Now().Before(active.Deadline) {
+		if expireErr := s.expireDeadline(ctx, active.ID); expireErr != nil && !errors.Is(expireErr, store.ErrFenced) {
+			return store.Round{}, false, expireErr
+		}
 	}
 	if errors.Is(err, store.ErrNotFound) {
 		if err := s.ready(ctx, input.Outcome); err != nil {
@@ -134,6 +153,9 @@ func (s *Service) Resume(ctx context.Context, actor store.Actor, roundID string)
 		return store.Round{}, store.ErrFenced
 	}
 	if !time.Now().Before(r.Deadline) {
+		if err := s.expireDeadline(ctx, roundID); err != nil {
+			return store.Round{}, errors.Join(store.ErrExpired, err)
+		}
 		return store.Round{}, store.ErrExpired
 	}
 	if err := s.ready(ctx, r.Outcome); err != nil {
@@ -149,6 +171,11 @@ func (s *Service) Resume(ctx context.Context, actor store.Actor, roundID string)
 	for _, attempt := range attempts {
 		check, err := s.Store.BeginRoundReconciliation(ctx, roundID, attempt.ID, r.Generation)
 		if err != nil {
+			if errors.Is(err, store.ErrExpired) {
+				if expireErr := s.expireDeadline(ctx, roundID); expireErr != nil {
+					return store.Round{}, errors.Join(err, expireErr)
+				}
+			}
 			return store.Round{}, err
 		}
 		observeCtx, cancel := context.WithDeadline(ctx, r.Deadline)
@@ -163,6 +190,11 @@ func (s *Service) Resume(ctx context.Context, actor store.Actor, roundID string)
 	}
 	resumed, err := s.Store.ResumeRound(ctx, actor, roundID, r.Generation)
 	if err != nil {
+		if errors.Is(err, store.ErrExpired) {
+			if expireErr := s.expireDeadline(ctx, roundID); expireErr != nil {
+				return store.Round{}, errors.Join(err, expireErr)
+			}
+		}
 		return store.Round{}, err
 	}
 	if err := s.Worker.LaunchRound(ctx, resumed); err != nil {

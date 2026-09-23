@@ -84,6 +84,17 @@ func (s *Store) RoundAttempt(ctx context.Context, id string) (RoundAttempt, erro
 	return a, err
 }
 
+func (s *Store) RoundAttemptForRequest(ctx context.Context, roundID, requestKey string) (RoundAttempt, error) {
+	if roundID == "" || requestKey == "" {
+		return RoundAttempt{}, ErrInvalid
+	}
+	a, err := scanRoundAttempt(s.db.QueryRowContext(ctx, `SELECT `+roundAttemptColumns+` FROM round_attempts WHERE round_id=? AND request_key=?`, roundID, requestKey))
+	if errors.Is(err, sql.ErrNoRows) {
+		return RoundAttempt{}, ErrNotFound
+	}
+	return a, err
+}
+
 func uncertainAttemptsTx(ctx context.Context, tx *sql.Tx, roundID string) ([]RoundAttempt, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT `+roundAttemptColumns+`
   FROM round_attempts WHERE round_id=? AND state='uncertain' ORDER BY created_at,id`, roundID)

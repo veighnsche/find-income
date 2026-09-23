@@ -232,6 +232,28 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 	if !scopeAllowsActor(round.Scope, actor) {
 		return RoundMutationResult{}, false, ErrFenced
 	}
+	// A successful request is replayable while its current turn capability is
+	// valid, even when the first execution consumed a staged source.
+	var oldDigest string
+	var oldResult sql.NullString
+	err = tx.QueryRowContext(ctx, `SELECT request_sha256,result_json FROM round_attempts
+  WHERE round_id=? AND request_key=?`, roundID, input.RequestKey).Scan(&oldDigest, &oldResult)
+	if err == nil {
+		if oldDigest != digest {
+			return RoundMutationResult{}, false, ErrRoundIdempotencyConflict
+		}
+		if !oldResult.Valid {
+			return RoundMutationResult{}, false, ErrFenced
+		}
+		var result RoundMutationResult
+		if err := json.Unmarshal([]byte(oldResult.String), &result); err != nil {
+			return RoundMutationResult{}, false, err
+		}
+		return result, false, tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return RoundMutationResult{}, false, err
+	}
 	if input.Operation == RoundRelationshipEventCreate && input.Relationship.Event.OpportunityID != "" && !roundHasOpportunityTx(ctx, tx, round, input.Relationship.Event.OpportunityID) {
 		return RoundMutationResult{}, false, ErrFenced
 	}
@@ -284,7 +306,23 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 				return RoundMutationResult{}, false, err
 			}
 			if staged == 0 && !scopeHas(round.Scope.InputRefs, input.ResourceID) {
-				return RoundMutationResult{}, false, ErrFenced
+				var priorBoardResource string
+				err := tx.QueryRowContext(ctx, `SELECT a.resource_id FROM source_sightings ss
+				  JOIN source_openings so ON so.id=ss.source_opening_id AND so.current_ingestion_id=ss.ingestion_id
+				  JOIN ingestion_requests i ON i.id=ss.ingestion_id
+				  JOIN round_attempts a ON a.id=ss.collector_attempt_id
+				  JOIN rounds prior ON prior.id=a.round_id
+				  WHERE ss.source_opening_id=? AND ss.decision IN ('new','changed')
+				    AND i.source_id IS NULL AND a.operation=? AND a.state='succeeded'
+				    AND prior.actor_kind=? AND prior.actor_id=? AND prior.state IN ('completed','failed')
+				  ORDER BY ss.recorded_at DESC,ss.id DESC LIMIT 1`,
+					input.SourceOpportunity.SourceOpeningID, RoundCollectorPage, round.Actor.Kind, round.Actor.ID).Scan(&priorBoardResource)
+				if errors.Is(err, sql.ErrNoRows) || err == nil && !scopeHas(round.Scope.Resources, priorBoardResource) {
+					return RoundMutationResult{}, false, ErrFenced
+				}
+				if err != nil {
+					return RoundMutationResult{}, false, err
+				}
 			}
 		case RoundCorrectOpportunity:
 			var companyID string
@@ -314,26 +352,6 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 		default:
 			return RoundMutationResult{}, false, ErrFenced
 		}
-	}
-	var oldDigest string
-	var oldResult sql.NullString
-	err = tx.QueryRowContext(ctx, `SELECT request_sha256,result_json FROM round_attempts
-  WHERE round_id=? AND request_key=?`, roundID, input.RequestKey).Scan(&oldDigest, &oldResult)
-	if err == nil {
-		if oldDigest != digest {
-			return RoundMutationResult{}, false, ErrRoundIdempotencyConflict
-		}
-		if !oldResult.Valid {
-			return RoundMutationResult{}, false, ErrFenced
-		}
-		var result RoundMutationResult
-		if err := json.Unmarshal([]byte(oldResult.String), &result); err != nil {
-			return RoundMutationResult{}, false, err
-		}
-		return result, false, tx.Commit()
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return RoundMutationResult{}, false, err
 	}
 	if err := requireRoundState(round, RoundRunning); err != nil {
 		return RoundMutationResult{}, false, err

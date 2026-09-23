@@ -100,6 +100,7 @@ type report struct {
 	Code                     string               `json:"code"`
 	BoardID                  string               `json:"boardId,omitempty"`
 	CollectorAttemptID       string               `json:"collectorAttemptId,omitempty"`
+	CollectorHasMore         bool                 `json:"collectorHasMore"`
 	SourceOpeningID          string               `json:"sourceOpeningId,omitempty"`
 	IngestionID              string               `json:"ingestionId,omitempty"`
 	Opportunities            int                  `json:"opportunities"`
@@ -113,6 +114,24 @@ type report struct {
 	DiscoveryCandidates      int                  `json:"discoveryCandidates,omitempty"`
 	UnreviewedCandidates     int                  `json:"unreviewedCandidates,omitempty"`
 	Remaining                store.RoundAllowance `json:"remaining"`
+}
+
+type selectedSourcePin struct {
+	OutcomeRoundID       string `json:"outcomeRoundId"`
+	BatchAttemptID       string `json:"batchAttemptId"`
+	BoardID              string `json:"boardId"`
+	SourceOpeningID      string `json:"sourceOpeningId"`
+	IngestionID          string `json:"ingestionId"`
+	ContentSHA256        string `json:"contentSha256"`
+	ExtractionRequestKey string `json:"extractionRequestKey"`
+	UnreviewedCandidates int    `json:"unreviewedCandidates"`
+}
+
+type agencyCursor struct {
+	CollectorBatchAttemptID    string             `json:"collectorBatchAttemptId,omitempty"`
+	ImportedCollectorAttemptID string             `json:"importedCollectorAttemptId,omitempty"`
+	CompletedBoardIDs          []string           `json:"completedBoardIds,omitempty"`
+	Selected                   *selectedSourcePin `json:"selected,omitempty"`
 }
 
 func (e *Engine) finish(ctx context.Context, roundID string, owner store.Actor, code string, partial bool, detail report) {
@@ -163,6 +182,105 @@ func (e *Engine) live(ctx context.Context, roundID string, generation, profileVe
 	return r, nil
 }
 
+func (e *Engine) collectorContinuation(ctx context.Context, owner store.Actor, r store.Round, boardID string) (collector.Cursor, string, error) {
+	var saved struct {
+		AttemptID string `json:"collectorBatchAttemptId"`
+	}
+	if err := json.Unmarshal(r.Cursor, &saved); err != nil {
+		return collector.Cursor{}, "", err
+	}
+	attemptID := saved.AttemptID
+	var payload json.RawMessage
+	if attemptID == "" {
+		var err error
+		attemptID, payload, err = e.Store.LatestRoundCollectorContinuation(ctx, owner, boardID)
+		if errors.Is(err, store.ErrNotFound) {
+			return collector.Cursor{}, "", nil
+		}
+		if err != nil {
+			return collector.Cursor{}, "", err
+		}
+		if _, err := e.Store.ImportRoundCollectorCursor(ctx, owner, r.ID, attemptID); err != nil {
+			return collector.Cursor{}, "", err
+		}
+	} else {
+		var err error
+		payload, err = e.Store.RoundCollectorBatch(ctx, attemptID)
+		if err != nil {
+			return collector.Cursor{}, "", err
+		}
+	}
+	var batch collector.Batch
+	if err := json.Unmarshal(payload, &batch); err != nil {
+		return collector.Cursor{}, "", err
+	}
+	if batch.Next == nil {
+		prior, err := e.Store.RoundAttempt(ctx, attemptID)
+		if err != nil {
+			return collector.Cursor{}, "", err
+		}
+		if prior.ResourceID == "board:"+boardID {
+			return collector.Cursor{}, "", store.ErrFenced
+		}
+		return collector.Cursor{}, attemptID, nil
+	}
+	if batch.Next.BoardID != boardID {
+		return collector.Cursor{}, "", store.ErrFenced
+	}
+	return *batch.Next, attemptID, nil
+}
+
+func (e *Engine) acquireCollectorBatch(ctx context.Context, owner store.Actor, r store.Round, board store.CollectorBoard) (string, string) {
+	cursor, priorAttemptID, err := e.collectorContinuation(ctx, owner, r, board.ID)
+	if err != nil {
+		return "", terminalCode(err)
+	}
+	requestKey := "collect:" + board.ID
+	if priorAttemptID != "" {
+		requestKey += ":" + priorAttemptID
+	}
+	maxPages := 1
+	if len(cursor.Pending) > 0 {
+		maxPages = 0
+	}
+	reserve, created, err := e.Store.ReserveCollectorAcquisition(ctx, owner, r.ID, store.RoundCollectorAcquisitionInput{RequestKey: requestKey, BoardID: board.ID, CursorAttemptID: priorAttemptID, MaxPages: maxPages, MaxItems: 4})
+	if err != nil || !created {
+		return "", terminalCode(err)
+	}
+	attemptID := reserve.ID
+	if _, err = e.Store.MarkRoundDispatched(ctx, r.ID, attemptID); err != nil {
+		return "", "source_dispatch_failed"
+	}
+	batch, fetchErr := e.Collector.AcquireLever(ctx, collector.Request{Board: board, Cursor: cursor, MaxPages: maxPages, MaxItems: 4})
+	if fetchErr != nil {
+		batch.ErrorCode = "source_acquisition_failed"
+		cursor.BoardID = board.ID
+		batch.Next = &cursor
+	}
+	// Even a transport failure is published with its cursor and charge.
+	staging, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	current, readErr := e.Store.Round(staging, r.ID)
+	if readErr == nil {
+		encoded, encodeErr := json.Marshal(batch)
+		if encodeErr == nil {
+			_, readErr = e.Store.SaveRoundCollectorBatch(staging, owner, r.ID, attemptID, current.Revision, encoded)
+		} else {
+			readErr = encodeErr
+		}
+	}
+	cancel()
+	if readErr != nil {
+		settle, done := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		_, _ = e.Store.FinishRoundAttempt(settle, owner, r.ID, attemptID, false, nil, "collector_stage_failed")
+		done()
+		return "", "source_result_uncertain"
+	}
+	if batch.ErrorCode != "" {
+		return "", batch.ErrorCode
+	}
+	return attemptID, ""
+}
+
 var errProfileChanged = errors.New("profile changed during commissioned round")
 
 func (e *Engine) run(ctx context.Context, initial store.Round) {
@@ -181,247 +299,352 @@ func (e *Engine) run(ctx context.Context, initial store.Round) {
 		code = terminalCode(err)
 		return
 	}
-	var cursor struct {
-		CollectorBatchAttemptID string `json:"collectorBatchAttemptId"`
+	var cursor agencyCursor
+	if json.Unmarshal(r.Cursor, &cursor) != nil {
+		code = "round_cursor_invalid"
+		return
 	}
-	_ = json.Unmarshal(r.Cursor, &cursor)
 	attemptID := cursor.CollectorBatchAttemptID
-	if attemptID == "" {
-		boards, err := e.Store.ListCollectorBoards(ctx)
-		if err != nil {
+	outcomeRoundID := r.ID
+	var chosen *store.CollectorSourceOutcome
+	pinnedAtLaunch := cursor.Selected != nil
+	importedBoardID := ""
+	if !pinnedAtLaunch && attemptID != "" {
+		stagedAttempt, readErr := e.Store.RoundAttempt(ctx, attemptID)
+		if readErr != nil || stagedAttempt.Operation != store.RoundCollectorPage || stagedAttempt.State != store.AttemptSucceeded || !strings.HasPrefix(stagedAttempt.ResourceID, "board:") || !hasRoundResource(r.Scope.Resources, stagedAttempt.ResourceID) {
+			code = "source_batch_invalid"
+			return
+		}
+		if cursor.ImportedCollectorAttemptID == attemptID && r.Step == "collector_cursor_imported" {
+			if _, err := e.Store.ImportRoundCollectorCursor(ctx, owner, r.ID, attemptID); err != nil {
+				code = "source_batch_invalid"
+				return
+			}
+			importedBoardID = strings.TrimPrefix(stagedAttempt.ResourceID, "board:")
+			attemptID = ""
+		} else if stagedAttempt.RoundID != r.ID {
+			code = "source_batch_invalid"
+			return
+		}
+		detail.BoardID = strings.TrimPrefix(stagedAttempt.ResourceID, "board:")
+	}
+	if importedBoardID != "" {
+		boards, readErr := e.Store.ListCollectorBoards(ctx)
+		if readErr != nil {
 			code = "source_inventory_failed"
 			return
 		}
-		allowed := map[string]bool{}
-		for _, resource := range r.Scope.Resources {
-			allowed[resource] = true
-		}
-		choices := map[string]store.CollectorBoard{}
-		searchChoices := map[string]store.RoleCriterion{}
-		input := jev.DecisionInput{Kind: jev.DecisionSourceResearch, CampaignIntent: r.Intent, MaxReportedTokens: 1200,
-			Capabilities:       []jev.DecisionCapability{{ID: "lever_page", Description: "Read one public Lever board page and stage up to four exact postings."}, {ID: "himalayas_search", Description: "Read one bounded public discovery search and stage exact candidate links for later verification."}},
-			RemainingAllowance: []jev.DecisionAllowance{{Operation: store.RoundCollectorPage, Remaining: r.Limits.Requests - r.Used.Requests}}}
-		profile, profileErr := e.Store.CurrentPreferences(ctx)
-		if profileErr != nil || profile.Version != r.ProfileVersion {
-			code = "profile_changed"
-			return
-		}
-		profileSources, profileIDs, complete := profileDecisionSources(profile, 4)
-		if !complete {
-			code = "profile_context_unbounded"
-			return
-		}
-		input.Sources = append(input.Sources, profileSources...)
-		for _, board := range boards {
-			if !board.Enabled || board.VerifiedAt == "" || !allowed["board:"+board.ID] {
-				continue
-			}
-			choices[board.ID] = board
-			input.Sources = append(input.Sources, jev.DecisionSource{ID: board.ID, SourceRevision: fmt.Sprint(board.Revision), SourceKind: "verified_official_careers", URL: board.OfficialCareersURL, ObservedAt: board.VerifiedAt, Excerpt: board.DisplayName + " public careers board"})
-			input.Candidates = append(input.Candidates, jev.DecisionCandidate{ID: board.ID, Description: "Inspect " + board.DisplayName + " public careers postings.", Scope: "One bounded Lever page; source facts require subsequent extraction.", CapabilityID: "lever_page", SourceIDs: append([]string{board.ID}, profileIDs...)})
-			if len(choices) == 8 {
-				break
-			}
-		}
-		for i, criterion := range profile.RoleCriteria {
-			if len(input.Candidates) == 16 {
-				break
-			}
-			if criterion.Mode != "require" && criterion.Mode != "prefer" {
-				continue
-			}
-			id := fmt.Sprintf("search-%d", i)
-			searchChoices[id] = criterion
-			input.Candidates = append(input.Candidates, jev.DecisionCandidate{ID: id, Description: "Search public vacancies for owner criterion " + criterion.Label + ": " + prefixUTF8(criterion.Description, 800), Scope: "One charged bounded Himalayas search; staged links are unverified leads.", CapabilityID: "himalayas_search", SourceIDs: profileIDs})
-		}
-		if len(input.Candidates) == 0 {
-			return
-		}
-		decision, err := e.Decisions.RunDecision(ctx, jevservice.Binding{Actor: owner, RoundID: r.ID, ResourceID: "campaign:active", RequestKeyPrefix: "select-board", ProfileVersion: r.ProfileVersion}, input)
-		if err != nil {
-			code = terminalCode(err)
-			return
-		}
-		if decision.Disposition != jev.DecisionSelected {
-			code = "source_choice_unresolved"
-			return
-		}
 		var board store.CollectorBoard
-		if criterion, search := searchChoices[decision.SelectedID]; search {
-			_, err = e.live(ctx, r.ID, initial.Generation, initial.ProfileVersion)
-			if err != nil {
-				code = terminalCode(err)
-				return
-			}
-			pageNumber := 1
-			continuation, continuationErr := e.Store.DiscoverySearchContinuation(ctx, criterion.Label, "")
-			if continuationErr == nil {
-				if continuation.NextPage < 1 {
-					code = "discovery_search_exhausted"
-					return
-				}
-				pageNumber = continuation.NextPage
-			} else if !errors.Is(continuationErr, store.ErrNotFound) {
-				code = "discovery_continuation_unavailable"
-				return
-			}
-			brief := "Research one public vacancy search for the selected owner criterion. Use source_discovery with method search_jobs, the exact keyword and page in evidence, and empty country. Stage at most one relevant link with discovery_candidate_stage using an exact quote from the returned page. For that staged candidate, read its matching company detail with source_discovery, use discovery_official_links on the claimed company website and at most one evidenced same-origin careers link, then use discovery_board_register only for an exact Lever link from the saved official-site read. The board registration authorizes full posting collection in this round. Do not create an opportunity from a search summary or company detail. Stop if any provenance step is missing."
-			evidence, _ := json.Marshal(struct {
-				Criterion store.RoleCriterion `json:"criterion"`
-				Keyword   string              `json:"keyword"`
-				Page      int                 `json:"page"`
-			}{criterion, criterion.Label, pageNumber})
-			_, err = e.Runtime.ExecuteRoundTurn(ctx, agent, r.ID, codexservice.RoundTurnInput{RequestKey: "discover:" + decision.SelectedID, ResourceID: "discovery:himalayas", Brief: brief, Evidence: string(evidence)})
-			if err != nil {
-				code = terminalCode(err)
-				return
-			}
-			history, readErr := e.Store.RoundHistory(ctx, r.ID)
-			if readErr != nil {
-				code = "discovery_history_unavailable"
-				return
-			}
-			registeredID := ""
-			for _, event := range history {
-				if event.Operation == store.RoundStageDiscovery {
-					detail.DiscoveryCandidates++
-				} else if event.Operation == store.RoundRegisterDiscoveryBoard && event.EntityKind == "collector_board" {
-					registeredID = event.EntityID
-				}
-			}
-			if registeredID == "" {
-				if detail.DiscoveryCandidates == 0 {
-					code = "discovery_unresolved"
-				} else {
-					code = "unverified_discovery_candidates"
-				}
-				return
-			}
-			boards, err = e.Store.ListCollectorBoards(ctx)
-			if err != nil {
-				code = "registered_board_unavailable"
-				return
-			}
-			for _, candidate := range boards {
-				if candidate.ID == registeredID && candidate.Enabled && candidate.VerifiedAt != "" {
-					board = candidate
-					break
-				}
-			}
-			if board.ID == "" {
-				code = "registered_board_unavailable"
-				return
-			}
-		} else {
-			var found bool
-			board, found = choices[decision.SelectedID]
-			if !found {
-				code = "source_choice_invalid"
-				return
+		for _, candidate := range boards {
+			if candidate.ID == importedBoardID && candidate.Enabled && candidate.VerifiedAt != "" {
+				board = candidate
+				break
 			}
 		}
-		detail.BoardID = board.ID
+		if board.ID == "" {
+			code = "source_batch_invalid"
+			return
+		}
 		r, err = e.live(ctx, r.ID, initial.Generation, initial.ProfileVersion)
 		if err != nil {
 			code = terminalCode(err)
 			return
 		}
-		reserve, created, err := e.Store.ReserveCollectorAcquisition(ctx, owner, r.ID, store.RoundCollectorAcquisitionInput{RequestKey: "collect:" + board.ID, BoardID: board.ID, MaxPages: 1, MaxItems: 4})
-		if err != nil || !created {
+		attemptID, code = e.acquireCollectorBatch(ctx, owner, r, board)
+		if code != "" {
+			return
+		}
+	}
+	if cursor.Selected != nil {
+		pin := cursor.Selected
+		attemptID, outcomeRoundID = pin.BatchAttemptID, pin.OutcomeRoundID
+		if pin.BatchAttemptID == "" || pin.OutcomeRoundID == "" || pin.BoardID == "" || pin.SourceOpeningID == "" || pin.IngestionID == "" || pin.ExtractionRequestKey == "" ||
+			!hasRoundResource(r.Scope.Resources, "board:"+pin.BoardID) {
+			code = "selected_source_invalid"
+			return
+		}
+		boardAttempt, readErr := e.Store.RoundAttempt(ctx, attemptID)
+		if readErr != nil || boardAttempt.RoundID != outcomeRoundID || boardAttempt.ResourceID != "board:"+pin.BoardID || boardAttempt.State != store.AttemptSucceeded {
+			code = "selected_source_invalid"
+			return
+		}
+		outcomes, readErr := e.Store.RoundCollectorOutcomes(ctx, outcomeRoundID, attemptID)
+		if readErr != nil {
+			code = "selected_source_unavailable"
+			return
+		}
+		for i := range outcomes {
+			candidate := &outcomes[i]
+			if candidate.SourceOpeningID == pin.SourceOpeningID && candidate.IngestionID == pin.IngestionID && candidate.ContentSHA256 == pin.ContentSHA256 && candidate.Current {
+				chosen = candidate
+				break
+			}
+		}
+		if chosen == nil {
+			code = "selected_source_stale"
+			return
+		}
+		detail.BoardID, detail.CollectorAttemptID, detail.UnreviewedCandidates = pin.BoardID, attemptID, pin.UnreviewedCandidates
+	}
+	if cursor.Selected == nil {
+		if attemptID == "" {
+			boards, err := e.Store.ListCollectorBoards(ctx)
+			if err != nil {
+				code = "source_inventory_failed"
+				return
+			}
+			allowed := map[string]bool{}
+			for _, resource := range r.Scope.Resources {
+				allowed[resource] = true
+			}
+			choices := map[string]store.CollectorBoard{}
+			searchChoices := map[string]store.RoleCriterion{}
+			input := jev.DecisionInput{Kind: jev.DecisionSourceResearch, CampaignIntent: r.Intent, MaxReportedTokens: 1200,
+				Capabilities:       []jev.DecisionCapability{{ID: "lever_page", Description: "Read one public Lever board page and stage up to four exact postings."}, {ID: "himalayas_search", Description: "Read one bounded public discovery search and stage exact candidate links for later verification."}},
+				RemainingAllowance: []jev.DecisionAllowance{{Operation: store.RoundCollectorPage, Remaining: r.Limits.Requests - r.Used.Requests}}}
+			profile, profileErr := e.Store.CurrentPreferences(ctx)
+			if profileErr != nil || profile.Version != r.ProfileVersion {
+				code = "profile_changed"
+				return
+			}
+			profileSources, profileIDs, complete := profileDecisionSources(profile, 4)
+			if !complete {
+				code = "profile_context_unbounded"
+				return
+			}
+			input.Sources = append(input.Sources, profileSources...)
+			for _, board := range boards {
+				if !board.Enabled || board.VerifiedAt == "" || !allowed["board:"+board.ID] {
+					continue
+				}
+				choices[board.ID] = board
+				input.Sources = append(input.Sources, jev.DecisionSource{ID: board.ID, SourceRevision: fmt.Sprint(board.Revision), SourceKind: "verified_official_careers", URL: board.OfficialCareersURL, ObservedAt: board.VerifiedAt, Excerpt: board.DisplayName + " public careers board"})
+				input.Candidates = append(input.Candidates, jev.DecisionCandidate{ID: board.ID, Description: "Inspect " + board.DisplayName + " public careers postings.", Scope: "One bounded Lever page; source facts require subsequent extraction.", CapabilityID: "lever_page", SourceIDs: append([]string{board.ID}, profileIDs...)})
+				if len(choices) == 8 {
+					break
+				}
+			}
+			for i, criterion := range profile.RoleCriteria {
+				if len(input.Candidates) == 16 {
+					break
+				}
+				if criterion.Mode != "require" && criterion.Mode != "prefer" {
+					continue
+				}
+				id := fmt.Sprintf("search-%d", i)
+				searchChoices[id] = criterion
+				input.Candidates = append(input.Candidates, jev.DecisionCandidate{ID: id, Description: "Search public vacancies for owner criterion " + criterion.Label + ": " + prefixUTF8(criterion.Description, 800), Scope: "One charged bounded Himalayas search; staged links are unverified leads.", CapabilityID: "himalayas_search", SourceIDs: profileIDs})
+			}
+			if len(input.Candidates) == 0 {
+				return
+			}
+			decision, err := e.Decisions.RunDecision(ctx, jevservice.Binding{Actor: owner, RoundID: r.ID, ResourceID: "campaign:active", RequestKeyPrefix: "select-board", ProfileVersion: r.ProfileVersion}, input)
+			if err != nil {
+				code = terminalCode(err)
+				return
+			}
+			if decision.Disposition != jev.DecisionSelected {
+				code = "source_choice_unresolved"
+				return
+			}
+			var board store.CollectorBoard
+			if criterion, search := searchChoices[decision.SelectedID]; search {
+				_, err = e.live(ctx, r.ID, initial.Generation, initial.ProfileVersion)
+				if err != nil {
+					code = terminalCode(err)
+					return
+				}
+				pageNumber := 1
+				continuation, continuationErr := e.Store.DiscoverySearchContinuation(ctx, criterion.Label, "")
+				if continuationErr == nil {
+					if continuation.NextPage < 1 {
+						code = "discovery_search_exhausted"
+						return
+					}
+					pageNumber = continuation.NextPage
+				} else if !errors.Is(continuationErr, store.ErrNotFound) {
+					code = "discovery_continuation_unavailable"
+					return
+				}
+				brief := "Research one public vacancy search for the selected owner criterion. Use source_discovery with method search_jobs, the exact keyword and page in evidence, and empty country. Stage at most one relevant link with discovery_candidate_stage using an exact quote from the returned page. For that staged candidate, read its matching company detail with source_discovery, use discovery_official_links on the claimed company website and at most one evidenced same-origin careers link, then use discovery_board_register only for an exact Lever link from the saved official-site read. The board registration authorizes full posting collection in this round. Do not create an opportunity from a search summary or company detail. Stop if any provenance step is missing."
+				evidence, _ := json.Marshal(struct {
+					Criterion store.RoleCriterion `json:"criterion"`
+					Keyword   string              `json:"keyword"`
+					Page      int                 `json:"page"`
+				}{criterion, criterion.Label, pageNumber})
+				_, err = e.Runtime.ExecuteRoundTurn(ctx, agent, r.ID, codexservice.RoundTurnInput{RequestKey: "discover:" + decision.SelectedID, ResourceID: "discovery:himalayas", Brief: brief, Evidence: string(evidence)})
+				if err != nil {
+					code = terminalCode(err)
+					return
+				}
+				history, readErr := e.Store.RoundHistory(ctx, r.ID)
+				if readErr != nil {
+					code = "discovery_history_unavailable"
+					return
+				}
+				registeredID := ""
+				for _, event := range history {
+					if event.Operation == store.RoundStageDiscovery {
+						detail.DiscoveryCandidates++
+					} else if event.Operation == store.RoundRegisterDiscoveryBoard && event.EntityKind == "collector_board" {
+						registeredID = event.EntityID
+					}
+				}
+				if registeredID == "" {
+					if detail.DiscoveryCandidates == 0 {
+						code = "discovery_unresolved"
+					} else {
+						code = "unverified_discovery_candidates"
+					}
+					return
+				}
+				boards, err = e.Store.ListCollectorBoards(ctx)
+				if err != nil {
+					code = "registered_board_unavailable"
+					return
+				}
+				for _, candidate := range boards {
+					if candidate.ID == registeredID && candidate.Enabled && candidate.VerifiedAt != "" {
+						board = candidate
+						break
+					}
+				}
+				if board.ID == "" {
+					code = "registered_board_unavailable"
+					return
+				}
+			} else {
+				var found bool
+				board, found = choices[decision.SelectedID]
+				if !found {
+					code = "source_choice_invalid"
+					return
+				}
+			}
+			detail.BoardID = board.ID
+			r, err = e.live(ctx, r.ID, initial.Generation, initial.ProfileVersion)
+			if err != nil {
+				code = terminalCode(err)
+				return
+			}
+			backlogRoundID, backlogAttemptID, backlogErr := e.Store.OldestPendingCollectorBatch(ctx, owner, board.ID)
+			if backlogErr == nil {
+				attemptID, outcomeRoundID = backlogAttemptID, backlogRoundID
+			} else if !errors.Is(backlogErr, store.ErrNotFound) {
+				code = "source_backlog_unavailable"
+				return
+			}
+			if attemptID == "" {
+				attemptID, code = e.acquireCollectorBatch(ctx, owner, r, board)
+				if code != "" {
+					return
+				}
+			}
+		}
+		detail.CollectorAttemptID = attemptID
+		staged, err := e.Store.RoundCollectorBatch(ctx, attemptID)
+		if err != nil {
+			code = "source_batch_unavailable"
+			return
+		}
+		var stagedBoundary struct {
+			Next *collector.Cursor `json:"next"`
+		}
+		if json.Unmarshal(staged, &stagedBoundary) != nil {
+			code = "source_batch_invalid"
+			return
+		}
+		detail.CollectorHasMore = stagedBoundary.Next != nil
+		outcomes, err := e.Store.RoundCollectorOutcomes(ctx, outcomeRoundID, attemptID)
+		if err != nil {
+			code = "source_outcomes_unavailable"
+			return
+		}
+		candidateInput := jev.DecisionInput{Kind: jev.DecisionSourceResearch, CampaignIntent: r.Intent, MaxReportedTokens: 1200,
+			Capabilities:       []jev.DecisionCapability{{ID: "source_extract", Description: "Extract one current exact vacancy into a source-linked opportunity."}},
+			RemainingAllowance: []jev.DecisionAllowance{{Operation: store.RoundCodexTurn, Remaining: r.Limits.Turns - r.Used.Turns}}}
+		choiceProfile, profileErr := e.Store.CurrentPreferences(ctx)
+		if profileErr != nil || choiceProfile.Version != r.ProfileVersion {
+			code = "profile_changed"
+			return
+		}
+		profileSources, profileIDs, complete := profileDecisionSources(choiceProfile, 8)
+		if !complete {
+			code = "profile_context_unbounded"
+			return
+		}
+		candidateInput.Sources = append(candidateInput.Sources, profileSources...)
+		candidateOutcomes := map[string]store.CollectorSourceOutcome{}
+		for i := range outcomes {
+			item := &outcomes[i]
+			if item.Current && item.SourceID == "" && (item.Decision == "new" || item.Decision == "changed") {
+				stored, readErr := e.Store.Ingestion(ctx, item.IngestionID)
+				if readErr != nil {
+					continue
+				}
+				id := item.SourceOpeningID
+				candidateOutcomes[id] = *item
+				excerpt := prefixUTF8(stored.OriginalText, 1900)
+				if len(excerpt) < len(stored.OriginalText) {
+					excerpt += " [excerpt truncated; complete source is retained]"
+				}
+				candidateInput.Sources = append(candidateInput.Sources, jev.DecisionSource{ID: id, SourceRevision: item.ContentSHA256, SourceKind: "lever_posting", URL: item.SourceURL, ObservedAt: item.ObservedAt, Excerpt: excerpt})
+				candidateInput.Candidates = append(candidateInput.Candidates, jev.DecisionCandidate{ID: id, Description: "Review this current saved vacancy source.", Scope: "One source-linked opportunity extraction; no external application.", CapabilityID: "source_extract", SourceIDs: append([]string{id}, profileIDs...)})
+			}
+		}
+		if len(candidateInput.Candidates) == 0 {
+			code = "no_new_source"
+			return
+		}
+		detail.UnreviewedCandidates = len(candidateInput.Candidates) - 1
+		selection, err := e.Decisions.RunDecision(ctx, jevservice.Binding{Actor: owner, RoundID: r.ID, ResourceID: "campaign:active", RequestKeyPrefix: "select-source:" + attemptID, ProfileVersion: r.ProfileVersion}, candidateInput)
+		if err != nil {
 			code = terminalCode(err)
 			return
 		}
-		attemptID = reserve.ID
-		detail.CollectorAttemptID = attemptID
-		if _, err = e.Store.MarkRoundDispatched(ctx, r.ID, attemptID); err != nil {
-			code = "source_dispatch_failed"
+		if selection.Disposition != jev.DecisionSelected {
+			code = "source_choice_unresolved"
 			return
 		}
-		batch, fetchErr := e.Collector.AcquireLever(ctx, collector.Request{Board: board, MaxPages: 1, MaxItems: 4})
-		if fetchErr != nil {
-			batch.ErrorCode = "source_acquisition_failed"
-			batch.Next = &collector.Cursor{BoardID: board.ID}
+		selected, found := candidateOutcomes[selection.SelectedID]
+		if !found {
+			code = "source_choice_invalid"
+			return
 		}
-		// Even a transport failure is published with its cursor and charge.
-		staging, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		current, readErr := e.Store.Round(staging, r.ID)
-		if readErr == nil {
-			encoded, encodeErr := json.Marshal(batch)
-			if encodeErr == nil {
-				_, readErr = e.Store.SaveRoundCollectorBatch(staging, owner, r.ID, attemptID, current.Revision, encoded)
-			}
+		chosen = &selected
+		r, err = e.live(ctx, r.ID, initial.Generation, initial.ProfileVersion)
+		if err != nil {
+			code = terminalCode(err)
+			return
 		}
-		cancel()
+		if json.Unmarshal(r.Cursor, &cursor) != nil || cursor.Selected != nil {
+			code = "round_cursor_conflict"
+			return
+		}
+		cursor.Selected = &selectedSourcePin{OutcomeRoundID: outcomeRoundID, BatchAttemptID: attemptID,
+			BoardID: detail.BoardID, SourceOpeningID: chosen.SourceOpeningID, IngestionID: chosen.IngestionID,
+			ContentSHA256: chosen.ContentSHA256, ExtractionRequestKey: fmt.Sprintf("extract:%s:g%d", chosen.IngestionID, initial.Generation), UnreviewedCandidates: detail.UnreviewedCandidates}
+		pinnedCursor, _ := json.Marshal(cursor)
+		r, err = e.Store.SaveRoundProgress(ctx, owner, r.ID, r.Revision, store.RoundProgress{Step: "source_selected", Cursor: pinnedCursor, Unresolved: r.Unresolved, Report: r.Report})
+		if err != nil {
+			code = terminalCode(err)
+			return
+		}
+	} else {
+		staged, readErr := e.Store.RoundCollectorBatch(ctx, attemptID)
 		if readErr != nil {
-			settle, done := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			_, _ = e.Store.FinishRoundAttempt(settle, owner, r.ID, attemptID, false, nil, "collector_stage_failed")
-			done()
-			code = "source_result_uncertain"
+			code = "source_batch_unavailable"
 			return
 		}
-		if batch.ErrorCode != "" {
-			code = batch.ErrorCode
+		var stagedBoundary struct {
+			Next *collector.Cursor `json:"next"`
+		}
+		if json.Unmarshal(staged, &stagedBoundary) != nil {
+			code = "source_batch_invalid"
 			return
 		}
+		detail.CollectorHasMore = stagedBoundary.Next != nil
 	}
-	detail.CollectorAttemptID = attemptID
-	outcomes, err := e.Store.RoundCollectorOutcomes(ctx, r.ID, attemptID)
-	if err != nil {
-		code = "source_outcomes_unavailable"
-		return
-	}
-	candidateInput := jev.DecisionInput{Kind: jev.DecisionSourceResearch, CampaignIntent: r.Intent, MaxReportedTokens: 1200,
-		Capabilities:       []jev.DecisionCapability{{ID: "source_extract", Description: "Extract one current exact vacancy into a source-linked opportunity."}},
-		RemainingAllowance: []jev.DecisionAllowance{{Operation: store.RoundCodexTurn, Remaining: r.Limits.Turns - r.Used.Turns}}}
-	choiceProfile, profileErr := e.Store.CurrentPreferences(ctx)
-	if profileErr != nil || choiceProfile.Version != r.ProfileVersion {
-		code = "profile_changed"
-		return
-	}
-	profileSources, profileIDs, complete := profileDecisionSources(choiceProfile, 8)
-	if !complete {
-		code = "profile_context_unbounded"
-		return
-	}
-	candidateInput.Sources = append(candidateInput.Sources, profileSources...)
-	candidateOutcomes := map[string]store.CollectorSourceOutcome{}
-	for i := range outcomes {
-		item := &outcomes[i]
-		if item.Current && (item.Decision == "new" || item.Decision == "changed") {
-			stored, readErr := e.Store.Ingestion(ctx, item.IngestionID)
-			if readErr != nil {
-				continue
-			}
-			id := item.SourceOpeningID
-			candidateOutcomes[id] = *item
-			excerpt := prefixUTF8(stored.OriginalText, 1900)
-			if len(excerpt) < len(stored.OriginalText) {
-				excerpt += " [excerpt truncated; complete source is retained]"
-			}
-			candidateInput.Sources = append(candidateInput.Sources, jev.DecisionSource{ID: id, SourceRevision: item.ContentSHA256, SourceKind: "lever_posting", URL: item.SourceURL, ObservedAt: item.ObservedAt, Excerpt: excerpt})
-			candidateInput.Candidates = append(candidateInput.Candidates, jev.DecisionCandidate{ID: id, Description: "Review this current saved vacancy source.", Scope: "One source-linked opportunity extraction; no external application.", CapabilityID: "source_extract", SourceIDs: append([]string{id}, profileIDs...)})
-		}
-	}
-	if len(candidateInput.Candidates) == 0 {
-		code = "no_new_source"
-		return
-	}
-	detail.UnreviewedCandidates = len(candidateInput.Candidates) - 1
-	selection, err := e.Decisions.RunDecision(ctx, jevservice.Binding{Actor: owner, RoundID: r.ID, ResourceID: "campaign:active", RequestKeyPrefix: "select-source:" + attemptID, ProfileVersion: r.ProfileVersion}, candidateInput)
-	if err != nil {
-		code = terminalCode(err)
-		return
-	}
-	if selection.Disposition != jev.DecisionSelected {
-		code = "source_choice_unresolved"
-		return
-	}
-	selected, found := candidateOutcomes[selection.SelectedID]
-	if !found {
-		code = "source_choice_invalid"
-		return
-	}
-	chosen := &selected
 	detail.SourceOpeningID, detail.IngestionID = chosen.SourceOpeningID, chosen.IngestionID
 	item, err := e.Store.Ingestion(ctx, chosen.IngestionID)
 	if err != nil {
@@ -438,11 +661,42 @@ func (e *Engine) run(ctx context.Context, initial store.Round) {
 		return
 	}
 	needsSave := true
+	if pinnedAtLaunch && chosen.SourceID == "" {
+		prior, priorErr := e.Store.RoundAttemptForRequest(ctx, r.ID, cursor.Selected.ExtractionRequestKey)
+		if priorErr != nil && !errors.Is(priorErr, store.ErrNotFound) {
+			code = "source_extraction_evidence_unavailable"
+			return
+		}
+		if priorErr == nil && (prior.DispatchedAt != "" || prior.State != store.AttemptReserved && prior.State != store.AttemptCancelled) {
+			code = "source_extraction_unresolved"
+			return
+		}
+		r, err = e.live(ctx, r.ID, initial.Generation, initial.ProfileVersion)
+		if err != nil {
+			code = terminalCode(err)
+			return
+		}
+		if json.Unmarshal(r.Cursor, &cursor) != nil || cursor.Selected == nil || cursor.Selected.SourceOpeningID != chosen.SourceOpeningID || cursor.Selected.IngestionID != chosen.IngestionID {
+			code = "selected_source_invalid"
+			return
+		}
+		cursor.Selected.ExtractionRequestKey = fmt.Sprintf("extract:%s:g%d", chosen.IngestionID, initial.Generation)
+		encoded, _ := json.Marshal(cursor)
+		r, err = e.Store.SaveRoundProgress(ctx, owner, r.ID, r.Revision, store.RoundProgress{Step: "source_selected", Cursor: encoded, Unresolved: r.Unresolved, Report: r.Report})
+		if err != nil {
+			code = terminalCode(err)
+			return
+		}
+	}
 	if chosen.OpportunityID != "" {
 		previous, readErr := e.Store.Opportunity(ctx, chosen.OpportunityID)
 		if readErr == nil && previous.OriginalText == item.OriginalText {
 			needsSave = false
 		}
+	}
+	if pinnedAtLaunch && chosen.SourceID != "" && needsSave {
+		code = "source_mapping_stale"
+		return
 	}
 	if needsSave {
 		boardAttempt, readErr := e.Store.RoundAttempt(ctx, attemptID)
@@ -514,13 +768,13 @@ func (e *Engine) run(ctx context.Context, initial store.Round) {
 			return
 		}
 		brief := "Extract this exact current source into a sourced opportunity. If existingCompanyId is supplied, use it and expectedRevision. Otherwise create a company with boardCompanyName and officialCareersUrl using round_mutation company.create, then use its returned id and revision. Save via round_mutation opportunity.source_save using resourceId source-opening:<sourceOpeningId>, and both expectedRevision fields set to the company revision for a new opening or the mapped opportunity revision for a refresh. Set only vacancy facts supported by originalText. If insufficient, leave unresolved. Do not claim an application was sent."
-		_, err = e.Runtime.ExecuteRoundTurn(ctx, agent, r.ID, codexservice.RoundTurnInput{RequestKey: "extract:" + chosen.IngestionID, ResourceID: "campaign:active", Brief: brief, Evidence: string(evidence)})
+		_, err = e.Runtime.ExecuteRoundTurn(ctx, agent, r.ID, codexservice.RoundTurnInput{RequestKey: cursor.Selected.ExtractionRequestKey, ResourceID: "campaign:active", Brief: brief, Evidence: string(evidence)})
 		if err != nil {
 			code = terminalCode(err)
 			return
 		}
 	}
-	refreshed, err := e.Store.RoundCollectorOutcomes(ctx, r.ID, attemptID)
+	refreshed, err := e.Store.RoundCollectorOutcomes(ctx, outcomeRoundID, attemptID)
 	if err != nil {
 		code = "source_mapping_unavailable"
 		return
@@ -575,25 +829,33 @@ func (e *Engine) run(ctx context.Context, initial store.Round) {
 	for _, c := range profile.RoleCriteria {
 		criteria = append(criteria, jev.ScreeningCriterion{ID: c.ID, Label: c.Label, Description: c.Description, Kind: c.Kind, Mode: c.Mode})
 	}
-	screenPrefix := "screen:" + chosen.IngestionID
+	screenPrefix := fmt.Sprintf("screen:%s:g%d", chosen.IngestionID, initial.Generation)
 	screenInput := jev.ScreeningInput{PreferenceVersion: r.ProfileVersion, MaxTotalTokens: 2500, Criteria: criteria, Spans: spans}
-	screening, err := e.Decisions.RunScreening(ctx, jevservice.Binding{Actor: owner, RoundID: r.ID, ResourceID: "campaign:active", RequestKeyPrefix: screenPrefix, ProfileVersion: r.ProfileVersion}, screenInput)
-	if err != nil {
-		code = terminalCode(err)
+	binding := store.RoundAssessmentInput{Actor: owner, RoundID: r.ID, RoundGeneration: initial.Generation, ResourceID: "campaign:active", OpportunityID: chosen.OpportunityID, OpportunityRevision: currentOpportunity.Revision, SourceID: chosen.SourceID, SourceRevision: chosen.ContentSHA256, ProfileVersion: r.ProfileVersion, OmittedBytes: detail.ScreeningOmittedBytes}
+	screenAssessment, currentErr := e.Store.CurrentRoundJevAssessment(ctx, chosen.OpportunityID, "screening")
+	if currentErr != nil && !errors.Is(currentErr, store.ErrNotFound) && !errors.Is(currentErr, store.ErrConflict) {
+		code = "screening_current_unavailable"
 		return
 	}
-	screenAttemptIDs, err := e.Store.JevAttemptIDsForRequestPrefix(ctx, r.ID, screenPrefix)
-	if err != nil {
-		code = "screening_attempts_unavailable"
-		return
+	if currentErr != nil || screenAssessment.RoundID != r.ID || screenAssessment.SourceID != chosen.SourceID || screenAssessment.SourceRevision != chosen.ContentSHA256 || screenAssessment.OpportunityRevision != currentOpportunity.Revision || screenAssessment.ProfileVersion != r.ProfileVersion {
+		screening, screenErr := e.Decisions.RunScreening(ctx, jevservice.Binding{Actor: owner, RoundID: r.ID, ResourceID: "campaign:active", RequestKeyPrefix: screenPrefix, ProfileVersion: r.ProfileVersion}, screenInput)
+		if screenErr != nil {
+			code = terminalCode(screenErr)
+			return
+		}
+		screenAttemptIDs, readErr := e.Store.JevAttemptIDsForRequestPrefix(ctx, r.ID, screenPrefix)
+		if readErr != nil {
+			code = "screening_attempts_unavailable"
+			return
+		}
+		binding.JevAttemptIDs = screenAttemptIDs
+		screenAssessment, err = e.Store.ApplyRoundScreening(ctx, binding, screenInput, screening)
+		if err != nil {
+			code = "screening_apply_failed"
+			return
+		}
 	}
-	binding := store.RoundAssessmentInput{Actor: owner, RoundID: r.ID, RoundGeneration: initial.Generation, ResourceID: "campaign:active", OpportunityID: chosen.OpportunityID, OpportunityRevision: currentOpportunity.Revision, SourceID: chosen.SourceID, SourceRevision: chosen.ContentSHA256, ProfileVersion: r.ProfileVersion, JevAttemptIDs: screenAttemptIDs, OmittedBytes: detail.ScreeningOmittedBytes}
-	screenAssessment, err := e.Store.ApplyRoundScreening(ctx, binding, screenInput, screening)
-	if err != nil {
-		code = "screening_apply_failed"
-		return
-	}
-	detail.Screened, detail.ScreeningInputSHA256, detail.ScreeningAssessmentID, detail.ScreeningStatus = true, screening.InputSHA256, screenAssessment.ID, screenAssessment.Status
+	detail.Screened, detail.ScreeningInputSHA256, detail.ScreeningAssessmentID, detail.ScreeningStatus = true, screenAssessment.InputSHA256, screenAssessment.ID, screenAssessment.Status
 	categorySet, err := e.Store.CurrentOrganisationCategories(ctx)
 	if err != nil || len(categorySet.Categories) == 0 {
 		code = "organisation_categories_unavailable"
@@ -606,26 +868,42 @@ func (e *Engine) run(ctx context.Context, initial store.Round) {
 	for _, span := range spans {
 		organisationInput.Facts = append(organisationInput.Facts, jev.OrganisationFact{ID: span.ID, SourceID: span.SourceID, SourceRevision: span.SourceRevision, SourceKind: "vacancy_snapshot", ObservedAt: span.ObservedAt, Excerpt: span.Excerpt})
 	}
-	organisationPrefix := "organise:" + chosen.IngestionID
-	organisation, err := e.Decisions.RunOrganisation(ctx, jevservice.Binding{Actor: owner, RoundID: r.ID, ResourceID: "campaign:active", RequestKeyPrefix: organisationPrefix, ProfileVersion: r.ProfileVersion}, organisationInput)
-	if err != nil {
-		code = terminalCode(err)
+	organisationPrefix := fmt.Sprintf("organise:%s:g%d", chosen.IngestionID, initial.Generation)
+	organisationAssessment, currentErr := e.Store.CurrentRoundJevAssessment(ctx, chosen.OpportunityID, "organisation")
+	if currentErr != nil && !errors.Is(currentErr, store.ErrNotFound) && !errors.Is(currentErr, store.ErrConflict) {
+		code = "organisation_current_unavailable"
 		return
 	}
-	organisationAttempts, err := e.Store.JevAttemptIDsForRequestPrefix(ctx, r.ID, organisationPrefix)
-	if err != nil {
-		code = "organisation_attempts_unavailable"
-		return
-	}
-	binding.JevAttemptIDs = organisationAttempts
-	organisationAssessment, err := e.Store.ApplyRoundOrganisation(ctx, binding, organisationInput, organisation)
-	if err != nil {
-		code = "organisation_apply_failed"
-		return
+	if currentErr != nil || organisationAssessment.RoundID != r.ID || organisationAssessment.SourceID != chosen.SourceID || organisationAssessment.SourceRevision != chosen.ContentSHA256 || organisationAssessment.OpportunityRevision != currentOpportunity.Revision || organisationAssessment.ProfileVersion != r.ProfileVersion || organisationAssessment.CategoryVersion != categorySet.Version {
+		organisation, organiseErr := e.Decisions.RunOrganisation(ctx, jevservice.Binding{Actor: owner, RoundID: r.ID, ResourceID: "campaign:active", RequestKeyPrefix: organisationPrefix, ProfileVersion: r.ProfileVersion}, organisationInput)
+		if organiseErr != nil {
+			code = terminalCode(organiseErr)
+			return
+		}
+		organisationAttempts, readErr := e.Store.JevAttemptIDsForRequestPrefix(ctx, r.ID, organisationPrefix)
+		if readErr != nil {
+			code = "organisation_attempts_unavailable"
+			return
+		}
+		binding.JevAttemptIDs = organisationAttempts
+		organisationAssessment, err = e.Store.ApplyRoundOrganisation(ctx, binding, organisationInput, organisation)
+		if err != nil {
+			code = "organisation_apply_failed"
+			return
+		}
 	}
 	detail.OrganisationAssessmentID, detail.OrganisationStatus = organisationAssessment.ID, organisationAssessment.Status
 	code = "sourced_opportunity_assessed"
-	partial = detail.ScreeningOmittedBytes > 0 || detail.UnreviewedCandidates > 0 || screenAssessment.Status != "proposed" || organisationAssessment.Status != "selected"
+	partial = detail.CollectorHasMore || detail.ScreeningOmittedBytes > 0 || detail.UnreviewedCandidates > 0 || screenAssessment.Status != "proposed" || organisationAssessment.Status != "selected"
+}
+
+func hasRoundResource(resources []string, target string) bool {
+	for _, resource := range resources {
+		if resource == target {
+			return true
+		}
+	}
+	return false
 }
 
 func prefixUTF8(value string, maximum int) string {
