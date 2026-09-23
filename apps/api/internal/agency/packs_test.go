@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/veighnsche/find-income-dashboard/api/internal/applicationpacks"
 	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
@@ -214,6 +215,39 @@ func TestPrepareCommissionStopsOnMissingSelectionAndOversizedRole(t *testing.T) 
 	_, err = buildPackTurnEvidence(store.Opportunity{ID: "large", Revision: 1, Title: "Role", SourceURL: "https://example.invalid", OriginalText: strings.Repeat("x", 30000)}, store.Company{Name: "Employer"}, store.Preferences{Version: 1}, sources)
 	if !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("oversized full role silently truncated: %v", err)
+	}
+}
+
+func TestPackCorrectionTurnEvidenceCarriesExactOwnerRequestAndPriorReview(t *testing.T) {
+	ctx := context.Background()
+	root, err := filepath.Abs("../../../../../")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sources, err := (LocalPackSources{ProjectRoot: root}).LoadPackSources(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	correction := &packCorrectionEvidence{PriorPackID: "pack-one", PriorVersion: 2,
+		PriorContentSHA256: strings.Repeat("a", 64), OwnerInstructionID: "owner-request-one", OwnerInstructionExpectedRevision: 2,
+		OwnerInstructionText: "Separate personal Go project work from paid employment.",
+		PriorDraft: applicationpacks.Draft{Focus: applicationpacks.Line{Text: "Earlier focus"},
+			Relevance: []applicationpacks.Relevance{{Requirement: "Go service", SourceID: "cv-vince-liem.md", Scope: "relevant", Confidence: 0.8, InputSHA256: strings.Repeat("b", 64), Model: "jev-fixture"}}},
+	}
+	text, err := buildPackTurnEvidence(store.Opportunity{ID: "role", Revision: 1, Title: "Platform Engineer", SourceURL: "https://example.invalid/role", OriginalText: "Build Go services."},
+		store.Company{Name: "Employer"}, store.Preferences{Version: 1}, sources, correction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var evidence packTurnEvidence
+	if err := json.Unmarshal([]byte(text), &evidence); err != nil {
+		t.Fatal(err)
+	}
+	if evidence.Correction == nil || evidence.Correction.OwnerInstructionID != correction.OwnerInstructionID ||
+		evidence.Correction.OwnerInstructionText != correction.OwnerInstructionText ||
+		evidence.Correction.PriorDraft.Focus.Text != correction.PriorDraft.Focus.Text ||
+		len(evidence.Correction.PriorDraft.Relevance) != 1 {
+		t.Fatalf("correction omitted from Codex evidence: %+v", evidence.Correction)
 	}
 }
 

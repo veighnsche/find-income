@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,6 +46,25 @@ func (e *Engine) launchPrepare(r store.Round) error {
 	if r.State != store.RoundRunning || r.Outcome != "prepare" {
 		return store.ErrInvalid
 	}
+	return e.launchPrepareWithCorrection(r, nil)
+}
+
+// LaunchPackCorrection is the process_input dispatch seam for one exact owner
+// instruction. The pack tool rechecks it before any guarded write.
+func (e *Engine) LaunchPackCorrection(r store.Round, priorPackID, instructionID string) error {
+	if r.State != store.RoundRunning || r.Outcome != "process_input" || priorPackID == "" || instructionID == "" ||
+		!slices.Contains(r.Scope.InputRefs, "instruction:"+instructionID) {
+		return store.ErrFenced
+	}
+	return e.launchPrepareWithCorrection(r, &packCorrectionTarget{PriorPackID: priorPackID, InstructionID: instructionID})
+}
+
+type packCorrectionTarget struct {
+	PriorPackID   string
+	InstructionID string
+}
+
+func (e *Engine) launchPrepareWithCorrection(r store.Round, correction *packCorrectionTarget) error {
 	if _, err := packOpportunityScope(r.Scope); err != nil {
 		return err
 	}
@@ -70,7 +90,7 @@ func (e *Engine) launchPrepare(r store.Round) error {
 	go func() {
 		defer cancel()
 		defer func() { e.mu.Lock(); delete(e.active, r.ID); e.mu.Unlock() }()
-		e.runPrepare(ctx, r)
+		e.runPrepareWithCorrection(ctx, r, correction)
 	}()
 	return nil
 }
@@ -90,15 +110,26 @@ type packSourceExcerpt struct {
 }
 
 type packTurnEvidence struct {
-	OpportunityID       string              `json:"opportunityId"`
-	OpportunityRevision int64               `json:"opportunityRevision"`
-	Title               string              `json:"title"`
-	Company             string              `json:"company"`
-	SourceURL           string              `json:"sourceUrl"`
-	OriginalText        string              `json:"originalText"` // Complete saved role text; no silent truncation.
-	ProfileRevision     int64               `json:"profileRevision"`
-	Preferences         packPreferences     `json:"preferences"`
-	CareerSources       []packSourceExcerpt `json:"careerSources"`
+	OpportunityID       string                  `json:"opportunityId"`
+	OpportunityRevision int64                   `json:"opportunityRevision"`
+	Title               string                  `json:"title"`
+	Company             string                  `json:"company"`
+	SourceURL           string                  `json:"sourceUrl"`
+	OriginalText        string                  `json:"originalText"` // Complete saved role text; no silent truncation.
+	ProfileRevision     int64                   `json:"profileRevision"`
+	Preferences         packPreferences         `json:"preferences"`
+	CareerSources       []packSourceExcerpt     `json:"careerSources"`
+	Correction          *packCorrectionEvidence `json:"correction,omitempty"`
+}
+
+type packCorrectionEvidence struct {
+	PriorPackID                      string                 `json:"priorPackId"`
+	PriorVersion                     int64                  `json:"priorVersion"`
+	PriorContentSHA256               string                 `json:"priorContentSha256"`
+	OwnerInstructionID               string                 `json:"ownerInstructionId"`
+	OwnerInstructionExpectedRevision int64                  `json:"ownerInstructionExpectedRevision"`
+	OwnerInstructionText             string                 `json:"ownerInstructionText"`
+	PriorDraft                       applicationpacks.Draft `json:"priorDraft"`
 }
 
 type packPreferences struct {
@@ -113,8 +144,11 @@ type packPreferences struct {
 
 // Only approved source excerpts enter the remote turn. Full source snapshots
 // stay local for the pack tool, and every omission is counted explicitly.
-func buildPackTurnEvidence(opportunity store.Opportunity, company store.Company, profile store.Preferences, sources []applicationpacks.Source) (string, error) {
+func buildPackTurnEvidence(opportunity store.Opportunity, company store.Company, profile store.Preferences, sources []applicationpacks.Source, correction ...*packCorrectionEvidence) (string, error) {
 	if opportunity.ID == "" || opportunity.Revision < 1 || opportunity.SourceURL == "" || strings.TrimSpace(opportunity.OriginalText) == "" || len(sources) < 3 {
+		return "", store.ErrInvalid
+	}
+	if len(correction) > 1 {
 		return "", store.ErrInvalid
 	}
 	evidence := packTurnEvidence{OpportunityID: opportunity.ID, OpportunityRevision: opportunity.Revision,
@@ -124,6 +158,9 @@ func buildPackTurnEvidence(opportunity store.Opportunity, company store.Company,
 			AllowHybrid: profile.AllowHybrid, TargetHoursHundredths: profile.TargetHoursHundredths,
 			MinMonthlyBaseCents: profile.MinMonthlyBaseCents, SalaryCurrency: profile.SalaryCurrency,
 			RoleCriteria: profile.RoleCriteria}}
+	if len(correction) == 1 {
+		evidence.Correction = correction[0]
+	}
 	for _, source := range sources {
 		limit := len(source.Body)
 		if source.ID == "github-evidence-review.md" && limit > 6500 {
@@ -168,6 +205,44 @@ func sourceBodyByID(sources []applicationpacks.Source, id string) string {
 	return ""
 }
 
+func (e *Engine) loadPackCorrection(ctx context.Context, round store.Round, target packCorrectionTarget,
+	opportunity store.Opportunity, company store.Company, profile store.Preferences, sources []applicationpacks.Source) (*packCorrectionEvidence, error) {
+	prior, err := e.Store.ApplicationPack(ctx, target.PriorPackID)
+	if err != nil {
+		return nil, err
+	}
+	if prior.OpportunityID != opportunity.ID || prior.OpportunityRevision != opportunity.Revision || prior.ProfileRevision != profile.Version {
+		return nil, store.ErrConflict
+	}
+	instruction, err := e.Store.OwnerInstruction(ctx, round.Actor, target.InstructionID)
+	if err != nil {
+		return nil, err
+	}
+	if instruction.TargetKind != "application_pack" || instruction.TargetID != prior.ID ||
+		instruction.ExpectedRevision != prior.Version || instruction.RevokedAt != "" ||
+		!slices.Contains(round.Scope.InputRefs, "instruction:"+instruction.ID) ||
+		(instruction.RoundID != "" && instruction.RoundID != round.ID) {
+		return nil, store.ErrFenced
+	}
+	var manifest struct {
+		Role    applicationpacks.Role     `json:"role"`
+		Sources []applicationpacks.Source `json:"sources"`
+		Draft   applicationpacks.Draft    `json:"draft"`
+	}
+	if err := json.Unmarshal(prior.ManifestJSON, &manifest); err != nil {
+		return nil, store.ErrInvalid
+	}
+	role := manifest.Role
+	if role.OpportunityID != opportunity.ID || role.OpportunityRevision != opportunity.Revision || role.ProfileRevision != profile.Version ||
+		role.Title != opportunity.Title || role.Company != company.Name || role.SourceURL != opportunity.SourceURL ||
+		role.Description != opportunity.OriginalText || !applicationpacks.SameApprovedSourceSnapshots(manifest.Sources, sources) {
+		return nil, store.ErrConflict
+	}
+	return &packCorrectionEvidence{PriorPackID: prior.ID, PriorVersion: prior.Version, PriorContentSHA256: prior.ContentSHA256,
+		OwnerInstructionID: instruction.ID, OwnerInstructionExpectedRevision: instruction.ExpectedRevision,
+		OwnerInstructionText: instruction.Text, PriorDraft: manifest.Draft}, nil
+}
+
 type packReport struct {
 	Code             string               `json:"code"`
 	OpportunityID    string               `json:"opportunityId,omitempty"`
@@ -199,6 +274,10 @@ func (e *Engine) finishPrepare(ctx context.Context, initial store.Round, detail 
 }
 
 func (e *Engine) runPrepare(ctx context.Context, initial store.Round) {
+	e.runPrepareWithCorrection(ctx, initial, nil)
+}
+
+func (e *Engine) runPrepareWithCorrection(ctx context.Context, initial store.Round, target *packCorrectionTarget) {
 	detail := packReport{Code: "pack_unavailable"}
 	partial := true
 	defer func() {
@@ -226,10 +305,12 @@ func (e *Engine) runPrepare(ctx context.Context, initial store.Round) {
 		detail.Code = "selected_role_decision_changed"
 		return
 	}
-	if found := e.findPackForRound(ctx, r.ID, opportunityID, opportunity.Revision); found.PackID != "" {
-		detail = found
-		partial = false
-		return
+	if target == nil {
+		if found := e.findPackForRound(ctx, r.ID, opportunityID, opportunity.Revision, nil); found.PackID != "" {
+			detail = found
+			partial = false
+			return
+		}
 	}
 	company, err := e.Store.Company(ctx, opportunity.CompanyID)
 	if err != nil {
@@ -246,7 +327,20 @@ func (e *Engine) runPrepare(ctx context.Context, initial store.Round) {
 		detail.Code = "approved_career_material_unavailable"
 		return
 	}
-	evidence, err := buildPackTurnEvidence(opportunity, company, profile, sources)
+	var correction *packCorrectionEvidence
+	if target != nil {
+		correction, err = e.loadPackCorrection(ctx, r, *target, opportunity, company, profile, sources)
+		if err != nil {
+			detail.Code = "pack_correction_fenced"
+			return
+		}
+		if found := e.findPackForRound(ctx, r.ID, opportunityID, opportunity.Revision, correction); found.PackID != "" {
+			detail = found
+			partial = false
+			return
+		}
+	}
+	evidence, err := buildPackTurnEvidence(opportunity, company, profile, sources, correction)
 	if err != nil {
 		detail.Code = "role_or_career_context_unbounded"
 		return
@@ -260,7 +354,12 @@ func (e *Engine) runPrepare(ctx context.Context, initial store.Round) {
 		return
 	}
 	brief := "Prepare one reviewable application pack for the selected saved opportunity. Use application_pack_prepare exactly once with this round capability and a fresh request key. The evidence includes the complete saved opening, current owner preferences, and approved career excerpts with exact source IDs/digests and omitted-byte counts. Quote one actual role requirement exactly from originalText and cite only exact career excerpts shown here. Distinguish dated employment from personal projects. Do not invent tenure, employment type, proficiency, deployment or current interests; follow current stated preferences instead of inferring a desired role from historic skills. Draft concise focus, cover and any supported answers. If the application destination or employer questions are absent, leave destination empty and record material unknowns; do not invent them. Do not send an application."
-	_, err = e.Runtime.ExecuteRoundTurn(ctx, store.Actor{Kind: "agent", ID: "codex-runner"}, r.ID, codexservice.RoundTurnInput{RequestKey: "prepare:" + opportunity.ID + ":" + fmt.Sprint(opportunity.Revision), ResourceID: "opportunity:" + opportunity.ID, Brief: brief, Evidence: evidence})
+	turnKey := "prepare:" + opportunity.ID + ":" + fmt.Sprint(opportunity.Revision)
+	if correction != nil {
+		brief = "Correct the one owner-selected prior application pack identified in correction, using the saved owner instruction as the requested change. Call application_pack_prepare with correction.priorPackId and correction.ownerInstructionId exactly as supplied. Revise the prior draft, but verify every factual statement against the current approved career excerpts and cite exact source text. Keep recorded Jev relevance visible for review and allow the pack tool to reassess the revised citations. Do not choose another pack, turn an opportunity-wide note into pack authority, invent experience, or send an application."
+		turnKey = "correct-pack:" + correction.PriorPackID + ":" + correction.OwnerInstructionID
+	}
+	_, err = e.Runtime.ExecuteRoundTurn(ctx, store.Actor{Kind: "agent", ID: "codex-runner"}, r.ID, codexservice.RoundTurnInput{RequestKey: turnKey, ResourceID: "opportunity:" + opportunity.ID, Brief: brief, Evidence: evidence})
 	if err != nil {
 		detail.Code = terminalCode(err)
 		return
@@ -278,7 +377,7 @@ func (e *Engine) runPrepare(ctx context.Context, initial store.Round) {
 		detail.Code = "selected_role_decision_changed"
 		return
 	}
-	if found := e.findPackForRound(ctx, r.ID, opportunityID, opportunity.Revision); found.PackID != "" {
+	if found := e.findPackForRound(ctx, r.ID, opportunityID, opportunity.Revision, correction); found.PackID != "" {
 		detail = found
 		partial = false
 		return
@@ -297,7 +396,7 @@ func (e *Engine) requireSelectedPackOpportunity(ctx context.Context, opportunity
 	return nil
 }
 
-func (e *Engine) findPackForRound(ctx context.Context, roundID, opportunityID string, revision int64) packReport {
+func (e *Engine) findPackForRound(ctx context.Context, roundID, opportunityID string, revision int64, correction *packCorrectionEvidence) packReport {
 	result := packReport{Code: "pack_unavailable", OpportunityID: opportunityID}
 	events, err := e.Store.RoundHistory(ctx, roundID)
 	if err != nil {
@@ -316,8 +415,14 @@ func (e *Engine) findPackForRound(ctx context.Context, roundID, opportunityID st
 			Draft struct {
 				MaterialUnknowns []string `json:"materialUnknowns"`
 			} `json:"draft"`
+			Correction *applicationpacks.Correction `json:"correction"`
 		}
 		if json.Unmarshal(pack.ManifestJSON, &manifest) != nil {
+			continue
+		}
+		if correction != nil && (manifest.Correction == nil || manifest.Correction.PriorPackID != correction.PriorPackID ||
+			manifest.Correction.PriorVersion != correction.PriorVersion || manifest.Correction.OwnerInstructionID != correction.OwnerInstructionID ||
+			manifest.Correction.OwnerInstructionExpectedRevision != correction.OwnerInstructionExpectedRevision) {
 			continue
 		}
 		return packReport{Code: "pack_ready", OpportunityID: opportunityID, PackID: pack.ID, Version: pack.Version, MaterialUnknowns: manifest.Draft.MaterialUnknowns}

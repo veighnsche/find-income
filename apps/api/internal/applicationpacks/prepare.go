@@ -79,13 +79,26 @@ type Draft struct {
 	Relevance        []Relevance `json:"relevance"`
 }
 
+// Correction records the owner-selected immutable pack and the exact saved
+// instruction that caused this new version. It never replaces prior bytes.
+type Correction struct {
+	PriorPackID                      string `json:"priorPackId"`
+	PriorVersion                     int64  `json:"priorVersion"`
+	PriorContentSHA256               string `json:"priorContentSha256"`
+	OwnerInstructionID               string `json:"ownerInstructionId"`
+	OwnerInstructionRequestKey       string `json:"ownerInstructionRequestKey"`
+	OwnerInstructionExpectedRevision int64  `json:"ownerInstructionExpectedRevision"`
+	OwnerInstructionText             string `json:"ownerInstructionText"`
+}
+
 type Input struct {
-	Role                     Role     `json:"role"`
-	Sources                  []Source `json:"sources"`
-	Draft                    Draft    `json:"draft"`
-	CVTemplate               []byte   `json:"-"`
-	TemplateSHA256           string   `json:"templateSha256"`
-	PreparationRequestSHA256 string   `json:"preparationRequestSha256,omitempty"`
+	Role                     Role        `json:"role"`
+	Sources                  []Source    `json:"sources"`
+	Draft                    Draft       `json:"draft"`
+	CVTemplate               []byte      `json:"-"`
+	TemplateSHA256           string      `json:"templateSha256"`
+	PreparationRequestSHA256 string      `json:"preparationRequestSha256,omitempty"`
+	Correction               *Correction `json:"correction,omitempty"`
 }
 
 type Prepared struct {
@@ -121,6 +134,15 @@ func validateLine(line Line, sources map[string]Source) error {
 }
 
 func validate(input Input) error {
+	if correction := input.Correction; correction != nil {
+		if !bounded(correction.PriorPackID, 100) || correction.PriorVersion < 1 ||
+			len(correction.PriorContentSHA256) != 64 || !isHexDigest(correction.PriorContentSHA256) ||
+			!bounded(correction.OwnerInstructionID, 100) || !bounded(correction.OwnerInstructionRequestKey, 200) ||
+			correction.OwnerInstructionExpectedRevision != correction.PriorVersion ||
+			!bounded(correction.OwnerInstructionText, 20000) {
+			return ErrInvalid
+		}
+	}
 	r := input.Role
 	if !bounded(r.OpportunityID, 100) || r.OpportunityRevision < 1 || r.ProfileRevision < 1 ||
 		!bounded(r.Title, 200) || !bounded(r.Company, 200) || !bounded(r.SourceURL, 2000) ||
@@ -201,6 +223,11 @@ func validate(input Input) error {
 		}
 	}
 	return nil
+}
+
+func isHexDigest(value string) bool {
+	_, err := hex.DecodeString(value)
+	return err == nil
 }
 
 // ValidateInput checks deterministic structure and exact citation excerpts

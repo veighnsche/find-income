@@ -134,6 +134,33 @@ func TestApplicationPackToolUsesRecordedJevAndGuardedMutation(t *testing.T) {
 	if _, err := s.applicationPackPrepareTool(ctx, changed); !errors.Is(err, store.ErrRoundIdempotencyConflict) || calls != 1 {
 		t.Fatalf("changed replay err=%v calls=%d", err, calls)
 	}
+	sources, template, err := applicationpacks.LoadApprovedCareerSources(root, []string{"cv-vince-liem.typ", "cv-vince-liem.md", "github-evidence-review.md"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.packCorrection(ctx, round, applicationPackCorrectionArgs{PriorPackID: "wrong-pack", OwnerInstructionID: "wrong-instruction"}, opportunity, company, profile, sources, template); !errors.Is(err, store.ErrFenced) {
+		t.Fatalf("wrong prior pack not fenced: %v", err)
+	}
+	wrongOpportunity := opportunity
+	wrongOpportunity.ID = "different-opportunity"
+	if _, err := s.packCorrection(ctx, round, applicationPackCorrectionArgs{PriorPackID: id, OwnerInstructionID: "wrong-instruction"}, wrongOpportunity, company, profile, sources, template); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("wrong opportunity not fenced: %v", err)
+	}
+	staleProfile := profile
+	staleProfile.Version++
+	if _, err := s.packCorrection(ctx, round, applicationPackCorrectionArgs{PriorPackID: id, OwnerInstructionID: "wrong-instruction"}, opportunity, company, staleProfile, sources, template); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("changed profile not fenced: %v", err)
+	}
+	if _, err := s.packCorrection(ctx, round, applicationPackCorrectionArgs{PriorPackID: id, OwnerInstructionID: "wrong-instruction"}, opportunity, company, profile, sources, template); !errors.Is(err, store.ErrFenced) {
+		t.Fatalf("wrong instruction not fenced: %v", err)
+	}
+	wrongKind, _, err := db.AddOwnerInstruction(ctx, owner, store.OwnerInstructionInput{RequestKey: "wrong-pack-kind", TargetKind: "opportunity", TargetID: opportunity.ID, ExpectedRevision: opportunity.Revision, Text: "Correct the selected opportunity."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.packCorrection(ctx, round, applicationPackCorrectionArgs{PriorPackID: id, OwnerInstructionID: wrongKind.ID}, opportunity, company, profile, sources, template); !errors.Is(err, store.ErrFenced) {
+		t.Fatalf("opportunity-wide instruction authorised pack correction: %v", err)
+	}
 }
 
 func TestApplicationPackExpiredBeforePreparation(t *testing.T) {

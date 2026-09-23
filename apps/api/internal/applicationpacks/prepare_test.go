@@ -1,6 +1,7 @@
 package applicationpacks
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,6 +34,41 @@ func fixture(t *testing.T) Input {
 			Answers:          []Answer{{Question: "What systems experience is relevant?", Lines: []Line{{Text: "My personal SodaOS project uses a Go environment and access API.", Citations: []Citation{{SourceID: "github-evidence-review.md", Excerpt: "The project adds a Go environment/access service, OAuth and SQLite-backed state."}}}}}},
 			MaterialUnknowns: []string{"Actual application destination and required employer questions are unknown in this fixture."},
 		},
+	}
+}
+
+func TestCorrectedPackPreservesPriorBytesAndRecordsOwnerInstruction(t *testing.T) {
+	typst, err := exec.LookPath("typst")
+	if err != nil {
+		t.Skip("Typst not installed")
+	}
+	renderer := Renderer{TypstPath: typst, PrivateTempDir: t.TempDir(), Timeout: 10 * time.Second}
+	priorInput := fixture(t)
+	prior, err := renderer.Prepare(context.Background(), priorInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldManifest, oldPDF, oldSource, oldHash := bytes.Clone(prior.ManifestJSON), bytes.Clone(prior.PDF), bytes.Clone(prior.TypstSource), prior.SHA256
+	corrected := fixture(t)
+	corrected.Draft.Focus.Text = "Corrected focus on cited personal Go service projects."
+	corrected.Correction = &Correction{PriorPackID: "prior-pack", PriorVersion: 1, PriorContentSHA256: oldHash,
+		OwnerInstructionID: "owner-instruction", OwnerInstructionRequestKey: "correct-focus", OwnerInstructionExpectedRevision: 1,
+		OwnerInstructionText: "Please distinguish my personal project work from paid employment in the focus."}
+	next, err := renderer.Prepare(context.Background(), corrected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.SHA256 == oldHash || !bytes.Equal(prior.ManifestJSON, oldManifest) || !bytes.Equal(prior.PDF, oldPDF) || !bytes.Equal(prior.TypstSource, oldSource) {
+		t.Fatal("corrected preparation altered prior material or retained its digest")
+	}
+	var captured Input
+	if err := json.Unmarshal(next.ManifestJSON, &captured); err != nil || captured.Correction == nil ||
+		*captured.Correction != *corrected.Correction || captured.Draft.Focus.Text != corrected.Draft.Focus.Text {
+		t.Fatalf("correction provenance missing: %+v %v", captured.Correction, err)
+	}
+	corrected.Correction.OwnerInstructionExpectedRevision = 2
+	if !errors.Is(ValidateInput(corrected), ErrInvalid) {
+		t.Fatal("instruction revision different from prior pack version accepted")
 	}
 }
 

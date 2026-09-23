@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,22 +28,31 @@ type ApplicationPackRuntimeConfig struct {
 }
 
 type applicationPackPrepareArgs struct {
-	RoundID          string                    `json:"roundId"`
-	Capability       string                    `json:"capability"`
-	RequestKey       string                    `json:"requestKey"`
-	OpportunityID    string                    `json:"opportunityId"`
-	Destination      string                    `json:"destination,omitempty"`
-	RequirementQuote string                    `json:"requirementQuote"`
-	SourceNames      []string                  `json:"sourceNames,omitempty"`
-	Focus            applicationpacks.Line     `json:"focus"`
-	Cover            []applicationpacks.Line   `json:"cover"`
-	Answers          []applicationpacks.Answer `json:"answers,omitempty"`
-	MaterialUnknowns []string                  `json:"materialUnknowns,omitempty"`
+	RoundID          string                         `json:"roundId"`
+	Capability       string                         `json:"capability"`
+	RequestKey       string                         `json:"requestKey"`
+	OpportunityID    string                         `json:"opportunityId"`
+	Destination      string                         `json:"destination,omitempty"`
+	RequirementQuote string                         `json:"requirementQuote"`
+	SourceNames      []string                       `json:"sourceNames,omitempty"`
+	Focus            applicationpacks.Line          `json:"focus"`
+	Cover            []applicationpacks.Line        `json:"cover"`
+	Answers          []applicationpacks.Answer      `json:"answers,omitempty"`
+	MaterialUnknowns []string                       `json:"materialUnknowns,omitempty"`
+	Correction       *applicationPackCorrectionArgs `json:"correction,omitempty"`
+}
+
+type applicationPackCorrectionArgs struct {
+	PriorPackID        string `json:"priorPackId"`
+	OwnerInstructionID string `json:"ownerInstructionId"`
 }
 
 func (s *Service) applicationPackPrepareTool(ctx context.Context, args applicationPackPrepareArgs) (map[string]any, error) {
 	if args.RoundID == "" || args.Capability == "" || len(args.RequestKey) < 1 || len(args.RequestKey) > 100 ||
 		args.OpportunityID == "" || len(args.RequirementQuote) < 8 || len(args.RequirementQuote) > 1000 {
+		return nil, store.ErrInvalid
+	}
+	if args.Correction != nil && (args.Correction.PriorPackID == "" || args.Correction.OwnerInstructionID == "") {
 		return nil, store.ErrInvalid
 	}
 	authority, err := s.db.VerifyRoundToolCapability(ctx, args.Capability, args.RoundID)
@@ -137,6 +147,13 @@ func (s *Service) applicationPackPrepareTool(ctx context.Context, args applicati
 	if err != nil {
 		return nil, err
 	}
+	var correction *applicationpacks.Correction
+	if args.Correction != nil {
+		correction, err = s.packCorrection(ctx, round, *args.Correction, opportunity, company, profile, sources, template)
+		if err != nil {
+			return nil, err
+		}
+	}
 	byID := make(map[string]applicationpacks.Source, len(sources))
 	for _, source := range sources {
 		byID[source.ID] = source
@@ -151,7 +168,7 @@ func (s *Service) applicationPackPrepareTool(ctx context.Context, args applicati
 	input := applicationpacks.Input{Role: applicationpacks.Role{OpportunityID: opportunity.ID,
 		OpportunityRevision: opportunity.Revision, ProfileRevision: profile.Version, Title: opportunity.Title,
 		Company: company.Name, SourceURL: opportunity.SourceURL, Description: opportunity.OriginalText,
-		Destination: args.Destination}, Sources: sources, Draft: draft, CVTemplate: template, TemplateSHA256: fmt.Sprintf("%x", sha256.Sum256(template)), PreparationRequestSHA256: requestSHA}
+		Destination: args.Destination}, Sources: sources, Draft: draft, CVTemplate: template, TemplateSHA256: fmt.Sprintf("%x", sha256.Sum256(template)), PreparationRequestSHA256: requestSHA, Correction: correction}
 	if err := applicationpacks.ValidateInput(input); err != nil {
 		return nil, err
 	}
@@ -212,11 +229,23 @@ func (s *Service) applicationPackPrepareTool(ctx context.Context, args applicati
 	if err := s.requireCurrentPackRound(ctx, round, args.OpportunityID, opportunity.Revision); err != nil {
 		return nil, err
 	}
+	if args.Correction != nil {
+		currentCorrection, err := s.packCorrection(ctx, round, *args.Correction, opportunity, company, profile, sources, template)
+		if err != nil {
+			return nil, err
+		}
+		if *currentCorrection != *correction {
+			return nil, store.ErrConflict
+		}
+	}
 	mutation := store.RoundMutationInput{RequestKey: args.RequestKey + "/pack", Operation: store.RoundPrepareApplicationPack,
 		ResourceID: "opportunity:" + args.OpportunityID, ExpectedRevision: opportunity.Revision, Capability: args.Capability,
 		ApplicationPack: &store.ApplicationPackMutationInput{OpportunityID: args.OpportunityID,
 			ExpectedOpportunityRevision: opportunity.Revision, ExpectedProfileRevision: profile.Version,
 			ContentSHA256: prepared.SHA256, ManifestJSON: prepared.ManifestJSON, TypstSource: prepared.TypstSource, PDF: prepared.PDF}}
+	if correction != nil {
+		mutation.OwnerInstructionID = correction.OwnerInstructionID
+	}
 	result, created, err := s.db.ApplyRoundMutation(ctx, authority.Actor, args.RoundID, mutation)
 	if err != nil {
 		return nil, err
@@ -224,6 +253,56 @@ func (s *Service) applicationPackPrepareTool(ctx context.Context, args applicati
 	return map[string]any{"packId": result.EntityID, "version": result.Revision, "created": created,
 		"contentSha256": prepared.SHA256, "materialUnknowns": draft.MaterialUnknowns,
 		"relevanceCount": len(draft.Relevance)}, nil
+}
+
+// packCorrection ties an agent's draft to one saved owner instruction and one
+// prior immutable version. The store repeats the authority check at commit.
+func (s *Service) packCorrection(ctx context.Context, round store.Round, args applicationPackCorrectionArgs,
+	opportunity store.Opportunity, company store.Company, profile store.Preferences, sources []applicationpacks.Source, template []byte) (*applicationpacks.Correction, error) {
+	if len(args.PriorPackID) > 100 || len(args.OwnerInstructionID) > 100 {
+		return nil, store.ErrInvalid
+	}
+	prior, err := s.db.ApplicationPack(ctx, args.PriorPackID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, store.ErrFenced
+		}
+		return nil, err
+	}
+	if prior.OpportunityID != opportunity.ID || prior.OpportunityRevision != opportunity.Revision || prior.ProfileRevision != profile.Version {
+		return nil, store.ErrConflict
+	}
+	instruction, err := s.db.OwnerInstruction(ctx, round.Actor, args.OwnerInstructionID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, store.ErrFenced
+		}
+		return nil, err
+	}
+	if instruction.TargetKind != "application_pack" || instruction.TargetID != prior.ID ||
+		instruction.ExpectedRevision != prior.Version || instruction.ActorID != round.Actor.ID || instruction.RevokedAt != "" ||
+		!scopeContains(round.Scope.InputRefs, "instruction:"+instruction.ID) ||
+		(instruction.RoundID != "" && instruction.RoundID != round.ID) {
+		return nil, store.ErrFenced
+	}
+	var manifest struct {
+		Role           applicationpacks.Role     `json:"role"`
+		Sources        []applicationpacks.Source `json:"sources"`
+		TemplateSHA256 string                    `json:"templateSha256"`
+	}
+	if err := json.Unmarshal(prior.ManifestJSON, &manifest); err != nil {
+		return nil, store.ErrInvalid
+	}
+	role := manifest.Role
+	if role.OpportunityID != opportunity.ID || role.OpportunityRevision != opportunity.Revision || role.ProfileRevision != profile.Version ||
+		role.Title != opportunity.Title || role.Company != company.Name || role.SourceURL != opportunity.SourceURL ||
+		role.Description != opportunity.OriginalText || manifest.TemplateSHA256 != fmt.Sprintf("%x", sha256.Sum256(template)) ||
+		!applicationpacks.SameApprovedSourceSnapshots(manifest.Sources, sources) {
+		return nil, store.ErrConflict
+	}
+	return &applicationpacks.Correction{PriorPackID: prior.ID, PriorVersion: prior.Version, PriorContentSHA256: prior.ContentSHA256,
+		OwnerInstructionID: instruction.ID, OwnerInstructionRequestKey: instruction.RequestKey,
+		OwnerInstructionExpectedRevision: instruction.ExpectedRevision, OwnerInstructionText: instruction.Text}, nil
 }
 
 func (s *Service) requireCurrentPackRound(ctx context.Context, initial store.Round, opportunityID string, revision int64) error {

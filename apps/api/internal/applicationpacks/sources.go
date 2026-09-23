@@ -46,3 +46,26 @@ func LoadApprovedCareerSources(projectRoot string, names []string) ([]Source, []
 	}
 	return sources, template, nil
 }
+
+// SameApprovedSourceSnapshots fences a correction when its prior pack and the
+// newly loaded approved career material do not have the same source digests.
+func SameApprovedSourceSnapshots(prior, current []Source) bool {
+	if len(prior) == 0 || len(prior) != len(current) {
+		return false
+	}
+	byID := make(map[string]Source, len(current))
+	for _, source := range current {
+		if !source.Approved || source.ID == "" || source.Name == "" || len(source.SHA256) != 64 || byID[source.ID].ID != "" {
+			return false
+		}
+		byID[source.ID] = source
+	}
+	for _, source := range prior {
+		match, ok := byID[source.ID]
+		if !ok || !source.Approved || source.Name != match.Name || source.SHA256 != match.SHA256 {
+			return false
+		}
+		delete(byID, source.ID)
+	}
+	return len(byID) == 0
+}
