@@ -2,7 +2,7 @@
 
 Updated 24 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. Current ownership, reviewed checkpoints and remaining acceptance are recorded below; historical test passes do not establish completion of the evolving worktree.
 
-**Current position: 5 tasks accepted, 17 partial, 5 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20–I22, I24–I26. I24 and I25 backend slices are active. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 17 partial, 5 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20–I22, I24–I26. I24 recovery correction and I25 backend review are active. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -30,12 +30,12 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I24 interview backend | Sol High | Isolated61a5d0b frozen for recovery authority review; no main or web edits. |
-| I24 recovery review | Astra High | Read-only review and three fresh technical Jev consultations on local result recovery versus unknown remote turn status. |
-| I24 interview UI | Sol Medium | Main web/smoke only; consumes stable c55f562 generated contract, one complete invitation/context input and one debrief input, preserved round/retry controls. |
-| I25 offer backend | Sol High | Isolated checkout `/private/tmp/find-income-i25-backend` at f1533a8; complete supplied offer extraction, exact comparison, charged Jev tradeoff and persistence/API; no main or web edits. |
+| I24 interview backend | Sol High | Correct isolated61a5d0b recovery phase ordering after reproduced P1/P2 findings; no main or web edits. |
+| I25 backend review | Astra Medium | Read-only review of frozen2209289: owner/source authority, exact arithmetic, bounded execution and per-attempt recovery. |
+| I25 offer UI | Sol Medium | Main web/smoke only, using interface867f480; complete offer input, sourced comparisons and finite round controls. I24 UI committed54b7977. |
+| I25 offer backend | Sol High | Frozen isolated2209289; implementer idle during independent review; no main or web edits. |
 
-The main backend checkpoint is **d9679af**, and the web checkpoint is **235441d**. The coordinator ran the full Go suite, both generated-contract checks, web lint/TypeScript and production-build Chromium smoke. Independent I22 recheck closed all three delivery findings; all13 reviewed file hashes matched before commit. Root reproduced and rechecked the omitted preexisting dismissal defect. Saved recommendations are now recoverable in a fresh browser through a pure latest-completed read. These are local/synthetic checks, not live recruitment acceptance. Core is idle; interview recovery review, interview UI corrections and isolated offer backend are active. The isolated interview backend is frozen pending review. Interview contract c55f562 is a shared interface checkpoint only: it compiles and both generated checks pass, but main interview routes are not wired until reviewed backend integration.
+The main backend checkpoint is **d9679af**, and the web checkpoint is **235441d**. The coordinator ran the full Go suite, both generated-contract checks, web lint/TypeScript and production-build Chromium smoke. Independent I22 recheck closed all three delivery findings; all13 reviewed file hashes matched before commit. Root reproduced and rechecked the omitted preexisting dismissal defect. Saved recommendations are now recoverable in a fresh browser through a pure latest-completed read. These are local/synthetic checks, not live recruitment acceptance. Core is idle. Interview recovery correction runs concurrently with independent offer backend review and contextual offer UI. The interview review reproduced two authority defects; three fresh Jev consultations used6905 reported tokens and disagreed. The correction follows the code reproduction. Interview UI corrections pass root lint/TypeScript and production-build Chromium fixtures; backend integration remains pending. Offer contract867f480 is also interface-only and passes both generated checks and HTTP compile; main offer routes await reviewed integration. Interview contract c55f562 is a shared interface checkpoint only: it compiles and both generated checks pass, but main interview routes are not wired until reviewed backend integration.
 
 Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; contextual input and shared pack transaction integration committed2279c3f after independent correction review, full Go suite and race-enabled recovery tests. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. Contextual-input UI is committed12b138d after root lint/TypeScript and production-build browser checks; real runtime acceptance remains open. The web recommendation and delivery controls are committed235441d; interview helpers are committed7299c54 after root review/tests, and the I25 offer helpers are reviewed and committed in de84e23; both domain slices still need commissioned persistence/UI integration. Four live workers maximum.
 
@@ -456,7 +456,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I15, I18.
 
-**Remaining work:** Finish commissioned backend integration in /private/tmp/find-income-i24-backend at base b4f1080; review and integrate its isolated commit after main delivery stabilises. Then add concise contextual UI and verify real quality cases.
+**Remaining work:** Correct the independently reproduced parent-turn recovery bypass in isolated backend61a5d0b, recheck and integrate it with main delivery recovery. Main contextual UI corrections pass root lint/TypeScript and Chromium fixtures; UI committed54b7977, verify combined routes, then evaluate real interview quality.
 
 **Task scope:** Implement one-interview preparation using employer/context evidence and truthful examples, plus contextual debrief capture. Accept owner-supplied complete interview context without requiring inbox or calendar integration.
 
@@ -468,7 +468,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I01, I09, I18.
 
-**Remaining work:** Finish commissioned offer backend in /private/tmp/find-income-i25-backend at f1533a8, review and integrate its isolated commit, then add concise contextual UI and actual offer-case evaluation. Domain helpers alone are not full I25 acceptance.
+**Remaining work:** Independently review frozen commissioned backend2209289 in /private/tmp/find-income-i25-backend, correct findings and integrate shared recovery/schema/contracts directly. Add concise whole-offer contextual UI and evaluate actual offer cases; synthetic execution does not complete I25.
 
 **Task scope:** Implement sourced offer intake/comparison, Go exact comparable amounts and Jev qualitative tradeoffs with separate real-case evaluation. Accept complete supplied offers as well as later inbox-derived evidence; no inbox dependency.
 
