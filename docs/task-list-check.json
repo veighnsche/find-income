@@ -5,7 +5,12 @@
   "checklist_matches_graph": true,
   "models_valid": true,
   "unnecessary_milestone_gates_absent": true,
-  "dispatched": [],
+  "dispatched": [
+    "I05-A",
+    "I06-A",
+    "I07-A",
+    "I10-A"
+  ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",
     "I02 prerequisite inventory only",
@@ -36,5 +41,6 @@
     "I06-A",
     "I07-A",
     "I10-A"
-  ]
+  ],
+  "goal_status": "active"
 }

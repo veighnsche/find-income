@@ -1,6 +1,6 @@
 # Recruitment agency — full task list and concurrent execution guide
 
-Updated 23 September 2026 after the reviewed core, runtime, collector, Jev and web slices. This is the complete I01–I27 task list for the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md). It describes the next implementation run; writing this document does not start workers. All previous workers have stopped at their handoffs. The reviewed code checkpoint is `5e93c0d`.
+Updated 23 September 2026 after the reviewed core, runtime, collector, Jev and web slices. This is the complete I01–I27 task list for the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md). The owner has created an active goal to complete the entire list. I05-A, I06-A, I07-A and I10-A are now dispatched concurrently to the four existing live tasks on Sol High. Accepted slices remain accepted; the current assignments implement their remaining integration. The reviewed code checkpoint is `5e93c0d`.
 
 **Current position: 5 tasks accepted, 5 partially implemented, 17 not started or conditional.** Accepted: I01, I02, I03, I04, I09. Partial: I05, I06, I07, I10, I11. I17 is conditional. These counts describe task acceptance, not percentage of product completion.
 
@@ -26,7 +26,7 @@ Use **one coordinator plus up to four independent live implementation tasks**. F
 
 Dependencies in the task index gate **full integration and acceptance**. They do not prohibit an explicitly named independent slice from coding against an agreed narrow interface. A worker must have useful owned code to change, not an instruction to wait and repeatedly check another task. When a worker finishes, review its result and immediately dispatch the next ready slice; do not wait for an entire batch to finish.
 
-### Next launch: four concrete independent assignments
+### Current launch: four concrete independent assignments
 
 These slice labels divide existing tasks; they do not create additional product acceptance checkboxes.
 

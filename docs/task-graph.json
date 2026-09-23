@@ -79,11 +79,14 @@
       "scope": "Integrate round capabilities with existing authenticated domain operations, worker claims and MCP. Own OpenAPI/generated contracts and HTTP round controls for this handoff. Distinguish inert external intake, direct owner decisions and delegated mutations; permit only explicitly scoped preference corrections.",
       "acceptance": "Cookie/agent/MCP/internal paths cannot bypass actor, resource, operation, revision or allowance checks. Stale tools cannot mutate after Stop. Page load/login/timers/reconnect claim no recruitment. Publish stable DTO/tool boundaries for runtime, collector and web before their integration.",
       "selection_reason": "Authority spans transports and workers, making Sol High appropriate. Do not fork separate business logic per adapter.",
-      "status": "authority_slice_accepted",
+      "status": "integration_slice_dispatched",
       "thread_id": "01a0cf13-2c03-73f2-b074-6c73d7120ebe",
       "host_id": "local",
       "review": "Supported mutation/MCP/remote-dispatch and collector staging code reviewed; final-page draining and completed-source transition corrections accepted. Scoped owner correction and remaining domain integration keep full I05 open.",
-      "remaining_work": "Implement scoped owner instructions and delegated preference/evidence updates, direct select/dismiss/acknowledge decisions, typed result/history reads, and the remaining shared domain boundaries needed by discovery and correction. Publish contracts early. Bind implemented services through the one round authority with I06/I07/I10; remove superseded standalone write paths when replacing them. Company/opportunity creation, scoped MCP, dispatch evidence and collector staging are already accepted."
+      "remaining_work": "Implement scoped owner instructions and delegated preference/evidence updates, direct select/dismiss/acknowledge decisions, typed result/history reads, and the remaining shared domain boundaries needed by discovery and correction. Publish contracts early. Bind implemented services through the one round authority with I06/I07/I10; remove superseded standalone write paths when replacing them. Company/opportunity creation, scoped MCP, dispatch evidence and collector staging are already accepted.",
+      "active_slice": "I05-A as defined in implementation-tasks.md",
+      "active_model": "gpt-6-sol",
+      "active_effort": "high"
     },
     {
       "id": "I06",
@@ -98,10 +101,10 @@
       "scope": "Reconcile existing lifecycle/readiness drafts. Implement generation-bound login/disconnect, uncertain dispatch reconciliation, scoped app tools and bounded research access. Keep server credentials outside the runner and no paid API fallback. Own internal/codex*, excluding shared startup and store/schema files unless handed over.",
       "acceptance": "Focused protocol/service/runner tests cover late login, quota/readiness gaps, interruption, remote uncertainty and retries without clearing dispatch identity. Show how tool requests\u2014not just turns\u2014consume the round allowance. Fake checks do not count as real login or host containment.",
       "selection_reason": "Uncertain remote lifecycle and cross-file tool integration need Sol High; do not spend Astra on routine implementation.",
-      "status": "execution_slice_accepted",
+      "status": "integration_slice_dispatched",
       "thread_id": "01a0ce8e-4c6e-7c93-b63c-1084063ba7c0",
       "host_id": "local",
-      "active_slice": "No active assignment; callable integration, bounded research and live prerequisites remain.",
+      "active_slice": "I06-A as defined in implementation-tasks.md",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
       "authorization": "Owner directly authorised implementation in runtime task; worker resumed.",
@@ -120,12 +123,12 @@
       "scope": "Reuse source-identity drafts; adapt Lever to commissioned batches with page/intra-page continuation, stable opening/sighting identity, source snapshots, unchanged-input reuse and changed-role refresh. Own internal/collector and ingestion identity files only after explicit store/schema handoff.",
       "acceptance": "Unchanged sources skip extraction; changed same-ID content updates one role with evidence history. Source failures do not close roles, uncertain matches are not silently merged, oversized pages respect item allowance, and due times never dispatch work. Run focused collector/store boundary checks.",
       "selection_reason": "Existing identity and runtime coupling justify Sol High; no general crawler or extra connector is required here.",
-      "status": "independent_slice_accepted",
+      "status": "integration_slice_dispatched",
       "thread_id": "01a0ce8e-2459-78d0-9843-ac474acffe5f",
       "host_id": "local",
-      "active_slice": "Bounded collector acquisition with fake transport, no store writes; final authority/identity integration waits for I05",
+      "active_slice": "I07-A as defined in implementation-tasks.md",
       "active_model": "gpt-6-sol",
-      "active_effort": "medium",
+      "active_effort": "high",
       "review": "Collector acquisition accepted after exact-byte roundtrip correction. Full round/identity/persistence integration pending I05.",
       "remaining_work": "Connect acquisition and staged batches to source identity, snapshots, unchanged-input reuse and changed-opening refresh. Publish results into the shared authorized domain path and persist continuation across commissioned rounds. The bounded Lever adapter and exact-byte final-page/source-switch staging already exist; do not rebuild them."
     },
@@ -176,12 +179,12 @@
       "scope": "Integrate durable assessments and bounded candidate selection with the controller and acquisition services. Include organisation, factual scope, lead/research priority and next useful implemented outcome. Persist full request/response, versions, options, source support and usage; treat facts and require/avoid/prefer policy separately.",
       "acceptance": "Integration fakes show Jev choices affect selected work while Go enforces scope/arithmetic. No keyword ranking or hidden Codex-only fallback; stale or invalid results stay unresolved. Candidate omission, long text and conflicts are observable. Display saved next-action advice while idle; no planning-only commission.",
       "selection_reason": "Semantic contracts, persistence and orchestration cross packages; use Sol High on this integration rather than on evidence copying.",
-      "status": "independent_slice_accepted",
+      "status": "integration_slice_dispatched",
       "thread_id": "01a0ce8e-5f14-76f0-b700-ab7a67a8f7a0",
       "host_id": "local",
-      "active_slice": "Supplied-candidate source/research/next-outcome Jev helpers only; no durable integration",
+      "active_slice": "I10-A as defined in implementation-tasks.md",
       "active_model": "gpt-6-sol",
-      "active_effort": "medium",
+      "active_effort": "high",
       "review": "Typed candidate helpers accepted against fake checks. Full durable orchestration, failed-attempt capture and real quality pending dependencies.",
       "remaining_work": "Persist full requests, exact responses, candidate/source references, versions and usage for successful AND invalid/failed/over-budget attempts. Wire source selection, factual assessment, organisation, research priority, shortlist and next-outcome advice into actual bounded execution. Existing factual and candidate-choice helpers are accepted; ensure large text and missing support remain visible."
     },
@@ -507,6 +510,8 @@
     }
   ],
   "max_concurrent_live_workers": 4,
-  "dispatch_status": "proposed_only_no_workers_started",
-  "code_checkpoint": "5e93c0d0282ff36d55485ebf664c805c7e84de9b"
+  "dispatch_status": "active_goal_four_live_workers",
+  "code_checkpoint": "5e93c0d0282ff36d55485ebf664c805c7e84de9b",
+  "goal_status": "active",
+  "goal_objective": "Complete all I01\u2013I27 task acceptance using concurrent live tasks, reviewed coherent commits and actual live acceptance where required."
 }
