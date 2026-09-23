@@ -191,9 +191,15 @@ func TestTimeoutCancellationAndLateReply(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a := callAsync(func() error { _, err := c.ReadAccount(ctx); return err })
 	r := p.read(t)
-	// Ensure the writer acknowledgement has completed before cancellation.
-	p.write(t, `{"method":"account/updated","params":{"authMode":null}}`)
-	event(t, c)
+	// Reading a subsequent outgoing frame proves the serial writer has sent
+	// the first acknowledgement. An incoming notification only synchronizes
+	// the independent reader and cannot serve as this barrier.
+	barrier := callAsync(func() error { return c.Logout(context.Background()) })
+	br := p.read(t)
+	p.result(t, br, `{}`)
+	if err := receive(t, barrier); err != nil {
+		t.Fatal(err)
+	}
 	cancel()
 	if err := receive(t, a); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
@@ -214,14 +220,38 @@ func TestTimeoutCancellationAndLateReply(t *testing.T) {
 	}
 }
 
+func TestAcknowledgedWriteWinsConcurrentCancellation(t *testing.T) {
+	c, _ := setup(t, Options{})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// Both select cases are ready: the completed write must always win, even
+	// if cancellation is the branch initially selected by the scheduler.
+	for range 100 {
+		ack := make(chan error, 1)
+		ack <- nil
+		if err := c.awaitWrite(ctx, ack); err != nil {
+			t.Fatal(err)
+		}
+		if c.Err() != nil {
+			t.Fatalf("acknowledged write closed connection: %v", c.Err())
+		}
+	}
+}
+
 func TestCancellationDuringBlockedWriteClosesTransport(t *testing.T) {
 	c, p := setup(t, Options{})
 	initialize(t, c, p)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ch := callAsync(func() error { _, err := c.ReadAccount(ctx); return err })
-	// Peer deliberately does not read the next frame.
-	if err := receive(t, ch); !errors.Is(err, context.DeadlineExceeded) {
+	// Reading only one byte proves Write has started and cannot have completed:
+	// net.Pipe blocks the writer until the peer consumes the rest of the frame.
+	p.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if _, err := p.Conn.Read(make([]byte, 1)); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	if err := receive(t, ch); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	waitFailed(t, c, ErrUnavailable)

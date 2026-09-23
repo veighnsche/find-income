@@ -202,12 +202,23 @@ func (c *Client) send(ctx context.Context, message any, token *RequestToken) err
 	default:
 		return ErrBackpressure
 	}
+	return c.awaitWrite(ctx, job.ack)
+}
+
+func (c *Client) awaitWrite(ctx context.Context, ack <-chan error) error {
 	select {
-	case err := <-job.ack:
+	case err := <-ack:
 		return err
 	case <-c.done:
 		return c.Err()
 	case <-ctx.Done():
+		// select may choose cancellation even when the writer has already
+		// acknowledged a complete frame. That outcome is no longer uncertain.
+		select {
+		case err := <-ack:
+			return err
+		default:
+		}
 		// A partially written frame cannot safely be retried or followed by another
 		// request. Close the connection; the supervisor must reconcile outcomes.
 		c.fail(ErrUnavailable)
