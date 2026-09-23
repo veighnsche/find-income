@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/veighnsche/find-income-dashboard/api/internal/applicationpacks"
 	"github.com/veighnsche/find-income-dashboard/api/internal/fit"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 )
@@ -16,26 +15,26 @@ func cents(value int64) *int64 { return &value }
 func offerFixture() Input {
 	first := "Fixture A offers EUR 4,800 gross base monthly for 32 hours weekly, excluding holiday pay. The role is remote and includes a learning budget."
 	second := "Fixture B offers EUR 5,000 gross base monthly for 40 hours weekly, excluding holiday pay. The role is hybrid and includes a pension contribution."
-	quote := func(id, excerpt string) *applicationpacks.Citation {
-		return &applicationpacks.Citation{SourceID: id, Excerpt: excerpt}
+	quote := func(id, excerpt string) *Citation {
+		return &Citation{SourceID: id, Excerpt: excerpt}
 	}
 	return Input{Sources: []Source{
 		{ID: "offer-a-text", OfferID: "offer-a", Kind: "owner_paste", Revision: "paste-1", SHA256: digest(first), Body: first},
 		{ID: "offer-b-text", OfferID: "offer-b", Kind: "owner_paste", Revision: "paste-2", SHA256: digest(second), Body: second},
 	}, Offers: []Offer{
-		{ID: "offer-a", Employer: "Fixture A", Engagement: "employment",
+		{ID: "offer-a", Employer: "Fixture A", EmployerCitation: quote("offer-a-text", "Fixture A offers"), Engagement: "employment", EngagementCitation: quote("offer-a-text", "gross base monthly"),
 			Pay:         PayTerm{AmountKind: "exact", MinCents: cents(480000), Currency: "EUR", Period: fit.Monthly, Basis: fit.Base, Citation: quote("offer-a-text", "EUR 4,800 gross base monthly")},
 			Hours:       HoursTerm{WeeklyHundredths: cents(3200), Citation: quote("offer-a-text", "32 hours weekly")},
 			Holiday:     HolidayTerm{Treatment: "excluded", Citation: quote("offer-a-text", "excluding holiday pay")},
-			Benefits:    []CitedText{{Text: "Learning budget is reported.", Citations: []applicationpacks.Citation{*quote("offer-a-text", "learning budget")}}},
-			Arrangement: []CitedText{{Text: "Remote work is reported.", Citations: []applicationpacks.Citation{*quote("offer-a-text", "remote")}}}},
-		{ID: "offer-b", Employer: "Fixture B", Engagement: "employment",
+			Benefits:    []CitedText{{Text: "Learning budget is reported.", Citations: []Citation{*quote("offer-a-text", "learning budget")}}},
+			Arrangement: []CitedText{{Text: "Remote work is reported.", Citations: []Citation{*quote("offer-a-text", "remote")}}}},
+		{ID: "offer-b", Employer: "Fixture B", EmployerCitation: quote("offer-b-text", "Fixture B offers"), Engagement: "employment", EngagementCitation: quote("offer-b-text", "gross base monthly"),
 			Pay:         PayTerm{AmountKind: "exact", MinCents: cents(500000), Currency: "EUR", Period: fit.Monthly, Basis: fit.Base, Citation: quote("offer-b-text", "EUR 5,000 gross base monthly")},
 			Hours:       HoursTerm{WeeklyHundredths: cents(4000), Citation: quote("offer-b-text", "40 hours weekly")},
 			Holiday:     HolidayTerm{Treatment: "excluded", Citation: quote("offer-b-text", "excluding holiday pay")},
-			Benefits:    []CitedText{{Text: "Pension contribution is reported.", Citations: []applicationpacks.Citation{*quote("offer-b-text", "pension contribution")}}},
-			Arrangement: []CitedText{{Text: "Hybrid work is reported.", Citations: []applicationpacks.Citation{*quote("offer-b-text", "hybrid")}}}},
-	}, Alternatives: []Alternative{{ID: "clarify-hours", Kind: "clarify", Why: CitedText{Text: "Clarify whether Fixture B can offer fewer weekly hours before comparing the amounts at equal hours.", Citations: []applicationpacks.Citation{*quote("offer-a-text", "32 hours weekly"), *quote("offer-b-text", "40 hours weekly")}}}}}
+			Benefits:    []CitedText{{Text: "Pension contribution is reported.", Citations: []Citation{*quote("offer-b-text", "pension contribution")}}},
+			Arrangement: []CitedText{{Text: "Hybrid work is reported.", Citations: []Citation{*quote("offer-b-text", "hybrid")}}}},
+	}, Alternatives: []Alternative{{ID: "clarify-hours", Kind: "clarify", Why: CitedText{Text: "Clarify whether Fixture B can offer fewer weekly hours before comparing the amounts at equal hours.", Citations: []Citation{*quote("offer-a-text", "32 hours weekly"), *quote("offer-b-text", "40 hours weekly")}}}}}
 }
 
 func TestKnownActualHoursRemainVisibleWithoutProration(t *testing.T) {
@@ -74,8 +73,9 @@ func TestExactSameBasisAndCitedAnnualConversion(t *testing.T) {
 	input.Offers[1].Pay.MinCents = cents(6000000)
 	input.Offers[1].Pay.Period = fit.Annual
 	input.Offers[1].Pay.Citation.Excerpt = "EUR 60,000 gross base annually"
+	input.Offers[1].EngagementCitation.Excerpt = "gross base annually"
 	input.Offers[1].Pay.AnnualConversion = "twelve_equal_monthly_base_payments"
-	input.Offers[1].Pay.ConversionCitation = &applicationpacks.Citation{SourceID: "offer-b-text", Excerpt: "twelve equal monthly base payments"}
+	input.Offers[1].Pay.ConversionCitation = &Citation{SourceID: "offer-b-text", Excerpt: "twelve equal monthly base payments"}
 	comparison, err = Prepare(input)
 	if err != nil || comparison.Pay[0].Status != "comparable" || comparison.Pay[0].Period != fit.Monthly ||
 		comparison.Pay[0].Delta.Min.Numerator != 20000 || comparison.Views[1].MonthlyEquivalent.Min.Numerator != 500000 {
@@ -112,6 +112,7 @@ func TestRangesMissingTermsAndProjectEconomics(t *testing.T) {
 		t.Fatalf("missing hours treated as comparable: %+v err=%v", comparison, err)
 	}
 	input.Offers[1].Engagement = "project"
+	input.Offers[1].EngagementCitation.Excerpt = "project fee"
 	input.Sources[1].Body = strings.Replace(input.Sources[1].Body, "EUR 4,800 to 5,200 gross base monthly", "EUR 4,800 to 5,200 project fee", 1)
 	input.Sources[1].SHA256 = digest(input.Sources[1].Body)
 	input.Offers[1].Pay.Citation.Excerpt = "EUR 4,800 to 5,200 project fee"
@@ -150,7 +151,7 @@ func TestUnsupportedCurrencyPreservesCitedAmountWithoutArithmetic(t *testing.T) 
 	input.Sources[1].Body = strings.Replace(input.Sources[1].Body, "EUR 5,000", "JPY 800,000", 1)
 	input.Sources[1].SHA256 = digest(input.Sources[1].Body)
 	input.Offers[1].Pay = PayTerm{AmountKind: "raw", RawAmountText: "JPY 800,000", Currency: "JPY", Period: fit.Monthly, Basis: fit.Base,
-		Citation: &applicationpacks.Citation{SourceID: "offer-b-text", Excerpt: "JPY 800,000 gross base monthly"}}
+		Citation: &Citation{SourceID: "offer-b-text", Excerpt: "JPY 800,000 gross base monthly"}}
 	comparison, err := Prepare(input)
 	if err != nil || comparison.Views[1].ReportedText != "JPY 800,000" || comparison.Views[1].Reported != nil ||
 		comparison.Views[1].MonthlyEquivalent != nil || comparison.Pay[0].Status != "unknown" || comparison.Pay[0].Delta != nil ||

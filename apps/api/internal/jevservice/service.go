@@ -292,3 +292,17 @@ func (s Service) RunDeliveryRoute(ctx context.Context, binding Binding, input je
 	}
 	return result, nil
 }
+
+func (s Service) RunOfferTradeoff(ctx context.Context, binding Binding, input jev.OfferTradeoffInput) (jev.OfferTradeoffResult, error) {
+	if err := s.ready(binding); err != nil {
+		return jev.OfferTradeoffResult{}, err
+	}
+	refs, _ := json.Marshal(input.Sources)
+	candidates, _ := json.Marshal(input.Candidates)
+	evaluator := &recordingEvaluator{service: s, binding: binding, purpose: "offer_tradeoff", rubric: "offer-tradeoff-v1", sourceRefs: refs, candidates: candidates, maxReportedTokens: input.MaxReportedTokens}
+	result, err := jev.SelectOfferTradeoff(ctx, evaluator, input)
+	if err = evaluator.finish(ctx, err); err != nil {
+		return jev.OfferTradeoffResult{}, err
+	}
+	return result, nil
+}

@@ -30,6 +30,10 @@ type Decisions interface {
 	RunOrganisation(context.Context, jevservice.Binding, jev.OrganisationInput) (jev.OrganisationResult, error)
 }
 
+type OfferTradeoffs interface {
+	RunOfferTradeoff(context.Context, jevservice.Binding, jev.OfferTradeoffInput) (jev.OfferTradeoffResult, error)
+}
+
 type SourceCollector interface {
 	AcquireLever(context.Context, collector.Request) (collector.Batch, error)
 }
@@ -38,6 +42,7 @@ type Engine struct {
 	Store       *store.Store
 	Runtime     Runtime
 	Decisions   Decisions
+	Tradeoffs   OfferTradeoffs
 	Collector   SourceCollector
 	InputReader OwnerSourceReader
 	PackSources PackSourceLoader
@@ -78,6 +83,9 @@ func (e *Engine) WaitRoundStopped(ctx context.Context, id string) error {
 }
 
 func (e *Engine) CheckRound(ctx context.Context, outcome string) error {
+	if outcome == "compare_offers" {
+		return e.checkOfferComparison(ctx)
+	}
 	if outcome == "prepare" {
 		return e.checkPrepare(ctx)
 	}
@@ -91,6 +99,9 @@ func (e *Engine) CheckRound(ctx context.Context, outcome string) error {
 }
 
 func (e *Engine) LaunchRound(_ context.Context, r store.Round) error {
+	if r.Outcome == "compare_offers" {
+		return e.launchOfferComparison(r)
+	}
 	if r.Outcome == "prepare" {
 		return e.launchPrepare(r)
 	}

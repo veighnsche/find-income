@@ -51,6 +51,34 @@ func TestOfferTradeoffChoiceHasFullContextAndAbstention(t *testing.T) {
 	}
 }
 
+func TestRecoverCapturedOfferTradeoffUsesExactRequestAndResponse(t *testing.T) {
+	input := offerTradeoffFixture()
+	raw := []byte(`{"model":"jev-1.13.0","answers":{"offer_tradeoff":{"type":"choice","choice":"clarify-hours","probabilities":{"clarify-hours":0.9,"__unresolved__":0.1},"confidence":0.8}},"usage":{"input_tokens":10,"output_tokens":2}}`)
+	var request Request
+	_, err := SelectOfferTradeoff(context.Background(), screenFake(func(r Request) (Result, error) {
+		request = r
+		return screenResult(r, map[string]string{offerTradeoffQuestionID: "clarify-hours"}), nil
+	}), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logical, _ := json.Marshal(struct {
+		State     any                 `json:"state"`
+		Questions map[string]Question `json:"questions"`
+	}{request.State, request.Questions})
+	recovered, err := RecoverCapturedOfferTradeoff(input, logical, raw, "jev-1.13.0")
+	if err != nil || recovered.SelectedID != "clarify-hours" || string(recovered.ProviderResult.RawResponse) != string(raw) {
+		t.Fatalf("recovery: %+v %v", recovered, err)
+	}
+	logical[0] = '['
+	if _, err := RecoverCapturedOfferTradeoff(input, logical, raw, "jev-1.13.0"); err == nil {
+		t.Fatal("altered request accepted")
+	}
+	if _, err := RecoverCapturedOfferTradeoff(input, recovered.RequestSnapshot, []byte(`{"answers":{}}`), "jev-1.13.0"); err == nil {
+		t.Fatal("incomplete response accepted")
+	}
+}
+
 func TestOfferTradeoffRejectsInvalidChoiceAndEvidence(t *testing.T) {
 	input := offerTradeoffFixture()
 	bad := screenFake(func(request Request) (Result, error) {

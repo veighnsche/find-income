@@ -94,6 +94,9 @@ func runWithContext(ctx context.Context, args []string) error {
 		}
 	}
 	worker := &agency.Engine{Store: database, Runtime: runtime, Decisions: decisions, Collector: &collector.Collector{}, PackSources: packSources, Context: ctx}
+	if tradeoffs, ok := decisions.(jevservice.Service); ok {
+		worker.Tradeoffs = tradeoffs
+	}
 	options.Codex = runtime
 	options.Rounds = &rounds.Service{Store: database, Readiness: worker, Canceller: runtime, Reconciler: runtime, Worker: worker}
 	options.Delivery = &deliveryservice.Service{Store: database, From: os.Getenv("JOBSEEK_SMTP_FROM")}

@@ -1,6 +1,7 @@
 package jev
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -8,6 +9,36 @@ import (
 	"sort"
 	"strings"
 )
+
+type capturedOfferEvaluator struct {
+	logical  []byte
+	response []byte
+	model    string
+}
+
+func (c capturedOfferEvaluator) Evaluate(_ context.Context, request Request) (Result, error) {
+	logical, err := json.Marshal(struct {
+		State     any                 `json:"state"`
+		Questions map[string]Question `json:"questions"`
+	}{request.State, request.Questions})
+	if err != nil || !bytes.Equal(logical, c.logical) {
+		return Result{}, &Error{Kind: ErrInvalidResponse}
+	}
+	result, err := parseResponse(c.response, request.Questions, c.model)
+	if err != nil {
+		return Result{}, &Error{Kind: ErrInvalidResponse}
+	}
+	return result, nil
+}
+
+// RecoverCapturedOfferTradeoff validates saved request and response bytes using
+// the same Choice helper, without issuing another provider request.
+func RecoverCapturedOfferTradeoff(input OfferTradeoffInput, logical, response []byte, requestedModel string) (OfferTradeoffResult, error) {
+	if len(logical) == 0 || len(response) == 0 || requestedModel == "" {
+		return OfferTradeoffResult{}, &Error{Kind: ErrInvalidResponse}
+	}
+	return SelectOfferTradeoff(context.Background(), capturedOfferEvaluator{logical: logical, response: response, model: requestedModel}, input)
+}
 
 const offerTradeoffQuestionID = "offer_tradeoff"
 const offerTradeoffUnresolved = "__unresolved__"

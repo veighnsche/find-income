@@ -222,21 +222,30 @@ func (s *Service) Resume(ctx context.Context, actor store.Actor, roundID string)
 	if err != nil {
 		return store.Round{}, err
 	}
-	if len(attempts) != 0 && s.Reconciler == nil {
-		return store.Round{}, store.ErrUncertain
-	}
 	for _, attempt := range attempts {
-		if local, ok := s.Reconciler.(LocalReconciler); ok {
-			handled, resolved, err := local.RecoverLocalDispatch(ctx, roundID, attempt.ID, r.Generation)
+		handled := false
+		for _, provider := range []any{s.Worker, s.Reconciler} {
+			local, ok := provider.(LocalReconciler)
+			if !ok {
+				continue
+			}
+			matched, resolved, err := local.RecoverLocalDispatch(ctx, roundID, attempt.ID, r.Generation)
 			if err != nil {
 				return store.Round{}, err
 			}
-			if handled {
+			if matched {
 				if !resolved {
 					return store.Round{}, store.ErrUncertain
 				}
-				continue
+				handled = true
+				break
 			}
+		}
+		if handled {
+			continue
+		}
+		if s.Reconciler == nil {
+			return store.Round{}, store.ErrUncertain
 		}
 		check, err := s.Store.BeginRoundReconciliation(ctx, roundID, attempt.ID, r.Generation)
 		if err != nil {

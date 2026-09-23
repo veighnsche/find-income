@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/veighnsche/find-income-dashboard/api/internal/offercomparison"
 )
 
 const (
@@ -22,6 +24,7 @@ const (
 	RoundStageDiscovery                 = "discovery.candidate_stage"
 	RoundRegisterDiscoveryBoard         = "discovery.board_register"
 	RoundPrepareApplicationPack         = "application_pack.prepare"
+	RoundPrepareOfferComparison         = "offer_comparison.prepare"
 	RoundRelationshipCounterpartyCreate = "relationship.counterparty_create"
 	RoundRelationshipEventCreate        = "relationship.event_create"
 	RoundRelationshipRouteCreate        = "relationship.route_create"
@@ -53,7 +56,7 @@ func RoundOperationCost(operation string) (RoundAllowance, bool) {
 		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
 	case RoundStageDiscovery, RoundRegisterDiscoveryBoard:
 		return RoundAllowance{Items: 1, Tools: 1}, true
-	case RoundPrepareApplicationPack:
+	case RoundPrepareApplicationPack, RoundPrepareOfferComparison:
 		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
 	default:
 		return RoundAllowance{}, false
@@ -72,8 +75,14 @@ type RoundMutationInput struct {
 	Preferences        *Preferences                    `json:"preferences,omitempty"`
 	OpportunityPatch   *OpportunityPatch               `json:"opportunityPatch,omitempty"`
 	ApplicationPack    *ApplicationPackMutationInput   `json:"applicationPack,omitempty"`
+	OfferComparison    *OfferComparisonMutationInput   `json:"offerComparison,omitempty"`
 	Relationship       *RelationshipMutationInput      `json:"relationship,omitempty"`
 	Capability         string                          `json:"-"`
+}
+
+type OfferComparisonMutationInput struct {
+	IntakeID   string                     `json:"intakeId"`
+	Comparison offercomparison.Comparison `json:"comparison"`
 }
 
 type SourceOpportunityMutationInput struct {
@@ -117,6 +126,7 @@ func validRoundMutation(input RoundMutationInput) bool {
 		return false
 	}
 	if input.Operation != RoundPrepareApplicationPack && input.ApplicationPack != nil ||
+		input.Operation != RoundPrepareOfferComparison && input.OfferComparison != nil ||
 		input.Operation != RoundRelationshipCounterpartyCreate && input.Operation != RoundRelationshipEventCreate && input.Operation != RoundRelationshipRouteCreate && input.Operation != RoundRelationshipCorrect && input.Relationship != nil {
 		return false
 	}
@@ -135,6 +145,9 @@ func validRoundMutation(input RoundMutationInput) bool {
 		return input.ApplicationPack != nil && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil &&
 			(input.ApplicationPack.PriorPackID == "") == (input.OwnerInstructionID == "") &&
 			input.ResourceID == "opportunity:"+input.ApplicationPack.OpportunityID && input.ExpectedRevision == input.ApplicationPack.ExpectedOpportunityRevision
+	case RoundPrepareOfferComparison:
+		return input.OfferComparison != nil && input.ApplicationPack == nil && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.Relationship == nil &&
+			input.ResourceID == "offer_intake:"+input.OfferComparison.IntakeID && input.ExpectedRevision == 1
 	case RoundRelationshipCounterpartyCreate:
 		return input.Relationship != nil && input.Relationship.Counterparty != nil && presentRelationshipInput(*input.Relationship) == 1 && input.Relationship.Counterparty.ID == "" && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.ResourceID == "campaign:active"
 	case RoundRelationshipEventCreate:
@@ -480,6 +493,9 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 	} else if input.Operation == RoundPrepareApplicationPack {
 		entityID, revision, err = createApplicationPackTx(ctx, tx, *input.ApplicationPack)
 		kind = "application_pack"
+	} else if input.Operation == RoundPrepareOfferComparison {
+		entityID, revision, err = createOfferComparisonTx(ctx, tx, round, *input.OfferComparison)
+		kind = "offer_comparison"
 	} else if input.Operation == RoundRelationshipCounterpartyCreate || input.Operation == RoundRelationshipEventCreate || input.Operation == RoundRelationshipRouteCreate || input.Operation == RoundRelationshipCorrect {
 		entityID, kind, revision, err = writeRelationshipTx(ctx, tx, input.Operation, input.ExpectedRevision, *input.Relationship)
 	} else if input.Operation == RoundCorrectPreferences {

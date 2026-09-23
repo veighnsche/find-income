@@ -395,6 +395,31 @@ CREATE TABLE rounds (
   completed_at TEXT,
   UNIQUE(actor_kind,actor_id,request_key)
 );
+CREATE TABLE offer_comparison_intakes (
+  id TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  request_sha256 TEXT NOT NULL,
+  sources_json TEXT NOT NULL CHECK (json_valid(sources_json)),
+  created_at TEXT NOT NULL,
+  UNIQUE(owner_id,request_key)
+);
+CREATE TABLE offer_comparisons (
+  id TEXT PRIMARY KEY,
+  intake_id TEXT NOT NULL UNIQUE REFERENCES offer_comparison_intakes(id),
+  round_id TEXT NOT NULL UNIQUE REFERENCES rounds(id),
+  input_sha256 TEXT NOT NULL,
+  comparison_json TEXT NOT NULL CHECK (json_valid(comparison_json)),
+  created_at TEXT NOT NULL
+);
+CREATE TABLE offer_tradeoff_assessments (
+  id TEXT PRIMARY KEY,
+  comparison_id TEXT NOT NULL UNIQUE REFERENCES offer_comparisons(id),
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  jev_attempt_id TEXT NOT NULL UNIQUE REFERENCES jev_attempts(id),
+  result_json TEXT NOT NULL CHECK (json_valid(result_json)),
+  created_at TEXT NOT NULL
+);
 CREATE UNIQUE INDEX one_active_round ON rounds((1))
   WHERE state IN ('queued','running','awaiting_input','stopping','paused');
 

@@ -13,7 +13,7 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-var requiredTools = []string{"round_context", "round_mutation", "round_evidence_correction", "source_links", "source_discovery", "discovery_candidate_stage", "discovery_official_links", "discovery_board_register", "application_pack_prepare"}
+var requiredTools = []string{"round_context", "round_mutation", "round_evidence_correction", "source_links", "source_discovery", "discovery_candidate_stage", "discovery_official_links", "discovery_board_register", "application_pack_prepare", "offer_comparison_prepare"}
 var errTool = errors.New("Round tool input or authority is invalid; refresh round_context.")
 
 type roundContextArgs struct {
@@ -74,6 +74,7 @@ func (s *Service) newBridge() http.Handler {
 	registerTool(server, "discovery_official_links", "Read the staged candidate's claimed company website from a matching saved company detail, or one exact same-origin careers link from that first read.", s.discoveryOfficialLinksTool)
 	registerTool(server, "discovery_board_register", "Register an exact Lever link from the saved official-site read as a verified board in this round's scope.", s.discoveryBoardRegisterTool)
 	registerTool(server, "application_pack_prepare", "Prepare a private application pack from a current sourced opportunity after recorded relevance review.", s.applicationPackPrepareTool)
+	registerTool(server, "offer_comparison_prepare", "Save a cited offer comparison from the complete immutable owner-supplied offer texts in this round.", s.offerComparisonPrepareTool)
 	bridge := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Dedicated bridge authentication: browser cookies and Origin-bearing
@@ -137,6 +138,11 @@ func (s *Service) roundContextTool(ctx context.Context, args roundContextArgs) (
 		}
 	case "prepare":
 		if len(r.Scope.Resources) != 1 || !strings.HasPrefix(r.Scope.Resources[0], "opportunity:") || len(r.Scope.Resources[0]) == len("opportunity:") {
+			return nil, store.ErrFenced
+		}
+		resourceID = r.Scope.Resources[0]
+	case "compare_offers":
+		if len(r.Scope.Resources) != 1 || !strings.HasPrefix(r.Scope.Resources[0], "offer_intake:") || len(r.Scope.Resources[0]) == len("offer_intake:") {
 			return nil, store.ErrFenced
 		}
 		resourceID = r.Scope.Resources[0]

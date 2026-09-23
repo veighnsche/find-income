@@ -11,7 +11,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/veighnsche/find-income-dashboard/api/internal/applicationpacks"
 	"github.com/veighnsche/find-income-dashboard/api/internal/fit"
 )
 
@@ -27,45 +26,52 @@ type Source struct {
 	Body     string `json:"body"`
 }
 
+type Citation struct {
+	SourceID string `json:"sourceId"`
+	Excerpt  string `json:"excerpt"`
+}
+
 type CitedText struct {
-	Text      string                      `json:"text"`
-	Citations []applicationpacks.Citation `json:"citations"`
+	Text      string     `json:"text"`
+	Citations []Citation `json:"citations"`
 }
 
 type PayTerm struct {
-	AmountKind         string                     `json:"amountKind"`              // exact, range, from, raw, or unknown
-	RawAmountText      string                     `json:"rawAmountText,omitempty"` // cited amount when minor units are not established
-	MinCents           *int64                     `json:"minCents,omitempty"`
-	MaxCents           *int64                     `json:"maxCents,omitempty"`
-	Currency           string                     `json:"currency,omitempty"`
-	Period             fit.PayPeriod              `json:"period"`
-	Basis              fit.PayBasis               `json:"basis"`
-	AnnualConversion   string                     `json:"annualConversion,omitempty"`
-	Citation           *applicationpacks.Citation `json:"citation,omitempty"`
-	ConversionCitation *applicationpacks.Citation `json:"conversionCitation,omitempty"`
+	AmountKind         string        `json:"amountKind"`              // exact, range, from, raw, or unknown
+	RawAmountText      string        `json:"rawAmountText,omitempty"` // cited amount when minor units are not established
+	MinCents           *int64        `json:"minCents,omitempty"`
+	MaxCents           *int64        `json:"maxCents,omitempty"`
+	Currency           string        `json:"currency,omitempty"`
+	Period             fit.PayPeriod `json:"period"`
+	Basis              fit.PayBasis  `json:"basis"`
+	AnnualConversion   string        `json:"annualConversion,omitempty"`
+	Citation           *Citation     `json:"citation,omitempty"`
+	ConversionCitation *Citation     `json:"conversionCitation,omitempty"`
 }
 
 type HoursTerm struct {
-	WeeklyHundredths *int64                     `json:"weeklyHundredths,omitempty"`
-	Citation         *applicationpacks.Citation `json:"citation,omitempty"`
+	WeeklyHundredths *int64    `json:"weeklyHundredths,omitempty"`
+	Citation         *Citation `json:"citation,omitempty"`
 }
 
 type HolidayTerm struct {
-	Treatment string                     `json:"treatment"` // included, excluded, or unknown
-	RateBPS   *int64                     `json:"rateBps,omitempty"`
-	Citation  *applicationpacks.Citation `json:"citation,omitempty"`
+	Treatment string    `json:"treatment"` // included, excluded, or unknown
+	RateBPS   *int64    `json:"rateBps,omitempty"`
+	Citation  *Citation `json:"citation,omitempty"`
 }
 
 type Offer struct {
-	ID          string      `json:"id"`
-	Employer    string      `json:"employer"`
-	Engagement  string      `json:"engagement"` // employment, project, or unknown
-	Pay         PayTerm     `json:"pay"`
-	Hours       HoursTerm   `json:"hours"`
-	Holiday     HolidayTerm `json:"holiday"`
-	Benefits    []CitedText `json:"benefits,omitempty"`
-	Arrangement []CitedText `json:"arrangement,omitempty"`
-	Unknowns    []string    `json:"unknowns,omitempty"`
+	ID                 string      `json:"id"`
+	Employer           string      `json:"employer"`
+	EmployerCitation   *Citation   `json:"employerCitation,omitempty"`
+	Engagement         string      `json:"engagement"` // employment, project, or unknown
+	EngagementCitation *Citation   `json:"engagementCitation,omitempty"`
+	Pay                PayTerm     `json:"pay"`
+	Hours              HoursTerm   `json:"hours"`
+	Holiday            HolidayTerm `json:"holiday"`
+	Benefits           []CitedText `json:"benefits,omitempty"`
+	Arrangement        []CitedText `json:"arrangement,omitempty"`
+	Unknowns           []string    `json:"unknowns,omitempty"`
 }
 
 type Alternative struct {
@@ -167,7 +173,11 @@ func Prepare(input Input) (Comparison, error) {
 				break
 			}
 		}
-		if !foundSource || !validPay(offer.Pay, offer.ID, index) || !validHours(offer.Hours, offer.ID, index) || !validHoliday(offer.Holiday, offer.ID, index) {
+		if !foundSource || !validPay(offer.Pay, offer.ID, index) || !validHours(offer.Hours, offer.ID, index) || !validHoliday(offer.Holiday, offer.ID, index) ||
+			offer.Employer != "Unknown employer" && (offer.EmployerCitation == nil || !validCitation(*offer.EmployerCitation, offer.ID, index) || !strings.Contains(offer.EmployerCitation.Excerpt, offer.Employer)) ||
+			offer.Employer == "Unknown employer" && offer.EmployerCitation != nil ||
+			offer.Engagement != "unknown" && (offer.EngagementCitation == nil || !validCitation(*offer.EngagementCitation, offer.ID, index)) ||
+			offer.Engagement == "unknown" && offer.EngagementCitation != nil {
 			return Comparison{}, ErrInvalid
 		}
 		for _, term := range append(append([]CitedText(nil), offer.Benefits...), offer.Arrangement...) {
@@ -302,7 +312,7 @@ func validCited(term CitedText, offerID string, sources map[string]Source) bool 
 	return true
 }
 
-func validCitation(citation applicationpacks.Citation, offerID string, sources map[string]Source) bool {
+func validCitation(citation Citation, offerID string, sources map[string]Source) bool {
 	source, ok := sources[citation.SourceID]
 	return ok && (offerID == "" || source.OfferID == offerID) && validBody(citation.Excerpt, 1200) && strings.Contains(source.Body, citation.Excerpt)
 }
