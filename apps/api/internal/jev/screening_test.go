@@ -90,6 +90,22 @@ func TestScreenResponsibilitiesSilentAvoidanceAndConflict(t *testing.T) {
 	}
 }
 
+func TestScreenResponsibilitiesPreservesExactWhitespaceAtSpanBoundary(t *testing.T) {
+	in := screenInput()
+	in.Criteria = in.Criteria[:1]
+	in.Spans[0].Excerpt = " Research interviews are the primary work. "
+	fake := screenFake(func(request Request) (Result, error) {
+		spans := request.State.(map[string]any)["source_spans"].([]ScreeningSpan)
+		if spans[1].Excerpt != " Research interviews are the primary work. " {
+			t.Fatalf("exact source span changed: %#v", spans)
+		}
+		return screenResult(request, map[string]string{"scope_0": ScopeNoRelevantEvidence}), nil
+	})
+	if _, err := ScreenResponsibilities(context.Background(), fake, in); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestScreenResponsibilitiesBoundedWindowAndUsageOverflow(t *testing.T) {
 	in := screenInput()
 	in.Criteria = in.Criteria[:1]

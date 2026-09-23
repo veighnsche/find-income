@@ -75,6 +75,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rounds/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner commissions a private pack for a selected sourced opportunity */
+        post: operations["prepareRound"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rounds/{id}": {
         parameters: {
             query?: never;
@@ -571,6 +588,154 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/opportunities/{id}/screening": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Read current sourced Jev screening proposal, separate from confirmed qualification */
+        get: operations["getOpportunityScreening"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/application-packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** List private immutable packs for one opportunity */
+        get: operations["listApplicationPacks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/application-packs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Read private pack manifest and revision metadata */
+        get: operations["getApplicationPack"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/application-packs/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Preview the private PDF */
+        get: operations["getApplicationPackPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/application-packs/{id}/source.zip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Download reproducible private Typst source */
+        get: operations["getApplicationPackSource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/relationships/counterparties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read sourced people and organisations in the relationship network */
+        get: operations["listRelationshipCounterparties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/relationships/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read sourced introductions and conversations, including pre-vacancy leads */
+        get: operations["listRelationshipEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Read sourced direct and relationship routes to an opportunity */
+        get: operations["listOpportunityRoutes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ingestions": {
         parameters: {
             query?: never;
@@ -1029,6 +1194,11 @@ export interface components {
         StartRoundRequest: {
             requestKey: string;
         };
+        /** @description Owner selects an existing sourced opportunity; the server derives all pack details and authority. */
+        PrepareRoundRequest: {
+            requestKey: string;
+            opportunityId: string;
+        };
         RoundCapability: {
             canStart: boolean;
             reason: string;
@@ -1117,7 +1287,7 @@ export interface components {
         OwnerInstructionInput: {
             requestKey: string;
             /** @enum {string} */
-            targetKind: "campaign" | "profile" | "opportunity" | "evidence";
+            targetKind: "campaign" | "profile" | "opportunity" | "evidence" | "relationship";
             targetId: string;
             /** Format: int64 */
             expectedRevision: number;
@@ -1160,7 +1330,7 @@ export interface components {
         RoundMutationRequest: {
             requestKey: string;
             /** @enum {string} */
-            operation: "company.create" | "opportunity.create" | "opportunity.source_save" | "opportunity.owner_correction" | "preferences.correct";
+            operation: "company.create" | "opportunity.create" | "opportunity.source_save" | "opportunity.owner_correction" | "preferences.correct" | "relationship.counterparty_create" | "relationship.event_create" | "relationship.route_create" | "relationship.correct";
             resourceId: string;
             /** Format: int64 */
             expectedRevision: number;
@@ -1170,6 +1340,7 @@ export interface components {
             ownerInstructionId?: string;
             opportunityPatch?: components["schemas"]["RoundOpportunityCorrection"];
             preferences?: components["schemas"]["RoundPreferences"];
+            relationship?: components["schemas"]["RelationshipMutation"];
         };
         RoundSourceOpportunity: {
             sourceOpeningId: string;
@@ -1208,11 +1379,237 @@ export interface components {
         RoundMutationResult: {
             attemptId: string;
             /** @enum {string} */
-            entityKind: "company" | "opportunity" | "preferences" | "evidence";
+            entityKind: "company" | "opportunity" | "preferences" | "evidence" | "application_pack" | "relationship_counterparty" | "relationship_event" | "opportunity_route";
             entityId: string;
             /** Format: int64 */
             revision: number;
             auditId: string;
+        };
+        ApplicationPackSummary: {
+            id: string;
+            opportunityId: string;
+            /** Format: int64 */
+            opportunityRevision: number;
+            /** Format: int64 */
+            profileRevision: number;
+            /** Format: int64 */
+            version: number;
+            contentSha256: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        RoundScreeningView: {
+            /** @enum {string} */
+            status: "not_assessed" | "proposed" | "unresolved" | "outdated";
+            /** @enum {boolean} */
+            confirmed: false;
+            current: components["schemas"]["RoundScreeningAssessment"] | null;
+        };
+        RoundScreeningAssessment: {
+            id: string;
+            /** Format: int64 */
+            opportunityRevision: number;
+            /** Format: int64 */
+            profileVersion: number;
+            sourceId: string;
+            sourceRevision: string;
+            omittedBytes: number;
+            input: components["schemas"]["RoundScreeningInput"];
+            result: components["schemas"]["RoundScreeningResult"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        RoundScreeningInput: {
+            /** Format: int64 */
+            preference_version: number;
+            /** Format: int64 */
+            max_total_tokens: number;
+            criteria: components["schemas"]["RoundScreeningCriterion"][];
+            spans: components["schemas"]["RoundScreeningSpan"][];
+        };
+        RoundScreeningCriterion: {
+            id: string;
+            label: string;
+            description: string;
+            /** @enum {string} */
+            kind: "role" | "responsibility" | "technology";
+            /** @enum {string} */
+            mode: "require" | "avoid" | "prefer";
+        };
+        RoundScreeningSpan: {
+            id: string;
+            source_id: string;
+            source_revision: string;
+            source_kind: string;
+            observed_at?: string;
+            excerpt: string;
+        };
+        RoundScreeningSupport: {
+            span_id: string;
+            source_id: string;
+            source_revision: string;
+            source_kind: string;
+        };
+        RoundScreeningObservation: {
+            criterion_id: string;
+            definition_sha256: string;
+            scope: string;
+            confidence: number;
+            probabilities: {
+                [key: string]: number;
+            };
+            proposed_support: components["schemas"]["RoundScreeningSupport"][];
+            support_state: string;
+            support_confidence?: number;
+        };
+        RoundScreeningResult: {
+            rubric_version: number;
+            /** Format: int64 */
+            preference_version: number;
+            input_sha256: string;
+            input_spans: components["schemas"]["RoundScreeningSupport"][];
+            observations: components["schemas"]["RoundScreeningObservation"][];
+            requested_model: string;
+            returned_model: string;
+            usage: components["schemas"]["RoundScreeningUsage"];
+        };
+        RoundScreeningUsage: {
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+        };
+        ApplicationPackList: {
+            items: components["schemas"]["ApplicationPackSummary"][];
+        };
+        ApplicationPackDetail: components["schemas"]["ApplicationPackSummary"] & {
+            manifest: components["schemas"]["ApplicationPackManifest"];
+        };
+        ApplicationPackManifest: {
+            role: components["schemas"]["ApplicationPackRole"];
+            sources: components["schemas"]["ApplicationPackSource"][];
+            draft: components["schemas"]["ApplicationPackDraft"];
+            templateSha256: string;
+            preparationRequestSha256?: string;
+        };
+        ApplicationPackRole: {
+            opportunityId: string;
+            /** Format: int64 */
+            opportunityRevision: number;
+            /** Format: int64 */
+            profileRevision: number;
+            title: string;
+            company: string;
+            sourceUrl: string;
+            description: string;
+            destination: string;
+        };
+        ApplicationPackSource: {
+            id: string;
+            name: string;
+            sha256: string;
+            approved: boolean;
+            body: string;
+        };
+        ApplicationPackCitation: {
+            sourceId: string;
+            excerpt: string;
+        };
+        ApplicationPackLine: {
+            text: string;
+            citations: components["schemas"]["ApplicationPackCitation"][];
+        };
+        ApplicationPackAnswer: {
+            question: string;
+            lines: components["schemas"]["ApplicationPackLine"][];
+        };
+        ApplicationPackRelevance: {
+            requirement: string;
+            sourceId: string;
+            /** @enum {string} */
+            scope: "relevant" | "uncertain" | "unrelated";
+            confidence: number;
+            inputSha256: string;
+            model: string;
+        };
+        ApplicationPackDraft: {
+            focus: components["schemas"]["ApplicationPackLine"];
+            cover: components["schemas"]["ApplicationPackLine"][];
+            answers: components["schemas"]["ApplicationPackAnswer"][];
+            materialUnknowns: string[];
+            relevance: components["schemas"]["ApplicationPackRelevance"][];
+        };
+        RelationshipSource: {
+            sourceKind: string;
+            sourceRef?: string;
+            sourceExcerpt: string;
+            /** Format: date-time */
+            observedAt: string;
+        };
+        RelationshipCounterpartyInput: components["schemas"]["RelationshipSource"] & {
+            id?: string;
+            displayName: string;
+            /** @enum {string} */
+            kind: "recruiter" | "referrer" | "contact";
+            organizationText: string;
+        };
+        RelationshipEventInput: components["schemas"]["RelationshipSource"] & {
+            id?: string;
+            counterpartyId?: string;
+            opportunityId?: string;
+            /** @enum {string} */
+            kind: "introduction" | "conversation" | "referral" | "other";
+            summary: string;
+        };
+        OpportunityRouteInput: components["schemas"]["RelationshipSource"] & {
+            id?: string;
+            opportunityId: string;
+            eventId?: string;
+            counterpartyId?: string;
+            /** @enum {string} */
+            kind: "direct" | "referral" | "recruiter";
+            destinationText: string;
+        };
+        RelationshipMutation: {
+            counterparty?: components["schemas"]["RelationshipCounterpartyInput"];
+            event?: components["schemas"]["RelationshipEventInput"];
+            route?: components["schemas"]["OpportunityRouteInput"];
+        };
+        RelationshipCounterparty: components["schemas"]["RelationshipCounterpartyInput"] & {
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        RelationshipEvent: components["schemas"]["RelationshipEventInput"] & {
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        OpportunityRoute: components["schemas"]["OpportunityRouteInput"] & {
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        RelationshipCounterpartyList: {
+            items: components["schemas"]["RelationshipCounterparty"][];
+        };
+        RelationshipEventList: {
+            items: components["schemas"]["RelationshipEvent"][];
+        };
+        OpportunityRouteList: {
+            items: components["schemas"]["OpportunityRoute"][];
         };
         CodexStatus: {
             /** @enum {string} */
@@ -1330,7 +1727,7 @@ export interface components {
         };
         OrganisationView: {
             /** @enum {string} */
-            status: "unconfigured" | "pending" | "processing" | "selected" | "uncertain" | "failed" | "outdated";
+            status: "not_assessed" | "unconfigured" | "pending" | "processing" | "selected" | "uncertain" | "failed" | "outdated";
             current: components["schemas"]["OrganisationAssessment"] | null;
             latestHistorical: components["schemas"]["OrganisationAssessment"] | null;
             jobId?: string;
@@ -1338,7 +1735,7 @@ export interface components {
         OrganisationSummary: {
             opportunityId: string;
             /** @enum {string} */
-            status: "unconfigured" | "pending" | "processing" | "selected" | "uncertain" | "failed" | "outdated";
+            status: "not_assessed" | "unconfigured" | "pending" | "processing" | "selected" | "uncertain" | "failed" | "outdated";
             categoryId?: string;
         };
         OrganisationSummaryList: {
@@ -2245,6 +2642,42 @@ export interface operations {
             503: components["responses"]["Unavailable"];
         };
     };
+    prepareRound: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepareRoundRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing round */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Round"];
+                };
+            };
+            /** @description Round created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Round"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
     getRound: {
         parameters: {
             query?: never;
@@ -2947,6 +3380,184 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getOpportunityScreening: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Screening proposal status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundScreeningView"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listApplicationPacks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pack versions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationPackList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getApplicationPack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pack detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationPackDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getApplicationPackPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Inline PDF */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getApplicationPackSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Source archive */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listRelationshipCounterparties: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Counterparties */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelationshipCounterpartyList"];
+                };
+            };
+        };
+    };
+    listRelationshipEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Relationship events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelationshipEventList"];
+                };
+            };
+        };
+    };
+    listOpportunityRoutes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Opportunity routes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpportunityRouteList"];
+                };
+            };
             404: components["responses"]["NotFound"];
         };
     };

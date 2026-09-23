@@ -33,8 +33,11 @@ func (h *Handler) defaultRoundInput(ctx context.Context, requestKey string) (sto
 	for _, instruction := range instructions {
 		if instruction.RoundID == "" && (instruction.TargetKind == "profile" &&
 			instruction.TargetID == "current" && instruction.ExpectedRevision == profile.Version ||
-			instruction.TargetKind == "evidence" || instruction.TargetKind == "opportunity") {
+			instruction.TargetKind == "evidence" || instruction.TargetKind == "opportunity" || instruction.TargetKind == "relationship") {
 			inputRefs = append(inputRefs, "instruction:"+instruction.ID)
+			if instruction.TargetKind == "relationship" {
+				resources = append(resources, "relationship:"+instruction.TargetID)
+			}
 		}
 	}
 	for _, board := range boards {
@@ -63,14 +66,84 @@ func (h *Handler) defaultRoundInput(ctx context.Context, requestKey string) (sto
 		Intent:  "Discover source-linked work opportunities for the current owner profile.",
 		Outcome: "discover", ProfileVersion: profile.Version,
 		Scope: store.RoundScope{InputRefs: inputRefs,
-			Resources: resources, Operations: []string{store.RoundCreateCompany, store.RoundCreateOpportunity, store.RoundSaveSourceOpportunity, store.RoundCorrectPreferences, store.RoundCorrectEvidence, store.RoundCorrectOpportunity, store.RoundCollectorPage, store.RoundSearchSource, store.RoundCodexTurn, store.RoundContextTool},
+			Resources: resources, Operations: []string{store.RoundCreateCompany, store.RoundCreateOpportunity, store.RoundSaveSourceOpportunity, store.RoundCorrectPreferences, store.RoundCorrectEvidence, store.RoundCorrectOpportunity, store.RoundRelationshipCounterpartyCreate, store.RoundRelationshipEventCreate, store.RoundRelationshipRouteCreate, store.RoundRelationshipCorrect, store.RoundStageDiscovery, store.RoundRegisterDiscoveryBoard, store.RoundCollectorPage, store.RoundSearchSource, store.RoundFetchSource, store.RoundJevRequest, store.RoundCodexTurn, store.RoundContextTool},
 			Delegates: []string{"codex-runner"}},
-		Limits:   store.RoundAllowance{Requests: 10, Items: 10, Tools: 12, Turns: 4},
+		Limits:   store.RoundAllowance{Requests: 16, Items: 10, Tools: 18, Turns: 4},
 		Deadline: time.Now().Add(30 * time.Minute).UTC()}, nil
 }
 
 type roundStartRequest struct {
 	RequestKey string `json:"requestKey"`
+}
+
+type prepareRoundRequest struct {
+	RequestKey    string `json:"requestKey"`
+	OpportunityID string `json:"opportunityId"`
+}
+
+func (h *Handler) prepareRound(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.owner(w, r)
+	if !ok || !h.mutationAllowed(w, r, p) {
+		return
+	}
+	var body prepareRoundRequest
+	if !decodeRecordJSON(w, r, &body) {
+		return
+	}
+	if body.RequestKey == "" || len(body.RequestKey) > 200 || strings.TrimSpace(body.RequestKey) != body.RequestKey || body.OpportunityID == "" || len(body.OpportunityID) > 128 || strings.TrimSpace(body.OpportunityID) != body.OpportunityID {
+		failRound(w, store.ErrInvalid)
+		return
+	}
+	actor := store.Actor{Kind: p.Kind, ID: p.ID}
+	previous, err := h.database.RoundByRequest(r.Context(), actor, body.RequestKey)
+	if err == nil {
+		if previous.Outcome != "prepare" || len(previous.Scope.Resources) != 1 || previous.Scope.Resources[0] != "opportunity:"+body.OpportunityID {
+			failRound(w, store.ErrRoundIdempotencyConflict)
+			return
+		}
+		writeJSON(w, http.StatusOK, roundModel(previous))
+		return
+	}
+	if !errors.Is(err, store.ErrNotFound) {
+		failRound(w, err)
+		return
+	}
+	opportunity, err := h.database.Opportunity(r.Context(), body.OpportunityID)
+	if err != nil {
+		failRound(w, err)
+		return
+	}
+	if opportunity.ArchivedAt != "" || opportunity.SourceURL == "" || strings.TrimSpace(opportunity.OriginalText) == "" {
+		failRound(w, store.ErrInvalid)
+		return
+	}
+	selection, err := h.database.OwnerOpportunityDecision(r.Context(), opportunity.ID)
+	if errors.Is(err, store.ErrNotFound) || err == nil && (selection.Decision != "selected" || selection.OpportunityRevision != opportunity.Revision) {
+		failRound(w, store.ErrFenced)
+		return
+	}
+	if err != nil {
+		failRound(w, err)
+		return
+	}
+	profile, err := h.database.CurrentPreferences(r.Context())
+	if err != nil {
+		failRound(w, err)
+		return
+	}
+	input := store.StartRoundInput{RequestKey: body.RequestKey, Intent: "Prepare a private application pack for the selected sourced opportunity.", Outcome: "prepare", ProfileVersion: profile.Version,
+		Scope:  store.RoundScope{InputRefs: []string{"profile:current", "opportunity:" + opportunity.ID}, Resources: []string{"opportunity:" + opportunity.ID}, Operations: []string{store.RoundCodexTurn, store.RoundJevRequest, store.RoundPrepareApplicationPack, store.RoundContextTool}, Delegates: []string{"codex-runner"}},
+		Limits: store.RoundAllowance{Requests: 7, Items: 1, Tools: 3, Turns: 1}, Deadline: time.Now().Add(30 * time.Minute).UTC()}
+	round, created, err := h.rounds.Start(r.Context(), actor, input)
+	if err != nil {
+		failRound(w, err)
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, roundModel(round))
 }
 
 type roundResponse struct {
@@ -115,7 +188,7 @@ func (h *Handler) roundCapability(w http.ResponseWriter, r *http.Request) {
 		failRound(w, err)
 		return
 	}
-	canStart := h.rounds != nil && h.rounds.Readiness != nil &&
+	canStart := h.rounds != nil && h.rounds.Readiness != nil && h.rounds.Worker != nil &&
 		h.rounds.Readiness.CheckRound(r.Context(), input.Outcome) == nil
 	reason := ""
 	if !canStart {
@@ -282,6 +355,10 @@ func (h *Handler) roundMutation(w http.ResponseWriter, r *http.Request) {
 	}
 	var body store.RoundMutationInput
 	if !decodeRecordJSON(w, r, &body) {
+		return
+	}
+	if body.Operation == store.RoundPrepareApplicationPack || body.ApplicationPack != nil {
+		fail(w, http.StatusForbidden, generated.ApiErrorCodeForbidden, "Application packs require the commissioned preparation tool.")
 		return
 	}
 	body.Capability = r.Header.Get("X-Round-Capability")

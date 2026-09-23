@@ -150,3 +150,18 @@ func TestOrganiseRejectsMalformedEvaluatorResult(t *testing.T) {
 		})
 	}
 }
+
+func TestOrganisePreservesExactWhitespaceAtExcerptBoundary(t *testing.T) {
+	input := organisationFixture()
+	input.Facts[0].Excerpt = " Senior user researcher. "
+	fake := organisationEvaluator(func(_ context.Context, request Request) (Result, error) {
+		facts := request.State.(map[string]any)["source_facts"].([]OrganisationFact)
+		if facts[1].Excerpt != " Senior user researcher. " {
+			t.Fatalf("exact excerpt changed: %#v", facts)
+		}
+		return organisationAnswer(organisationUncertainOption, map[string]float64{"research": 0.1, "operations": 0.1, organisationUncertainOption: 0.8}), nil
+	})
+	if _, err := Organise(context.Background(), fake, input); err != nil {
+		t.Fatal(err)
+	}
+}

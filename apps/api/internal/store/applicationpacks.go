@@ -36,6 +36,37 @@ type ApplicationPack struct {
 	CreatedAt           string
 }
 
+type ApplicationPackSummary struct {
+	ID                  string `json:"id"`
+	OpportunityID       string `json:"opportunityId"`
+	OpportunityRevision int64  `json:"opportunityRevision"`
+	ProfileRevision     int64  `json:"profileRevision"`
+	Version             int64  `json:"version"`
+	ContentSHA256       string `json:"contentSha256"`
+	CreatedAt           string `json:"createdAt"`
+}
+
+func (s *Store) ListApplicationPacks(ctx context.Context, opportunityID string) ([]ApplicationPackSummary, error) {
+	if opportunityID == "" {
+		return nil, ErrInvalid
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id,opportunity_id,opportunity_revision,profile_revision,version,content_sha256,created_at
+	  FROM application_packs WHERE opportunity_id=? ORDER BY version DESC LIMIT 100`, opportunityID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]ApplicationPackSummary, 0)
+	for rows.Next() {
+		var item ApplicationPackSummary
+		if err := rows.Scan(&item.ID, &item.OpportunityID, &item.OpportunityRevision, &item.ProfileRevision, &item.Version, &item.ContentSHA256, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func applicationPackContentHash(manifest, source, pdf []byte) string {
 	encoded, _ := json.Marshal(struct {
 		Manifest []byte
@@ -115,4 +146,42 @@ func (s *Store) ApplicationPack(ctx context.Context, id string) (ApplicationPack
 		return ApplicationPack{}, fmt.Errorf("%w: application pack digest mismatch", ErrInvalid)
 	}
 	return pack, nil
+}
+
+// CompletedApplicationPackMutation finds an already committed pack by its
+// guarded mutation request key. The initial tool digest lives inside the
+// immutable manifest, so a repeated key with changed draft is rejected before
+// another Jev request or render.
+func (s *Store) CompletedApplicationPackMutation(ctx context.Context, roundID, requestKey string) (RoundMutationResult, string, error) {
+	var operation string
+	var state RoundAttemptState
+	var resultJSON sql.NullString
+	err := s.db.QueryRowContext(ctx, `SELECT operation,state,result_json FROM round_attempts WHERE round_id=? AND request_key=?`, roundID, requestKey).Scan(&operation, &state, &resultJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RoundMutationResult{}, "", ErrNotFound
+	}
+	if err != nil {
+		return RoundMutationResult{}, "", err
+	}
+	if operation != RoundPrepareApplicationPack {
+		return RoundMutationResult{}, "", ErrRoundIdempotencyConflict
+	}
+	if state != AttemptSucceeded || !resultJSON.Valid {
+		return RoundMutationResult{}, "", ErrUncertain
+	}
+	var result RoundMutationResult
+	if err := json.Unmarshal([]byte(resultJSON.String), &result); err != nil || result.EntityKind != "application_pack" || result.EntityID == "" {
+		return RoundMutationResult{}, "", ErrInvalid
+	}
+	pack, err := s.ApplicationPack(ctx, result.EntityID)
+	if err != nil {
+		return RoundMutationResult{}, "", err
+	}
+	var manifest struct {
+		PreparationRequestSHA256 string `json:"preparationRequestSha256"`
+	}
+	if err := json.Unmarshal(pack.ManifestJSON, &manifest); err != nil || len(manifest.PreparationRequestSHA256) != 64 {
+		return RoundMutationResult{}, "", ErrInvalid
+	}
+	return result, manifest.PreparationRequestSHA256, nil
 }

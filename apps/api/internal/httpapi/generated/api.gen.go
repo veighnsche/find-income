@@ -130,6 +130,27 @@ func (e ApiErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for ApplicationPackRelevanceScope.
+const (
+	ApplicationPackRelevanceScopeRelevant  ApplicationPackRelevanceScope = "relevant"
+	ApplicationPackRelevanceScopeUncertain ApplicationPackRelevanceScope = "uncertain"
+	ApplicationPackRelevanceScopeUnrelated ApplicationPackRelevanceScope = "unrelated"
+)
+
+// Valid indicates whether the value is a known member of the ApplicationPackRelevanceScope enum.
+func (e ApplicationPackRelevanceScope) Valid() bool {
+	switch e {
+	case ApplicationPackRelevanceScopeRelevant:
+		return true
+	case ApplicationPackRelevanceScopeUncertain:
+		return true
+	case ApplicationPackRelevanceScopeUnrelated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CodexStatusState.
 const (
 	CodexStatusStateConnecting  CodexStatusState = "connecting"
@@ -571,6 +592,48 @@ func (e OpportunityDuplicateReason) Valid() bool {
 	}
 }
 
+// Defines values for OpportunityRouteKind.
+const (
+	OpportunityRouteKindDirect    OpportunityRouteKind = "direct"
+	OpportunityRouteKindRecruiter OpportunityRouteKind = "recruiter"
+	OpportunityRouteKindReferral  OpportunityRouteKind = "referral"
+)
+
+// Valid indicates whether the value is a known member of the OpportunityRouteKind enum.
+func (e OpportunityRouteKind) Valid() bool {
+	switch e {
+	case OpportunityRouteKindDirect:
+		return true
+	case OpportunityRouteKindRecruiter:
+		return true
+	case OpportunityRouteKindReferral:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OpportunityRouteInputKind.
+const (
+	OpportunityRouteInputKindDirect    OpportunityRouteInputKind = "direct"
+	OpportunityRouteInputKindRecruiter OpportunityRouteInputKind = "recruiter"
+	OpportunityRouteInputKindReferral  OpportunityRouteInputKind = "referral"
+)
+
+// Valid indicates whether the value is a known member of the OpportunityRouteInputKind enum.
+func (e OpportunityRouteInputKind) Valid() bool {
+	switch e {
+	case OpportunityRouteInputKindDirect:
+		return true
+	case OpportunityRouteInputKindRecruiter:
+		return true
+	case OpportunityRouteInputKindReferral:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrganisationAssessmentDisposition.
 const (
 	OrganisationAssessmentDispositionCategorySelected OrganisationAssessmentDisposition = "category_selected"
@@ -592,6 +655,7 @@ func (e OrganisationAssessmentDisposition) Valid() bool {
 // Defines values for OrganisationSummaryStatus.
 const (
 	OrganisationSummaryStatusFailed       OrganisationSummaryStatus = "failed"
+	OrganisationSummaryStatusNotAssessed  OrganisationSummaryStatus = "not_assessed"
 	OrganisationSummaryStatusOutdated     OrganisationSummaryStatus = "outdated"
 	OrganisationSummaryStatusPending      OrganisationSummaryStatus = "pending"
 	OrganisationSummaryStatusProcessing   OrganisationSummaryStatus = "processing"
@@ -604,6 +668,8 @@ const (
 func (e OrganisationSummaryStatus) Valid() bool {
 	switch e {
 	case OrganisationSummaryStatusFailed:
+		return true
+	case OrganisationSummaryStatusNotAssessed:
 		return true
 	case OrganisationSummaryStatusOutdated:
 		return true
@@ -625,6 +691,7 @@ func (e OrganisationSummaryStatus) Valid() bool {
 // Defines values for OrganisationViewStatus.
 const (
 	OrganisationViewStatusFailed       OrganisationViewStatus = "failed"
+	OrganisationViewStatusNotAssessed  OrganisationViewStatus = "not_assessed"
 	OrganisationViewStatusOutdated     OrganisationViewStatus = "outdated"
 	OrganisationViewStatusPending      OrganisationViewStatus = "pending"
 	OrganisationViewStatusProcessing   OrganisationViewStatus = "processing"
@@ -637,6 +704,8 @@ const (
 func (e OrganisationViewStatus) Valid() bool {
 	switch e {
 	case OrganisationViewStatusFailed:
+		return true
+	case OrganisationViewStatusNotAssessed:
 		return true
 	case OrganisationViewStatusOutdated:
 		return true
@@ -699,10 +768,11 @@ func (e OwnerDecisionInputDecision) Valid() bool {
 
 // Defines values for OwnerInstructionTargetKind.
 const (
-	OwnerInstructionTargetKindCampaign    OwnerInstructionTargetKind = "campaign"
-	OwnerInstructionTargetKindEvidence    OwnerInstructionTargetKind = "evidence"
-	OwnerInstructionTargetKindOpportunity OwnerInstructionTargetKind = "opportunity"
-	OwnerInstructionTargetKindProfile     OwnerInstructionTargetKind = "profile"
+	OwnerInstructionTargetKindCampaign     OwnerInstructionTargetKind = "campaign"
+	OwnerInstructionTargetKindEvidence     OwnerInstructionTargetKind = "evidence"
+	OwnerInstructionTargetKindOpportunity  OwnerInstructionTargetKind = "opportunity"
+	OwnerInstructionTargetKindProfile      OwnerInstructionTargetKind = "profile"
+	OwnerInstructionTargetKindRelationship OwnerInstructionTargetKind = "relationship"
 )
 
 // Valid indicates whether the value is a known member of the OwnerInstructionTargetKind enum.
@@ -716,6 +786,8 @@ func (e OwnerInstructionTargetKind) Valid() bool {
 		return true
 	case OwnerInstructionTargetKindProfile:
 		return true
+	case OwnerInstructionTargetKindRelationship:
+		return true
 	default:
 		return false
 	}
@@ -723,10 +795,11 @@ func (e OwnerInstructionTargetKind) Valid() bool {
 
 // Defines values for OwnerInstructionInputTargetKind.
 const (
-	OwnerInstructionInputTargetKindCampaign    OwnerInstructionInputTargetKind = "campaign"
-	OwnerInstructionInputTargetKindEvidence    OwnerInstructionInputTargetKind = "evidence"
-	OwnerInstructionInputTargetKindOpportunity OwnerInstructionInputTargetKind = "opportunity"
-	OwnerInstructionInputTargetKindProfile     OwnerInstructionInputTargetKind = "profile"
+	OwnerInstructionInputTargetKindCampaign     OwnerInstructionInputTargetKind = "campaign"
+	OwnerInstructionInputTargetKindEvidence     OwnerInstructionInputTargetKind = "evidence"
+	OwnerInstructionInputTargetKindOpportunity  OwnerInstructionInputTargetKind = "opportunity"
+	OwnerInstructionInputTargetKindProfile      OwnerInstructionInputTargetKind = "profile"
+	OwnerInstructionInputTargetKindRelationship OwnerInstructionInputTargetKind = "relationship"
 )
 
 // Valid indicates whether the value is a known member of the OwnerInstructionInputTargetKind enum.
@@ -739,6 +812,8 @@ func (e OwnerInstructionInputTargetKind) Valid() bool {
 	case OwnerInstructionInputTargetKindOpportunity:
 		return true
 	case OwnerInstructionInputTargetKindProfile:
+		return true
+	case OwnerInstructionInputTargetKindRelationship:
 		return true
 	default:
 		return false
@@ -1039,6 +1114,96 @@ func (e RecordChangeSnapshotState) Valid() bool {
 	}
 }
 
+// Defines values for RelationshipCounterpartyKind.
+const (
+	RelationshipCounterpartyKindContact   RelationshipCounterpartyKind = "contact"
+	RelationshipCounterpartyKindRecruiter RelationshipCounterpartyKind = "recruiter"
+	RelationshipCounterpartyKindReferrer  RelationshipCounterpartyKind = "referrer"
+)
+
+// Valid indicates whether the value is a known member of the RelationshipCounterpartyKind enum.
+func (e RelationshipCounterpartyKind) Valid() bool {
+	switch e {
+	case RelationshipCounterpartyKindContact:
+		return true
+	case RelationshipCounterpartyKindRecruiter:
+		return true
+	case RelationshipCounterpartyKindReferrer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RelationshipCounterpartyInputKind.
+const (
+	RelationshipCounterpartyInputKindContact   RelationshipCounterpartyInputKind = "contact"
+	RelationshipCounterpartyInputKindRecruiter RelationshipCounterpartyInputKind = "recruiter"
+	RelationshipCounterpartyInputKindReferrer  RelationshipCounterpartyInputKind = "referrer"
+)
+
+// Valid indicates whether the value is a known member of the RelationshipCounterpartyInputKind enum.
+func (e RelationshipCounterpartyInputKind) Valid() bool {
+	switch e {
+	case RelationshipCounterpartyInputKindContact:
+		return true
+	case RelationshipCounterpartyInputKindRecruiter:
+		return true
+	case RelationshipCounterpartyInputKindReferrer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RelationshipEventKind.
+const (
+	RelationshipEventKindConversation RelationshipEventKind = "conversation"
+	RelationshipEventKindIntroduction RelationshipEventKind = "introduction"
+	RelationshipEventKindOther        RelationshipEventKind = "other"
+	RelationshipEventKindReferral     RelationshipEventKind = "referral"
+)
+
+// Valid indicates whether the value is a known member of the RelationshipEventKind enum.
+func (e RelationshipEventKind) Valid() bool {
+	switch e {
+	case RelationshipEventKindConversation:
+		return true
+	case RelationshipEventKindIntroduction:
+		return true
+	case RelationshipEventKindOther:
+		return true
+	case RelationshipEventKindReferral:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RelationshipEventInputKind.
+const (
+	RelationshipEventInputKindConversation RelationshipEventInputKind = "conversation"
+	RelationshipEventInputKindIntroduction RelationshipEventInputKind = "introduction"
+	RelationshipEventInputKindOther        RelationshipEventInputKind = "other"
+	RelationshipEventInputKindReferral     RelationshipEventInputKind = "referral"
+)
+
+// Valid indicates whether the value is a known member of the RelationshipEventInputKind enum.
+func (e RelationshipEventInputKind) Valid() bool {
+	switch e {
+	case RelationshipEventInputKindConversation:
+		return true
+	case RelationshipEventInputKindIntroduction:
+		return true
+	case RelationshipEventInputKindOther:
+		return true
+	case RelationshipEventInputKindReferral:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RoleCriterionKind.
 const (
 	RoleCriterionKindResponsibility RoleCriterionKind = "responsibility"
@@ -1158,11 +1323,15 @@ func (e RoundState) Valid() bool {
 
 // Defines values for RoundMutationRequestOperation.
 const (
-	CompanyCreate              RoundMutationRequestOperation = "company.create"
-	OpportunityCreate          RoundMutationRequestOperation = "opportunity.create"
-	OpportunityOwnerCorrection RoundMutationRequestOperation = "opportunity.owner_correction"
-	OpportunitySourceSave      RoundMutationRequestOperation = "opportunity.source_save"
-	PreferencesCorrect         RoundMutationRequestOperation = "preferences.correct"
+	CompanyCreate                  RoundMutationRequestOperation = "company.create"
+	OpportunityCreate              RoundMutationRequestOperation = "opportunity.create"
+	OpportunityOwnerCorrection     RoundMutationRequestOperation = "opportunity.owner_correction"
+	OpportunitySourceSave          RoundMutationRequestOperation = "opportunity.source_save"
+	PreferencesCorrect             RoundMutationRequestOperation = "preferences.correct"
+	RelationshipCorrect            RoundMutationRequestOperation = "relationship.correct"
+	RelationshipCounterpartyCreate RoundMutationRequestOperation = "relationship.counterparty_create"
+	RelationshipEventCreate        RoundMutationRequestOperation = "relationship.event_create"
+	RelationshipRouteCreate        RoundMutationRequestOperation = "relationship.route_create"
 )
 
 // Valid indicates whether the value is a known member of the RoundMutationRequestOperation enum.
@@ -1178,6 +1347,14 @@ func (e RoundMutationRequestOperation) Valid() bool {
 		return true
 	case PreferencesCorrect:
 		return true
+	case RelationshipCorrect:
+		return true
+	case RelationshipCounterpartyCreate:
+		return true
+	case RelationshipEventCreate:
+		return true
+	case RelationshipRouteCreate:
+		return true
 	default:
 		return false
 	}
@@ -1185,22 +1362,34 @@ func (e RoundMutationRequestOperation) Valid() bool {
 
 // Defines values for RoundMutationResultEntityKind.
 const (
-	RoundMutationResultEntityKindCompany     RoundMutationResultEntityKind = "company"
-	RoundMutationResultEntityKindEvidence    RoundMutationResultEntityKind = "evidence"
-	RoundMutationResultEntityKindOpportunity RoundMutationResultEntityKind = "opportunity"
-	RoundMutationResultEntityKindPreferences RoundMutationResultEntityKind = "preferences"
+	RoundMutationResultEntityKindApplicationPack          RoundMutationResultEntityKind = "application_pack"
+	RoundMutationResultEntityKindCompany                  RoundMutationResultEntityKind = "company"
+	RoundMutationResultEntityKindEvidence                 RoundMutationResultEntityKind = "evidence"
+	RoundMutationResultEntityKindOpportunity              RoundMutationResultEntityKind = "opportunity"
+	RoundMutationResultEntityKindOpportunityRoute         RoundMutationResultEntityKind = "opportunity_route"
+	RoundMutationResultEntityKindPreferences              RoundMutationResultEntityKind = "preferences"
+	RoundMutationResultEntityKindRelationshipCounterparty RoundMutationResultEntityKind = "relationship_counterparty"
+	RoundMutationResultEntityKindRelationshipEvent        RoundMutationResultEntityKind = "relationship_event"
 )
 
 // Valid indicates whether the value is a known member of the RoundMutationResultEntityKind enum.
 func (e RoundMutationResultEntityKind) Valid() bool {
 	switch e {
+	case RoundMutationResultEntityKindApplicationPack:
+		return true
 	case RoundMutationResultEntityKindCompany:
 		return true
 	case RoundMutationResultEntityKindEvidence:
 		return true
 	case RoundMutationResultEntityKindOpportunity:
 		return true
+	case RoundMutationResultEntityKindOpportunityRoute:
+		return true
 	case RoundMutationResultEntityKindPreferences:
+		return true
+	case RoundMutationResultEntityKindRelationshipCounterparty:
+		return true
+	case RoundMutationResultEntityKindRelationshipEvent:
 		return true
 	default:
 		return false
@@ -1249,6 +1438,87 @@ func (e RoundOpportunityCorrectionWorkPattern) Valid() bool {
 	}
 }
 
+// Defines values for RoundScreeningCriterionKind.
+const (
+	RoundScreeningCriterionKindResponsibility RoundScreeningCriterionKind = "responsibility"
+	RoundScreeningCriterionKindRole           RoundScreeningCriterionKind = "role"
+	RoundScreeningCriterionKindTechnology     RoundScreeningCriterionKind = "technology"
+)
+
+// Valid indicates whether the value is a known member of the RoundScreeningCriterionKind enum.
+func (e RoundScreeningCriterionKind) Valid() bool {
+	switch e {
+	case RoundScreeningCriterionKindResponsibility:
+		return true
+	case RoundScreeningCriterionKindRole:
+		return true
+	case RoundScreeningCriterionKindTechnology:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoundScreeningCriterionMode.
+const (
+	RoundScreeningCriterionModeAvoid   RoundScreeningCriterionMode = "avoid"
+	RoundScreeningCriterionModePrefer  RoundScreeningCriterionMode = "prefer"
+	RoundScreeningCriterionModeRequire RoundScreeningCriterionMode = "require"
+)
+
+// Valid indicates whether the value is a known member of the RoundScreeningCriterionMode enum.
+func (e RoundScreeningCriterionMode) Valid() bool {
+	switch e {
+	case RoundScreeningCriterionModeAvoid:
+		return true
+	case RoundScreeningCriterionModePrefer:
+		return true
+	case RoundScreeningCriterionModeRequire:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoundScreeningViewConfirmed.
+const (
+	False RoundScreeningViewConfirmed = false
+)
+
+// Valid indicates whether the value is a known member of the RoundScreeningViewConfirmed enum.
+func (e RoundScreeningViewConfirmed) Valid() bool {
+	switch e {
+	case False:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoundScreeningViewStatus.
+const (
+	RoundScreeningViewStatusNotAssessed RoundScreeningViewStatus = "not_assessed"
+	RoundScreeningViewStatusOutdated    RoundScreeningViewStatus = "outdated"
+	RoundScreeningViewStatusProposed    RoundScreeningViewStatus = "proposed"
+	RoundScreeningViewStatusUnresolved  RoundScreeningViewStatus = "unresolved"
+)
+
+// Valid indicates whether the value is a known member of the RoundScreeningViewStatus enum.
+func (e RoundScreeningViewStatus) Valid() bool {
+	switch e {
+	case RoundScreeningViewStatusNotAssessed:
+		return true
+	case RoundScreeningViewStatusOutdated:
+		return true
+	case RoundScreeningViewStatusProposed:
+		return true
+	case RoundScreeningViewStatusUnresolved:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SessionResponseActorKind.
 const (
 	SessionResponseActorKindAdministrator SessionResponseActorKind = "administrator"
@@ -1266,16 +1536,16 @@ func (e SessionResponseActorKind) Valid() bool {
 
 // Defines values for StatementSourceInputSpeakerAffiliation.
 const (
-	EmployerRepresentative StatementSourceInputSpeakerAffiliation = "employer_representative"
-	Recruiter              StatementSourceInputSpeakerAffiliation = "recruiter"
+	StatementSourceInputSpeakerAffiliationEmployerRepresentative StatementSourceInputSpeakerAffiliation = "employer_representative"
+	StatementSourceInputSpeakerAffiliationRecruiter              StatementSourceInputSpeakerAffiliation = "recruiter"
 )
 
 // Valid indicates whether the value is a known member of the StatementSourceInputSpeakerAffiliation enum.
 func (e StatementSourceInputSpeakerAffiliation) Valid() bool {
 	switch e {
-	case EmployerRepresentative:
+	case StatementSourceInputSpeakerAffiliationEmployerRepresentative:
 		return true
-	case Recruiter:
+	case StatementSourceInputSpeakerAffiliationRecruiter:
 		return true
 	default:
 		return false
@@ -1523,6 +1793,104 @@ type ApiError struct {
 
 // ApiErrorCode Stable machine-readable error code.
 type ApiErrorCode string
+
+// ApplicationPackAnswer defines model for ApplicationPackAnswer.
+type ApplicationPackAnswer struct {
+	Lines    []ApplicationPackLine `json:"lines"`
+	Question string                `json:"question"`
+}
+
+// ApplicationPackCitation defines model for ApplicationPackCitation.
+type ApplicationPackCitation struct {
+	Excerpt  string `json:"excerpt"`
+	SourceId string `json:"sourceId"`
+}
+
+// ApplicationPackDetail defines model for ApplicationPackDetail.
+type ApplicationPackDetail struct {
+	ContentSha256       string                  `json:"contentSha256"`
+	CreatedAt           time.Time               `json:"createdAt"`
+	Id                  string                  `json:"id"`
+	Manifest            ApplicationPackManifest `json:"manifest"`
+	OpportunityId       string                  `json:"opportunityId"`
+	OpportunityRevision int64                   `json:"opportunityRevision"`
+	ProfileRevision     int64                   `json:"profileRevision"`
+	Version             int64                   `json:"version"`
+}
+
+// ApplicationPackDraft defines model for ApplicationPackDraft.
+type ApplicationPackDraft struct {
+	Answers          []ApplicationPackAnswer    `json:"answers"`
+	Cover            []ApplicationPackLine      `json:"cover"`
+	Focus            ApplicationPackLine        `json:"focus"`
+	MaterialUnknowns []string                   `json:"materialUnknowns"`
+	Relevance        []ApplicationPackRelevance `json:"relevance"`
+}
+
+// ApplicationPackLine defines model for ApplicationPackLine.
+type ApplicationPackLine struct {
+	Citations []ApplicationPackCitation `json:"citations"`
+	Text      string                    `json:"text"`
+}
+
+// ApplicationPackList defines model for ApplicationPackList.
+type ApplicationPackList struct {
+	Items []ApplicationPackSummary `json:"items"`
+}
+
+// ApplicationPackManifest defines model for ApplicationPackManifest.
+type ApplicationPackManifest struct {
+	Draft                    ApplicationPackDraft    `json:"draft"`
+	PreparationRequestSha256 *string                 `json:"preparationRequestSha256,omitempty"`
+	Role                     ApplicationPackRole     `json:"role"`
+	Sources                  []ApplicationPackSource `json:"sources"`
+	TemplateSha256           string                  `json:"templateSha256"`
+}
+
+// ApplicationPackRelevance defines model for ApplicationPackRelevance.
+type ApplicationPackRelevance struct {
+	Confidence  float32                       `json:"confidence"`
+	InputSha256 string                        `json:"inputSha256"`
+	Model       string                        `json:"model"`
+	Requirement string                        `json:"requirement"`
+	Scope       ApplicationPackRelevanceScope `json:"scope"`
+	SourceId    string                        `json:"sourceId"`
+}
+
+// ApplicationPackRelevanceScope defines model for ApplicationPackRelevance.Scope.
+type ApplicationPackRelevanceScope string
+
+// ApplicationPackRole defines model for ApplicationPackRole.
+type ApplicationPackRole struct {
+	Company             string `json:"company"`
+	Description         string `json:"description"`
+	Destination         string `json:"destination"`
+	OpportunityId       string `json:"opportunityId"`
+	OpportunityRevision int64  `json:"opportunityRevision"`
+	ProfileRevision     int64  `json:"profileRevision"`
+	SourceUrl           string `json:"sourceUrl"`
+	Title               string `json:"title"`
+}
+
+// ApplicationPackSource defines model for ApplicationPackSource.
+type ApplicationPackSource struct {
+	Approved bool   `json:"approved"`
+	Body     string `json:"body"`
+	Id       string `json:"id"`
+	Name     string `json:"name"`
+	Sha256   string `json:"sha256"`
+}
+
+// ApplicationPackSummary defines model for ApplicationPackSummary.
+type ApplicationPackSummary struct {
+	ContentSha256       string    `json:"contentSha256"`
+	CreatedAt           time.Time `json:"createdAt"`
+	Id                  string    `json:"id"`
+	OpportunityId       string    `json:"opportunityId"`
+	OpportunityRevision int64     `json:"opportunityRevision"`
+	ProfileRevision     int64     `json:"profileRevision"`
+	Version             int64     `json:"version"`
+}
 
 // ArchiveRequest defines model for ArchiveRequest.
 type ArchiveRequest struct {
@@ -1990,6 +2358,48 @@ type OpportunityPage struct {
 	NextCursor *string           `json:"nextCursor,omitempty"`
 }
 
+// OpportunityRoute defines model for OpportunityRoute.
+type OpportunityRoute struct {
+	CounterpartyId  *string              `json:"counterpartyId,omitempty"`
+	CreatedAt       time.Time            `json:"createdAt"`
+	DestinationText string               `json:"destinationText"`
+	EventId         *string              `json:"eventId,omitempty"`
+	Id              string               `json:"id"`
+	Kind            OpportunityRouteKind `json:"kind"`
+	ObservedAt      time.Time            `json:"observedAt"`
+	OpportunityId   string               `json:"opportunityId"`
+	Revision        int64                `json:"revision"`
+	SourceExcerpt   string               `json:"sourceExcerpt"`
+	SourceKind      string               `json:"sourceKind"`
+	SourceRef       *string              `json:"sourceRef,omitempty"`
+	UpdatedAt       time.Time            `json:"updatedAt"`
+}
+
+// OpportunityRouteKind defines model for OpportunityRoute.Kind.
+type OpportunityRouteKind string
+
+// OpportunityRouteInput defines model for OpportunityRouteInput.
+type OpportunityRouteInput struct {
+	CounterpartyId  *string                   `json:"counterpartyId,omitempty"`
+	DestinationText string                    `json:"destinationText"`
+	EventId         *string                   `json:"eventId,omitempty"`
+	Id              *string                   `json:"id,omitempty"`
+	Kind            OpportunityRouteInputKind `json:"kind"`
+	ObservedAt      time.Time                 `json:"observedAt"`
+	OpportunityId   string                    `json:"opportunityId"`
+	SourceExcerpt   string                    `json:"sourceExcerpt"`
+	SourceKind      string                    `json:"sourceKind"`
+	SourceRef       *string                   `json:"sourceRef,omitempty"`
+}
+
+// OpportunityRouteInputKind defines model for OpportunityRouteInput.Kind.
+type OpportunityRouteInputKind string
+
+// OpportunityRouteList defines model for OpportunityRouteList.
+type OpportunityRouteList struct {
+	Items []OpportunityRoute `json:"items"`
+}
+
 // OpportunityView defines model for OpportunityView.
 type OpportunityView struct {
 	LikelyDuplicates []OpportunityDuplicate `json:"likelyDuplicates"`
@@ -2213,6 +2623,12 @@ type PreferencesResponse struct {
 	Version             int64               `json:"version"`
 }
 
+// PrepareRoundRequest Owner selects an existing sourced opportunity; the server derives all pack details and authority.
+type PrepareRoundRequest struct {
+	OpportunityId string `json:"opportunityId"`
+	RequestKey    string `json:"requestKey"`
+}
+
 // QualificationCriterion defines model for QualificationCriterion.
 type QualificationCriterion struct {
 	Blocking    *bool                       `json:"blocking,omitempty"`
@@ -2390,6 +2806,99 @@ type RecordChangePage struct {
 	Watermark  int64          `json:"watermark"`
 }
 
+// RelationshipCounterparty defines model for RelationshipCounterparty.
+type RelationshipCounterparty struct {
+	CreatedAt        time.Time                    `json:"createdAt"`
+	DisplayName      string                       `json:"displayName"`
+	Id               string                       `json:"id"`
+	Kind             RelationshipCounterpartyKind `json:"kind"`
+	ObservedAt       time.Time                    `json:"observedAt"`
+	OrganizationText string                       `json:"organizationText"`
+	Revision         int64                        `json:"revision"`
+	SourceExcerpt    string                       `json:"sourceExcerpt"`
+	SourceKind       string                       `json:"sourceKind"`
+	SourceRef        *string                      `json:"sourceRef,omitempty"`
+	UpdatedAt        time.Time                    `json:"updatedAt"`
+}
+
+// RelationshipCounterpartyKind defines model for RelationshipCounterparty.Kind.
+type RelationshipCounterpartyKind string
+
+// RelationshipCounterpartyInput defines model for RelationshipCounterpartyInput.
+type RelationshipCounterpartyInput struct {
+	DisplayName      string                            `json:"displayName"`
+	Id               *string                           `json:"id,omitempty"`
+	Kind             RelationshipCounterpartyInputKind `json:"kind"`
+	ObservedAt       time.Time                         `json:"observedAt"`
+	OrganizationText string                            `json:"organizationText"`
+	SourceExcerpt    string                            `json:"sourceExcerpt"`
+	SourceKind       string                            `json:"sourceKind"`
+	SourceRef        *string                           `json:"sourceRef,omitempty"`
+}
+
+// RelationshipCounterpartyInputKind defines model for RelationshipCounterpartyInput.Kind.
+type RelationshipCounterpartyInputKind string
+
+// RelationshipCounterpartyList defines model for RelationshipCounterpartyList.
+type RelationshipCounterpartyList struct {
+	Items []RelationshipCounterparty `json:"items"`
+}
+
+// RelationshipEvent defines model for RelationshipEvent.
+type RelationshipEvent struct {
+	CounterpartyId *string               `json:"counterpartyId,omitempty"`
+	CreatedAt      time.Time             `json:"createdAt"`
+	Id             string                `json:"id"`
+	Kind           RelationshipEventKind `json:"kind"`
+	ObservedAt     time.Time             `json:"observedAt"`
+	OpportunityId  *string               `json:"opportunityId,omitempty"`
+	Revision       int64                 `json:"revision"`
+	SourceExcerpt  string                `json:"sourceExcerpt"`
+	SourceKind     string                `json:"sourceKind"`
+	SourceRef      *string               `json:"sourceRef,omitempty"`
+	Summary        string                `json:"summary"`
+	UpdatedAt      time.Time             `json:"updatedAt"`
+}
+
+// RelationshipEventKind defines model for RelationshipEvent.Kind.
+type RelationshipEventKind string
+
+// RelationshipEventInput defines model for RelationshipEventInput.
+type RelationshipEventInput struct {
+	CounterpartyId *string                    `json:"counterpartyId,omitempty"`
+	Id             *string                    `json:"id,omitempty"`
+	Kind           RelationshipEventInputKind `json:"kind"`
+	ObservedAt     time.Time                  `json:"observedAt"`
+	OpportunityId  *string                    `json:"opportunityId,omitempty"`
+	SourceExcerpt  string                     `json:"sourceExcerpt"`
+	SourceKind     string                     `json:"sourceKind"`
+	SourceRef      *string                    `json:"sourceRef,omitempty"`
+	Summary        string                     `json:"summary"`
+}
+
+// RelationshipEventInputKind defines model for RelationshipEventInput.Kind.
+type RelationshipEventInputKind string
+
+// RelationshipEventList defines model for RelationshipEventList.
+type RelationshipEventList struct {
+	Items []RelationshipEvent `json:"items"`
+}
+
+// RelationshipMutation defines model for RelationshipMutation.
+type RelationshipMutation struct {
+	Counterparty *RelationshipCounterpartyInput `json:"counterparty,omitempty"`
+	Event        *RelationshipEventInput        `json:"event,omitempty"`
+	Route        *OpportunityRouteInput         `json:"route,omitempty"`
+}
+
+// RelationshipSource defines model for RelationshipSource.
+type RelationshipSource struct {
+	ObservedAt    time.Time `json:"observedAt"`
+	SourceExcerpt string    `json:"sourceExcerpt"`
+	SourceKind    string    `json:"sourceKind"`
+	SourceRef     *string   `json:"sourceRef,omitempty"`
+}
+
 // RescheduleActionRequest defines model for RescheduleActionRequest.
 type RescheduleActionRequest struct {
 	// Due Exactly date or at plus timezone is required; the server rejects mixed or incomplete shapes.
@@ -2531,6 +3040,7 @@ type RoundMutationRequest struct {
 	OpportunityPatch   *RoundOpportunityCorrection `json:"opportunityPatch,omitempty"`
 	OwnerInstructionId *string                     `json:"ownerInstructionId,omitempty"`
 	Preferences        *RoundPreferences           `json:"preferences,omitempty"`
+	Relationship       *RelationshipMutation       `json:"relationship,omitempty"`
 	RequestKey         string                      `json:"requestKey"`
 	ResourceId         string                      `json:"resourceId"`
 	SourceOpportunity  *RoundSourceOpportunity     `json:"sourceOpportunity,omitempty"`
@@ -2596,6 +3106,103 @@ type RoundScope struct {
 	Operations []string `json:"operations"`
 	Resources  []string `json:"resources"`
 }
+
+// RoundScreeningAssessment defines model for RoundScreeningAssessment.
+type RoundScreeningAssessment struct {
+	CreatedAt           time.Time            `json:"createdAt"`
+	Id                  string               `json:"id"`
+	Input               RoundScreeningInput  `json:"input"`
+	OmittedBytes        int                  `json:"omittedBytes"`
+	OpportunityRevision int64                `json:"opportunityRevision"`
+	ProfileVersion      int64                `json:"profileVersion"`
+	Result              RoundScreeningResult `json:"result"`
+	SourceId            string               `json:"sourceId"`
+	SourceRevision      string               `json:"sourceRevision"`
+}
+
+// RoundScreeningCriterion defines model for RoundScreeningCriterion.
+type RoundScreeningCriterion struct {
+	Description string                      `json:"description"`
+	Id          string                      `json:"id"`
+	Kind        RoundScreeningCriterionKind `json:"kind"`
+	Label       string                      `json:"label"`
+	Mode        RoundScreeningCriterionMode `json:"mode"`
+}
+
+// RoundScreeningCriterionKind defines model for RoundScreeningCriterion.Kind.
+type RoundScreeningCriterionKind string
+
+// RoundScreeningCriterionMode defines model for RoundScreeningCriterion.Mode.
+type RoundScreeningCriterionMode string
+
+// RoundScreeningInput defines model for RoundScreeningInput.
+type RoundScreeningInput struct {
+	Criteria          []RoundScreeningCriterion `json:"criteria"`
+	MaxTotalTokens    int64                     `json:"max_total_tokens"`
+	PreferenceVersion int64                     `json:"preference_version"`
+	Spans             []RoundScreeningSpan      `json:"spans"`
+}
+
+// RoundScreeningObservation defines model for RoundScreeningObservation.
+type RoundScreeningObservation struct {
+	Confidence        float32                 `json:"confidence"`
+	CriterionId       string                  `json:"criterion_id"`
+	DefinitionSha256  string                  `json:"definition_sha256"`
+	Probabilities     map[string]float32      `json:"probabilities"`
+	ProposedSupport   []RoundScreeningSupport `json:"proposed_support"`
+	Scope             string                  `json:"scope"`
+	SupportConfidence *float32                `json:"support_confidence,omitempty"`
+	SupportState      string                  `json:"support_state"`
+}
+
+// RoundScreeningResult defines model for RoundScreeningResult.
+type RoundScreeningResult struct {
+	InputSha256       string                      `json:"input_sha256"`
+	InputSpans        []RoundScreeningSupport     `json:"input_spans"`
+	Observations      []RoundScreeningObservation `json:"observations"`
+	PreferenceVersion int64                       `json:"preference_version"`
+	RequestedModel    string                      `json:"requested_model"`
+	ReturnedModel     string                      `json:"returned_model"`
+	RubricVersion     int                         `json:"rubric_version"`
+	Usage             RoundScreeningUsage         `json:"usage"`
+}
+
+// RoundScreeningSpan defines model for RoundScreeningSpan.
+type RoundScreeningSpan struct {
+	Excerpt        string  `json:"excerpt"`
+	Id             string  `json:"id"`
+	ObservedAt     *string `json:"observed_at,omitempty"`
+	SourceId       string  `json:"source_id"`
+	SourceKind     string  `json:"source_kind"`
+	SourceRevision string  `json:"source_revision"`
+}
+
+// RoundScreeningSupport defines model for RoundScreeningSupport.
+type RoundScreeningSupport struct {
+	SourceId       string `json:"source_id"`
+	SourceKind     string `json:"source_kind"`
+	SourceRevision string `json:"source_revision"`
+	SpanId         string `json:"span_id"`
+}
+
+// RoundScreeningUsage defines model for RoundScreeningUsage.
+type RoundScreeningUsage struct {
+	InputTokens  int64 `json:"input_tokens"`
+	OutputTokens int64 `json:"output_tokens"`
+}
+
+// RoundScreeningView defines model for RoundScreeningView.
+type RoundScreeningView struct {
+	Confirmed RoundScreeningViewConfirmed `json:"confirmed"`
+	Current   *RoundScreeningAssessment   `json:"current"`
+	Status    RoundScreeningViewStatus    `json:"status"`
+}
+
+// RoundScreeningViewConfirmed defines model for RoundScreeningView.Confirmed.
+type RoundScreeningViewConfirmed bool
+
+// RoundScreeningViewStatus defines model for RoundScreeningView.Status.
+type RoundScreeningViewStatus string
 
 // RoundSourceOpportunity defines model for RoundSourceOpportunity.
 type RoundSourceOpportunity struct {
@@ -2900,6 +3507,9 @@ type AddOwnerInstructionJSONRequestBody = OwnerInstructionInput
 
 // StartRoundJSONRequestBody defines body for StartRound for application/json ContentType.
 type StartRoundJSONRequestBody = StartRoundRequest
+
+// PrepareRoundJSONRequestBody defines body for PrepareRound for application/json ContentType.
+type PrepareRoundJSONRequestBody = PrepareRoundRequest
 
 // ApplyRoundMutationJSONRequestBody defines body for ApplyRoundMutation for application/json ContentType.
 type ApplyRoundMutationJSONRequestBody = RoundMutationRequest

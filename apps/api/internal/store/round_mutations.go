@@ -13,25 +13,32 @@ import (
 )
 
 const (
-	RoundCreateCompany         = "company.create"
-	RoundCreateOpportunity     = "opportunity.create"
-	RoundSaveSourceOpportunity = "opportunity.source_save"
-	RoundCorrectPreferences    = "preferences.correct"
-	RoundCorrectEvidence       = "evidence.correct"
-	RoundCorrectOpportunity    = "opportunity.owner_correction"
-	RoundFetchSource           = "source.fetch"
-	RoundCollectorPage         = "source.page"
-	RoundSearchSource          = "source.search"
-	RoundCodexTurn             = "codex.turn"
-	RoundContextTool           = "round.context"
-	RoundJevRequest            = "jev.request"
+	RoundCreateCompany                  = "company.create"
+	RoundCreateOpportunity              = "opportunity.create"
+	RoundSaveSourceOpportunity          = "opportunity.source_save"
+	RoundCorrectPreferences             = "preferences.correct"
+	RoundCorrectEvidence                = "evidence.correct"
+	RoundCorrectOpportunity             = "opportunity.owner_correction"
+	RoundStageDiscovery                 = "discovery.candidate_stage"
+	RoundRegisterDiscoveryBoard         = "discovery.board_register"
+	RoundPrepareApplicationPack         = "application_pack.prepare"
+	RoundRelationshipCounterpartyCreate = "relationship.counterparty_create"
+	RoundRelationshipEventCreate        = "relationship.event_create"
+	RoundRelationshipRouteCreate        = "relationship.route_create"
+	RoundRelationshipCorrect            = "relationship.correct"
+	RoundFetchSource                    = "source.fetch"
+	RoundCollectorPage                  = "source.page"
+	RoundSearchSource                   = "source.search"
+	RoundCodexTurn                      = "codex.turn"
+	RoundContextTool                    = "round.context"
+	RoundJevRequest                     = "jev.request"
 )
 
 // The caller chooses an operation, never its charge. Later connectors can add
 // reviewed operations here without changing the reservation ledger.
 func RoundOperationCost(operation string) (RoundAllowance, bool) {
 	switch operation {
-	case RoundCreateCompany, RoundCreateOpportunity, RoundSaveSourceOpportunity, RoundCorrectPreferences, RoundCorrectEvidence, RoundCorrectOpportunity:
+	case RoundCreateCompany, RoundCreateOpportunity, RoundSaveSourceOpportunity, RoundCorrectPreferences, RoundCorrectEvidence, RoundCorrectOpportunity, RoundRelationshipCounterpartyCreate, RoundRelationshipEventCreate, RoundRelationshipRouteCreate, RoundRelationshipCorrect:
 		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
 	case RoundFetchSource, RoundSearchSource:
 		return RoundAllowance{Requests: 1, Tools: 1}, true
@@ -41,6 +48,10 @@ func RoundOperationCost(operation string) (RoundAllowance, bool) {
 		return RoundAllowance{Tools: 1}, true
 	case RoundJevRequest:
 		return RoundAllowance{Requests: 1}, true
+	case RoundStageDiscovery, RoundRegisterDiscoveryBoard:
+		return RoundAllowance{Items: 1, Tools: 1}, true
+	case RoundPrepareApplicationPack:
+		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
 	default:
 		return RoundAllowance{}, false
 	}
@@ -57,6 +68,8 @@ type RoundMutationInput struct {
 	OwnerInstructionID string                          `json:"ownerInstructionId,omitempty"`
 	Preferences        *Preferences                    `json:"preferences,omitempty"`
 	OpportunityPatch   *OpportunityPatch               `json:"opportunityPatch,omitempty"`
+	ApplicationPack    *ApplicationPackMutationInput   `json:"applicationPack,omitempty"`
+	Relationship       *RelationshipMutationInput      `json:"relationship,omitempty"`
 	Capability         string                          `json:"-"`
 }
 
@@ -100,6 +113,10 @@ func validRoundMutation(input RoundMutationInput) bool {
 		input.ExpectedRevision < 1 {
 		return false
 	}
+	if input.Operation != RoundPrepareApplicationPack && input.ApplicationPack != nil ||
+		input.Operation != RoundRelationshipCounterpartyCreate && input.Operation != RoundRelationshipEventCreate && input.Operation != RoundRelationshipRouteCreate && input.Operation != RoundRelationshipCorrect && input.Relationship != nil {
+		return false
+	}
 	switch input.Operation {
 	case RoundCreateCompany:
 		return input.Company != nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.ResourceID == "campaign:active"
@@ -111,6 +128,16 @@ func validRoundMutation(input RoundMutationInput) bool {
 			input.SourceOpportunity.SourceOpeningID != "" && input.SourceOpportunity.CompanyID != "" &&
 			input.SourceOpportunity.ExpectedRevision == input.ExpectedRevision &&
 			input.ResourceID == "source-opening:"+input.SourceOpportunity.SourceOpeningID
+	case RoundPrepareApplicationPack:
+		return input.ApplicationPack != nil && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.ResourceID == "opportunity:"+input.ApplicationPack.OpportunityID && input.ExpectedRevision == input.ApplicationPack.ExpectedOpportunityRevision
+	case RoundRelationshipCounterpartyCreate:
+		return input.Relationship != nil && input.Relationship.Counterparty != nil && presentRelationshipInput(*input.Relationship) == 1 && input.Relationship.Counterparty.ID == "" && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.ResourceID == "campaign:active"
+	case RoundRelationshipEventCreate:
+		return input.Relationship != nil && input.Relationship.Event != nil && presentRelationshipInput(*input.Relationship) == 1 && input.Relationship.Event.ID == "" && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.ResourceID == "campaign:active"
+	case RoundRelationshipRouteCreate:
+		return input.Relationship != nil && input.Relationship.Route != nil && presentRelationshipInput(*input.Relationship) == 1 && input.Relationship.Route.ID == "" && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.ResourceID == "opportunity:"+input.Relationship.Route.OpportunityID
+	case RoundRelationshipCorrect:
+		return input.Relationship != nil && presentRelationshipInput(*input.Relationship) == 1 && relationshipInputID(*input.Relationship) != "" && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID != "" && input.ResourceID == "relationship:"+relationshipInputID(*input.Relationship)
 	case RoundCorrectPreferences:
 		return input.OwnerInstructionID != "" && input.Preferences != nil &&
 			input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil &&
@@ -145,6 +172,33 @@ func roundHasCompanyTx(ctx context.Context, tx *sql.Tx, round Round, companyID s
 	return err == nil && linked > 0
 }
 
+func roundHasOpportunityTx(ctx context.Context, tx *sql.Tx, round Round, opportunityID string) bool {
+	if scopeHas(round.Scope.Resources, "opportunity:"+opportunityID) {
+		return true
+	}
+	var linked int
+	err := tx.QueryRowContext(ctx, `SELECT count(*) FROM round_record_changes rc JOIN audit_changes ac ON ac.id=rc.audit_id WHERE rc.round_id=? AND ac.entity_kind='opportunity' AND ac.entity_id=?`, round.ID, opportunityID).Scan(&linked)
+	return err == nil && linked > 0
+}
+
+func checkRelationshipInstructionTx(ctx context.Context, tx *sql.Tx, round Round, input RoundMutationInput) error {
+	if input.Relationship == nil || input.OwnerInstructionID == "" {
+		return ErrFenced
+	}
+	id := relationshipInputID(*input.Relationship)
+	var targetKind, targetID, instructionRound, instructionOwner string
+	var expected int64
+	var revoked sql.NullString
+	err := tx.QueryRowContext(ctx, `SELECT target_kind,target_id,expected_revision,COALESCE(round_id,''),revoked_at,actor_id FROM owner_instructions WHERE id=?`, input.OwnerInstructionID).Scan(&targetKind, &targetID, &expected, &instructionRound, &revoked, &instructionOwner)
+	if err != nil {
+		return err
+	}
+	if targetKind != "relationship" || targetID != id || expected != input.ExpectedRevision || revoked.Valid || instructionOwner != round.Actor.ID || instructionRound != round.ID && (instructionRound != "" || !scopeHas(round.Scope.InputRefs, "instruction:"+input.OwnerInstructionID)) {
+		return ErrFenced
+	}
+	return nil
+}
+
 // ApplyRoundMutation is the supported synchronous record-write boundary. The
 // actor/scope/generation/revision check, server-owned charge, domain write,
 // audit, attempt result and round change link commit or roll back together.
@@ -177,6 +231,26 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 	}
 	if !scopeAllowsActor(round.Scope, actor) {
 		return RoundMutationResult{}, false, ErrFenced
+	}
+	if input.Operation == RoundRelationshipEventCreate && input.Relationship.Event.OpportunityID != "" && !roundHasOpportunityTx(ctx, tx, round, input.Relationship.Event.OpportunityID) {
+		return RoundMutationResult{}, false, ErrFenced
+	}
+	if input.Operation == RoundRelationshipRouteCreate && !roundHasOpportunityTx(ctx, tx, round, input.Relationship.Route.OpportunityID) {
+		return RoundMutationResult{}, false, ErrFenced
+	}
+	if input.Operation == RoundRelationshipRouteCreate {
+		var revision int64
+		if err := tx.QueryRowContext(ctx, `SELECT revision FROM opportunities WHERE id=? AND archived_at IS NULL`, input.Relationship.Route.OpportunityID).Scan(&revision); err != nil {
+			return RoundMutationResult{}, false, err
+		}
+		if revision != input.ExpectedRevision {
+			return RoundMutationResult{}, false, ErrConflict
+		}
+	}
+	if input.Operation == RoundRelationshipCorrect {
+		if err := checkRelationshipInstructionTx(ctx, tx, round, input); err != nil {
+			return RoundMutationResult{}, false, err
+		}
 	}
 	if !scopeAllows(round.Scope, input.Operation, input.ResourceID) {
 		// A company created and audited by this round becomes a scoped child
@@ -222,6 +296,19 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 				return RoundMutationResult{}, false, err
 			}
 			if !roundHasCompanyTx(ctx, tx, round, companyID) {
+				return RoundMutationResult{}, false, ErrFenced
+			}
+		case RoundPrepareApplicationPack:
+			var linked int
+			err := tx.QueryRowContext(ctx, `SELECT count(*) FROM round_record_changes rc JOIN audit_changes ac ON ac.id=rc.audit_id WHERE rc.round_id=? AND ac.entity_kind='opportunity' AND ac.entity_id=?`, roundID, input.ApplicationPack.OpportunityID).Scan(&linked)
+			if err != nil {
+				return RoundMutationResult{}, false, err
+			}
+			if linked == 0 {
+				return RoundMutationResult{}, false, ErrFenced
+			}
+		case RoundRelationshipRouteCreate:
+			if !roundHasOpportunityTx(ctx, tx, round, input.Relationship.Route.OpportunityID) {
 				return RoundMutationResult{}, false, ErrFenced
 			}
 		default:
@@ -350,6 +437,11 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 	if input.Operation == RoundSaveSourceOpportunity {
 		entityID, revision, auditID, err = saveSourcedOpportunityTx(ctx, tx, actor, *input.SourceOpportunity)
 		kind = "opportunity"
+	} else if input.Operation == RoundPrepareApplicationPack {
+		entityID, revision, err = createApplicationPackTx(ctx, tx, *input.ApplicationPack)
+		kind = "application_pack"
+	} else if input.Operation == RoundRelationshipCounterpartyCreate || input.Operation == RoundRelationshipEventCreate || input.Operation == RoundRelationshipRouteCreate || input.Operation == RoundRelationshipCorrect {
+		entityID, kind, revision, err = writeRelationshipTx(ctx, tx, input.Operation, input.ExpectedRevision, *input.Relationship)
 	} else if input.Operation == RoundCorrectPreferences {
 		next := *input.Preferences
 		next.Version, next.Actor, next.CreatedAt = profileVersion+1, actor, now
@@ -384,7 +476,7 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 		if err != nil {
 			return RoundMutationResult{}, false, err
 		}
-		if input.Operation == RoundCorrectOpportunity {
+		if input.Operation == RoundCorrectOpportunity || input.Operation == RoundRelationshipCorrect {
 			_, err = tx.ExecContext(ctx, `INSERT INTO audit_changes
 			  (id,actor_kind,actor_id,operation,entity_kind,entity_id,revision_before,revision_after,occurred_at)
 			  VALUES (?,?,?,?,?,?,?,?,?)`, auditID, actor.Kind, actor.ID, input.Operation, kind, entityID,
@@ -392,13 +484,13 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 		} else {
 			_, err = tx.ExecContext(ctx, `INSERT INTO audit_changes
   (id,actor_kind,actor_id,operation,entity_kind,entity_id,revision_after,occurred_at)
-  VALUES (?,?,?,?,?,?,1,?)`, auditID, actor.Kind, actor.ID, input.Operation, kind, entityID, now)
+  VALUES (?,?,?,?,?,?,?,?)`, auditID, actor.Kind, actor.ID, input.Operation, kind, entityID, revision, now)
 		}
 		if err != nil {
 			return RoundMutationResult{}, false, err
 		}
 	}
-	if input.Operation == RoundCorrectPreferences || input.Operation == RoundCorrectOpportunity {
+	if input.Operation == RoundCorrectPreferences || input.Operation == RoundCorrectOpportunity || input.Operation == RoundRelationshipCorrect {
 		if _, err = tx.ExecContext(ctx, `INSERT INTO owner_instruction_applications(audit_id,instruction_id) VALUES (?,?)`, auditID, input.OwnerInstructionID); err != nil {
 			return RoundMutationResult{}, false, err
 		}

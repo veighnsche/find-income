@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -92,6 +93,15 @@ func TestRejectBrokenProvenanceAndTemplate(t *testing.T) {
 	input.CVTemplate = []byte("#import \"@preview/unsafe\": *")
 	if !errors.Is(validate(input), ErrInvalid) {
 		t.Fatal("untrusted template accepted")
+	}
+	input = fixture(t)
+	input.Draft.Relevance = []Relevance{{Requirement: "Go service", SourceID: "cv-vince-liem.md", Scope: "relevant", Confidence: math.NaN(), InputSHA256: strings.Repeat("a", 64), Model: "fixture"}}
+	if !errors.Is(validate(input), ErrInvalid) {
+		t.Fatal("NaN Jev confidence accepted")
+	}
+	input.Draft.Relevance[0].Confidence = math.Inf(1)
+	if !errors.Is(validate(input), ErrInvalid) {
+		t.Fatal("infinite Jev confidence accepted")
 	}
 }
 

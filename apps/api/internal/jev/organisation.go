@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // Organisation assigns a reversible organisational box. It is not a fit
@@ -180,7 +181,7 @@ func canonicalOrganisationInput(input OrganisationInput) (OrganisationInput, err
 			!boundedOrganisationText(fact.SourceID, 128) || !boundedOrganisationText(fact.SourceRevision, 128) ||
 			!boundedOrganisationText(fact.SourceKind, 80) ||
 			(fact.ObservedAt != "" && !boundedOrganisationText(fact.ObservedAt, 80)) ||
-			!boundedOrganisationText(fact.Excerpt, 2000) {
+			!boundedExactExcerpt(fact.Excerpt, 2000) {
 			return OrganisationInput{}, &Error{Kind: ErrInvalidRequest}
 		}
 		seenFacts[fact.ID] = true
@@ -192,4 +193,8 @@ func canonicalOrganisationInput(input OrganisationInput) (OrganisationInput, err
 
 func boundedOrganisationText(value string, maximum int) bool {
 	return value != "" && value == strings.TrimSpace(value) && len(value) <= maximum
+}
+
+func boundedExactExcerpt(value string, maximum int) bool {
+	return len(value) <= maximum && utf8.ValidString(value) && strings.TrimSpace(value) != ""
 }

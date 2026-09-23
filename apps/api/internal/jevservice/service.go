@@ -39,11 +39,13 @@ type Service struct {
 }
 
 type Binding struct {
-	Actor            store.Actor
-	RoundID          string
-	ResourceID       string // Must be in the active round scope.
-	RequestKeyPrefix string // Stable for one judgment; each HTTP stage adds an index.
-	ProfileVersion   int64
+	Actor             store.Actor
+	RoundID           string
+	ResourceID        string // Must be in the active round scope.
+	RequestKeyPrefix  string // Stable for one judgment; each HTTP stage adds an index.
+	ProfileVersion    int64
+	BoundCapability   string // Scoped agent-tool authority, when supplied.
+	MaxReportedTokens int64  // Optional except for pack relevance.
 }
 
 type recordedStage struct {
@@ -53,14 +55,15 @@ type recordedStage struct {
 }
 
 type recordingEvaluator struct {
-	service    Service
-	binding    Binding
-	purpose    string
-	rubric     string
-	sourceRefs []byte
-	candidates []byte
-	stages     []recordedStage
-	deadline   time.Time
+	service           Service
+	binding           Binding
+	purpose           string
+	rubric            string
+	sourceRefs        []byte
+	candidates        []byte
+	maxReportedTokens int64
+	stages            []recordedStage
+	deadline          time.Time
 }
 
 func (r *recordingEvaluator) Evaluate(ctx context.Context, request jev.Request) (jev.Result, error) {
@@ -84,7 +87,7 @@ func (r *recordingEvaluator) Evaluate(ctx context.Context, request jev.Request) 
 	cost, _ := store.RoundOperationCost(store.RoundJevRequest)
 	roundAttempt, created, err := r.service.Store.ReserveRoundAttempt(ctx, r.binding.Actor, r.binding.RoundID,
 		store.RoundAttemptInput{RequestKey: fmt.Sprintf("%s/%d", r.binding.RequestKeyPrefix, step),
-			Operation: store.RoundJevRequest, ResourceID: r.binding.ResourceID, Cost: cost})
+			Operation: store.RoundJevRequest, ResourceID: r.binding.ResourceID, Cost: cost, BoundCapability: r.binding.BoundCapability})
 	if err != nil {
 		return jev.Result{}, err
 	}
@@ -115,6 +118,11 @@ func (r *recordingEvaluator) Evaluate(ctx context.Context, request jev.Request) 
 		}
 	} else {
 		err = preparationErr
+	}
+	if err == nil && r.maxReportedTokens > 0 &&
+		(result.Usage.InputTokens > r.maxReportedTokens || result.Usage.OutputTokens > r.maxReportedTokens-result.Usage.InputTokens) {
+		err = &jev.Error{Kind: jev.ErrBudgetExceeded}
+		result = jev.Result{}
 	}
 	status, kind := classifyAttempt(err)
 	if exchange.ResponseTruncated {

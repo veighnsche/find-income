@@ -225,6 +225,24 @@ func ScreenResponsibilities(ctx context.Context, evaluator Evaluator, input Scre
 	return out, nil
 }
 
+// ScreeningInputSHA256 binds a captured input to the same canonical rubric
+// snapshot used by ScreenResponsibilities. Store writers recheck it under lock.
+func ScreeningInputSHA256(input ScreeningInput) (string, error) {
+	canonical, err := canonicalScreeningInput(input)
+	if err != nil {
+		return "", err
+	}
+	encoded, err := json.Marshal(struct {
+		RubricVersion int `json:"rubric_version"`
+		ScreeningInput
+	}{ScreeningRubricVersion, canonical})
+	if err != nil {
+		return "", &Error{Kind: ErrInvalidRequest}
+	}
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:]), nil
+}
+
 func supportFromSpan(span ScreeningSpan) ScreeningSupport {
 	return ScreeningSupport{SpanID: span.ID, SourceID: span.SourceID, SourceRevision: span.SourceRevision, SourceKind: span.SourceKind}
 }
@@ -279,7 +297,7 @@ func canonicalScreeningInput(input ScreeningInput) (ScreeningInput, error) {
 	seen = map[string]bool{}
 	for _, span := range out.Spans {
 		if !boundedOrganisationText(span.ID, 128) || seen[span.ID] || !boundedOrganisationText(span.SourceID, 128) || !boundedOrganisationText(span.SourceRevision, 128) || !boundedOrganisationText(span.SourceKind, 80) ||
-			(span.ObservedAt != "" && !boundedOrganisationText(span.ObservedAt, 80)) || !boundedOrganisationText(span.Excerpt, 2000) {
+			(span.ObservedAt != "" && !boundedOrganisationText(span.ObservedAt, 80)) || !boundedExactExcerpt(span.Excerpt, 2000) {
 			return ScreeningInput{}, &Error{Kind: ErrInvalidRequest}
 		}
 		seen[span.ID] = true

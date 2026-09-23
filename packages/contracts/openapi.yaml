@@ -68,6 +68,22 @@ paths:
           }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /rounds/prepare:
+    post:
+      operationId: prepareRound
+      summary: Owner commissions a private pack for a selected sourced opportunity
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PrepareRoundRequest' }
+      responses:
+        '200': { description: Existing round, content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } } }
+        '201': { description: Round created, content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /rounds/{id}:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     get:
@@ -527,6 +543,74 @@ paths:
               schema: { $ref: '#/components/schemas/OrganisationView' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /opportunities/{id}/screening:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getOpportunityScreening
+      summary: Read current sourced Jev screening proposal, separate from confirmed qualification
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200': { description: Screening proposal status, content: { application/json: { schema: { $ref: '#/components/schemas/RoundScreeningView' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /opportunities/{id}/application-packs:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: listApplicationPacks
+      summary: List private immutable packs for one opportunity
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Pack versions, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationPackList' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /application-packs/{id}:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getApplicationPack
+      summary: Read private pack manifest and revision metadata
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Pack detail, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationPackDetail' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /application-packs/{id}/pdf:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getApplicationPackPdf
+      summary: Preview the private PDF
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Inline PDF, content: { application/pdf: { schema: { type: string, format: binary } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /application-packs/{id}/source.zip:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getApplicationPackSource
+      summary: Download reproducible private Typst source
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Source archive, content: { application/zip: { schema: { type: string, format: binary } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /relationships/counterparties:
+    get:
+      operationId: listRelationshipCounterparties
+      summary: Read sourced people and organisations in the relationship network
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200': { description: Counterparties, content: { application/json: { schema: { $ref: '#/components/schemas/RelationshipCounterpartyList' } } } }
+  /relationships/events:
+    get:
+      operationId: listRelationshipEvents
+      summary: Read sourced introductions and conversations, including pre-vacancy leads
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200': { description: Relationship events, content: { application/json: { schema: { $ref: '#/components/schemas/RelationshipEventList' } } } }
+  /opportunities/{id}/routes:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: listOpportunityRoutes
+      summary: Read sourced direct and relationship routes to an opportunity
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200': { description: Opportunity routes, content: { application/json: { schema: { $ref: '#/components/schemas/OpportunityRouteList' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
   /ingestions:
     get:
@@ -1081,6 +1165,14 @@ components:
       required: [requestKey]
       properties:
         requestKey: { type: string, minLength: 1, maxLength: 200 }
+    PrepareRoundRequest:
+      type: object
+      additionalProperties: false
+      description: Owner selects an existing sourced opportunity; the server derives all pack details and authority.
+      required: [requestKey, opportunityId]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        opportunityId: { type: string, minLength: 1 }
     RoundCapability:
       type: object
       required: [canStart, reason, intent, outcome, limits, sourceCount]
@@ -1209,7 +1301,7 @@ components:
       required: [requestKey, targetKind, targetId, expectedRevision, text]
       properties:
         requestKey: { type: string, minLength: 1, maxLength: 200 }
-        targetKind: { type: string, enum: [campaign, profile, opportunity, evidence] }
+        targetKind: { type: string, enum: [campaign, profile, opportunity, evidence, relationship] }
         targetId: { type: string }
         expectedRevision: { type: integer, format: int64, minimum: 1 }
         roundId: { type: string }
@@ -1265,6 +1357,10 @@ components:
                 opportunity.source_save,
                 opportunity.owner_correction,
                 preferences.correct,
+                relationship.counterparty_create,
+                relationship.event_create,
+                relationship.route_create,
+                relationship.correct,
               ],
           }
         resourceId: { type: string }
@@ -1275,6 +1371,7 @@ components:
         ownerInstructionId: { type: string }
         opportunityPatch: { $ref: '#/components/schemas/RoundOpportunityCorrection' }
         preferences: { $ref: '#/components/schemas/RoundPreferences' }
+        relationship: { $ref: '#/components/schemas/RelationshipMutation' }
     RoundSourceOpportunity:
       type: object
       required: [sourceOpeningId, expectedRevision, companyId, opportunity]
@@ -1325,10 +1422,279 @@ components:
       required: [attemptId, entityKind, entityId, revision, auditId]
       properties:
         attemptId: { type: string }
-        entityKind: { type: string, enum: [company, opportunity, preferences, evidence] }
+        entityKind: { type: string, enum: [company, opportunity, preferences, evidence, application_pack, relationship_counterparty, relationship_event, opportunity_route] }
         entityId: { type: string }
         revision: { type: integer, format: int64 }
         auditId: { type: string }
+    ApplicationPackSummary:
+      type: object
+      required: [id, opportunityId, opportunityRevision, profileRevision, version, contentSha256, createdAt]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        opportunityRevision: { type: integer, format: int64 }
+        profileRevision: { type: integer, format: int64 }
+        version: { type: integer, format: int64 }
+        contentSha256: { type: string }
+        createdAt: { type: string, format: date-time }
+    RoundScreeningView:
+      type: object
+      required: [status, confirmed, current]
+      properties:
+        status: { type: string, enum: [not_assessed, proposed, unresolved, outdated] }
+        confirmed: { type: boolean, enum: [false] }
+        current:
+          nullable: true
+          allOf: [{ $ref: '#/components/schemas/RoundScreeningAssessment' }]
+    RoundScreeningAssessment:
+      type: object
+      required: [id, opportunityRevision, profileVersion, sourceId, sourceRevision, omittedBytes, input, result, createdAt]
+      properties:
+        id: { type: string }
+        opportunityRevision: { type: integer, format: int64 }
+        profileVersion: { type: integer, format: int64 }
+        sourceId: { type: string }
+        sourceRevision: { type: string }
+        omittedBytes: { type: integer, minimum: 0 }
+        input: { $ref: '#/components/schemas/RoundScreeningInput' }
+        result: { $ref: '#/components/schemas/RoundScreeningResult' }
+        createdAt: { type: string, format: date-time }
+    RoundScreeningInput:
+      type: object
+      required: [preference_version, max_total_tokens, criteria, spans]
+      properties:
+        preference_version: { type: integer, format: int64 }
+        max_total_tokens: { type: integer, format: int64 }
+        criteria: { type: array, items: { $ref: '#/components/schemas/RoundScreeningCriterion' } }
+        spans: { type: array, items: { $ref: '#/components/schemas/RoundScreeningSpan' } }
+    RoundScreeningCriterion:
+      type: object
+      required: [id, label, description, kind, mode]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        description: { type: string }
+        kind: { type: string, enum: [role, responsibility, technology] }
+        mode: { type: string, enum: [require, avoid, prefer] }
+    RoundScreeningSpan:
+      type: object
+      required: [id, source_id, source_revision, source_kind, excerpt]
+      properties:
+        id: { type: string }
+        source_id: { type: string }
+        source_revision: { type: string }
+        source_kind: { type: string }
+        observed_at: { type: string }
+        excerpt: { type: string }
+    RoundScreeningSupport:
+      type: object
+      required: [span_id, source_id, source_revision, source_kind]
+      properties:
+        span_id: { type: string }
+        source_id: { type: string }
+        source_revision: { type: string }
+        source_kind: { type: string }
+    RoundScreeningObservation:
+      type: object
+      required: [criterion_id, definition_sha256, scope, confidence, probabilities, proposed_support, support_state]
+      properties:
+        criterion_id: { type: string }
+        definition_sha256: { type: string }
+        scope: { type: string }
+        confidence: { type: number }
+        probabilities: { type: object, additionalProperties: { type: number } }
+        proposed_support: { type: array, items: { $ref: '#/components/schemas/RoundScreeningSupport' } }
+        support_state: { type: string }
+        support_confidence: { type: number }
+    RoundScreeningResult:
+      type: object
+      required: [rubric_version, preference_version, input_sha256, input_spans, observations, requested_model, returned_model, usage]
+      properties:
+        rubric_version: { type: integer }
+        preference_version: { type: integer, format: int64 }
+        input_sha256: { type: string }
+        input_spans: { type: array, items: { $ref: '#/components/schemas/RoundScreeningSupport' } }
+        observations: { type: array, items: { $ref: '#/components/schemas/RoundScreeningObservation' } }
+        requested_model: { type: string }
+        returned_model: { type: string }
+        usage: { $ref: '#/components/schemas/RoundScreeningUsage' }
+    RoundScreeningUsage:
+      type: object
+      required: [input_tokens, output_tokens]
+      properties:
+        input_tokens: { type: integer, format: int64 }
+        output_tokens: { type: integer, format: int64 }
+    ApplicationPackList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ApplicationPackSummary' } }
+    ApplicationPackDetail:
+      allOf:
+        - { $ref: '#/components/schemas/ApplicationPackSummary' }
+        - type: object
+          required: [manifest]
+          properties:
+            manifest: { $ref: '#/components/schemas/ApplicationPackManifest' }
+    ApplicationPackManifest:
+      type: object
+      required: [role, sources, draft, templateSha256]
+      properties:
+        role: { $ref: '#/components/schemas/ApplicationPackRole' }
+        sources: { type: array, items: { $ref: '#/components/schemas/ApplicationPackSource' } }
+        draft: { $ref: '#/components/schemas/ApplicationPackDraft' }
+        templateSha256: { type: string }
+        preparationRequestSha256: { type: string }
+    ApplicationPackRole:
+      type: object
+      required: [opportunityId, opportunityRevision, profileRevision, title, company, sourceUrl, description, destination]
+      properties:
+        opportunityId: { type: string }
+        opportunityRevision: { type: integer, format: int64 }
+        profileRevision: { type: integer, format: int64 }
+        title: { type: string }
+        company: { type: string }
+        sourceUrl: { type: string }
+        description: { type: string }
+        destination: { type: string }
+    ApplicationPackSource:
+      type: object
+      required: [id, name, sha256, approved, body]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        sha256: { type: string }
+        approved: { type: boolean }
+        body: { type: string }
+    ApplicationPackCitation:
+      type: object
+      required: [sourceId, excerpt]
+      properties:
+        sourceId: { type: string }
+        excerpt: { type: string }
+    ApplicationPackLine:
+      type: object
+      required: [text, citations]
+      properties:
+        text: { type: string }
+        citations: { type: array, items: { $ref: '#/components/schemas/ApplicationPackCitation' } }
+    ApplicationPackAnswer:
+      type: object
+      required: [question, lines]
+      properties:
+        question: { type: string }
+        lines: { type: array, items: { $ref: '#/components/schemas/ApplicationPackLine' } }
+    ApplicationPackRelevance:
+      type: object
+      required: [requirement, sourceId, scope, confidence, inputSha256, model]
+      properties:
+        requirement: { type: string }
+        sourceId: { type: string }
+        scope: { type: string, enum: [relevant, uncertain, unrelated] }
+        confidence: { type: number }
+        inputSha256: { type: string }
+        model: { type: string }
+    ApplicationPackDraft:
+      type: object
+      required: [focus, cover, answers, materialUnknowns, relevance]
+      properties:
+        focus: { $ref: '#/components/schemas/ApplicationPackLine' }
+        cover: { type: array, items: { $ref: '#/components/schemas/ApplicationPackLine' } }
+        answers: { type: array, items: { $ref: '#/components/schemas/ApplicationPackAnswer' } }
+        materialUnknowns: { type: array, items: { type: string } }
+        relevance: { type: array, items: { $ref: '#/components/schemas/ApplicationPackRelevance' } }
+    RelationshipSource:
+      type: object
+      required: [sourceKind, sourceExcerpt, observedAt]
+      properties:
+        sourceKind: { type: string }
+        sourceRef: { type: string }
+        sourceExcerpt: { type: string }
+        observedAt: { type: string, format: date-time }
+    RelationshipCounterpartyInput:
+      allOf:
+        - { $ref: '#/components/schemas/RelationshipSource' }
+        - type: object
+          required: [displayName, kind, organizationText]
+          properties:
+            id: { type: string }
+            displayName: { type: string }
+            kind: { type: string, enum: [recruiter, referrer, contact] }
+            organizationText: { type: string }
+    RelationshipEventInput:
+      allOf:
+        - { $ref: '#/components/schemas/RelationshipSource' }
+        - type: object
+          required: [kind, summary]
+          properties:
+            id: { type: string }
+            counterpartyId: { type: string }
+            opportunityId: { type: string }
+            kind: { type: string, enum: [introduction, conversation, referral, other] }
+            summary: { type: string }
+    OpportunityRouteInput:
+      allOf:
+        - { $ref: '#/components/schemas/RelationshipSource' }
+        - type: object
+          required: [opportunityId, kind, destinationText]
+          properties:
+            id: { type: string }
+            opportunityId: { type: string }
+            eventId: { type: string }
+            counterpartyId: { type: string }
+            kind: { type: string, enum: [direct, referral, recruiter] }
+            destinationText: { type: string }
+    RelationshipMutation:
+      type: object
+      properties:
+        counterparty: { $ref: '#/components/schemas/RelationshipCounterpartyInput' }
+        event: { $ref: '#/components/schemas/RelationshipEventInput' }
+        route: { $ref: '#/components/schemas/OpportunityRouteInput' }
+    RelationshipCounterparty:
+      allOf:
+        - { $ref: '#/components/schemas/RelationshipCounterpartyInput' }
+        - type: object
+          required: [id, revision, createdAt, updatedAt]
+          properties:
+            id: { type: string }
+            revision: { type: integer, format: int64 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    RelationshipEvent:
+      allOf:
+        - { $ref: '#/components/schemas/RelationshipEventInput' }
+        - type: object
+          required: [id, revision, createdAt, updatedAt]
+          properties:
+            id: { type: string }
+            revision: { type: integer, format: int64 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    OpportunityRoute:
+      allOf:
+        - { $ref: '#/components/schemas/OpportunityRouteInput' }
+        - type: object
+          required: [id, revision, createdAt, updatedAt]
+          properties:
+            id: { type: string }
+            revision: { type: integer, format: int64 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    RelationshipCounterpartyList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/RelationshipCounterparty' } }
+    RelationshipEventList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/RelationshipEvent' } }
+    OpportunityRouteList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/OpportunityRoute' } }
     CodexStatus:
       type: object
       required: [state, code, connected, ingestionAvailable, busy]
@@ -1495,7 +1861,7 @@ components:
         status:
           {
             type: string,
-            enum: [unconfigured, pending, processing, selected, uncertain, failed, outdated],
+            enum: [not_assessed, unconfigured, pending, processing, selected, uncertain, failed, outdated],
           }
         current:
           allOf: [{ $ref: '#/components/schemas/OrganisationAssessment' }]
@@ -1512,7 +1878,7 @@ components:
         status:
           {
             type: string,
-            enum: [unconfigured, pending, processing, selected, uncertain, failed, outdated],
+            enum: [not_assessed, unconfigured, pending, processing, selected, uncertain, failed, outdated],
           }
         categoryId: { type: string }
     OrganisationSummaryList:

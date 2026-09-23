@@ -28,17 +28,25 @@ type Reconciler interface {
 	ObserveDispatch(context.Context, string) (Observation, error)
 }
 
+// Worker accepts only a round already committed by owner Start or Resume.
+// LaunchRound returns after ownership is established, not after provider work.
+type Worker interface {
+	LaunchRound(context.Context, store.Round) error
+	CancelRound(string)
+}
+
 type Service struct {
 	Store      *store.Store
 	Readiness  Readiness
 	Canceller  Canceller
 	Reconciler Reconciler
+	Worker     Worker
 }
 
 var ErrNotReady = errors.New("round capability unavailable")
 
 func (s *Service) ready(ctx context.Context, outcome string) error {
-	if s == nil || s.Store == nil || s.Readiness == nil {
+	if s == nil || s.Store == nil || s.Readiness == nil || s.Worker == nil {
 		return ErrNotReady
 	}
 	return s.Readiness.CheckRound(ctx, outcome)
@@ -64,7 +72,17 @@ func (s *Service) Start(ctx context.Context, actor store.Actor, input store.Star
 		return r, created, err
 	}
 	r, err = s.Store.ActivateRound(ctx, actor, r.ID)
-	return r, true, err
+	if err != nil {
+		return r, true, err
+	}
+	if err := s.Worker.LaunchRound(ctx, r); err != nil {
+		failed, finishErr := s.Store.FinishRound(ctx, actor, r.ID, store.RoundFailed, "worker_unavailable", "none", json.RawMessage(`{"code":"worker_unavailable"}`))
+		if finishErr != nil {
+			return r, true, errors.Join(ErrNotReady, err, finishErr)
+		}
+		return failed, true, errors.Join(ErrNotReady, err)
+	}
+	return r, true, nil
 }
 
 // Stop commits the fence first. Cancellation is advisory and its result is
@@ -76,6 +94,9 @@ func (s *Service) Stop(ctx context.Context, actor store.Actor, roundID string) (
 	r, attempts, err := s.Store.StopRound(ctx, actor, roundID)
 	if err != nil {
 		return store.Round{}, err
+	}
+	if s.Worker != nil {
+		s.Worker.CancelRound(roundID)
 	}
 	if r.State == store.RoundPaused {
 		return r, nil
@@ -140,7 +161,18 @@ func (s *Service) Resume(ctx context.Context, actor store.Actor, roundID string)
 			return store.Round{}, err
 		}
 	}
-	return s.Store.ResumeRound(ctx, actor, roundID, r.Generation)
+	resumed, err := s.Store.ResumeRound(ctx, actor, roundID, r.Generation)
+	if err != nil {
+		return store.Round{}, err
+	}
+	if err := s.Worker.LaunchRound(ctx, resumed); err != nil {
+		failed, finishErr := s.Store.FinishRound(ctx, actor, roundID, store.RoundFailed, "worker_unavailable", "partial", json.RawMessage(`{"code":"worker_unavailable"}`))
+		if finishErr != nil {
+			return resumed, errors.Join(ErrNotReady, err, finishErr)
+		}
+		return failed, errors.Join(ErrNotReady, err)
+	}
+	return resumed, nil
 }
 
 func (s *Service) Reserve(ctx context.Context, actor store.Actor, roundID string, input store.RoundAttemptInput) (store.RoundAttempt, bool, error) {

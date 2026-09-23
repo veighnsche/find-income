@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,11 +80,12 @@ type Draft struct {
 }
 
 type Input struct {
-	Role           Role     `json:"role"`
-	Sources        []Source `json:"sources"`
-	Draft          Draft    `json:"draft"`
-	CVTemplate     []byte   `json:"-"`
-	TemplateSHA256 string   `json:"templateSha256"`
+	Role                     Role     `json:"role"`
+	Sources                  []Source `json:"sources"`
+	Draft                    Draft    `json:"draft"`
+	CVTemplate               []byte   `json:"-"`
+	TemplateSHA256           string   `json:"templateSha256"`
+	PreparationRequestSHA256 string   `json:"preparationRequestSha256,omitempty"`
 }
 
 type Prepared struct {
@@ -122,10 +124,20 @@ func validate(input Input) error {
 	r := input.Role
 	if !bounded(r.OpportunityID, 100) || r.OpportunityRevision < 1 || r.ProfileRevision < 1 ||
 		!bounded(r.Title, 200) || !bounded(r.Company, 200) || !bounded(r.SourceURL, 2000) ||
-		!bounded(r.Description, 30000) || !bounded(r.Destination, 2000) ||
+		!bounded(r.Description, 30000) || len(r.Destination) > 2000 || strings.ContainsRune(r.Destination, 0) ||
 		len(input.Sources) < 2 || len(input.Sources) > 8 ||
 		input.TemplateSHA256 != templateSHA256 || hash(input.CVTemplate) != input.TemplateSHA256 {
 		return ErrInvalid
+	}
+	if input.PreparationRequestSHA256 != "" {
+		if len(input.PreparationRequestSHA256) != 64 {
+			return ErrInvalid
+		}
+		for _, char := range input.PreparationRequestSHA256 {
+			if char < '0' || char > '9' && char < 'a' || char > 'f' {
+				return ErrInvalid
+			}
+		}
 	}
 	sources := make(map[string]Source, len(input.Sources))
 	for _, source := range input.Sources {
@@ -184,12 +196,16 @@ func validate(input Input) error {
 	for _, relevance := range input.Draft.Relevance {
 		if !bounded(relevance.Requirement, 1000) || sources[relevance.SourceID].ID == "" ||
 			(relevance.Scope != "relevant" && relevance.Scope != "uncertain" && relevance.Scope != "unrelated") ||
-			relevance.Confidence < 0 || relevance.Confidence > 1 || len(relevance.InputSHA256) != 64 || !bounded(relevance.Model, 100) {
+			math.IsNaN(relevance.Confidence) || math.IsInf(relevance.Confidence, 0) || relevance.Confidence < 0 || relevance.Confidence > 1 || len(relevance.InputSHA256) != 64 || !bounded(relevance.Model, 100) {
 			return ErrInvalid
 		}
 	}
 	return nil
 }
+
+// ValidateInput checks deterministic structure and exact citation excerpts
+// before a caller spends Jev allowance or starts rendering.
+func ValidateInput(input Input) error { return validate(input) }
 
 // Prepare does no database write. Save its exact bytes through the guarded
 // round mutation after rechecking the role/profile revisions in one transaction.

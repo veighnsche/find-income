@@ -55,6 +55,7 @@ type Service struct {
 	sourceMu        sync.Mutex
 	sourceCalls     map[string]*sourceCall
 	linkFetch       func(context.Context, string, SourceLinkPage) (SourceLinksSnapshot, error)
+	packConfig      ApplicationPackRuntimeConfig
 }
 
 func NewFromEnvironment(ctx context.Context, db *store.Store) (*Service, error) {

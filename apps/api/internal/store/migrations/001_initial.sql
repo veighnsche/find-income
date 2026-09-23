@@ -250,6 +250,49 @@ CREATE TABLE job_attempts (
       OR (outcome <> 'running' AND finished_at IS NOT NULL))
 );
 
+CREATE TABLE relationship_counterparties (
+  id TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('recruiter','referrer','contact')),
+  organization_text TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  source_ref TEXT,
+  source_excerpt TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 1 CHECK(revision>0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE relationship_events (
+  id TEXT PRIMARY KEY,
+  counterparty_id TEXT REFERENCES relationship_counterparties(id),
+  opportunity_id TEXT REFERENCES opportunities(id),
+  kind TEXT NOT NULL CHECK(kind IN ('introduction','conversation','referral','other')),
+  summary TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  source_ref TEXT,
+  source_excerpt TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 1 CHECK(revision>0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE opportunity_routes (
+  id TEXT PRIMARY KEY,
+  opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+  event_id TEXT REFERENCES relationship_events(id),
+  counterparty_id TEXT REFERENCES relationship_counterparties(id),
+  kind TEXT NOT NULL CHECK(kind IN ('direct','referral','recruiter')),
+  destination_text TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  source_ref TEXT,
+  source_excerpt TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 1 CHECK(revision>0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- A commissioned round is the sole authority for recruitment work. The
 -- partial unique index includes paused rounds so restart never frees a slot.
 CREATE TABLE rounds (
@@ -294,7 +337,7 @@ CREATE TABLE owner_instructions (
   actor_id TEXT NOT NULL,
   request_key TEXT NOT NULL,
   request_sha256 TEXT NOT NULL,
-  target_kind TEXT NOT NULL CHECK (target_kind IN ('campaign','profile','opportunity','evidence')),
+  target_kind TEXT NOT NULL CHECK (target_kind IN ('campaign','profile','opportunity','evidence','relationship')),
   target_id TEXT NOT NULL,
   expected_revision INTEGER NOT NULL CHECK (expected_revision > 0),
   round_id TEXT REFERENCES rounds(id),
@@ -440,6 +483,32 @@ CREATE TABLE jev_attempts (
   UNIQUE(round_attempt_id,step_index)
 );
 
+CREATE TABLE round_jev_assessments (
+  id TEXT PRIMARY KEY,
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+  kind TEXT NOT NULL CHECK(kind IN ('screening','organisation')),
+  source_id TEXT NOT NULL REFERENCES evidence_sources(id),
+  source_revision TEXT NOT NULL,
+  opportunity_revision INTEGER NOT NULL,
+  profile_version INTEGER NOT NULL,
+  category_version INTEGER,
+  round_generation INTEGER NOT NULL,
+  input_sha256 TEXT NOT NULL,
+  input_json TEXT NOT NULL CHECK(json_valid(input_json)),
+  result_json TEXT NOT NULL CHECK(json_valid(result_json)),
+  jev_attempt_ids_json TEXT NOT NULL CHECK(json_valid(jev_attempt_ids_json)),
+  omitted_bytes INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE round_jev_current (
+  opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+  kind TEXT NOT NULL,
+  assessment_id TEXT NOT NULL REFERENCES round_jev_assessments(id),
+  PRIMARY KEY(opportunity_id,kind)
+);
+
 CREATE TABLE discovery_http (
   attempt_id TEXT PRIMARY KEY REFERENCES round_attempts(id),
   round_id TEXT NOT NULL REFERENCES rounds(id),
@@ -453,6 +522,20 @@ CREATE TABLE discovery_http (
   error_code TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX discovery_http_round ON discovery_http(round_id,observed_at);
+
+CREATE TABLE discovery_official_reads (
+  attempt_id TEXT PRIMARY KEY REFERENCES round_attempts(id),
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  candidate_id TEXT NOT NULL REFERENCES discovery_candidates(id),
+  company_detail_attempt_id TEXT NOT NULL REFERENCES discovery_http(attempt_id),
+  parent_attempt_id TEXT REFERENCES discovery_official_reads(attempt_id),
+  source_url TEXT NOT NULL,
+  claim_url TEXT NOT NULL,
+  status TEXT NOT NULL,
+  snapshot_json TEXT,
+  observed_at TEXT NOT NULL
+);
+CREATE INDEX discovery_official_reads_round_candidate ON discovery_official_reads(round_id,candidate_id);
 
 CREATE TABLE discovery_candidates (
   id TEXT PRIMARY KEY,

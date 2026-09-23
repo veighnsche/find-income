@@ -17,11 +17,13 @@ func TestOrganisationModelKeepsCapturedDefinitionSeparateFromSource(t *testing.T
 	})
 	result, _ := json.Marshal(jev.OrganisationResult{
 		Disposition: jev.OrganisationCategorySelected, CategoryID: "chosen",
+		RequestedModel: "requested", ReturnedModel: "returned",
 		SourceRefs: []jev.OrganisationSourceRef{{FactID: "fact-1", SourceID: "source-1", SourceRevision: "sha", SourceKind: "vacancy_snapshot"}},
 	})
-	model, err := organisationAssessmentModel(store.OrganisationAssessment{
-		ID: "assessment", CategoryVersion: 4, Disposition: "category_selected", CategoryID: "chosen",
-		InputJSON: input, ResultJSON: result, RequestedModel: "requested", ReturnedModel: "returned", CreatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+	model, err := organisationAssessmentModel(store.RoundOrganisationProjection{Status: "selected", CategoryID: "chosen", Assessment: store.RoundJevAssessment{
+		ID: "assessment", CategoryVersion: 4,
+		InputJSON: input, ResultJSON: result, CreatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+	},
 	})
 	if err != nil {
 		t.Fatal(err)

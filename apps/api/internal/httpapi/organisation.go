@@ -19,13 +19,13 @@ func categorySetModel(value store.OrganisationCategorySet) generated.Organisatio
 	return generated.OrganisationCategorySet{Version: value.Version, Categories: categories, CreatedAt: optionalTime(value.CreatedAt)}
 }
 
-func organisationAssessmentModel(value store.OrganisationAssessment) (generated.OrganisationAssessment, error) {
+func organisationAssessmentModel(value store.RoundOrganisationProjection) (generated.OrganisationAssessment, error) {
 	var input jev.OrganisationInput
 	var result jev.OrganisationResult
-	if err := json.Unmarshal(value.InputJSON, &input); err != nil {
+	if err := json.Unmarshal(value.Assessment.InputJSON, &input); err != nil {
 		return generated.OrganisationAssessment{}, err
 	}
-	if err := json.Unmarshal(value.ResultJSON, &result); err != nil {
+	if err := json.Unmarshal(value.Assessment.ResultJSON, &result); err != nil {
 		return generated.OrganisationAssessment{}, err
 	}
 	facts := make([]generated.OrganisationSourceFact, 0, len(input.Facts))
@@ -49,12 +49,12 @@ func organisationAssessmentModel(value store.OrganisationAssessment) (generated.
 		}
 	}
 	return generated.OrganisationAssessment{
-		Id: value.ID, CategorySetVersion: value.CategoryVersion,
-		Disposition: generated.OrganisationAssessmentDisposition(value.Disposition),
+		Id: value.Assessment.ID, CategorySetVersion: value.Assessment.CategoryVersion,
+		Disposition: generated.OrganisationAssessmentDisposition(result.Disposition),
 		CategoryId:  nonemptyString(value.CategoryID), CategoryDescription: nonemptyString(description),
 		SourceFacts: facts, SourceRefs: refs,
-		RequestedModel: value.RequestedModel, ReturnedModel: value.ReturnedModel,
-		CreatedAt: recordedTime(value.CreatedAt),
+		RequestedModel: result.RequestedModel, ReturnedModel: result.ReturnedModel,
+		CreatedAt: recordedTime(value.Assessment.CreatedAt),
 	}, nil
 }
 
@@ -63,9 +63,6 @@ func (h *Handler) runtimeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ingestionAvailable := h.ingestionAvailable
-	if h.codex != nil {
-		ingestionAvailable = h.codex.Status(r.Context()).IngestionAvailable
-	}
 	writeJSON(w, http.StatusOK, generated.RuntimeStatus{
 		IngestionAvailable: ingestionAvailable, OrganisationAvailable: h.organisationAvailable,
 		CollectionAvailable: h.collectionAvailable,
@@ -130,27 +127,26 @@ func (h *Handler) opportunityOrganisation(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
-	view, err := h.database.Organisation(r.Context(), id)
-	if err != nil {
+	projection, err := h.database.CurrentRoundOrganisation(r.Context(), id)
+	if err != nil && !errors.Is(err, store.ErrNotFound) && !errors.Is(err, store.ErrConflict) {
 		fail(w, http.StatusInternalServerError, generated.ApiErrorCodeInternalError, "Could not read organisation.")
 		return
 	}
-	model := generated.OrganisationView{Status: generated.OrganisationViewStatus(view.Status), JobId: nonemptyString(view.JobID)}
-	if view.Current != nil {
-		value, err := organisationAssessmentModel(*view.Current)
+	status := "not_assessed"
+	if errors.Is(err, store.ErrConflict) {
+		status = "outdated"
+	}
+	if err == nil {
+		status = projection.Status
+	}
+	model := generated.OrganisationView{Status: generated.OrganisationViewStatus(status)}
+	if err == nil {
+		value, err := organisationAssessmentModel(projection)
 		if err != nil {
 			fail(w, http.StatusInternalServerError, generated.ApiErrorCodeInternalError, "Could not read organisation result.")
 			return
 		}
 		model.Current = &value
-	}
-	if view.LatestHistorical != nil {
-		value, err := organisationAssessmentModel(*view.LatestHistorical)
-		if err != nil {
-			fail(w, http.StatusInternalServerError, generated.ApiErrorCodeInternalError, "Could not read organisation history.")
-			return
-		}
-		model.LatestHistorical = &value
 	}
 	writeJSON(w, http.StatusOK, model)
 }
@@ -176,21 +172,29 @@ func (h *Handler) organisationSummaries(w http.ResponseWriter, r *http.Request) 
 		}
 		seen[id] = true
 	}
-	summaries, err := h.database.OrganisationSummaries(r.Context(), ids)
-	if err != nil {
-		fail(w, http.StatusInternalServerError, generated.ApiErrorCodeInternalError, "Could not read organisation summaries.")
-		return
-	}
-	items := make([]generated.OrganisationSummary, 0, len(summaries))
+	items := make([]generated.OrganisationSummary, 0, len(ids))
 	for _, id := range ids {
-		value, ok := summaries[id]
-		if !ok {
+		if _, err := h.database.Opportunity(r.Context(), id); errors.Is(err, store.ErrNotFound) {
 			continue
+		} else if err != nil {
+			fail(w, http.StatusInternalServerError, generated.ApiErrorCodeInternalError, "Could not read opportunity.")
+			return
 		}
-		items = append(items, generated.OrganisationSummary{
-			OpportunityId: id, Status: generated.OrganisationSummaryStatus(value.Status),
-			CategoryId: nonemptyString(value.CategoryID),
-		})
+		value, err := h.database.CurrentRoundOrganisation(r.Context(), id)
+		status := "not_assessed"
+		if errors.Is(err, store.ErrConflict) {
+			status = "outdated"
+		} else if err == nil {
+			status = value.Status
+		} else if !errors.Is(err, store.ErrNotFound) {
+			fail(w, http.StatusInternalServerError, generated.ApiErrorCodeInternalError, "Could not read organisation summaries.")
+			return
+		}
+		categoryID := ""
+		if err == nil {
+			categoryID = value.CategoryID
+		}
+		items = append(items, generated.OrganisationSummary{OpportunityId: id, Status: generated.OrganisationSummaryStatus(status), CategoryId: nonemptyString(categoryID)})
 	}
 	writeJSON(w, http.StatusOK, generated.OrganisationSummaryList{Items: items})
 }

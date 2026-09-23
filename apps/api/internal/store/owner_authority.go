@@ -73,6 +73,8 @@ func instructionTargetRevision(ctx context.Context, tx *sql.Tx, kind, id string)
 		err = tx.QueryRowContext(ctx, `SELECT revision FROM opportunities WHERE id=? AND archived_at IS NULL`, id).Scan(&revision)
 	case "evidence":
 		err = tx.QueryRowContext(ctx, `SELECT 1 FROM evidence WHERE id=?`, id).Scan(&revision)
+	case "relationship":
+		err = tx.QueryRowContext(ctx, `SELECT revision FROM relationship_counterparties WHERE id=? UNION ALL SELECT revision FROM relationship_events WHERE id=? UNION ALL SELECT revision FROM opportunity_routes WHERE id=?`, id, id, id).Scan(&revision)
 	default:
 		return 0, ErrInvalid
 	}

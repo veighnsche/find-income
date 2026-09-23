@@ -12,6 +12,21 @@ import (
 
 type fakeReady struct{ blocked bool }
 
+type fakeWorker struct {
+	launched  []string
+	cancelled []string
+	err       error
+}
+
+func (f *fakeWorker) LaunchRound(_ context.Context, r store.Round) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.launched = append(f.launched, r.ID)
+	return nil
+}
+func (f *fakeWorker) CancelRound(id string) { f.cancelled = append(f.cancelled, id) }
+
 func (f *fakeReady) CheckRound(context.Context, string) error {
 	if f.blocked {
 		return ErrNotReady
@@ -67,7 +82,8 @@ func TestServiceFakeWorkerStopThenResumeRetainsAllowance(t *testing.T) {
 		{State: store.AttemptUncertain, Evidence: json.RawMessage(`{"checked":"not_confirmed"}`)},
 		{State: store.AttemptObservedFailure, Evidence: json.RawMessage(`{"checked":"failed"}`)},
 	}}
-	svc := &Service{Store: db, Readiness: ready, Reconciler: reconciler}
+	worker := &fakeWorker{}
+	svc := &Service{Store: db, Readiness: ready, Reconciler: reconciler, Worker: worker}
 	r, created, err := svc.Start(ctx, actor, input)
 	if err != nil || !created || r.State != store.RoundRunning {
 		t.Fatalf("start: %+v %v %v", r, created, err)
@@ -92,6 +108,9 @@ func TestServiceFakeWorkerStopThenResumeRetainsAllowance(t *testing.T) {
 	if err != nil || paused.State != store.RoundPaused || len(canceller.called) != 1 || canceller.called[0] != attempt.ID {
 		t.Fatalf("stop: %+v called=%v err=%v", paused, canceller.called, err)
 	}
+	if len(worker.cancelled) != 1 || worker.cancelled[0] != r.ID {
+		t.Fatalf("worker cancellation after stop: %v", worker.cancelled)
+	}
 	if _, err := svc.Complete(ctx, actor, r.ID, attempt.ID, json.RawMessage(`{"unsafe":true}`)); !errors.Is(err, store.ErrFenced) {
 		t.Fatalf("stopped attempt wrote result: %v", err)
 	}
@@ -103,7 +122,7 @@ func TestServiceFakeWorkerStopThenResumeRetainsAllowance(t *testing.T) {
 	}
 	resumed, err := svc.Resume(ctx, actor, r.ID)
 	if err != nil || resumed.State != store.RoundRunning || resumed.Used.Requests != 3 || resumed.Used.Tools != 3 ||
-		len(reconciler.called) != 2 {
+		len(reconciler.called) != 2 || len(worker.launched) != 2 {
 		t.Fatalf("reconciled resume: %+v called=%v err=%v", resumed, reconciler.called, err)
 	}
 	if _, _, err := svc.Reserve(ctx, actor, r.ID, store.RoundAttemptInput{RequestKey: "retry",

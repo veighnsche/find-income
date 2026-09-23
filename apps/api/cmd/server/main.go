@@ -20,8 +20,13 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/veighnsche/find-income-dashboard/api/internal/agency"
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
+	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
+	"github.com/veighnsche/find-income-dashboard/api/internal/collector"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
+	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
+	"github.com/veighnsche/find-income-dashboard/api/internal/jevservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
@@ -67,7 +72,28 @@ func runWithContext(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	options.Rounds = &rounds.Service{Store: database}
+	// Constructing these adapters does not connect to a provider or start work.
+	// Only owner Start/Resume crosses the commissioned execution boundary.
+	runtime := codexservice.NewLazy(ctx, database)
+	defer runtime.Close()
+	jevConfig := jev.DefaultConfig()
+	jevConfig.Enabled = os.Getenv(jev.CredentialEnvironmentVariable) != ""
+	jevClient, err := jev.NewFromEnvironment(jevConfig, nil)
+	if err != nil {
+		return err
+	}
+	var decisions agency.Decisions
+	var packSources agency.PackSourceLoader
+	if jevConfig.Enabled {
+		decisions = jevservice.Service{Store: database, Client: jevClient}
+		if root, typst := os.Getenv("JOBSEEK_APPROVED_CAREER_ROOT"), os.Getenv("JOBSEEK_TYPST_PATH"); root != "" && typst != "" {
+			packSources = &agency.LocalPackSources{ProjectRoot: root}
+			runtime.SetApplicationPackConfig(codexservice.ApplicationPackRuntimeConfig{ProjectRoot: root, TypstPath: typst, PrivateTempDir: filepath.Join(dataDir, "application-pack-tmp"), RenderTimeout: 20 * time.Second, Relevance: jevservice.Service{Store: database, Client: jevClient}})
+		}
+	}
+	worker := &agency.Engine{Store: database, Runtime: runtime, Decisions: decisions, Collector: &collector.Collector{}, PackSources: packSources, Context: ctx}
+	options.Codex = runtime
+	options.Rounds = &rounds.Service{Store: database, Readiness: worker, Canceller: runtime, Reconciler: runtime, Worker: worker}
 	server := newAPIServer(addr, newHandler(database, service, options))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -101,6 +127,7 @@ func serveUntil(ctx context.Context, server *http.Server, listener net.Listener)
 		}
 		return err
 	case <-ctx.Done():
+		server.SetKeepAlivesEnabled(false)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		shutdownErr := server.Shutdown(shutdownCtx)
 		cancel()

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -24,8 +25,15 @@ type Options struct {
 	IngestionAvailable    bool
 	OrganisationAvailable bool
 	CollectionAvailable   bool
-	Codex                 *codexservice.Service
+	Codex                 CodexControl
 	Rounds                *rounds.Service
+}
+
+type CodexControl interface {
+	Status(context.Context) codexservice.Status
+	Connect(context.Context) (codexservice.Connection, error)
+	CancelConnect(context.Context) error
+	MCPHandler() http.Handler
 }
 
 type Handler struct {
@@ -36,7 +44,7 @@ type Handler struct {
 	ingestionAvailable    bool
 	organisationAvailable bool
 	collectionAvailable   bool
-	codex                 *codexservice.Service
+	codex                 CodexControl
 	rounds                *rounds.Service
 	limiter               *loginLimiter
 }
@@ -60,6 +68,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/rounds/active", h.activeRound)
 	mux.HandleFunc("GET /api/v1/rounds/capability", h.roundCapability)
 	mux.HandleFunc("POST /api/v1/rounds", h.startRound)
+	mux.HandleFunc("POST /api/v1/rounds/prepare", h.prepareRound)
 	mux.HandleFunc("GET /api/v1/rounds/{id}", h.getRound)
 	mux.HandleFunc("GET /api/v1/rounds/{id}/results", h.roundResults)
 	mux.HandleFunc("GET /api/v1/rounds/{id}/cards", h.roundCards)
@@ -101,6 +110,14 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/decision", h.getOwnerOpportunityDecision)
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/decision", h.setOwnerOpportunityDecision)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/organisation", h.opportunityOrganisation)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/screening", h.opportunityScreening)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/application-packs", h.listApplicationPacks)
+	mux.HandleFunc("GET /api/v1/relationships/counterparties", h.listRelationshipCounterparties)
+	mux.HandleFunc("GET /api/v1/relationships/events", h.listRelationshipEvents)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/routes", h.listOpportunityRoutes)
+	mux.HandleFunc("GET /api/v1/application-packs/{id}", h.getApplicationPack)
+	mux.HandleFunc("GET /api/v1/application-packs/{id}/pdf", h.applicationPackPDF)
+	mux.HandleFunc("GET /api/v1/application-packs/{id}/source.zip", h.applicationPackSourceArchive)
 	mux.HandleFunc("PATCH /api/v1/opportunities/{id}", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/archive", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/actions", h.listActions)
