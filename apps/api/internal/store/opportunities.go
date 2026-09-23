@@ -29,6 +29,7 @@ type Opportunity struct {
 	Kind         string
 	SourceURL    string
 	OriginalText string
+	Notes        string
 	Stage        string
 	WorkPattern  string
 	LocationText string
@@ -47,6 +48,7 @@ type OpportunityInput struct {
 	Kind         string
 	SourceURL    string
 	OriginalText string
+	Notes        string
 	Stage        string
 	WorkPattern  string
 	LocationText string
@@ -62,6 +64,7 @@ type OpportunityPatch struct {
 	Kind             *string
 	SourceURL        *string
 	OriginalText     *string
+	Notes            *string
 	Stage            *string
 	WorkPattern      *string
 	LocationText     *string
@@ -89,7 +92,7 @@ type OpportunityDuplicate struct {
 	Reason      string // same_source_url or same_company_title
 }
 
-const opportunityColumns = `o.id,o.company_id,o.title,o.kind,o.source_url,o.original_text,
+const opportunityColumns = `o.id,o.company_id,o.title,o.kind,o.source_url,o.original_text,o.notes,
   o.stage,o.work_pattern,o.location_text,o.posted_on,o.deadline_on,o.archived_at,
   o.revision,o.created_at,o.updated_at,c.currency,c.min_amount_cents,
   c.max_amount_cents,c.period,c.reference_hours,c.basis,c.benefits_text`
@@ -174,7 +177,7 @@ func validateOpportunity(input OpportunityInput) (OpportunityInput, error) {
 		(input.Kind != "employment" && input.Kind != "project") || !validStage(input.Stage) ||
 		(input.WorkPattern != "unknown" && input.WorkPattern != "onsite" &&
 			input.WorkPattern != "hybrid" && input.WorkPattern != "remote") ||
-		len(input.OriginalText) > 200000 || len(input.LocationText) > 500 ||
+		len(input.OriginalText) > 200000 || len(input.Notes) > 10000 || len(input.LocationText) > 500 ||
 		(input.SourceURL == "" && strings.TrimSpace(input.OriginalText) == "") ||
 		!validCalendarDate(input.PostedOn) || !validCalendarDate(input.DeadlineOn) ||
 		(input.PostedOn != "" && input.DeadlineOn != "" && input.DeadlineOn < input.PostedOn) {
@@ -194,7 +197,7 @@ func scanOpportunity(row rowScanner) (Opportunity, error) {
 	var currency, period, basis, benefits sql.NullString
 	var minimum, maximum, hours sql.NullInt64
 	err := row.Scan(&opportunity.ID, &opportunity.CompanyID, &opportunity.Title, &opportunity.Kind,
-		&source, &opportunity.OriginalText, &opportunity.Stage, &opportunity.WorkPattern,
+		&source, &opportunity.OriginalText, &opportunity.Notes, &opportunity.Stage, &opportunity.WorkPattern,
 		&opportunity.LocationText, &posted, &deadline, &archived, &opportunity.Revision,
 		&opportunity.CreatedAt, &opportunity.UpdatedAt, &currency, &minimum, &maximum,
 		&period, &hours, &basis, &benefits)
@@ -264,18 +267,18 @@ func (s *Store) CreateOpportunity(ctx context.Context, actor Actor, input Opport
 	}
 	now := recordNow()
 	record := Opportunity{ID: id, CompanyID: input.CompanyID, Title: input.Title, Kind: input.Kind,
-		SourceURL: input.SourceURL, OriginalText: input.OriginalText, Stage: input.Stage,
+		SourceURL: input.SourceURL, OriginalText: input.OriginalText, Notes: input.Notes, Stage: input.Stage,
 		WorkPattern: input.WorkPattern, LocationText: input.LocationText, PostedOn: input.PostedOn,
 		DeadlineOn: input.DeadlineOn, Revision: 1, CreatedAt: now, UpdatedAt: now,
 		Compensation: input.Compensation}
 	revision := int64(1)
 	changeID, err := s.WriteAudited(ctx, actor, func(tx *sql.Tx) (Change, error) {
 		result, err := tx.ExecContext(ctx, `INSERT INTO opportunities
-  (id,company_id,title,kind,source_url,original_text,stage,work_pattern,location_text,
+  (id,company_id,title,kind,source_url,original_text,notes,stage,work_pattern,location_text,
    posted_on,deadline_on,revision,created_at,updated_at)
-  SELECT ?,?,?,?,?,?,?,?,?,?,?,1,?,? FROM companies
+  SELECT ?,?,?,?,?,?,?,?,?,?,?,?,1,?,? FROM companies
   WHERE id=? AND archived_at IS NULL`, id, input.CompanyID, input.Title, input.Kind,
-			optionalText(input.SourceURL), input.OriginalText, input.Stage, input.WorkPattern,
+			optionalText(input.SourceURL), input.OriginalText, input.Notes, input.Stage, input.WorkPattern,
 			input.LocationText, optionalText(input.PostedOn), optionalText(input.DeadlineOn), now, now,
 			input.CompanyID)
 		if err != nil {
@@ -302,7 +305,7 @@ func (s *Store) CreateOpportunity(ctx context.Context, actor Actor, input Opport
 
 func opportunityInputFromRecord(record Opportunity) OpportunityInput {
 	return OpportunityInput{CompanyID: record.CompanyID, Title: record.Title, Kind: record.Kind,
-		SourceURL: record.SourceURL, OriginalText: record.OriginalText, Stage: record.Stage,
+		SourceURL: record.SourceURL, OriginalText: record.OriginalText, Notes: record.Notes, Stage: record.Stage,
 		WorkPattern: record.WorkPattern, LocationText: record.LocationText, PostedOn: record.PostedOn,
 		DeadlineOn: record.DeadlineOn, Compensation: record.Compensation}
 }
@@ -322,6 +325,9 @@ func applyOpportunityPatch(input *OpportunityInput, patch OpportunityPatch) {
 	}
 	if patch.OriginalText != nil {
 		input.OriginalText = *patch.OriginalText
+	}
+	if patch.Notes != nil {
+		input.Notes = *patch.Notes
 	}
 	if patch.Stage != nil {
 		input.Stage = *patch.Stage
@@ -345,7 +351,7 @@ func applyOpportunityPatch(input *OpportunityInput, patch OpportunityPatch) {
 
 func emptyOpportunityPatch(patch OpportunityPatch) bool {
 	return patch.CompanyID == nil && patch.Title == nil && patch.Kind == nil && patch.SourceURL == nil &&
-		patch.OriginalText == nil && patch.Stage == nil && patch.WorkPattern == nil &&
+		patch.OriginalText == nil && patch.Notes == nil && patch.Stage == nil && patch.WorkPattern == nil &&
 		patch.LocationText == nil && patch.PostedOn == nil && patch.DeadlineOn == nil && patch.Compensation == nil
 }
 
@@ -367,18 +373,18 @@ func (s *Store) PatchOpportunity(ctx context.Context, actor Actor, id string, pa
 		return Opportunity{}, "", err
 	}
 	updated := Opportunity{ID: id, CompanyID: input.CompanyID, Title: input.Title, Kind: input.Kind,
-		SourceURL: input.SourceURL, OriginalText: input.OriginalText, Stage: input.Stage,
+		SourceURL: input.SourceURL, OriginalText: input.OriginalText, Notes: input.Notes, Stage: input.Stage,
 		WorkPattern: input.WorkPattern, LocationText: input.LocationText, PostedOn: input.PostedOn,
 		DeadlineOn: input.DeadlineOn, Revision: current.Revision + 1,
 		CreatedAt: current.CreatedAt, UpdatedAt: recordNow(), Compensation: input.Compensation}
 	companyChanged := input.CompanyID != current.CompanyID
 	changeID, err := s.WriteAudited(ctx, actor, func(tx *sql.Tx) (Change, error) {
 		result, err := tx.ExecContext(ctx, `UPDATE opportunities SET company_id=?,title=?,kind=?,
-  source_url=?,original_text=?,stage=?,work_pattern=?,location_text=?,posted_on=?,deadline_on=?,
+  source_url=?,original_text=?,notes=?,stage=?,work_pattern=?,location_text=?,posted_on=?,deadline_on=?,
   revision=?,updated_at=? WHERE id=? AND revision=? AND archived_at IS NULL AND
   (?=0 OR EXISTS(SELECT 1 FROM companies WHERE id=? AND archived_at IS NULL))`,
 			updated.CompanyID, updated.Title, updated.Kind, optionalText(updated.SourceURL),
-			updated.OriginalText, updated.Stage, updated.WorkPattern, updated.LocationText,
+			updated.OriginalText, updated.Notes, updated.Stage, updated.WorkPattern, updated.LocationText,
 			optionalText(updated.PostedOn), optionalText(updated.DeadlineOn), updated.Revision,
 			updated.UpdatedAt, id, current.Revision, companyChanged, input.CompanyID)
 		if err != nil {

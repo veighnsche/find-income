@@ -17,6 +17,7 @@ func fixtureOpportunity(companyID string) OpportunityInput {
 	return OpportunityInput{
 		CompanyID: companyID, Title: "Backend Engineer", Kind: "employment",
 		SourceURL: "https://harbour.example/jobs/1", OriginalText: "Build Go services.",
+		Notes: "First private tracking note",
 		Stage: "new", WorkPattern: "hybrid", LocationText: "Amsterdam",
 		PostedOn: "2026-09-20", DeadlineOn: "2026-10-20",
 		Compensation: AdvertisedCompensation{
@@ -58,6 +59,7 @@ func TestOpportunityRoundTripHistoryArchiveAndReferences(t *testing.T) {
 	}
 	read, err := s.Opportunity(ctx, created.ID)
 	if err != nil || read.OriginalText != input.OriginalText || read.SourceURL != input.SourceURL ||
+		read.Notes != input.Notes ||
 		read.Compensation.MinAmountCents == nil || *read.Compensation.MinAmountCents != 600000 ||
 		read.Compensation.ReferenceHours == nil || *read.Compensation.ReferenceHours != 40 {
 		t.Fatalf("roundtrip: %+v err=%v", read, err)
@@ -71,7 +73,8 @@ func TestOpportunityRoundTripHistoryArchiveAndReferences(t *testing.T) {
 		t.Fatalf("create event: %+v err=%v", firstEvent, err)
 	}
 	firstSnapshot := snapshotFields(t, firstEvent)
-	if firstSnapshot["originalText"] != input.OriginalText || firstSnapshot["sourceUrl"] != input.SourceURL {
+	if firstSnapshot["originalText"] != input.OriginalText || firstSnapshot["sourceUrl"] != input.SourceURL ||
+		firstSnapshot["notes"] != input.Notes {
 		t.Fatalf("original source not captured: %+v", firstSnapshot)
 	}
 	comp := input.Compensation
@@ -94,11 +97,31 @@ func TestOpportunityRoundTripHistoryArchiveAndReferences(t *testing.T) {
 		t.Fatalf("revised source not captured: %+v", secondSnapshot)
 	}
 	oldEvent, err := s.RecordChange(ctx, createChange)
-	if err != nil || snapshotFields(t, oldEvent)["originalText"] != input.OriginalText {
+	if err != nil || snapshotFields(t, oldEvent)["originalText"] != input.OriginalText ||
+		snapshotFields(t, oldEvent)["notes"] != input.Notes {
 		t.Fatalf("old source mutated: %+v err=%v", oldEvent, err)
 	}
-	archived, archiveChange, err := s.ArchiveOpportunity(ctx, ownerActor(), created.ID, 2)
-	if err != nil || archived.Revision != 3 || archived.ArchivedAt == "" {
+	// Clearing tracking notes is a separate edit; it must not rewrite the
+	// original vacancy source or previous revision's note snapshot.
+	clearedNotes := ""
+	cleared, clearChange, err := s.PatchOpportunity(ctx, ownerActor(), created.ID, OpportunityPatch{
+		ExpectedRevision: 2, Notes: &clearedNotes,
+	})
+	if err != nil || cleared.Revision != 3 || cleared.Notes != "" ||
+		cleared.OriginalText != newText || cleared.SourceURL != newURL {
+		t.Fatalf("clear notes changed source: %+v err=%v", cleared, err)
+	}
+	clearEvent, err := s.RecordChange(ctx, clearChange)
+	if err != nil || snapshotFields(t, clearEvent)["notes"] != "" ||
+		snapshotFields(t, clearEvent)["originalText"] != newText {
+		t.Fatalf("clear note snapshot: %+v err=%v", clearEvent, err)
+	}
+	if oldEvent, err = s.RecordChange(ctx, createChange); err != nil ||
+		snapshotFields(t, oldEvent)["notes"] != input.Notes {
+		t.Fatalf("old note snapshot mutated: %+v err=%v", oldEvent, err)
+	}
+	archived, archiveChange, err := s.ArchiveOpportunity(ctx, ownerActor(), created.ID, 3)
+	if err != nil || archived.Revision != 4 || archived.ArchivedAt == "" {
 		t.Fatalf("archive: %+v err=%v", archived, err)
 	}
 	archiveEvent, err := s.RecordChange(ctx, archiveChange)
@@ -139,6 +162,12 @@ func TestOpportunityInvalidPatchRollsBackWithoutPhantomChange(t *testing.T) {
 		ExpectedRevision: 1, PostedOn: &badDate,
 	}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("invalid date accepted: %v", err)
+	}
+	longNotes := strings.Repeat("x", 10001)
+	if _, _, err := s.PatchOpportunity(ctx, ownerActor(), created.ID, OpportunityPatch{
+		ExpectedRevision: 1, Notes: &longNotes,
+	}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("unbounded notes accepted: %v", err)
 	}
 	badComp := fixtureOpportunity(company.ID).Compensation
 	badComp.MaxAmountCents = int64Ptr(500000)
@@ -400,6 +429,82 @@ func TestChangeBackfillExplicitlyLacksHistoricalSnapshot(t *testing.T) {
 	change, err := s.RecordChange(ctx, "old-audit")
 	if err != nil || change.SnapshotState != "unavailable_historical" || change.Snapshot != nil {
 		t.Fatalf("backfill fabricated snapshot: %+v err=%v", change, err)
+	}
+}
+
+func TestOpportunityNotesMigrationPreservesPriorSnapshots(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	db, err := sql.Open("sqlite", "file:"+dir+"/jobseek.sqlite?_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	if _, err := db.ExecContext(ctx, `CREATE TABLE schema_migrations
+  (version INTEGER PRIMARY KEY, name TEXT NOT NULL, sha256 TEXT NOT NULL, applied_at TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	migrations, err := embeddedMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range migrations[:5] {
+		if err := applyMigration(ctx, db, migration); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO companies(id,name,created_at,updated_at)
+  VALUES ('legacy-company','Legacy company','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO opportunities
+  (id,company_id,title,kind,original_text,stage,created_at,updated_at)
+  VALUES ('legacy-opportunity','legacy-company','Legacy role','employment','Original vacancy','new',
+          '2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO audit_changes
+  (id,actor_kind,actor_id,operation,entity_kind,entity_id,revision_after,occurred_at)
+  VALUES ('legacy-audit','system','fixture','opportunity.create','opportunity',
+          'legacy-opportunity',1,'2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	oldEvent, err := s.RecordChange(ctx, "legacy-audit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldSnapshot := snapshotFields(t, oldEvent)
+	if _, exists := oldSnapshot["notes"]; exists {
+		t.Fatalf("pre-006 snapshot retrofitted with notes: %+v", oldSnapshot)
+	}
+	if oldSnapshot["originalText"] != "Original vacancy" {
+		t.Fatalf("pre-006 source changed: %+v", oldSnapshot)
+	}
+	note := "Contacted recruiter"
+	updated, changeID, err := s.PatchOpportunity(ctx, ownerActor(), "legacy-opportunity", OpportunityPatch{
+		ExpectedRevision: 1, Notes: &note,
+	})
+	if err != nil || updated.Notes != note || updated.OriginalText != "Original vacancy" {
+		t.Fatalf("post-migration note patch: %+v err=%v", updated, err)
+	}
+	newEvent, err := s.RecordChange(ctx, changeID)
+	if err != nil || snapshotFields(t, newEvent)["notes"] != note {
+		t.Fatalf("post-migration note snapshot: %+v err=%v", newEvent, err)
+	}
+	oldEvent, err = s.RecordChange(ctx, "legacy-audit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := snapshotFields(t, oldEvent)["notes"]; exists {
+		t.Fatal("pre-006 snapshot changed after note edit")
 	}
 }
 
