@@ -151,6 +151,114 @@ func (e CreateOpportunityRequestWorkPattern) Valid() bool {
 	}
 }
 
+// Defines values for EvidenceArrangementPattern.
+const (
+	EvidenceArrangementPatternHybrid EvidenceArrangementPattern = "hybrid"
+	EvidenceArrangementPatternOnsite EvidenceArrangementPattern = "onsite"
+	EvidenceArrangementPatternRemote EvidenceArrangementPattern = "remote"
+)
+
+// Valid indicates whether the value is a known member of the EvidenceArrangementPattern enum.
+func (e EvidenceArrangementPattern) Valid() bool {
+	switch e {
+	case EvidenceArrangementPatternHybrid:
+		return true
+	case EvidenceArrangementPatternOnsite:
+		return true
+	case EvidenceArrangementPatternRemote:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EvidenceSalaryBasis.
+const (
+	EvidenceSalaryBasisBase      EvidenceSalaryBasis = "base"
+	EvidenceSalaryBasisInclusive EvidenceSalaryBasis = "inclusive"
+	EvidenceSalaryBasisUnknown   EvidenceSalaryBasis = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the EvidenceSalaryBasis enum.
+func (e EvidenceSalaryBasis) Valid() bool {
+	switch e {
+	case EvidenceSalaryBasisBase:
+		return true
+	case EvidenceSalaryBasisInclusive:
+		return true
+	case EvidenceSalaryBasisUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EvidenceSalaryPeriod.
+const (
+	EvidenceSalaryPeriodHour    EvidenceSalaryPeriod = "hour"
+	EvidenceSalaryPeriodMonth   EvidenceSalaryPeriod = "month"
+	EvidenceSalaryPeriodProject EvidenceSalaryPeriod = "project"
+	EvidenceSalaryPeriodYear    EvidenceSalaryPeriod = "year"
+)
+
+// Valid indicates whether the value is a known member of the EvidenceSalaryPeriod enum.
+func (e EvidenceSalaryPeriod) Valid() bool {
+	switch e {
+	case EvidenceSalaryPeriodHour:
+		return true
+	case EvidenceSalaryPeriodMonth:
+		return true
+	case EvidenceSalaryPeriodProject:
+		return true
+	case EvidenceSalaryPeriodYear:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EvidenceSourceActorKind.
+const (
+	EvidenceSourceActorKindAdministrator EvidenceSourceActorKind = "administrator"
+	EvidenceSourceActorKindAgent         EvidenceSourceActorKind = "agent"
+)
+
+// Valid indicates whether the value is a known member of the EvidenceSourceActorKind enum.
+func (e EvidenceSourceActorKind) Valid() bool {
+	switch e {
+	case EvidenceSourceActorKindAdministrator:
+		return true
+	case EvidenceSourceActorKindAgent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EvidenceSourceSourceKind.
+const (
+	EmployerStatement  EvidenceSourceSourceKind = "employer_statement"
+	OwnerObservation   EvidenceSourceSourceKind = "owner_observation"
+	RecruiterStatement EvidenceSourceSourceKind = "recruiter_statement"
+	VacancySnapshot    EvidenceSourceSourceKind = "vacancy_snapshot"
+)
+
+// Valid indicates whether the value is a known member of the EvidenceSourceSourceKind enum.
+func (e EvidenceSourceSourceKind) Valid() bool {
+	switch e {
+	case EmployerStatement:
+		return true
+	case OwnerObservation:
+		return true
+	case RecruiterStatement:
+		return true
+	case VacancySnapshot:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthResponseService.
 const (
 	JobseekApi HealthResponseService = "jobseek-api"
@@ -283,6 +391,111 @@ func (e PatchOpportunityRequestWorkPattern) Valid() bool {
 	}
 }
 
+// Defines values for QualificationCriterionState.
+const (
+	QualificationCriterionStateMatch    QualificationCriterionState = "match"
+	QualificationCriterionStateMismatch QualificationCriterionState = "mismatch"
+	QualificationCriterionStateUnknown  QualificationCriterionState = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the QualificationCriterionState enum.
+func (e QualificationCriterionState) Valid() bool {
+	switch e {
+	case QualificationCriterionStateMatch:
+		return true
+	case QualificationCriterionStateMismatch:
+		return true
+	case QualificationCriterionStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for QualificationEvaluationOverall.
+const (
+	NeedsRequalification QualificationEvaluationOverall = "needs_requalification"
+	Qualified            QualificationEvaluationOverall = "qualified"
+	Unresolved           QualificationEvaluationOverall = "unresolved"
+	Unsuitable           QualificationEvaluationOverall = "unsuitable"
+)
+
+// Valid indicates whether the value is a known member of the QualificationEvaluationOverall enum.
+func (e QualificationEvaluationOverall) Valid() bool {
+	switch e {
+	case NeedsRequalification:
+		return true
+	case Qualified:
+		return true
+	case Unresolved:
+		return true
+	case Unsuitable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for QualificationInputVersionsOpportunityKind.
+const (
+	QualificationInputVersionsOpportunityKindEmployment QualificationInputVersionsOpportunityKind = "employment"
+	QualificationInputVersionsOpportunityKindProject    QualificationInputVersionsOpportunityKind = "project"
+)
+
+// Valid indicates whether the value is a known member of the QualificationInputVersionsOpportunityKind enum.
+func (e QualificationInputVersionsOpportunityKind) Valid() bool {
+	switch e {
+	case QualificationInputVersionsOpportunityKindEmployment:
+		return true
+	case QualificationInputVersionsOpportunityKindProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for QualificationSalaryState.
+const (
+	QualificationSalaryStateMatch    QualificationSalaryState = "match"
+	QualificationSalaryStateMismatch QualificationSalaryState = "mismatch"
+	QualificationSalaryStateUnknown  QualificationSalaryState = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the QualificationSalaryState enum.
+func (e QualificationSalaryState) Valid() bool {
+	switch e {
+	case QualificationSalaryStateMatch:
+		return true
+	case QualificationSalaryStateMismatch:
+		return true
+	case QualificationSalaryStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for QualificationViewStatus.
+const (
+	Current     QualificationViewStatus = "current"
+	NotAssessed QualificationViewStatus = "not_assessed"
+	Outdated    QualificationViewStatus = "outdated"
+)
+
+// Valid indicates whether the value is a known member of the QualificationViewStatus enum.
+func (e QualificationViewStatus) Valid() bool {
+	switch e {
+	case Current:
+		return true
+	case NotAssessed:
+		return true
+	case Outdated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RecordChangeActorKind.
 const (
 	RecordChangeActorKindAdministrator RecordChangeActorKind = "administrator"
@@ -346,6 +559,81 @@ const (
 func (e SessionResponseActorKind) Valid() bool {
 	switch e {
 	case SessionResponseActorKindAdministrator:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StatementSourceInputSpeakerAffiliation.
+const (
+	EmployerRepresentative StatementSourceInputSpeakerAffiliation = "employer_representative"
+	Recruiter              StatementSourceInputSpeakerAffiliation = "recruiter"
+)
+
+// Valid indicates whether the value is a known member of the StatementSourceInputSpeakerAffiliation enum.
+func (e StatementSourceInputSpeakerAffiliation) Valid() bool {
+	switch e {
+	case EmployerRepresentative:
+		return true
+	case Recruiter:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WriteEvidenceRequestCriterion.
+const (
+	BackendPlatform      WriteEvidenceRequestCriterion = "backend_platform"
+	LocationArrangement  WriteEvidenceRequestCriterion = "location_arrangement"
+	LocationWorkable     WriteEvidenceRequestCriterion = "location_workable"
+	MonthlyBaseSalary    WriteEvidenceRequestCriterion = "monthly_base_salary"
+	NoFrontendDuties     WriteEvidenceRequestCriterion = "no_frontend_duties"
+	NoPhpFocusedDuties   WriteEvidenceRequestCriterion = "no_php_focused_duties"
+	TargetHoursAvailable WriteEvidenceRequestCriterion = "target_hours_available"
+)
+
+// Valid indicates whether the value is a known member of the WriteEvidenceRequestCriterion enum.
+func (e WriteEvidenceRequestCriterion) Valid() bool {
+	switch e {
+	case BackendPlatform:
+		return true
+	case LocationArrangement:
+		return true
+	case LocationWorkable:
+		return true
+	case MonthlyBaseSalary:
+		return true
+	case NoFrontendDuties:
+		return true
+	case NoPhpFocusedDuties:
+		return true
+	case TargetHoursAvailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WriteEvidenceRequestFinding.
+const (
+	Ambiguous        WriteEvidenceRequestFinding = "ambiguous"
+	ExplicitMatch    WriteEvidenceRequestFinding = "explicit_match"
+	ExplicitMismatch WriteEvidenceRequestFinding = "explicit_mismatch"
+	MentionOnly      WriteEvidenceRequestFinding = "mention_only"
+)
+
+// Valid indicates whether the value is a known member of the WriteEvidenceRequestFinding enum.
+func (e WriteEvidenceRequestFinding) Valid() bool {
+	switch e {
+	case Ambiguous:
+		return true
+	case ExplicitMatch:
+		return true
+	case ExplicitMismatch:
+		return true
+	case MentionOnly:
 		return true
 	default:
 		return false
@@ -491,6 +779,14 @@ type CreateCompanyRequest struct {
 	Website *string `json:"website,omitempty"`
 }
 
+// CreateEvidenceSourceRequest Exactly one of vacancySnapshot, statement, ownerObservation is required. Caller cannot set actor, sourceKind or authority.
+type CreateEvidenceSourceRequest struct {
+	ExpectedContextVersion int64                        `json:"expectedContextVersion"`
+	OwnerObservation       *OwnerObservationSourceInput `json:"ownerObservation,omitempty"`
+	Statement              *StatementSourceInput        `json:"statement,omitempty"`
+	VacancySnapshot        *VacancySnapshotInput        `json:"vacancySnapshot,omitempty"`
+}
+
 // CreateOpportunityRequest Provide sourceUrl or originalText; notes are separate from the source. No actor or confirmed-pay fields are accepted.
 type CreateOpportunityRequest struct {
 	CompanyId string `json:"companyId"`
@@ -526,6 +822,121 @@ type CreatedAgentCredential struct {
 // ErrorEnvelope defines model for ErrorEnvelope.
 type ErrorEnvelope struct {
 	Error ApiError `json:"error"`
+}
+
+// EvidenceArrangement defines model for EvidenceArrangement.
+type EvidenceArrangement struct {
+	BaseLocation    string                     `json:"baseLocation"`
+	OnsiteDays      *int64                     `json:"onsiteDays,omitempty"`
+	Pattern         EvidenceArrangementPattern `json:"pattern"`
+	RemoteGeography string                     `json:"remoteGeography"`
+}
+
+// EvidenceArrangementPattern defines model for EvidenceArrangement.Pattern.
+type EvidenceArrangementPattern string
+
+// EvidenceClaim defines model for EvidenceClaim.
+type EvidenceClaim struct {
+	Arrangement                *EvidenceArrangement `json:"arrangement,omitempty"`
+	CreatedAt                  time.Time            `json:"createdAt"`
+	Criterion                  string               `json:"criterion"`
+	ExcerptSha256              string               `json:"excerptSha256"`
+	Finding                    string               `json:"finding"`
+	HasSpan                    bool                 `json:"hasSpan"`
+	Hours                      *EvidenceHours       `json:"hours,omitempty"`
+	Id                         string               `json:"id"`
+	LegacyUnverified           bool                 `json:"legacyUnverified"`
+	ObservedAt                 string               `json:"observedAt"`
+	ObservedValue              string               `json:"observedValue"`
+	OpportunityId              string               `json:"opportunityId"`
+	OwnerPreferencesVersion    *int64               `json:"ownerPreferencesVersion,omitempty"`
+	OwnerWorkableForEvidenceId *string              `json:"ownerWorkableForEvidenceId,omitempty"`
+	Salary                     *EvidenceSalary      `json:"salary,omitempty"`
+	SourceContactText          *string              `json:"sourceContactText,omitempty"`
+	SourceExcerpt              string               `json:"sourceExcerpt"`
+	SourceId                   string               `json:"sourceId"`
+	SourceKind                 *string              `json:"sourceKind,omitempty"`
+	SourceUrl                  *string              `json:"sourceUrl,omitempty"`
+	SpanEnd                    *int                 `json:"spanEnd,omitempty"`
+	SpanStart                  *int                 `json:"spanStart,omitempty"`
+	SupersedesId               *string              `json:"supersedesId,omitempty"`
+}
+
+// EvidenceHours defines model for EvidenceHours.
+type EvidenceHours struct {
+	HardBounds bool  `json:"hardBounds"`
+	MaxWeekly  int64 `json:"maxWeekly"`
+	MinWeekly  int64 `json:"minWeekly"`
+}
+
+// EvidenceMutation defines model for EvidenceMutation.
+type EvidenceMutation struct {
+	ChangeId             string                     `json:"changeId"`
+	CurrentInputVersions QualificationInputVersions `json:"currentInputVersions"`
+	Evidence             EvidenceClaim              `json:"evidence"`
+}
+
+// EvidencePage defines model for EvidencePage.
+type EvidencePage struct {
+	Items      []EvidenceClaim `json:"items"`
+	NextCursor *string         `json:"nextCursor,omitempty"`
+}
+
+// EvidenceSalary defines model for EvidenceSalary.
+type EvidenceSalary struct {
+	ActualWeeklyHours int64                `json:"actualWeeklyHours"`
+	AmountCents       int64                `json:"amountCents"`
+	Basis             EvidenceSalaryBasis  `json:"basis"`
+	Currency          string               `json:"currency"`
+	Period            EvidenceSalaryPeriod `json:"period"`
+}
+
+// EvidenceSalaryBasis defines model for EvidenceSalary.Basis.
+type EvidenceSalaryBasis string
+
+// EvidenceSalaryPeriod defines model for EvidenceSalary.Period.
+type EvidenceSalaryPeriod string
+
+// EvidenceSource defines model for EvidenceSource.
+type EvidenceSource struct {
+	ActorId                 string                   `json:"actorId"`
+	ActorKind               EvidenceSourceActorKind  `json:"actorKind"`
+	Channel                 *string                  `json:"channel,omitempty"`
+	CompanyId               string                   `json:"companyId"`
+	ContentSha256           string                   `json:"contentSha256"`
+	ContextVersion          int64                    `json:"contextVersion"`
+	Id                      string                   `json:"id"`
+	OccurredAt              *time.Time               `json:"occurredAt,omitempty"`
+	OpportunityId           string                   `json:"opportunityId"`
+	OpportunityKind         string                   `json:"opportunityKind"`
+	OriginalText            string                   `json:"originalText"`
+	OwnerPreferencesVersion *int64                   `json:"ownerPreferencesVersion,omitempty"`
+	RecordChangeAuditId     *string                  `json:"recordChangeAuditId,omitempty"`
+	RecordedAt              time.Time                `json:"recordedAt"`
+	SourceKind              EvidenceSourceSourceKind `json:"sourceKind"`
+	SourceUrl               *string                  `json:"sourceUrl,omitempty"`
+	SpeakerName             *string                  `json:"speakerName,omitempty"`
+	SpeakerOrganisation     *string                  `json:"speakerOrganisation,omitempty"`
+	SpeakerRole             *string                  `json:"speakerRole,omitempty"`
+}
+
+// EvidenceSourceActorKind defines model for EvidenceSource.ActorKind.
+type EvidenceSourceActorKind string
+
+// EvidenceSourceSourceKind defines model for EvidenceSource.SourceKind.
+type EvidenceSourceSourceKind string
+
+// EvidenceSourceMutation defines model for EvidenceSourceMutation.
+type EvidenceSourceMutation struct {
+	ChangeId             string                     `json:"changeId"`
+	CurrentInputVersions QualificationInputVersions `json:"currentInputVersions"`
+	Source               EvidenceSource             `json:"source"`
+}
+
+// EvidenceSourcePage defines model for EvidenceSourcePage.
+type EvidenceSourcePage struct {
+	Items      []EvidenceSource `json:"items"`
+	NextCursor *string          `json:"nextCursor,omitempty"`
 }
 
 // HealthResponse defines model for HealthResponse.
@@ -606,6 +1017,13 @@ type OpportunityView struct {
 	Opportunity      Opportunity            `json:"opportunity"`
 }
 
+// OwnerObservationSourceInput defines model for OwnerObservationSourceInput.
+type OwnerObservationSourceInput struct {
+	ExpectedPreferencesVersion int64     `json:"expectedPreferencesVersion"`
+	OccurredAt                 time.Time `json:"occurredAt"`
+	OriginalText               string    `json:"originalText"`
+}
+
 // PatchCompanyRequest defines model for PatchCompanyRequest.
 type PatchCompanyRequest struct {
 	ExpectedRevision int64   `json:"expectedRevision"`
@@ -654,6 +1072,109 @@ type PreferencesResponse struct {
 	Version                int64  `json:"version"`
 }
 
+// QualificationCriterion defines model for QualificationCriterion.
+type QualificationCriterion struct {
+	Conflicting bool                        `json:"conflicting"`
+	Criterion   string                      `json:"criterion"`
+	Reason      string                      `json:"reason"`
+	State       QualificationCriterionState `json:"state"`
+}
+
+// QualificationCriterionState defines model for QualificationCriterion.State.
+type QualificationCriterionState string
+
+// QualificationEstimate defines model for QualificationEstimate.
+type QualificationEstimate struct {
+	MaxDisplayCents int64 `json:"maxDisplayCents"`
+	MinDisplayCents int64 `json:"minDisplayCents"`
+	ReferenceHours  int64 `json:"referenceHours"`
+	TargetHours     int64 `json:"targetHours"`
+}
+
+// QualificationEvaluation defines model for QualificationEvaluation.
+type QualificationEvaluation struct {
+	ActorId             string                         `json:"actorId"`
+	ActorKind           string                         `json:"actorKind"`
+	ContextVersion      int64                          `json:"contextVersion"`
+	CreatedAt           time.Time                      `json:"createdAt"`
+	Criteria            []QualificationCriterion       `json:"criteria"`
+	EvidenceVersion     int64                          `json:"evidenceVersion"`
+	Id                  string                         `json:"id"`
+	LegacyUnverified    bool                           `json:"legacyUnverified"`
+	MaterialVersion     int64                          `json:"materialVersion"`
+	OpportunityId       string                         `json:"opportunityId"`
+	OpportunityRevision int64                          `json:"opportunityRevision"`
+	Overall             QualificationEvaluationOverall `json:"overall"`
+	PreferencesVersion  int64                          `json:"preferencesVersion"`
+	RulesVersion        string                         `json:"rulesVersion"`
+	Salary              QualificationSalary            `json:"salary"`
+	SourceRefs          []QualificationSourceRef       `json:"sourceRefs"`
+}
+
+// QualificationEvaluationOverall defines model for QualificationEvaluation.Overall.
+type QualificationEvaluationOverall string
+
+// QualificationHistoryPage defines model for QualificationHistoryPage.
+type QualificationHistoryPage struct {
+	Items      []QualificationEvaluation `json:"items"`
+	NextCursor *string                   `json:"nextCursor,omitempty"`
+}
+
+// QualificationInputVersions defines model for QualificationInputVersions.
+type QualificationInputVersions struct {
+	CompanyId           string                                    `json:"companyId"`
+	ContextVersion      int64                                     `json:"contextVersion"`
+	EvidenceVersion     int64                                     `json:"evidenceVersion"`
+	MaterialVersion     int64                                     `json:"materialVersion"`
+	OpportunityId       string                                    `json:"opportunityId"`
+	OpportunityKind     QualificationInputVersionsOpportunityKind `json:"opportunityKind"`
+	OpportunityRevision int64                                     `json:"opportunityRevision"`
+	PreferencesVersion  int64                                     `json:"preferencesVersion"`
+	RulesVersion        string                                    `json:"rulesVersion"`
+}
+
+// QualificationInputVersionsOpportunityKind defines model for QualificationInputVersions.OpportunityKind.
+type QualificationInputVersionsOpportunityKind string
+
+// QualificationMutation defines model for QualificationMutation.
+type QualificationMutation struct {
+	ChangeId             string                     `json:"changeId"`
+	CurrentInputVersions QualificationInputVersions `json:"currentInputVersions"`
+	Evaluation           QualificationEvaluation    `json:"evaluation"`
+}
+
+// QualificationSalary defines model for QualificationSalary.
+type QualificationSalary struct {
+	ConfirmedActual bool                     `json:"confirmedActual"`
+	Conflicting     bool                     `json:"conflicting"`
+	Estimate        *QualificationEstimate   `json:"estimate,omitempty"`
+	Reason          string                   `json:"reason"`
+	State           QualificationSalaryState `json:"state"`
+}
+
+// QualificationSalaryState defines model for QualificationSalary.State.
+type QualificationSalaryState string
+
+// QualificationSourceRef defines model for QualificationSourceRef.
+type QualificationSourceRef struct {
+	EvidenceId string `json:"evidenceId"`
+	SourceId   string `json:"sourceId"`
+}
+
+// QualificationView defines model for QualificationView.
+type QualificationView struct {
+	Current              *QualificationEvaluation   `json:"current"`
+	CurrentInputVersions QualificationInputVersions `json:"currentInputVersions"`
+	LatestHistorical     *QualificationEvaluation   `json:"latestHistorical"`
+
+	// RefreshError Safe message only when local refresh failed.
+	RefreshError *string                 `json:"refreshError,omitempty"`
+	Status       QualificationViewStatus `json:"status"`
+}
+
+// QualificationViewStatus defines model for QualificationView.Status.
+type QualificationViewStatus string
+
 // RecordChange defines model for RecordChange.
 type RecordChange struct {
 	ActorId        string                 `json:"actorId"`
@@ -698,6 +1219,51 @@ type SessionResponse struct {
 
 // SessionResponseActorKind defines model for SessionResponse.ActorKind.
 type SessionResponseActorKind string
+
+// StatementSourceInput defines model for StatementSourceInput.
+type StatementSourceInput struct {
+	Channel             string                                 `json:"channel"`
+	OccurredAt          time.Time                              `json:"occurredAt"`
+	OriginalText        string                                 `json:"originalText"`
+	SourceUrl           *string                                `json:"sourceUrl,omitempty"`
+	SpeakerAffiliation  StatementSourceInputSpeakerAffiliation `json:"speakerAffiliation"`
+	SpeakerName         string                                 `json:"speakerName"`
+	SpeakerOrganisation string                                 `json:"speakerOrganisation"`
+	SpeakerRole         string                                 `json:"speakerRole"`
+}
+
+// StatementSourceInputSpeakerAffiliation defines model for StatementSourceInput.SpeakerAffiliation.
+type StatementSourceInputSpeakerAffiliation string
+
+// VacancySnapshotInput defines model for VacancySnapshotInput.
+type VacancySnapshotInput struct {
+	RecordChangeAuditId string `json:"recordChangeAuditId"`
+}
+
+// WriteEvidenceRequest defines model for WriteEvidenceRequest.
+type WriteEvidenceRequest struct {
+	Arrangement                *EvidenceArrangement          `json:"arrangement,omitempty"`
+	Criterion                  WriteEvidenceRequestCriterion `json:"criterion"`
+	ExpectedEvidenceVersion    int64                         `json:"expectedEvidenceVersion"`
+	Finding                    WriteEvidenceRequestFinding   `json:"finding"`
+	Hours                      *EvidenceHours                `json:"hours,omitempty"`
+	ObservedValue              string                        `json:"observedValue"`
+	OwnerWorkableForEvidenceId *string                       `json:"ownerWorkableForEvidenceId,omitempty"`
+	Salary                     *EvidenceSalary               `json:"salary,omitempty"`
+	SourceId                   string                        `json:"sourceId"`
+
+	// SpanEnd Exclusive UTF-8 byte offset.
+	SpanEnd int `json:"spanEnd"`
+
+	// SpanStart UTF-8 byte offset into immutable source text.
+	SpanStart int `json:"spanStart"`
+}
+
+// WriteEvidenceRequestCriterion defines model for WriteEvidenceRequest.Criterion.
+type WriteEvidenceRequestCriterion string
+
+// WriteEvidenceRequestFinding defines model for WriteEvidenceRequest.Finding.
+type WriteEvidenceRequestFinding string
 
 // Cursor defines model for Cursor.
 type Cursor = string
@@ -763,6 +1329,25 @@ type ListOpportunitiesParams struct {
 // ListOpportunitiesParamsKind defines parameters for ListOpportunities.
 type ListOpportunitiesParamsKind string
 
+// ListEvidenceParams defines parameters for ListEvidence.
+type ListEvidenceParams struct {
+	Limit             *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor            *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+	IncludeSuperseded *bool   `form:"includeSuperseded,omitempty" json:"includeSuperseded,omitempty"`
+}
+
+// ListEvidenceSourcesParams defines parameters for ListEvidenceSources.
+type ListEvidenceSourcesParams struct {
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListQualificationHistoryParams defines parameters for ListQualificationHistory.
+type ListQualificationHistoryParams struct {
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // CreateAgentCredentialJSONRequestBody defines body for CreateAgentCredential for application/json ContentType.
 type CreateAgentCredentialJSONRequestBody = CreateAgentCredentialRequest
 
@@ -786,3 +1371,12 @@ type PatchOpportunityJSONRequestBody = PatchOpportunityRequest
 
 // ArchiveOpportunityJSONRequestBody defines body for ArchiveOpportunity for application/json ContentType.
 type ArchiveOpportunityJSONRequestBody = ArchiveRequest
+
+// CreateEvidenceJSONRequestBody defines body for CreateEvidence for application/json ContentType.
+type CreateEvidenceJSONRequestBody = WriteEvidenceRequest
+
+// CreateEvidenceSourceJSONRequestBody defines body for CreateEvidenceSource for application/json ContentType.
+type CreateEvidenceSourceJSONRequestBody = CreateEvidenceSourceRequest
+
+// SupersedeEvidenceJSONRequestBody defines body for SupersedeEvidence for application/json ContentType.
+type SupersedeEvidenceJSONRequestBody = WriteEvidenceRequest

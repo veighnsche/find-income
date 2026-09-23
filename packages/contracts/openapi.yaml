@@ -404,6 +404,224 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /opportunities/{id}/evidence-sources:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: listEvidenceSources
+      summary: Page immutable, attributable evidence sources
+      description: Bearer credentials require opportunities:read. Sources remain historical after context changes.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Source page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceSourcePage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: createEvidenceSource
+      summary: Record an immutable vacancy snapshot, attributed statement or owner observation
+      description: Bearer credentials require evidence:write. Owner observations require an owner session and current preference version. The actor and source kind are server derived.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateEvidenceSourceRequest' }
+      responses:
+        '201':
+          description: Source recorded and qualification reevaluated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceSourceMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /opportunities/{id}/evidence-sources/{sourceId}:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+      - name: sourceId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getEvidenceSource
+      summary: Read an immutable source within its opportunity
+      description: Bearer credentials require opportunities:read.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Source
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceSource' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /opportunities/{id}/evidence:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: listEvidence
+      summary: Page sourced claims, optionally including superseded history
+      description: Bearer credentials require opportunities:read. Raw claims are not qualification results.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: includeSuperseded
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Claim page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidencePage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: createEvidence
+      summary: Record a typed observation over exact UTF-8 source byte offsets
+      description: Bearer credentials require evidence:write. Owner workability requires an owner session. Authority and confirmation are derived, never request fields.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WriteEvidenceRequest' }
+      responses:
+        '201':
+          description: Claim recorded and qualification reevaluated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /opportunities/{id}/evidence/{evidenceId}:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+      - name: evidenceId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getEvidence
+      summary: Read one immutable claim within its opportunity
+      description: Bearer credentials require opportunities:read.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Claim
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceClaim' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /opportunities/{id}/evidence/{evidenceId}/supersede:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+      - name: evidenceId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: supersedeEvidence
+      summary: Append a replacement for an unsuperseded claim
+      description: Bearer credentials require evidence:write; owner workability requires an owner session. The prior claim must belong to this opportunity and criterion.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WriteEvidenceRequest' }
+      responses:
+        '201':
+          description: Replacement claim recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceMutation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /opportunities/{id}/qualification:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: getQualification
+      summary: Read current qualification, refreshing stale local inputs deterministically
+      description: Bearer credentials require opportunities:read. A failed refresh cannot report historical results as current.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Qualification view
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QualificationView' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503':
+          description: Local refresh failed; current is null and historical evaluation is marked outdated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QualificationView' }
+  /opportunities/{id}/qualification/history:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: listQualificationHistory
+      summary: Page immutable evaluations, including unverified legacy history
+      description: Bearer credentials require opportunities:read.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Evaluation history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QualificationHistoryPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /opportunities/{id}/qualification/reevaluate:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    post:
+      operationId: reevaluateQualification
+      summary: Explicitly run local deterministic qualification
+      description: Bearer credentials require evidence:write. No caller supplied result or evidence is accepted. Cookie mutation requires Origin and CSRF.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: New evaluation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QualificationMutation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
 components:
   parameters:
     RecordId:
@@ -854,3 +1072,344 @@ components:
           items: { $ref: '#/components/schemas/RecordChange' }
         nextCursor: { type: string }
         watermark: { type: integer, format: int64 }
+    QualificationInputVersions:
+      type: object
+      required:
+        [
+          opportunityId,
+          opportunityRevision,
+          companyId,
+          opportunityKind,
+          materialVersion,
+          evidenceVersion,
+          contextVersion,
+          preferencesVersion,
+          rulesVersion,
+        ]
+      properties:
+        opportunityId: { type: string }
+        opportunityRevision: { type: integer, format: int64 }
+        companyId: { type: string }
+        opportunityKind: { type: string, enum: [employment, project] }
+        materialVersion: { type: integer, format: int64 }
+        evidenceVersion: { type: integer, format: int64 }
+        contextVersion: { type: integer, format: int64 }
+        preferencesVersion: { type: integer, format: int64 }
+        rulesVersion: { type: string }
+    EvidenceSource:
+      type: object
+      required:
+        [
+          id,
+          opportunityId,
+          companyId,
+          opportunityKind,
+          contextVersion,
+          sourceKind,
+          originalText,
+          contentSha256,
+          recordedAt,
+          actorKind,
+          actorId,
+        ]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        companyId: { type: string }
+        opportunityKind: { type: string }
+        contextVersion: { type: integer, format: int64 }
+        sourceKind:
+          {
+            type: string,
+            enum: [vacancy_snapshot, employer_statement, recruiter_statement, owner_observation],
+          }
+        recordChangeAuditId: { type: string }
+        sourceUrl: { type: string }
+        originalText: { type: string }
+        contentSha256: { type: string }
+        speakerName: { type: string }
+        speakerRole: { type: string }
+        speakerOrganisation: { type: string }
+        channel: { type: string }
+        occurredAt: { type: string, format: date-time }
+        ownerPreferencesVersion: { type: integer, format: int64 }
+        recordedAt: { type: string, format: date-time }
+        actorKind: { type: string, enum: [administrator, agent] }
+        actorId: { type: string }
+    EvidenceSourcePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/EvidenceSource' }
+        nextCursor: { type: string }
+    VacancySnapshotInput:
+      type: object
+      additionalProperties: false
+      required: [recordChangeAuditId]
+      properties:
+        recordChangeAuditId: { type: string }
+    StatementSourceInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          speakerAffiliation,
+          speakerName,
+          speakerRole,
+          speakerOrganisation,
+          channel,
+          occurredAt,
+          originalText,
+        ]
+      properties:
+        speakerAffiliation: { type: string, enum: [employer_representative, recruiter] }
+        speakerName: { type: string, maxLength: 200 }
+        speakerRole: { type: string, maxLength: 200 }
+        speakerOrganisation: { type: string, maxLength: 200 }
+        channel: { type: string, maxLength: 80 }
+        occurredAt: { type: string, format: date-time }
+        originalText: { type: string, maxLength: 20000 }
+        sourceUrl: { type: string, maxLength: 2048 }
+    OwnerObservationSourceInput:
+      type: object
+      additionalProperties: false
+      required: [occurredAt, originalText, expectedPreferencesVersion]
+      properties:
+        occurredAt: { type: string, format: date-time }
+        originalText: { type: string, maxLength: 20000 }
+        expectedPreferencesVersion: { type: integer, format: int64, minimum: 1 }
+    CreateEvidenceSourceRequest:
+      type: object
+      additionalProperties: false
+      description: Exactly one of vacancySnapshot, statement, ownerObservation is required. Caller cannot set actor, sourceKind or authority.
+      required: [expectedContextVersion]
+      properties:
+        expectedContextVersion: { type: integer, format: int64, minimum: 1 }
+        vacancySnapshot: { $ref: '#/components/schemas/VacancySnapshotInput' }
+        statement: { $ref: '#/components/schemas/StatementSourceInput' }
+        ownerObservation: { $ref: '#/components/schemas/OwnerObservationSourceInput' }
+    EvidenceSourceMutation:
+      type: object
+      required: [source, changeId, currentInputVersions]
+      properties:
+        source: { $ref: '#/components/schemas/EvidenceSource' }
+        changeId: { type: string }
+        currentInputVersions: { $ref: '#/components/schemas/QualificationInputVersions' }
+    EvidenceHours:
+      type: object
+      additionalProperties: false
+      required: [minWeekly, maxWeekly, hardBounds]
+      properties:
+        minWeekly: { type: integer, format: int64, minimum: 1, maximum: 168 }
+        maxWeekly: { type: integer, format: int64, minimum: 1, maximum: 168 }
+        hardBounds: { type: boolean }
+    EvidenceArrangement:
+      type: object
+      additionalProperties: false
+      required: [pattern, baseLocation, remoteGeography]
+      properties:
+        pattern: { type: string, enum: [onsite, hybrid, remote] }
+        baseLocation: { type: string, maxLength: 500 }
+        remoteGeography: { type: string, maxLength: 500 }
+        onsiteDays: { type: integer, format: int64, minimum: 0, maximum: 7 }
+    EvidenceSalary:
+      type: object
+      additionalProperties: false
+      required: [currency, period, basis, amountCents, actualWeeklyHours]
+      properties:
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        period: { type: string, enum: [month, year, hour, project] }
+        basis: { type: string, enum: [base, inclusive, unknown] }
+        amountCents: { type: integer, format: int64, minimum: 0 }
+        actualWeeklyHours: { type: integer, format: int64, minimum: 1, maximum: 168 }
+    WriteEvidenceRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [sourceId, criterion, finding, observedValue, spanStart, spanEnd, expectedEvidenceVersion]
+      properties:
+        sourceId: { type: string }
+        criterion:
+          {
+            type: string,
+            enum:
+              [
+                backend_platform,
+                no_frontend_duties,
+                no_php_focused_duties,
+                target_hours_available,
+                location_arrangement,
+                location_workable,
+                monthly_base_salary,
+              ],
+          }
+        finding:
+          { type: string, enum: [explicit_match, explicit_mismatch, mention_only, ambiguous] }
+        observedValue: { type: string, maxLength: 1000 }
+        spanStart:
+          { type: integer, minimum: 0, description: UTF-8 byte offset into immutable source text. }
+        spanEnd: { type: integer, minimum: 1, description: Exclusive UTF-8 byte offset. }
+        expectedEvidenceVersion: { type: integer, format: int64, minimum: 0 }
+        hours: { $ref: '#/components/schemas/EvidenceHours' }
+        arrangement: { $ref: '#/components/schemas/EvidenceArrangement' }
+        ownerWorkableForEvidenceId: { type: string }
+        salary: { $ref: '#/components/schemas/EvidenceSalary' }
+    EvidenceClaim:
+      type: object
+      required:
+        [
+          id,
+          opportunityId,
+          sourceId,
+          criterion,
+          finding,
+          observedValue,
+          sourceExcerpt,
+          excerptSha256,
+          observedAt,
+          createdAt,
+          legacyUnverified,
+          hasSpan,
+        ]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        sourceId: { type: string }
+        sourceKind: { type: string }
+        sourceUrl: { type: string }
+        sourceContactText: { type: string }
+        criterion: { type: string }
+        finding: { type: string }
+        observedValue: { type: string }
+        sourceExcerpt: { type: string }
+        excerptSha256: { type: string }
+        spanStart: { type: integer }
+        spanEnd: { type: integer }
+        hasSpan: { type: boolean }
+        observedAt: { type: string }
+        supersedesId: { type: string }
+        createdAt: { type: string, format: date-time }
+        hours: { $ref: '#/components/schemas/EvidenceHours' }
+        arrangement: { $ref: '#/components/schemas/EvidenceArrangement' }
+        ownerWorkableForEvidenceId: { type: string }
+        ownerPreferencesVersion: { type: integer, format: int64 }
+        salary: { $ref: '#/components/schemas/EvidenceSalary' }
+        legacyUnverified: { type: boolean }
+    EvidencePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/EvidenceClaim' }
+        nextCursor: { type: string }
+    EvidenceMutation:
+      type: object
+      required: [evidence, changeId, currentInputVersions]
+      properties:
+        evidence: { $ref: '#/components/schemas/EvidenceClaim' }
+        changeId: { type: string }
+        currentInputVersions: { $ref: '#/components/schemas/QualificationInputVersions' }
+    QualificationCriterion:
+      type: object
+      required: [criterion, state, reason, conflicting]
+      properties:
+        criterion: { type: string }
+        state: { type: string, enum: [match, mismatch, unknown] }
+        reason: { type: string }
+        conflicting: { type: boolean }
+    QualificationEstimate:
+      type: object
+      required: [minDisplayCents, maxDisplayCents, targetHours, referenceHours]
+      properties:
+        minDisplayCents: { type: integer, format: int64 }
+        maxDisplayCents: { type: integer, format: int64 }
+        targetHours: { type: integer, format: int64 }
+        referenceHours: { type: integer, format: int64 }
+    QualificationSalary:
+      type: object
+      required: [state, reason, confirmedActual, conflicting]
+      properties:
+        state: { type: string, enum: [match, mismatch, unknown] }
+        reason: { type: string }
+        estimate: { $ref: '#/components/schemas/QualificationEstimate' }
+        confirmedActual: { type: boolean }
+        conflicting: { type: boolean }
+    QualificationSourceRef:
+      type: object
+      required: [evidenceId, sourceId]
+      properties:
+        evidenceId: { type: string }
+        sourceId: { type: string }
+    QualificationEvaluation:
+      type: object
+      required:
+        [
+          id,
+          opportunityId,
+          opportunityRevision,
+          materialVersion,
+          evidenceVersion,
+          contextVersion,
+          preferencesVersion,
+          rulesVersion,
+          overall,
+          criteria,
+          salary,
+          sourceRefs,
+          createdAt,
+          actorKind,
+          actorId,
+          legacyUnverified,
+        ]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        opportunityRevision: { type: integer, format: int64 }
+        materialVersion: { type: integer, format: int64 }
+        evidenceVersion: { type: integer, format: int64 }
+        contextVersion: { type: integer, format: int64 }
+        preferencesVersion: { type: integer, format: int64 }
+        rulesVersion: { type: string }
+        overall: { type: string, enum: [qualified, unsuitable, unresolved, needs_requalification] }
+        criteria:
+          type: array
+          items: { $ref: '#/components/schemas/QualificationCriterion' }
+        salary: { $ref: '#/components/schemas/QualificationSalary' }
+        sourceRefs:
+          type: array
+          items: { $ref: '#/components/schemas/QualificationSourceRef' }
+        createdAt: { type: string, format: date-time }
+        actorKind: { type: string }
+        actorId: { type: string }
+        legacyUnverified: { type: boolean }
+    QualificationView:
+      type: object
+      required: [status, current, latestHistorical, currentInputVersions]
+      properties:
+        status: { type: string, enum: [not_assessed, current, outdated] }
+        current:
+          allOf: [{ $ref: '#/components/schemas/QualificationEvaluation' }]
+          nullable: true
+        latestHistorical:
+          allOf: [{ $ref: '#/components/schemas/QualificationEvaluation' }]
+          nullable: true
+        currentInputVersions: { $ref: '#/components/schemas/QualificationInputVersions' }
+        refreshError: { type: string, description: Safe message only when local refresh failed. }
+    QualificationHistoryPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/QualificationEvaluation' }
+        nextCursor: { type: string }
+    QualificationMutation:
+      type: object
+      required: [evaluation, changeId, currentInputVersions]
+      properties:
+        evaluation: { $ref: '#/components/schemas/QualificationEvaluation' }
+        changeId: { type: string }
+        currentInputVersions: { $ref: '#/components/schemas/QualificationInputVersions' }

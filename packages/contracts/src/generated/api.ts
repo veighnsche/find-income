@@ -315,6 +315,193 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/opportunities/{id}/evidence-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Page immutable, attributable evidence sources
+         * @description Bearer credentials require opportunities:read. Sources remain historical after context changes.
+         */
+        get: operations["listEvidenceSources"];
+        put?: never;
+        /**
+         * Record an immutable vacancy snapshot, attributed statement or owner observation
+         * @description Bearer credentials require evidence:write. Owner observations require an owner session and current preference version. The actor and source kind are server derived.
+         */
+        post: operations["createEvidenceSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/evidence-sources/{sourceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                sourceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read an immutable source within its opportunity
+         * @description Bearer credentials require opportunities:read.
+         */
+        get: operations["getEvidenceSource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Page sourced claims, optionally including superseded history
+         * @description Bearer credentials require opportunities:read. Raw claims are not qualification results.
+         */
+        get: operations["listEvidence"];
+        put?: never;
+        /**
+         * Record a typed observation over exact UTF-8 source byte offsets
+         * @description Bearer credentials require evidence:write. Owner workability requires an owner session. Authority and confirmation are derived, never request fields.
+         */
+        post: operations["createEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/evidence/{evidenceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                evidenceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read one immutable claim within its opportunity
+         * @description Bearer credentials require opportunities:read.
+         */
+        get: operations["getEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/evidence/{evidenceId}/supersede": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                evidenceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Append a replacement for an unsuperseded claim
+         * @description Bearer credentials require evidence:write; owner workability requires an owner session. The prior claim must belong to this opportunity and criterion.
+         */
+        post: operations["supersedeEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/qualification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read current qualification, refreshing stale local inputs deterministically
+         * @description Bearer credentials require opportunities:read. A failed refresh cannot report historical results as current.
+         */
+        get: operations["getQualification"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/qualification/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Page immutable evaluations, including unverified legacy history
+         * @description Bearer credentials require opportunities:read.
+         */
+        get: operations["listQualificationHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/qualification/reevaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Explicitly run local deterministic qualification
+         * @description Bearer credentials require evidence:write. No caller supplied result or evidence is accepted. Cookie mutation requires Origin and CSRF.
+         */
+        post: operations["reevaluateQualification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -565,6 +752,241 @@ export interface components {
             nextCursor?: string;
             /** Format: int64 */
             watermark: number;
+        };
+        QualificationInputVersions: {
+            opportunityId: string;
+            /** Format: int64 */
+            opportunityRevision: number;
+            companyId: string;
+            /** @enum {string} */
+            opportunityKind: "employment" | "project";
+            /** Format: int64 */
+            materialVersion: number;
+            /** Format: int64 */
+            evidenceVersion: number;
+            /** Format: int64 */
+            contextVersion: number;
+            /** Format: int64 */
+            preferencesVersion: number;
+            rulesVersion: string;
+        };
+        EvidenceSource: {
+            id: string;
+            opportunityId: string;
+            companyId: string;
+            opportunityKind: string;
+            /** Format: int64 */
+            contextVersion: number;
+            /** @enum {string} */
+            sourceKind: "vacancy_snapshot" | "employer_statement" | "recruiter_statement" | "owner_observation";
+            recordChangeAuditId?: string;
+            sourceUrl?: string;
+            originalText: string;
+            contentSha256: string;
+            speakerName?: string;
+            speakerRole?: string;
+            speakerOrganisation?: string;
+            channel?: string;
+            /** Format: date-time */
+            occurredAt?: string;
+            /** Format: int64 */
+            ownerPreferencesVersion?: number;
+            /** Format: date-time */
+            recordedAt: string;
+            /** @enum {string} */
+            actorKind: "administrator" | "agent";
+            actorId: string;
+        };
+        EvidenceSourcePage: {
+            items: components["schemas"]["EvidenceSource"][];
+            nextCursor?: string;
+        };
+        VacancySnapshotInput: {
+            recordChangeAuditId: string;
+        };
+        StatementSourceInput: {
+            /** @enum {string} */
+            speakerAffiliation: "employer_representative" | "recruiter";
+            speakerName: string;
+            speakerRole: string;
+            speakerOrganisation: string;
+            channel: string;
+            /** Format: date-time */
+            occurredAt: string;
+            originalText: string;
+            sourceUrl?: string;
+        };
+        OwnerObservationSourceInput: {
+            /** Format: date-time */
+            occurredAt: string;
+            originalText: string;
+            /** Format: int64 */
+            expectedPreferencesVersion: number;
+        };
+        /** @description Exactly one of vacancySnapshot, statement, ownerObservation is required. Caller cannot set actor, sourceKind or authority. */
+        CreateEvidenceSourceRequest: {
+            /** Format: int64 */
+            expectedContextVersion: number;
+            vacancySnapshot?: components["schemas"]["VacancySnapshotInput"];
+            statement?: components["schemas"]["StatementSourceInput"];
+            ownerObservation?: components["schemas"]["OwnerObservationSourceInput"];
+        };
+        EvidenceSourceMutation: {
+            source: components["schemas"]["EvidenceSource"];
+            changeId: string;
+            currentInputVersions: components["schemas"]["QualificationInputVersions"];
+        };
+        EvidenceHours: {
+            /** Format: int64 */
+            minWeekly: number;
+            /** Format: int64 */
+            maxWeekly: number;
+            hardBounds: boolean;
+        };
+        EvidenceArrangement: {
+            /** @enum {string} */
+            pattern: "onsite" | "hybrid" | "remote";
+            baseLocation: string;
+            remoteGeography: string;
+            /** Format: int64 */
+            onsiteDays?: number;
+        };
+        EvidenceSalary: {
+            currency: string;
+            /** @enum {string} */
+            period: "month" | "year" | "hour" | "project";
+            /** @enum {string} */
+            basis: "base" | "inclusive" | "unknown";
+            /** Format: int64 */
+            amountCents: number;
+            /** Format: int64 */
+            actualWeeklyHours: number;
+        };
+        WriteEvidenceRequest: {
+            sourceId: string;
+            /** @enum {string} */
+            criterion: "backend_platform" | "no_frontend_duties" | "no_php_focused_duties" | "target_hours_available" | "location_arrangement" | "location_workable" | "monthly_base_salary";
+            /** @enum {string} */
+            finding: "explicit_match" | "explicit_mismatch" | "mention_only" | "ambiguous";
+            observedValue: string;
+            /** @description UTF-8 byte offset into immutable source text. */
+            spanStart: number;
+            /** @description Exclusive UTF-8 byte offset. */
+            spanEnd: number;
+            /** Format: int64 */
+            expectedEvidenceVersion: number;
+            hours?: components["schemas"]["EvidenceHours"];
+            arrangement?: components["schemas"]["EvidenceArrangement"];
+            ownerWorkableForEvidenceId?: string;
+            salary?: components["schemas"]["EvidenceSalary"];
+        };
+        EvidenceClaim: {
+            id: string;
+            opportunityId: string;
+            sourceId: string;
+            sourceKind?: string;
+            sourceUrl?: string;
+            sourceContactText?: string;
+            criterion: string;
+            finding: string;
+            observedValue: string;
+            sourceExcerpt: string;
+            excerptSha256: string;
+            spanStart?: number;
+            spanEnd?: number;
+            hasSpan: boolean;
+            observedAt: string;
+            supersedesId?: string;
+            /** Format: date-time */
+            createdAt: string;
+            hours?: components["schemas"]["EvidenceHours"];
+            arrangement?: components["schemas"]["EvidenceArrangement"];
+            ownerWorkableForEvidenceId?: string;
+            /** Format: int64 */
+            ownerPreferencesVersion?: number;
+            salary?: components["schemas"]["EvidenceSalary"];
+            legacyUnverified: boolean;
+        };
+        EvidencePage: {
+            items: components["schemas"]["EvidenceClaim"][];
+            nextCursor?: string;
+        };
+        EvidenceMutation: {
+            evidence: components["schemas"]["EvidenceClaim"];
+            changeId: string;
+            currentInputVersions: components["schemas"]["QualificationInputVersions"];
+        };
+        QualificationCriterion: {
+            criterion: string;
+            /** @enum {string} */
+            state: "match" | "mismatch" | "unknown";
+            reason: string;
+            conflicting: boolean;
+        };
+        QualificationEstimate: {
+            /** Format: int64 */
+            minDisplayCents: number;
+            /** Format: int64 */
+            maxDisplayCents: number;
+            /** Format: int64 */
+            targetHours: number;
+            /** Format: int64 */
+            referenceHours: number;
+        };
+        QualificationSalary: {
+            /** @enum {string} */
+            state: "match" | "mismatch" | "unknown";
+            reason: string;
+            estimate?: components["schemas"]["QualificationEstimate"];
+            confirmedActual: boolean;
+            conflicting: boolean;
+        };
+        QualificationSourceRef: {
+            evidenceId: string;
+            sourceId: string;
+        };
+        QualificationEvaluation: {
+            id: string;
+            opportunityId: string;
+            /** Format: int64 */
+            opportunityRevision: number;
+            /** Format: int64 */
+            materialVersion: number;
+            /** Format: int64 */
+            evidenceVersion: number;
+            /** Format: int64 */
+            contextVersion: number;
+            /** Format: int64 */
+            preferencesVersion: number;
+            rulesVersion: string;
+            /** @enum {string} */
+            overall: "qualified" | "unsuitable" | "unresolved" | "needs_requalification";
+            criteria: components["schemas"]["QualificationCriterion"][];
+            salary: components["schemas"]["QualificationSalary"];
+            sourceRefs: components["schemas"]["QualificationSourceRef"][];
+            /** Format: date-time */
+            createdAt: string;
+            actorKind: string;
+            actorId: string;
+            legacyUnverified: boolean;
+        };
+        QualificationView: {
+            /** @enum {string} */
+            status: "not_assessed" | "current" | "outdated";
+            current: components["schemas"]["QualificationEvaluation"] | null;
+            latestHistorical: components["schemas"]["QualificationEvaluation"] | null;
+            currentInputVersions: components["schemas"]["QualificationInputVersions"];
+            /** @description Safe message only when local refresh failed. */
+            refreshError?: string;
+        };
+        QualificationHistoryPage: {
+            items: components["schemas"]["QualificationEvaluation"][];
+            nextCursor?: string;
+        };
+        QualificationMutation: {
+            evaluation: components["schemas"]["QualificationEvaluation"];
+            changeId: string;
+            currentInputVersions: components["schemas"]["QualificationInputVersions"];
         };
     };
     responses: {
@@ -1164,6 +1586,300 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listEvidenceSources: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Source page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceSourcePage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createEvidenceSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEvidenceSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description Source recorded and qualification reevaluated */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceSourceMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getEvidenceSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                sourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Source */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceSource"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listEvidence: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                includeSuperseded?: boolean;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Claim page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidencePage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WriteEvidenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Claim recorded and qualification reevaluated */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                evidenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Claim */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceClaim"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    supersedeEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                evidenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WriteEvidenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Replacement claim recorded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getQualification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Qualification view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualificationView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Local refresh failed; current is null and historical evaluation is marked outdated */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualificationView"];
+                };
+            };
+        };
+    };
+    listQualificationHistory: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Evaluation history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualificationHistoryPage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    reevaluateQualification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description New evaluation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualificationMutation"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
         };
     };
 }
