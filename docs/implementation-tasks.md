@@ -282,7 +282,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I05, I06.
 
-**Remaining work:** Verify the actual authenticated runtime journey for contextual input and corrected packs. Core2279c3f and UI12b138d implement commissioning, explicit paused replacement, exact replay and production results; synthetic fixtures do not establish live acceptance.
+**Remaining work:** Verify the actual authenticated runtime journey for contextual input and corrected packs. Core2279c3f and UI12b138d implement commissioning, explicit paused replacement, exact replay and production results; synthetic fixtures do not establish live acceptance. Finish the persisted Jev cross-outcome home recommendation among implemented actions, with technical ceilings in expandable details; current home offers static discovery and discovery next-outcome only chooses retained postings or finishes.
 
 **Task scope:** Reuse contextual-recovery work. Build the known-answer brief, named Start/Stop/Resume, partial sourced cards, preserved selection and one context-bound instruction/URL/full-text input against stable DTOs. Remove manual source/preference/record forms and inactive navigation. Use stored recommendations supplied by I10 when integrated.
 
