@@ -1,0 +1,3 @@
+package: generated
+generate:
+  models: true

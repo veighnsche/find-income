@@ -1,0 +1,101 @@
+:root {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  color: #18302d;
+  background: #f5f7f3;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid #d8e2da;
+  background: #fff;
+}
+.topbar span,
+nav span {
+  color: #61716b;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  min-height: calc(100vh - 3.5rem);
+}
+nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1.5rem;
+  border-right: 1px solid #d8e2da;
+}
+nav a,
+nav span {
+  padding: 0.6rem 0.75rem;
+  text-decoration: none;
+  border-radius: 0.5rem;
+}
+nav a {
+  background: #dcece1;
+  color: #163e32;
+  font-weight: 700;
+}
+main {
+  max-width: 60rem;
+  padding: 2.5rem;
+}
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #456b5b;
+}
+h1 {
+  font-size: 2.3rem;
+  margin: 0.3rem 0 1rem;
+}
+.status {
+  margin-top: 2rem;
+  padding: 1.4rem;
+  border: 1px solid #d8e2da;
+  border-radius: 0.7rem;
+  background: #fff;
+}
+.status h2 {
+  margin-top: 0;
+  font-size: 1rem;
+}
+.success {
+  color: #176342;
+}
+button {
+  border: 0;
+  border-radius: 0.4rem;
+  padding: 0.55rem 0.85rem;
+  color: #fff;
+  background: #235d49;
+  cursor: pointer;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #dc9d30;
+  outline-offset: 2px;
+}
+@media (max-width: 650px) {
+  .layout {
+    display: block;
+  }
+  nav {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid #d8e2da;
+  }
+  main {
+    padding: 1.5rem;
+  }
+}

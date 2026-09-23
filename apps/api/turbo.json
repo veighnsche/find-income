@@ -1,0 +1,31 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "generate": {
+      "command": ["sh", "./scripts/generate-go.sh"],
+      "dependsOn": ["@jobseek/contracts#validate"],
+      "inputs": ["codegen.yaml", "scripts/generate-go.sh"],
+      "outputs": ["internal/httpapi/generated/**"]
+    },
+    "check:generated": {
+      "command": ["sh", "./scripts/check-generated.sh"],
+      "dependsOn": ["@jobseek/contracts#validate"],
+      "cache": false
+    },
+    "build": {
+      "command": ["go", "build", "-o", "bin/jobseek", "./cmd/server"],
+      "dependsOn": ["generate"],
+      "inputs": ["$TURBO_DEFAULT$", "!bin/**"],
+      "outputs": ["bin/jobseek"],
+      "cache": true
+    },
+    "test": { "dependsOn": ["generate"] },
+    "lint": { "dependsOn": ["generate"] },
+    "dev": {
+      "command": ["go", "run", "./cmd/server"],
+      "cache": false,
+      "persistent": true
+    },
+    "format": { "cache": false }
+  }
+}

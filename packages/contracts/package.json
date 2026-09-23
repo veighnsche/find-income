@@ -1,0 +1,16 @@
+{
+  "name": "@jobseek/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "types": "src/generated/api.ts",
+  "scripts": {
+    "validate": "openapi-typescript openapi.yaml -o /dev/null",
+    "generate": "openapi-typescript openapi.yaml -o src/generated/api.ts",
+    "check:generated": "node scripts/check-generated.mjs",
+    "lint": "vp check",
+    "format": "vp fmt ."
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0"
+  }
+}

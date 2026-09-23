@@ -1,0 +1,20 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalGoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "globalDependencies": [".node-version", "go.work", "pnpm-lock.yaml"],
+  "globalPassThroughEnv": ["GOMODCACHE", "GOCACHE", "GOPATH", "GOPROXY"],
+  "tasks": {
+    "validate": { "outputs": [] },
+    "generate": { "dependsOn": ["@jobseek/contracts#validate"], "outputs": ["src/generated/**", "internal/httpapi/generated/**"] },
+    "check:generated": { "dependsOn": ["@jobseek/contracts#validate"], "cache": false },
+    "build": { "dependsOn": ["generate", "^generate"], "outputs": ["dist/**", "bin/**"] },
+    "test": { "dependsOn": ["generate", "^generate"], "outputs": [] },
+    "lint": { "dependsOn": ["generate", "^generate"], "outputs": [] },
+    "dev": { "cache": false, "persistent": true },
+    "format": { "cache": false },
+    "e2e": { "cache": false }
+  }
+}

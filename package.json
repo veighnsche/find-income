@@ -1,0 +1,20 @@
+{
+  "name": "@jobseek/workspace",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@12.3.4",
+  "engines": { "node": "24.21.0", "pnpm": "12.3.4" },
+  "scripts": {
+    "dev": "turbo run dev",
+    "check": "turbo run check:generated && turbo run lint",
+    "test": "turbo run test",
+    "build": "turbo run build",
+    "generate": "turbo run generate",
+    "format": "turbo run format",
+    "e2e": "node scripts/e2e-placeholder.mjs"
+  },
+  "devDependencies": {
+    "turbo": "2.11.3",
+    "vite-plus": "1.0.0-rc.0"
+  }
+}

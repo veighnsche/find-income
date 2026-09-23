@@ -1,0 +1,15 @@
+node_modules/
+.turbo/
+apps/web/dist/
+apps/api/bin/
+*.sqlite
+*.sqlite-*
+data/
+runtime/
+attachments/
+backups/
+*.pdf
+.env
+.env.*
+!.env.example
+coverage/
