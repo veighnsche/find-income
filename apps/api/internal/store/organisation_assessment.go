@@ -339,3 +339,94 @@ func (s *Store) Organisation(ctx context.Context, opportunityID string) (Organis
 	}
 	return view, nil
 }
+
+type OrganisationSummary struct {
+	OpportunityID string
+	Status        string
+	CategoryID    string
+}
+
+// OrganisationSummaries returns current category/status for at most one page
+// of opportunities with one bulk record query. Missing IDs are omitted.
+func (s *Store) OrganisationSummaries(ctx context.Context, opportunityIDs []string) (map[string]OrganisationSummary, error) {
+	if len(opportunityIDs) == 0 || len(opportunityIDs) > 100 {
+		return nil, ErrInvalid
+	}
+	for _, id := range opportunityIDs {
+		if id == "" || strings.TrimSpace(id) != id {
+			return nil, ErrInvalid
+		}
+	}
+	encodedIDs, err := json.Marshal(opportunityIDs)
+	if err != nil {
+		return nil, err
+	}
+	set, err := s.CurrentOrganisationCategories(ctx)
+	if err != nil {
+		return nil, err
+	}
+	configured := set.Version > 0 && len(set.Categories) > 0
+	rows, err := s.db.QueryContext(ctx, `SELECT o.id,o.company_id,o.kind,COALESCE(o.source_url,''),o.original_text,
+  COALESCE(i.source_id,''),COALESCE(j.state,''),COALESCE(j.result_ref,''),
+  COALESCE(a.category_version,0),COALESCE(a.source_fingerprint,''),COALESCE(a.disposition,''),
+  COALESCE(a.category_id,''),EXISTS(SELECT 1 FROM organisation_assessments h WHERE h.opportunity_id=o.id)
+  FROM opportunities o
+  LEFT JOIN ingestion_requests i ON i.id=(SELECT i2.id FROM ingestion_requests i2
+    WHERE i2.opportunity_id=o.id AND i2.status='completed' AND i2.source_id IS NOT NULL
+    ORDER BY i2.created_at DESC,i2.id DESC LIMIT 1)
+  LEFT JOIN jobs j ON j.id=i.organisation_job_id
+  LEFT JOIN organisation_current c ON c.opportunity_id=o.id
+  LEFT JOIN organisation_assessments a ON a.id=c.assessment_id
+  WHERE o.id IN (SELECT value FROM json_each(?))`, string(encodedIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	summaries := make(map[string]OrganisationSummary, len(opportunityIDs))
+	for rows.Next() {
+		var summary OrganisationSummary
+		var companyID, kind, url, originalText, sourceID, jobState, jobResult string
+		var categoryVersion int64
+		var fingerprint, disposition, categoryID string
+		var historical bool
+		if err := rows.Scan(&summary.OpportunityID, &companyID, &kind, &url, &originalText,
+			&sourceID, &jobState, &jobResult, &categoryVersion, &fingerprint, &disposition,
+			&categoryID, &historical); err != nil {
+			return nil, err
+		}
+		summary.Status = "unconfigured"
+		if configured {
+			summary.Status = "pending"
+			if historical {
+				summary.Status = "outdated"
+			}
+			if sourceID != "" && categoryVersion == set.Version &&
+				fingerprint == organisationSourceFingerprint(companyID, kind, url, originalText, sourceID) {
+				summary.Status = "selected"
+				if disposition == "uncertain" {
+					summary.Status = "uncertain"
+				} else {
+					summary.CategoryID = categoryID
+				}
+			} else {
+				switch JobState(jobState) {
+				case JobRunning:
+					summary.Status = "processing"
+				case JobFailed, JobCancelled:
+					summary.Status = "failed"
+				case JobQueued:
+					summary.Status = "pending"
+				case JobSucceeded:
+					if jobResult == "outdated" {
+						summary.Status = "outdated"
+					}
+				}
+			}
+		}
+		summaries[summary.OpportunityID] = summary
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return summaries, nil
+}

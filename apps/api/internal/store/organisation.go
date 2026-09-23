@@ -171,31 +171,45 @@ type organisationJobPayload struct {
 }
 
 func scheduleOrganisationTx(ctx context.Context, tx *sql.Tx, ingestionID, opportunityID string, categoryVersion int64, fingerprint string) (string, error) {
-	jobID, err := randomID()
-	if err != nil {
-		return "", err
-	}
-	payload, _ := json.Marshal(organisationJobPayload{ingestionID, opportunityID, categoryVersion, fingerprint})
-	payloadHash := sha256.Sum256(payload)
 	key := fmt.Sprintf("organisation:%s:%d:%s", opportunityID, categoryVersion, fingerprint)
-	requestInput, _ := json.Marshal(struct {
-		Kind        string          `json:"kind"`
-		Payload     json.RawMessage `json:"payload"`
-		MaxAttempts int             `json:"maxAttempts"`
-		Scheduled   string          `json:"scheduled"`
-	}{OrganisationJobKind, payload, 3, ""})
-	requestHash := sha256.Sum256(requestInput)
-	actor := Actor{Kind: "system", ID: "organisation"}
-	now := time.Now().UTC()
-	_, err = tx.ExecContext(ctx, `INSERT INTO jobs
+	var jobID, existingPayload string
+	err := tx.QueryRowContext(ctx, `SELECT id,payload_json FROM jobs WHERE actor_kind='system'
+  AND actor_id='organisation' AND idempotency_key=?`, key).Scan(&jobID, &existingPayload)
+	if err == nil {
+		var existing organisationJobPayload
+		if err := json.Unmarshal([]byte(existingPayload), &existing); err != nil ||
+			existing.OpportunityID != opportunityID || existing.CategoryVersion != categoryVersion ||
+			existing.SourceFingerprint != fingerprint {
+			return "", ErrConflict
+		}
+	} else if errors.Is(err, sql.ErrNoRows) {
+		jobID, err = randomID()
+		if err != nil {
+			return "", err
+		}
+		payload, _ := json.Marshal(organisationJobPayload{ingestionID, opportunityID, categoryVersion, fingerprint})
+		payloadHash := sha256.Sum256(payload)
+		requestInput, _ := json.Marshal(struct {
+			Kind        string          `json:"kind"`
+			Payload     json.RawMessage `json:"payload"`
+			MaxAttempts int             `json:"maxAttempts"`
+			Scheduled   string          `json:"scheduled"`
+		}{OrganisationJobKind, payload, 3, ""})
+		requestHash := sha256.Sum256(requestInput)
+		actor := Actor{Kind: "system", ID: "organisation"}
+		now := time.Now().UTC()
+		_, err = tx.ExecContext(ctx, `INSERT INTO jobs
   (id,kind,payload_json,payload_sha256,actor_kind,actor_id,idempotency_key,request_sha256,
    state,max_attempts,available_at,created_at,updated_at)
   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, jobID, OrganisationJobKind, string(payload), hex.EncodeToString(payloadHash[:]),
-		actor.Kind, actor.ID, key, hex.EncodeToString(requestHash[:]), JobQueued, 3, jobTime(now), jobTime(now), jobTime(now))
-	if err != nil {
-		return "", err
-	}
-	if err = writeJobAudit(ctx, tx, actor, "job.enqueue", jobID, now); err != nil {
+			actor.Kind, actor.ID, key, hex.EncodeToString(requestHash[:]), JobQueued, 3, jobTime(now), jobTime(now), jobTime(now))
+		if err != nil {
+			return "", err
+		}
+		if err = writeJobAudit(ctx, tx, actor, "job.enqueue", jobID, now); err != nil {
+			return "", err
+		}
+	} else {
 		return "", err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE ingestion_requests SET organisation_job_id=?,updated_at=? WHERE id=?`, jobID, utcNow(), ingestionID)

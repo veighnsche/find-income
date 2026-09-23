@@ -30,7 +30,7 @@ func sourcedFacts(snapshot store.OrganisationSnapshot) ([]jev.OrganisationFact, 
 	for i := 0; i < segments; i++ {
 		start := i * maxFactBytes
 		if len(text) > maxFactBytes*maxFacts {
-			// Cover the complete long source with bounded, deterministic excerpts.
+			// Sample across the long source with bounded, deterministic excerpts.
 			start = i * (len(text) - maxFactBytes) / (segments - 1)
 		}
 		for start < len(text) && !utf8.RuneStart(text[start]) {

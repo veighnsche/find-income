@@ -65,3 +65,49 @@ func TestOrganisationCategoriesQueueCompletedIntakesAndCheckVersion(t *testing.T
 		t.Fatalf("current category set: %+v %v", current, err)
 	}
 }
+
+func TestDistinctIntakesReuseMatchingOrganisationJob(t *testing.T) {
+	ctx := context.Background()
+	s := openJobTestStore(t)
+	owner := ownerActor()
+	_, err := s.UpdateOrganisationCategories(ctx, 0, []OrganisationCategory{
+		{ID: "platform", Description: "Platform engineering opportunities."}}, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	company := createFixtureCompany(t, s)
+	input := fixtureOpportunity(company.ID)
+	input.OriginalText = "Build Go platform services."
+	opportunity, changeID, err := s.CreateOpportunity(ctx, owner, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var firstJobID, firstSourceID string
+	for _, key := range []string{"first-intake", "second-intake"} {
+		intake, _, err := s.SubmitIngestion(ctx, owner, IngestionInput{
+			Origin: "owner", SourceURL: input.SourceURL, OriginalText: input.OriginalText, IdempotencyKey: key})
+		if err != nil {
+			t.Fatal(err)
+		}
+		claim := claimIngestionJob(t, s)
+		if err := s.RecordIngestionResult(ctx, claim, opportunity.ID, changeID); err != nil {
+			t.Fatalf("map %s: %v", key, err)
+		}
+		if applied, err := s.CompleteJob(ctx, claim, JobResult{Ref: opportunity.ID}, time.Now()); err != nil || !applied {
+			t.Fatalf("complete %s: %v %v", key, applied, err)
+		}
+		read, err := s.Ingestion(ctx, intake.ID)
+		if err != nil || read.Status != "completed" || read.SourceID == "" || read.OrganisationJobID == "" {
+			t.Fatalf("completed %s: %+v %v", key, read, err)
+		}
+		if firstJobID == "" {
+			firstJobID, firstSourceID = read.OrganisationJobID, read.SourceID
+		} else if read.OrganisationJobID != firstJobID || read.SourceID != firstSourceID {
+			t.Fatalf("duplicate work or source for %s: %+v", key, read)
+		}
+	}
+	var count int
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM jobs WHERE kind=?`, OrganisationJobKind).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("organisation jobs: count=%d err=%v", count, err)
+	}
+}

@@ -95,6 +95,10 @@ func TestAutomaticOrganisationKeepsFactualStateSeparate(t *testing.T) {
 		view.Current.CategoryVersion != 1 || len(view.Current.SourceRefsJSON) == 0 {
 		t.Fatalf("selection: %+v %v", view, err)
 	}
+	summaries, err := s.OrganisationSummaries(ctx, []string{opportunity.ID})
+	if err != nil || summaries[opportunity.ID].Status != view.Status || summaries[opportunity.ID].CategoryID != "backend" {
+		t.Fatalf("bulk selection: %+v %v", summaries, err)
+	}
 	stored, err := s.Opportunity(ctx, opportunity.ID)
 	if err != nil || stored.Stage != "discovered" {
 		t.Fatalf("organisation changed stage: %+v %v", stored, err)
@@ -109,6 +113,10 @@ func TestAutomaticOrganisationKeepsFactualStateSeparate(t *testing.T) {
 	if err != nil || view.Current != nil || view.LatestHistorical == nil || view.Status != "outdated" {
 		t.Fatalf("stale category remained current: %+v %v", view, err)
 	}
+	summaries, err = s.OrganisationSummaries(ctx, []string{opportunity.ID})
+	if err != nil || summaries[opportunity.ID].Status != view.Status || summaries[opportunity.ID].CategoryID != "" {
+		t.Fatalf("bulk stale status: %+v %v", summaries, err)
+	}
 }
 
 func TestUncertainAndChangedCategoriesRemainVisible(t *testing.T) {
@@ -122,6 +130,10 @@ func TestUncertainAndChangedCategoriesRemainVisible(t *testing.T) {
 	view, err := s.Organisation(ctx, opportunity.ID)
 	if err != nil || view.Status != "uncertain" || view.Current == nil || view.Current.CategoryID != "" {
 		t.Fatalf("uncertainty forced into category: %+v %v", view, err)
+	}
+	summaries, err := s.OrganisationSummaries(ctx, []string{opportunity.ID})
+	if err != nil || summaries[opportunity.ID].Status != view.Status || summaries[opportunity.ID].CategoryID != "" {
+		t.Fatalf("bulk uncertainty: %+v %v", summaries, err)
 	}
 	_, err = s.UpdateOrganisationCategories(ctx, 1, []store.OrganisationCategory{{ID: "platform", Description: "Platform engineering roles."}},
 		store.Actor{Kind: "administrator", ID: "owner"})
