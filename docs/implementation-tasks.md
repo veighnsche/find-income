@@ -1,8 +1,8 @@
 # Recruitment agency — full task list and concurrent execution guide
 
-Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the owner's active completion goal. Reviewed code is committed through `5147633`: source discovery and immutable Typst preparation in `ed64a8b`, private deployment packaging in `5147633`. Production integration continues with I05-B and I08-B on Sol High, I15-C and I11-B on Sol Medium. I10 and I18 have handed off tested slices for integration review.
+Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. API/contracts are committed in `2fdfe7d`, deployment configuration in `717ef93`, and web review in `8c8b66d`. Root check/test/build pass. Core review corrections, recovery and an isolated email adapter run concurrently while the independent report is finalized.
 
-**Current position: 5 tasks accepted, 9 partially implemented, 13 not started or conditional.** Accepted: I01, I02, I03, I04, I09. Partial: I05, I06, I07, I08, I10, I11, I12, I15, I18. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 10 partial, 3 active review/research/implementation tasks, 9 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I12, I14, I15, I18. Active: I13, I20, I26. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -30,16 +30,18 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I05-B | Sol High | Production work loop; shared schema/contracts/registration/startup; `internal/agency/engine.go`. |
-| I08-B | Sol High | Discovery verification and guarded registration of a supported employer board from exact source provenance. |
-| I15-C | Sol Medium | Pack replay/deadline corrections and new `internal/agency/packs.go` prepare outcome. |
-| I11-B | Sol Medium | Web pack review/preparation, sourced relationships and truthful Jev assessment display. |
+| I13-C core corrections | Sol High | Existing round lifecycle, agency collector continuation and scoped context files/tests only. |
+| I13-A report finalization | Astra High | Read-only review report for committed `717ef93`; no new code inspection during fixes. |
+| I26-A | Sol Medium | `ops/i26/**` current-format backup/restore with synthetic records/assets. |
+| I20-B | Sol High | New `internal/delivery/**` SMTP material/transport against synthetic destinations; no product send endpoint. |
 
-I10 and I18 have handed off their code and are idle. Runtime I12 is idle after packaging. Core alone changes shared files; the pack worker owns the explicitly handed-over new agency pack file. At most four live workers; a briefly overlapping read-projection correction has finished. Root reviews coherent handoffs before committing them.
+Web, discovery, Jev and relationship workers are idle. The pack worker now owns only the disjoint delivery package. Core may correct the three named integration findings; runtime/ops isolation changes are not yet assigned. Four live workers maximum, including a reviewer finishing a report.
 
-Reviewed checkpoint: `5147633`, including discovery/Typst helpers in `ed64a8b`. Current coupled integration is uncommitted while the prepare interfaces land. Do not count an intermediate compiling package as full journey acceptance.
+Reviewed checkpoints: API `2fdfe7d`, deployment `717ef93`, UI `8c8b66d`. Root `pnpm check`, `pnpm test`, `pnpm build` pass after contract formatting. Web has no automated test files; controlled browser interactions and screenshots were reviewed. The e2e script remains a placeholder.
 
-Root saved I08 research and three reworded consultations under `implementation-notes/implementation/I08-research/`. Official-source verification is active in I08-B. I12 package is under `ops/i12/`; host selection and actual sign-in/isolation remain open. I14 now has eleven full source snapshots and a reviewed 8-real/3-synthetic responsibility corpus. Four Jev cases matched reviewed alternatives; the fifth stopped at HTTP529. All calls were retained, no automatic retry or overall quality claim.
+I13 found four concrete gaps despite passing tests: native tools outside round accounting, expired paused rounds retaining the active slot, missing production Lever continuation, and prepare context reads using a resource outside the prepare scope. Full acceptance is withheld until corrected and verified. Pack-specific contextual correction and Jev choice among neutral discovered leads also remain open.
+
+I14 retained ten completed responsibility cases (seven real, three synthetic) and one HTTP529-incomplete case. The 22 calls reported 60,960 tokens, exceeding the 60,000 target by 960 on the final response; failed-call usage is unknown. No automatic retry or general accuracy claim. See [evaluation](jev-responsibility-evaluation.md). Host/account and inbox choices remain unanswered; no live deployment, mailbox access or employer send occurred.
 
 ### Initial wave ownership and handoff record
 
@@ -109,25 +111,25 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 | I05 | Expose one round authority through API, MCP and workers | Partial | I04 | GPT-6 Sol / High |
 | I06 | Finish Codex lifecycle and bounded research tools | Partial | I02, I05 | GPT-6 Sol / High |
 | I07 | Finish incremental Lever identity and refresh | Partial | I05 | GPT-6 Sol / High |
-| I08 | Discover additional official employer sources | In progress | I06, I07 | GPT-6 Sol / Medium |
+| I08 | Discover additional official employer sources | Partial | I06, I07 | GPT-6 Sol / Medium |
 | I09 | Reconcile the Jev factual contract and output checks | Accepted | None | GPT-6 Sol / Medium |
 | I10 | Wire Jev source, research and shortlist decisions | Partial | I05, I07, I08, I09 | GPT-6 Sol / High |
 | I11 | Deliver the brief, round home and contextual correction | Partial | I05, I06 | GPT-6 Sol / Medium |
-| I12 | Establish the real private app and isolated runner | In progress | I02, I05, I06 | GPT-6 Sol / High |
-| I13 | Independently review round and runner authority | Not started | I05, I06, I07, I10, I11, I12 | GPT-6 Astra / High |
-| I14 | Prove real discovery and initial Jev usefulness | Not started | I03, I08, I10, I11, I12, I13 | GPT-6 Sol / Medium |
-| I15 | Build one truthful Typst application pack | In progress | I05, I06, I09, I11 | GPT-6 Sol / Medium |
+| I12 | Establish the real private app and isolated runner | Partial | I02, I05, I06 | GPT-6 Sol / High |
+| I13 | Independently review round and runner authority | In progress | I05, I06, I07, I10, I11, I12 | GPT-6 Astra / High |
+| I14 | Prove real discovery and initial Jev usefulness | Partial | I03, I08, I10, I11, I12, I13 | GPT-6 Sol / Medium |
+| I15 | Build one truthful Typst application pack | Partial | I05, I06, I09, I11 | GPT-6 Sol / Medium |
 | I16 | Accept the first useful recruitment result | Not started | I14, I15 | GPT-6 Sol / Medium |
 | I17 | Add source breadth when observed misses justify it | Conditional | I14 | GPT-6 Sol / Medium |
-| I18 | Add lightweight recruiter, referral and contact records | Not started | I15 | GPT-6 Sol / Medium |
+| I18 | Add lightweight recruiter, referral and contact records | Partial | I15 | GPT-6 Sol / Medium |
 | I19 | Connect bounded read-only correspondence | Not started | I12, I18 | GPT-6 Sol / Medium |
-| I20 | Implement one supported application delivery route | Not started | I12, I15 | GPT-6 Sol / High |
+| I20 | Implement one supported application delivery route | In progress | I12, I15 | GPT-6 Sol / High |
 | I21 | Bind exact approval to bounded delivery | Not started | I15, I20 | GPT-6 Sol / High |
 | I22 | Review delivery authority and verify a controlled send | Not started | I21 | GPT-6 Astra / High |
 | I23 | Process replies and prepare follow-ups | Not started | I09, I19 | GPT-6 Sol / Medium |
 | I24 | Prepare interviews from actual context | Not started | I15, I18 | GPT-6 Sol / Medium |
 | I25 | Compare real offer terms without invented certainty | Not started | I01, I09, I18 | GPT-6 Sol / Medium |
-| I26 | Verify current-format backup and private operation | Not started | I12, I15 | GPT-6 Sol / Medium |
+| I26 | Verify current-format backup and private operation | In progress | I12, I15 | GPT-6 Sol / Medium |
 | I27 | Review the complete journey and publish accurate operating docs | Not started | I16, I18, I19, I22, I23, I24, I25, I26 | GPT-6 Sol / Medium; docs Luna Low |
 
 ## 4. Task deliverables and acceptance
@@ -192,7 +194,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I04.
 
-**Remaining work:** Implement scoped owner instructions and delegated preference/evidence updates, direct select/dismiss/acknowledge decisions, typed result/history reads, and the remaining shared domain boundaries needed by discovery and correction. Publish contracts early. Bind implemented services through the one round authority with I06/I07/I10; remove superseded standalone write paths when replacing them. Company/opportunity creation, scoped MCP, dispatch evidence and collector staging are already accepted.
+**Remaining work:** Fix I13 expired-round slot, production Lever continuation and prepare context scope findings; then pack contextual correction and live integration acceptance.
 
 **Task scope:** Integrate round capabilities with existing authenticated domain operations, worker claims and MCP. Own OpenAPI/generated contracts and HTTP round controls for this handoff. Distinguish inert external intake, direct owner decisions and delegated mutations; permit only explicitly scoped preference corrections.
 
@@ -200,13 +202,13 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 **Why this model/effort:** Authority spans transports and workers, making Sol High appropriate. Do not fork separate business logic per adapter.
 
-**Reviewed evidence:** Supported mutation/MCP/remote-dispatch and collector staging code reviewed; final-page draining and completed-source transition corrections accepted. Scoped owner correction and remaining domain integration keep full I05 open.
+**Reviewed evidence:** Committed 2fdfe7d: commissioned discovery/prepare work loops and shared authority/contracts; root full API suite and generated check pass.
 
 ### I06 — Finish Codex lifecycle and bounded research tools
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I02, I05.
 
-**Remaining work:** Connect the accepted turn executor to commissioned work; implement and verify one bounded research/tool path with operation-level accounting. Complete production control/readiness/cancellation integration. Lifecycle, exact history, generation-bound capabilities and explicit fake-tested execution are already accepted. Actual host/account validation remains I12.
+**Remaining work:** Complete actual host/account/control and cancellation acceptance in I12/I13; offline protocol evidence does not establish isolation.
 
 **Task scope:** Reconcile existing lifecycle/readiness drafts. Implement generation-bound login/disconnect, uncertain dispatch reconciliation, scoped app tools and bounded research access. Keep server credentials outside the runner and no paid API fallback. Own internal/codex*, excluding shared startup and store/schema files unless handed over.
 
@@ -214,13 +216,13 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 **Why this model/effort:** Uncertain remote lifecycle and cross-file tool integration need Sol High; do not spend Astra on routine implementation.
 
-**Reviewed evidence:** Lifecycle and explicit turn execution code plus fake transport/store/race/vet evidence reviewed. No live runtime or complete I06 acceptance.
+**Reviewed evidence:** Committed runtime/tool integration is called by commissioned agency outcomes; offline tests pass.
 
 ### I07 — Finish incremental Lever identity and refresh
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I05.
 
-**Remaining work:** Connect acquisition and staged batches to source identity, snapshots, unchanged-input reuse and changed-opening refresh. Publish results into the shared authorized domain path and persist continuation across commissioned rounds. The bounded Lever adapter and exact-byte final-page/source-switch staging already exist; do not rebuild them.
+**Remaining work:** Verify real commissioned continuation, source reuse and changed-source outcomes in I14 after authority review.
 
 **Task scope:** Reuse source-identity drafts; adapt Lever to commissioned batches with page/intra-page continuation, stable opening/sighting identity, source snapshots, unchanged-input reuse and changed-role refresh. Own internal/collector and ingestion identity files only after explicit store/schema handoff.
 
@@ -228,19 +230,21 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 **Why this model/effort:** Existing identity and runtime coupling justify Sol High; no general crawler or extra connector is required here.
 
-**Reviewed evidence:** Collector acquisition accepted after exact-byte roundtrip correction. Full round/identity/persistence integration pending I05.
+**Reviewed evidence:** Committed agency loop uses bounded collector persistence and re-extracts current new/changed sources.
 
 ### I08 — Discover additional official employer sources
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I06, I07.
 
-**Remaining work:** Verify and implement a minimal non-seed employer-source discovery path. Persist candidate origins, evidence and continuation; feed candidates to I10. The search capability is not yet established, so do not claim an available provider or silently substitute desktop tools.
+**Remaining work:** Have Jev choose among bounded neutral discovery leads, then verify a real non-seed official opening in I14. Existing source verification and registration are implemented.
 
 **Task scope:** Implement the smallest verified bounded search/career-link path from I02 alongside Lever. Produce persisted source candidates and exact employer evidence, with operation limits, unsupported-source reporting and continuation. This is candidate acquisition; I10 wires Jev selection. Do not require Ashby/general custom-site coverage to finish it.
 
 **Acceptance:** Deterministic source fixtures exercise discovered official links beyond the seeds, redirected/inaccessible pages and allowance exhaustion without manual board entry. A real non-seed result is verified later in I14. Search snippets alone are not vacancy evidence.
 
 **Why this model/effort:** One verified acquisition path with established boundaries is Sol Medium; escalate if the feasibility record exposes a genuinely different integration problem.
+
+**Reviewed evidence:** Committed 2fdfe7d: exact company-detail provenance, bounded official one-hop reads and atomic supported board registration; fixtures pass.
 
 ### I09 — Reconcile the Jev factual contract and output checks
 
@@ -260,7 +264,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I05, I07, I08, I09.
 
-**Remaining work:** Persist full requests, exact responses, candidate/source references, versions and usage for successful AND invalid/failed/over-budget attempts. Wire source selection, factual assessment, organisation, research priority, shortlist and next-outcome advice into actual bounded execution. Existing factual and candidate-choice helpers are accepted; ensure large text and missing support remain visible.
+**Remaining work:** Integrate Jev discovery-lead choice and saved next-outcome advice; verify live acquisition effects and currentness. Broader decision classes are not covered by the responsibility evaluation.
 
 **Task scope:** Integrate durable assessments and bounded candidate selection with the controller and acquisition services. Include organisation, factual scope, lead/research priority and next useful implemented outcome. Persist full request/response, versions, options, source support and usage; treat facts and require/avoid/prefer policy separately.
 
@@ -268,13 +272,13 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 **Why this model/effort:** Semantic contracts, persistence and orchestration cross packages; use Sol High on this integration rather than on evidence copying.
 
-**Reviewed evidence:** Typed candidate helpers accepted against fake checks. Full durable orchestration, failed-attempt capture and real quality pending dependencies.
+**Reviewed evidence:** Committed 2fdfe7d: recorded choices, guarded current screening/organisation projection and pack relevance; responsibility evaluation has ten complete cases.
 
 ### I11 — Deliver the brief, round home and contextual correction
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I05, I06.
 
-**Remaining work:** Connect the existing UI to server-backed brief corrections, record instructions, select/dismiss, documented profile history/proposals, typed source-linked results and saved next-outcome advice. Provide onboarding through existing career material plus one contextual input for genuinely missing facts. Start/Stop/Resume, automatic read-only progress, partial cards and browser-local drafts are already accepted; local drafts/selection are not completed server actions.
+**Remaining work:** Integrate pack-specific contextual correction when core supports it; verify the actual private runtime journey and owner usability.
 
 **Task scope:** Reuse contextual-recovery work. Build the known-answer brief, named Start/Stop/Resume, partial sourced cards, preserved selection and one context-bound instruction/URL/full-text input against stable DTOs. Remove manual source/preference/record forms and inactive navigation. Use stored recommendations supplied by I10 when integrated.
 
@@ -282,7 +286,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 **Why this model/effort:** The approved interaction pattern and stable API make this ordinary Sol Medium UI work. Do not assign Luna to uncertain browser state/debugging.
 
-**Reviewed evidence:** UI/controller code and synthetic browser evidence reviewed, including real Stop shape, automatic progress, terminal polling stop, delayed-read fencing and preserved drafts/results. Full I11 remains unchecked.
+**Reviewed evidence:** Committed 8c8b66d: pack controls/versions/PDF/citations, relationships and screening; browser fixtures and root check/test/build pass.
 
 ### I12 — Establish the real private app and isolated runner
 
@@ -298,9 +302,9 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 ### I13 — Independently review round and runner authority
 
-- [ ] **Not started** · GPT-6 Astra / High · Dependencies: I05, I06, I07, I10, I11, I12.
+- [ ] **In progress** · GPT-6 Astra / High · Dependencies: I05, I06, I07, I10, I11, I12.
 
-**Remaining work:** Perform the independent round/runner authority review on the integrated implementation and actual I12 evidence, then verify targeted corrections.
+**Remaining work:** Review minimal corrections for all four findings, then actual host/account isolation evidence; passing package tests did not cover these production paths.
 
 **Task scope:** Use a fresh bounded reviewer context: requirements, exact diff, interfaces and raw test evidence, without implementer conclusions. Review authority, limits, idle/restart behaviour, runner containment and uncertain dispatch. Read-only; report actionable failures with a reproduction or exact violated invariant.
 
@@ -308,11 +312,13 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 **Why this model/effort:** This is the concentrated security-sensitive review; Astra High is justified here rather than for every implementation task.
 
+**Reviewed evidence:** Independent review identified native-tool authority exposure, expired paused round deadlock, missing production Lever continuation and prepare round_context scope mismatch. Report finalization underway.
+
 ### I14 — Prove real discovery and initial Jev usefulness
 
-- [ ] **Not started** · GPT-6 Sol / Medium · Dependencies: I03, I08, I10, I11, I12, I13.
+- [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I03, I08, I10, I11, I12, I13.
 
-**Remaining work:** Implement meaningful end-to-end tests in place of the placeholder; perform capped real discovery and review Jev quality using complete source evidence and the I03 reference inventory.
+**Remaining work:** Run actual bounded discovery after I12/I13, verify non-seed sources and useful owner results. Classifier reference calls alone do not accept the dashboard journey.
 
 **Task scope:** Replace the e2e placeholder with actual first-journey coverage and run bounded real discovery. Use the existing reference set; review expected outcomes for 8–12 initial Dutch/English Jev cases, candidate/wording/long-text variants, and roughly two capped search rounds. Record sources reached/missed and owner usefulness without claiming statistical guarantees.
 
@@ -320,17 +326,21 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 **Why this model/effort:** Sol Medium can execute a defined evidence protocol and investigate results; escalate specific ambiguous failures rather than upgrading all review work.
 
+**Reviewed evidence:** Committed c15d85c documents ten completed Jev cases (seven real, three synthetic) and one HTTP529-incomplete case; raw evidence retained.
+
 ### I15 — Build one truthful Typst application pack
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I05, I06, I09, I11.
 
-**Remaining work:** Build one evidence-backed Typst PDF/answer pack and its review/correction flow from approved career assets and a selected role. Compile against fixtures while discovery is being finished; no asset-library project is required.
+**Remaining work:** Finish contextual correction for an existing pack, review integrated web flow and validate a real selected-role pack in I16.
 
 **Task scope:** Import only the existing approved source assets needed for one pack. Inspect the selected role’s actual route and required questions, use separately reviewed Jev requirement/asset relevance, generate answers and compile/render a Typst PDF. Store immutable sources, answers, destination, attachments and material versions; show review and contextual correction.
 
 **Acceptance:** With a sourced fixture, produce an inspectable PDF/answers with no false tenure or employment labels, no asset-entry form and no sent event. Source every claim; missing required personal facts are asked only after checking existing material. No general library, portfolio rebuild or multi-pack prerequisite. I16 supplies the real selected role.
 
 **Why this model/effort:** Existing Typst/assets and established API make a one-pack vertical slice Sol Medium; implementation can overlap discovery validation instead of waiting for it.
+
+**Reviewed evidence:** Committed 2fdfe7d: selected-role prepare outcome, guarded immutable pack replay, cited current profile/source context and owner-only review/PDF/source routes.
 
 ### I16 — Accept the first useful recruitment result
 
@@ -360,13 +370,15 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I15.
 
-**Remaining work:** Sourced relationship persistence and guarded reassociation fixtures pass. Finish web review/contextual correction and full selected-role integration.
+**Remaining work:** Web relationships committed 8c8b66d; verify actual Codex-owned records and selected-role behavior in the private runtime journey.
 
 **Task scope:** Implement modest origin/route/counterparty/event relationships, pre-vacancy leads and Codex-owned drafting/correction. Link multiple routes to one opportunity. Preserve assignment-specific qualification and current profile; no general CRM.
 
 **Acceptance:** A recruiter introduction without an opening stays an unqualified lead; one direct application and one referral to the same role do not duplicate it. No contact-entry forms, invented relationships, sends or claimed referral advantage.
 
 **Why this model/effort:** Ordinary domain/API/UI integration on existing records uses Sol Medium.
+
+**Reviewed evidence:** Committed 2fdfe7d: sourced relationships and scope-guarded reassociation; no fabricated referral advantage.
 
 ### I19 — Connect bounded read-only correspondence
 
@@ -382,15 +394,17 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 ### I20 — Implement one supported application delivery route
 
-- [ ] **Not started** · GPT-6 Sol / High · Dependencies: I12, I15.
+- [ ] **In progress** · GPT-6 Sol / High · Dependencies: I12, I15.
 
-**Remaining work:** Implement one verified employer-accepted delivery adapter and bounded receipt lookup using fake destinations first.
+**Remaining work:** Review concrete fake-tested SMTP material/transport and uncertain-outcome boundaries; approval integration is I21 and real account/delivery acceptance remains open.
 
 **Task scope:** Implement a verified employer-accepted email or supported candidate-portal route with exact required fields/attachments, bounded tool actions and read-only receipt lookup. Portal delivery must not wait for an email adapter. Exercise fake destination paths before real external action.
 
 **Acceptance:** Route requirements, login/challenge/attestation stops and supported/unsupported states are truthful. Public ATS GET access is not treated as submission permission. Unsupported routes may offer optional prepared handoff, never a claimed send.
 
 **Why this model/effort:** Browser/provider side effects and uncertain outcomes require Sol High.
+
+**Reviewed evidence:** Two primary employer email routes researched; no sending. Sol High implements internal/delivery only against synthetic SMTP, without product send registration.
 
 ### I21 — Bind exact approval to bounded delivery
 
@@ -454,15 +468,17 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 ### I26 — Verify current-format backup and private operation
 
-- [ ] **Not started** · GPT-6 Sol / Medium · Dependencies: I12, I15.
+- [ ] **In progress** · GPT-6 Sol / Medium · Dependencies: I12, I15.
 
-**Remaining work:** Package current-format backup/restore and private operation after useful assets exist; final restore coverage uses the completed current schema.
+**Remaining work:** Review current-format backup/restore, private assets and idle/auth boundaries against synthetic data; final schema and actual host operation remain later acceptance.
 
 **Task scope:** Package persistent private app/runner operation and current-format data/asset/pack backup/restore with clear account reconnection boundaries. Extend the current snapshot as later domain tables land; no legacy migration support. Do not wait for interview/offer UI to protect useful stored work.
 
 **Acceptance:** Restore a synthetic current-format backup with referenced assets, verify auth/restart/idle behaviour and secrets exclusion, and record real host operating steps. Final validation in I27 uses the complete current schema. No production credentials in backups/build artifacts.
 
 **Why this model/effort:** Known persistence and operational checks fit Sol Medium; documentation handoff can use Luna after commands are verified.
+
+**Reviewed evidence:** Sol Medium implements only ops/i26 with synthetic database/asset credential canaries.
 
 ### I27 — Review the complete journey and publish accurate operating docs
 
