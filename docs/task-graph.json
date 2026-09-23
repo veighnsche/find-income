@@ -418,8 +418,13 @@
       "scope": "Implement one-item and small exact-batch review, immutable approved material/destination, send intent, preflight substantive route checks, per-item outcomes and reconciliation under remaining allowance. New material invalidates affected approval; cosmetic changes alone do not.",
       "acceptance": "Fake boundary tests cover stale approval, altered attachments, double clicks, timeout-after-send, restart and no blind retry. Preparation never sends; receipt/verified evidence alone establishes sent. Unknown outcome offers explicit delivery checking without replenishing budget.",
       "selection_reason": "Authority plus external side effects spans storage, UI and adapters; use Sol High and a bounded independent review.",
-      "status": "waiting",
-      "remaining_work": "Implement exact-material approval, bounded delivery intent, per-item outcomes and uncertainty reconciliation."
+      "status": "in_progress",
+      "remaining_work": "Implement exact-material approval, bounded delivery intent, per-item outcomes and uncertainty reconciliation.",
+      "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
+      "host_id": "local",
+      "active_slice": "I21 integrated exact approval and bounded delivery",
+      "active_model": "gpt-6-sol",
+      "active_effort": "high"
     },
     {
       "id": "I22",
@@ -570,7 +575,7 @@
     }
   ],
   "max_concurrent_live_workers": 4,
-  "dispatch_status": "active_goal_two_live_workers",
+  "dispatch_status": "active_goal_three_live_workers",
   "code_checkpoint": "2279c3f",
   "goal_status": "active",
   "goal_objective": "Complete all I01\u2013I27 task acceptance using concurrent live tasks, reviewed coherent commits and actual live acceptance where required."
