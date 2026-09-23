@@ -2,7 +2,7 @@
 
 Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. API/contracts are committed in `2fdfe7d`, deployment configuration in `717ef93`, and web review in `8c8b66d`. Root check/test/build pass. Core corrections and immutable pack-correction preparation are committed; commissioned input integration and native runner configuration now run concurrently.
 
-**Current position: 5 tasks accepted, 13 partial, 2 active tasks, 7 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I12, I14, I15, I18, I20, I24, I26. Active: I13 and I25. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 14 partial, 1 active task, 7 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I12, I14, I15, I13, I18, I20, I24, I26. Active: I25. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -31,11 +31,10 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
 | I05/I11 contextual input | Sol High | Shared process_input, profile effective-version boundary, explicit paused replacement, pack transaction guard and API/contracts. |
-| I13 native runtime correction | Sol Medium | Runtime-owned Codex files and ops/i12 restrictive profile; final wrapper/account/MCP acceptance remains open. |
 | I11 contextual-input UI | Sol Medium | apps/web/src and browser fixture smoke against the published process-input contract. |
 | I25 offer comparison domain | Sol Medium | New offercomparison and Jev offer files; no shared schema or UI edits. |
 
-Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; shared storage/commission integration remains open. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). The runtime writer implements that direction while core connects contextual input. The web writer consumes the published contextual-input contract; interview helpers are committed7299c54 after root review/tests, and the worker now implements the independent I25 offer domain. Four live workers maximum.
+Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; shared storage/commission integration remains open. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. The web writer consumes the published contextual-input contract; interview helpers are committed7299c54 after root review/tests, and the worker now implements the independent I25 offer domain. Four live workers maximum.
 
 Reviewed checkpoints: API `2fdfe7d`, deployment `717ef93`, UI `8c8b66d`. Root `pnpm check`, `pnpm test`, `pnpm build` pass after contract formatting. Web has no automated test files; controlled browser interactions and screenshots were reviewed. The e2e placeholder is replaced by browser fixture smoke in a2726ed; root pnpm e2e passed.
 
@@ -302,7 +301,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 ### I13 — Independently review round and runner authority
 
-- [ ] **In progress** · GPT-6 Astra / High · Dependencies: I05, I06, I07, I10, I11, I12.
+- [ ] **Partial** · GPT-6 Astra / High · Dependencies: I05, I06, I07, I10, I11, I12.
 
 **Remaining work:** Review minimal corrections for all four findings, then actual host/account isolation evidence; passing package tests did not cover these production paths.
 
@@ -313,6 +312,9 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 **Why this model/effort:** This is the concentrated security-sensitive review; Astra High is justified here rather than for every implementation task.
 
 **Reviewed evidence:** Independent review identified native-tool authority exposure, expired paused round deadlock, missing production Lever continuation and prepare round_context scope mismatch. Report finalization underway.
+
+
+Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests and exact rollout baseline/negative checks pass; selected-host wrapper/account/MCP acceptance remains open.
 
 ### I14 — Prove real discovery and initial Jev usefulness
 

@@ -256,10 +256,10 @@
       "scope": "Use a fresh bounded reviewer context: requirements, exact diff, interfaces and raw test evidence, without implementer conclusions. Review authority, limits, idle/restart behaviour, runner containment and uncertain dispatch. Read-only; report actionable failures with a reproduction or exact violated invariant.",
       "acceptance": "Coordinator resolves findings and the reviewer verifies only changed/problematic boundaries. No live discovery acceptance until consequential boundary issues are resolved. Do not repeat an unlimited repository audit or broadly retest unchanged code.",
       "selection_reason": "This is the concentrated security-sensitive review; Astra High is justified here rather than for every implementation task.",
-      "status": "in_progress",
-      "remaining_work": "Apply and verify the named native-tool profile on the final wrapper/account/MCP setup; three reviewed core findings are corrected in7310026.",
-      "active_slice": "I13 native runtime configuration correction",
-      "review": "Independent review and focused replay/import corrections committed7310026. Synthetic Linux denial evidence and three fresh Jev consultations informed222036a; live runner acceptance remains open.",
+      "status": "partial",
+      "remaining_work": "Run selected-runner wrapper, real ChatGPT account, required live MCP and exact native handler-denial acceptance from docs/native-tool-boundary.md. Offline synthetic evidence does not establish selected-host isolation.",
+      "active_slice": "I13 core/native corrections committed; selected-host acceptance pending",
+      "review": "Core authority corrections independently reviewed at7310026. Native boundary committeda22afa7; root runtime package suite, exact saved-rollout baseline/negative parser checks and config/shell checks passed.",
       "thread_id": "01a0cfc1-3fa3-7371-ad63-26f41a796309",
       "host_id": "local",
       "active_model": "gpt-6-astra",
@@ -569,8 +569,8 @@
     }
   ],
   "max_concurrent_live_workers": 4,
-  "dispatch_status": "active_goal_four_live_workers",
-  "code_checkpoint": "7299c54",
+  "dispatch_status": "active_goal_three_live_workers",
+  "code_checkpoint": "a22afa7",
   "goal_status": "active",
   "goal_objective": "Complete all I01\u2013I27 task acceptance using concurrent live tasks, reviewed coherent commits and actual live acceptance where required."
 }
