@@ -1,6 +1,16 @@
-# Jobseek dashboard
+# Jobseek recruitment agency
 
-Private job-seeking dashboard under construction. The current slice provides local administrator sign-in, Today preferences, and owner-managed agent credentials. T07 authentication was accepted by the coordinator at commit `5dfc5e3` after clean-clone install/check/test/build checks and closure of both independent security findings. This remains local development guidance, not a full release or deployment guide. The foundation graph and cache evidence remain in [docs/foundation.md](docs/foundation.md).
+An undeployed personal recruitment agency prototype using Go/SQLite, Vite+ and React, native Go workspaces in Turborepo, Typst and Codex App Server. Codex gathers evidence and operates records; Jev classifies supplied evidence and choices. The owner commissions bounded work through Start/Stop/Resume.
+
+See the [full implementation task list and concurrent execution guide](docs/implementation-tasks.md) for current acceptance, remaining work, model/effort assignments and live-task handoffs. The [task graph](docs/task-graph.json) records dependencies and status. Five tasks and several independent slices are reviewed; the complete agency journey is not implemented.
+
+## Current behavior
+
+The web app has Agency and Account views, a read-only campaign brief, opportunity inspection, saved source intake, round controls and automatic progress reads. Manual preference/board/category forms have been removed. Contextual correction drafts and selection are currently browser-local; server-backed correction/history/selection remain unfinished.
+
+The API persists bounded rounds, charged attempts, scoped company/opportunity mutations, exact remote dispatch evidence and incremental collector batches. The runtime has fake-tested lifecycle and explicit turn execution, and Jev has factual/candidate-choice helpers. These components are not yet wired into a real discovery journey: production Start/Resume report unavailable until the commissioned executor is bound. Login, startup and progress reads launch no recruitment work.
+
+Private host/account setup, bounded non-seed research, durable Jev orchestration, application packs and delivery remain open. No live runtime, real discovery quality or deployment readiness follows from the fixture checks. The unsupported direct recruitment write routes return unavailable.
 
 ## Local setup
 
@@ -41,19 +51,9 @@ curl --fail http://127.0.0.1:5173/api/v1/health
 
 Stop both services with Ctrl+C. To use a different terminal later, repeat the `JOBSEEK_DATA_DIR` export there before running setup or `pnpm dev`. The default data path is the OS user config directory, but setting an explicit private path avoids accidentally using different databases between commands.
 
-## Sign-in and agent credentials
+## Verification
 
-The initial setup creates the single local administrator. Sign-in uses a private session cookie; sign out from the dashboard to end the session. In **Settings → Agent access**, create a distinct named token for each agent, select only the scopes it needs, and choose a 7-, 30-, or 90-day expiry. The raw token appears once: copy it directly into the agent's approved secret store. It cannot be shown again. Use **Revoke** in Settings to invalidate it immediately; create a replacement deliberately if needed. Agent credentials cannot administer the dashboard.
-
-Company/opportunity API routes and the browser capture/list/edit UI are present. The data/fit model is being revised, so those flows and evidence results are provisional pending renewed coordinator acceptance. The complete agent collect/evidence/action/draft/assessment/MCP journey is still being integrated; creating a token does not by itself mean that end-to-end agent workflow is ready. There is no outbound messaging capability.
-
-## Current scope and checks
-
-The current browser workflow includes sign-in, Today preferences/service status, agent credential controls, and opportunity capture/list/edit. The underlying T06/T08/T09/T10 data and fit model is being revised and remains pending renewed acceptance; treat current opportunity and evidence results as provisional. Today displays the owner's current preference profile (Amsterdam/workable remote or hybrid, 32 hours/week, EUR 4,500 gross monthly employee base at actual hours, `Europe/Amsterdam`, backend/platform direction, and current frontend/PHP-focused exclusions). These are profile values, not universal product rules. Preference editing and alternate-profile assessment are not accepted. The working-tree profile-model additions are proposals until coordinator acceptance. Full evidence/qualification integration, People and action workflows, source collection, Jev assessments, embedded Codex, and Typst/PDF generation are not complete. Personal asset import is not implemented.
-
-When profile editing is accepted, location, hours/week, minimum gross base amount, currency and compensation basis, timezone, role/responsibility preferences, and technology preferences/exclusions should be named, editable, versioned values. Assessments should use the active profile while preserving prior profile versions and results. These are proposed requirements; they are not a statement that the in-progress profile model has shipped.
-
-Useful repository checks after changes:
+Run these from this repository:
 
 ```sh
 pnpm check
@@ -61,4 +61,8 @@ pnpm test
 pnpm build
 ```
 
-These commands passed in the coordinator's clean clone at commit `5dfc5e3`; this documentation update did not rerun them. `pnpm e2e` still fails explicitly until T24 adds browser journeys. The web test task has no committed test cases yet. This README does not mark the full dashboard release or T25 complete.
+`pnpm e2e` currently fails intentionally as a placeholder; task I14 replaces it with actual journey coverage. Browser fixture checks are recorded in the task handoffs and do not establish live provider behavior. [Foundation notes](docs/foundation.md) describe the workspace/toolchain.
+
+## Development handoffs
+
+One writer owns each file during concurrent work. The coordinator commits coherent reviewed checkpoints after their relevant checks, stages explicit paths, and verifies the remaining status before dispatching more work. Shared schema, contracts, startup and web integration have named owners. The unused prototype changes directly; there are no backward-compatibility or upgrade paths.
