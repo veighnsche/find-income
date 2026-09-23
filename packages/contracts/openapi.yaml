@@ -1242,10 +1242,27 @@ components:
       properties:
         ingestionAvailable: { type: boolean }
         organisationAvailable: { type: boolean }
-        collectionAvailable: { type: boolean, description: Collector loop mounted; enabled board count and run outcomes are separate. }
+        collectionAvailable:
+          {
+            type: boolean,
+            description: Collector loop mounted; enabled board count and run outcomes are separate.,
+          }
     CollectorBoard:
       type: object
-      required: [id, provider, site, region, displayName, enabled, intervalMinutes, nextScanAt, revision, createdAt, updatedAt]
+      required:
+        [
+          id,
+          provider,
+          site,
+          region,
+          displayName,
+          enabled,
+          intervalMinutes,
+          nextScanAt,
+          revision,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string }
         provider: { type: string, enum: [lever] }
@@ -1335,13 +1352,24 @@ components:
         sourceKind: { type: string }
     OrganisationAssessment:
       type: object
-      required: [id, categorySetVersion, disposition, sourceFacts, sourceRefs, requestedModel, returnedModel, createdAt]
+      required:
+        [
+          id,
+          categorySetVersion,
+          disposition,
+          sourceFacts,
+          sourceRefs,
+          requestedModel,
+          returnedModel,
+          createdAt,
+        ]
       properties:
         id: { type: string }
         categorySetVersion: { type: integer, format: int64 }
         disposition: { type: string, enum: [category_selected, uncertain] }
         categoryId: { type: string }
-        categoryDescription: { type: string, description: Category definition captured at assessment time. }
+        categoryDescription:
+          { type: string, description: Category definition captured at assessment time. }
         sourceFacts:
           type: array
           items: { $ref: '#/components/schemas/OrganisationSourceFact' }
@@ -1355,7 +1383,11 @@ components:
       type: object
       required: [status, current, latestHistorical]
       properties:
-        status: { type: string, enum: [unconfigured, pending, processing, selected, uncertain, failed, outdated] }
+        status:
+          {
+            type: string,
+            enum: [unconfigured, pending, processing, selected, uncertain, failed, outdated],
+          }
         current:
           allOf: [{ $ref: '#/components/schemas/OrganisationAssessment' }]
           nullable: true
@@ -1368,7 +1400,11 @@ components:
       required: [opportunityId, status]
       properties:
         opportunityId: { type: string }
-        status: { type: string, enum: [unconfigured, pending, processing, selected, uncertain, failed, outdated] }
+        status:
+          {
+            type: string,
+            enum: [unconfigured, pending, processing, selected, uncertain, failed, outdated],
+          }
         categoryId: { type: string }
     OrganisationSummaryList:
       type: object
@@ -1392,7 +1428,19 @@ components:
         originalText: { type: string, maxLength: 200000 }
     IngestionRequest:
       type: object
-      required: [id, origin, sourceUrl, originalText, status, jobId, jobState, attemptsStarted, createdAt, updatedAt]
+      required:
+        [
+          id,
+          origin,
+          sourceUrl,
+          originalText,
+          status,
+          jobId,
+          jobState,
+          attemptsStarted,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string }
         origin: { type: string }
@@ -1456,7 +1504,12 @@ components:
         - type: object
           required: [definitionHash]
           properties:
-            definitionHash: { type: string, readOnly: true, description: Server-calculated SHA-256 of the complete criterion definition. }
+            definitionHash:
+              {
+                type: string,
+                readOnly: true,
+                description: Server-calculated SHA-256 of the complete criterion definition.,
+              }
     PreferencesInput:
       type: object
       required:
@@ -1494,7 +1547,18 @@ components:
           items: { $ref: '#/components/schemas/RoleCriterion' }
     PreferencesResponse:
       type: object
-      required: [version, preferredLocation, allowRemote, allowHybrid, targetHours, minMonthlyBaseCents, salaryCurrency, timezone, roleCriteria]
+      required:
+        [
+          version,
+          preferredLocation,
+          allowRemote,
+          allowHybrid,
+          targetHours,
+          minMonthlyBaseCents,
+          salaryCurrency,
+          timezone,
+          roleCriteria,
+        ]
       properties:
         version: { type: integer, format: int64 }
         preferredLocation: { type: string }
@@ -1618,17 +1682,31 @@ components:
       description: Exactly date or at plus timezone is required; the server rejects mixed or incomplete shapes.
       properties:
         date: { type: string, description: Real YYYY-MM-DD calendar date without an instant. }
-        at: { type: string, format: date-time, description: RFC3339 instant with offset matching the IANA timezone at that instant. }
+        at:
+          {
+            type: string,
+            format: date-time,
+            description: RFC3339 instant with offset matching the IANA timezone at that instant.,
+          }
         timezone: { type: string, description: Valid IANA timezone for local display. }
     Action:
       type: object
       required: [id, opportunityId, description, due, status, revision, createdAt, updatedAt]
       properties:
         id: { type: string }
-        opportunityId: { type: string, description: Empty for standalone actions. Archived opportunity links remain readable. }
+        opportunityId:
+          {
+            type: string,
+            description: Empty for standalone actions. Archived opportunity links remain readable.,
+          }
         description: { type: string }
         due: { $ref: '#/components/schemas/ActionDue' }
-        dueAtUtc: { type: string, format: date-time, description: Normalized stored UTC instant for timed deadlines; due.at is formatted in due.timezone for valid round-trip replacement. }
+        dueAtUtc:
+          {
+            type: string,
+            format: date-time,
+            description: Normalized stored UTC instant for timed deadlines; due.at is formatted in due.timezone for valid round-trip replacement.,
+          }
         status: { type: string, enum: [open, completed, cancelled] }
         completedAt: { type: string, format: date-time }
         revision: { type: integer, format: int64 }
@@ -1751,10 +1829,26 @@ components:
         minAmountCents: { type: integer, format: int64, minimum: 0 }
         maxAmountCents: { type: integer, format: int64, minimum: 0 }
         period: { type: string, enum: [month, year, hour, project, unknown] }
-        referenceHours: { type: string, description: Exact decimal weekly hours with at most two places. }
-        annualConversion: { type: string, enum: [twelve_equal_monthly_base_payments], description: Only when an exact source span states twelve equal monthly base payments for an annual base amount. }
-        annualConversionSpanStart: { type: integer, minimum: 0, description: UTF-8 byte offset into originalText for annual payment basis. }
-        annualConversionSpanEnd: { type: integer, minimum: 1, description: Exclusive UTF-8 byte offset for annual payment basis. }
+        referenceHours:
+          { type: string, description: Exact decimal weekly hours with at most two places. }
+        annualConversion:
+          {
+            type: string,
+            enum: [twelve_equal_monthly_base_payments],
+            description: Only when an exact source span states twelve equal monthly base payments for an annual base amount.,
+          }
+        annualConversionSpanStart:
+          {
+            type: integer,
+            minimum: 0,
+            description: UTF-8 byte offset into originalText for annual payment basis.,
+          }
+        annualConversionSpanEnd:
+          {
+            type: integer,
+            minimum: 1,
+            description: Exclusive UTF-8 byte offset for annual payment basis.,
+          }
         basis: { type: string, enum: [base, inclusive, unknown] }
         benefitsText: { type: string, maxLength: 10000 }
     Opportunity:
@@ -2034,7 +2128,21 @@ components:
         label: { type: string }
     OfferOptionSet:
       type: object
-      required: [id, opportunityId, sourceId, contextVersion, spanStart, spanEnd, sourceExcerpt, excerptSha256, createdAt, actorKind, actorId, options]
+      required:
+        [
+          id,
+          opportunityId,
+          sourceId,
+          contextVersion,
+          spanStart,
+          spanEnd,
+          sourceExcerpt,
+          excerptSha256,
+          createdAt,
+          actorKind,
+          actorId,
+          options,
+        ]
       properties:
         id: { type: string }
         opportunityId: { type: string }
@@ -2061,14 +2169,21 @@ components:
     CreateOfferOptionSetRequest:
       type: object
       additionalProperties: false
-      required: [sourceId, expectedContextVersion, expectedEvidenceVersion, spanStart, spanEnd, labels]
+      required:
+        [sourceId, expectedContextVersion, expectedEvidenceVersion, spanStart, spanEnd, labels]
       properties:
         sourceId: { type: string }
         expectedContextVersion: { type: integer, format: int64, minimum: 1 }
         expectedEvidenceVersion: { type: integer, format: int64, minimum: 0 }
         spanStart: { type: integer, minimum: 0 }
         spanEnd: { type: integer, minimum: 1 }
-        labels: { type: array, minItems: 2, maxItems: 8, items: { type: string, minLength: 1, maxLength: 100 } }
+        labels:
+          {
+            type: array,
+            minItems: 2,
+            maxItems: 8,
+            items: { type: string, minLength: 1, maxLength: 100 },
+          }
         supersedesId: { type: string }
     OfferOptionSetMutation:
       type: object
@@ -2082,8 +2197,8 @@ components:
       additionalProperties: false
       required: [minWeekly, maxWeekly, hardBounds]
       properties:
-        minWeekly: { type: string, description: Exact decimal weekly hours, at most two places. }
-        maxWeekly: { type: string, description: Exact decimal weekly hours, at most two places. }
+        minWeekly: { type: string, description: 'Exact decimal weekly hours, at most two places.' }
+        maxWeekly: { type: string, description: 'Exact decimal weekly hours, at most two places.' }
         hardBounds: { type: boolean }
     EvidenceArrangement:
       type: object
@@ -2093,7 +2208,8 @@ components:
         pattern: { type: string, enum: [onsite, hybrid, remote] }
         baseLocation: { type: string, maxLength: 500 }
         remoteGeography: { type: string, maxLength: 500 }
-        onsiteDays: { type: string, description: Exact decimal days per week, at most two places. }
+        onsiteDays:
+          { type: string, description: 'Exact decimal days per week, at most two places.' }
     EvidenceSalary:
       type: object
       additionalProperties: false
@@ -2103,13 +2219,27 @@ components:
         period: { type: string, enum: [month, year, hour, project] }
         basis: { type: string, enum: [base, inclusive, unknown] }
         amountCents: { type: integer, format: int64, minimum: 0 }
-        actualWeeklyHours: { type: string, description: Exact decimal weekly hours, at most two places. }
-        annualConversion: { type: string, enum: [twelve_equal_monthly_base_payments], description: Include only when directly supported by the quoted source. }
+        actualWeeklyHours:
+          { type: string, description: 'Exact decimal weekly hours, at most two places.' }
+        annualConversion:
+          {
+            type: string,
+            enum: [twelve_equal_monthly_base_payments],
+            description: Include only when directly supported by the quoted source.,
+          }
     WriteEvidenceRequest:
       type: object
       additionalProperties: false
       required:
-        [sourceId, criterion, observedValue, spanStart, spanEnd, expectedEvidenceVersion, expectedPreferencesVersion]
+        [
+          sourceId,
+          criterion,
+          observedValue,
+          spanStart,
+          spanEnd,
+          expectedEvidenceVersion,
+          expectedPreferencesVersion,
+        ]
       properties:
         sourceId: { type: string }
         criterion:
@@ -2126,11 +2256,27 @@ components:
           }
         finding:
           { type: string, enum: [explicit_match, explicit_mismatch, mention_only, ambiguous] }
-        roleCriterionId: { type: string, description: Stable ID from the current preference version. }
-        rolePresence: { type: string, enum: [explicit_presence, explicit_absence, mention_only, ambiguous], description: What the exact quote establishes, independent of require/avoid/prefer mode. }
+        roleCriterionId:
+          { type: string, description: Stable ID from the current preference version. }
+        rolePresence:
+          {
+            type: string,
+            enum: [explicit_presence, explicit_absence, mention_only, ambiguous],
+            description: 'What the exact quote establishes, independent of require/avoid/prefer mode.',
+          }
         expectedPreferencesVersion: { type: integer, format: int64, minimum: 1 }
-        offerOptionId: { type: string, maxLength: 80, description: Named offer option grouping for schedule and economic facts. }
-        observedValue: { type: string, maxLength: 1000, description: Factual explanation of the selected source span; not a fit verdict. }
+        offerOptionId:
+          {
+            type: string,
+            maxLength: 80,
+            description: Named offer option grouping for schedule and economic facts.,
+          }
+        observedValue:
+          {
+            type: string,
+            maxLength: 1000,
+            description: Factual explanation of the selected source span; not a fit verdict.,
+          }
         spanStart:
           { type: integer, minimum: 0, description: UTF-8 byte offset into immutable source text. }
         spanEnd: { type: integer, minimum: 1, description: Exclusive UTF-8 byte offset. }
@@ -2165,10 +2311,15 @@ components:
         criterion: { type: string }
         finding: { type: string }
         roleCriterionId: { type: string }
-        roleDefinition: { $ref: '#/components/schemas/RoleCriterion', description: Exact criterion definition captured when this claim was written. }
+        roleDefinition:
+          {
+            $ref: '#/components/schemas/RoleCriterion',
+            description: Exact criterion definition captured when this claim was written.,
+          }
         roleDefinitionHash: { type: string }
         rolePreferencesVersion: { type: integer, format: int64 }
-        rolePresence: { type: string, enum: [explicit_presence, explicit_absence, mention_only, ambiguous] }
+        rolePresence:
+          { type: string, enum: [explicit_presence, explicit_absence, mention_only, ambiguous] }
         offerOptionId: { type: string }
         observedValue: { type: string }
         sourceExcerpt: { type: string }
@@ -2207,7 +2358,8 @@ components:
         criterionId: { type: string }
         label: { type: string }
         description: { type: string }
-        kind: { type: string, enum: [role, responsibility, technology, working_terms, compensation] }
+        kind:
+          { type: string, enum: [role, responsibility, technology, working_terms, compensation] }
         mode: { type: string, enum: [require, avoid, prefer] }
         blocking: { type: boolean }
         relevant: { type: boolean }

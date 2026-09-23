@@ -1582,9 +1582,9 @@ export interface components {
             currentInputVersions: components["schemas"]["QualificationInputVersions"];
         };
         EvidenceHours: {
-            /** @description Exact decimal weekly hours */
+            /** @description Exact decimal weekly hours, at most two places. */
             minWeekly: string;
-            /** @description Exact decimal weekly hours */
+            /** @description Exact decimal weekly hours, at most two places. */
             maxWeekly: string;
             hardBounds: boolean;
         };
@@ -1593,7 +1593,7 @@ export interface components {
             pattern: "onsite" | "hybrid" | "remote";
             baseLocation: string;
             remoteGeography: string;
-            /** @description Exact decimal days per week */
+            /** @description Exact decimal days per week, at most two places. */
             onsiteDays?: string;
         };
         EvidenceSalary: {
@@ -1604,7 +1604,7 @@ export interface components {
             basis: "base" | "inclusive" | "unknown";
             /** Format: int64 */
             amountCents: number;
-            /** @description Exact decimal weekly hours */
+            /** @description Exact decimal weekly hours, at most two places. */
             actualWeeklyHours: string;
             /**
              * @description Include only when directly supported by the quoted source.
@@ -1621,7 +1621,7 @@ export interface components {
             /** @description Stable ID from the current preference version. */
             roleCriterionId?: string;
             /**
-             * @description What the exact quote establishes
+             * @description What the exact quote establishes, independent of require/avoid/prefer mode.
              * @enum {string}
              */
             rolePresence?: "explicit_presence" | "explicit_absence" | "mention_only" | "ambiguous";

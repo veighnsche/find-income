@@ -1500,7 +1500,7 @@ type ErrorEnvelope struct {
 type EvidenceArrangement struct {
 	BaseLocation string `json:"baseLocation"`
 
-	// OnsiteDays Exact decimal days per week
+	// OnsiteDays Exact decimal days per week, at most two places.
 	OnsiteDays      *string                    `json:"onsiteDays,omitempty"`
 	Pattern         EvidenceArrangementPattern `json:"pattern"`
 	RemoteGeography string                     `json:"remoteGeography"`
@@ -1548,10 +1548,10 @@ type EvidenceClaimRolePresence string
 type EvidenceHours struct {
 	HardBounds bool `json:"hardBounds"`
 
-	// MaxWeekly Exact decimal weekly hours
+	// MaxWeekly Exact decimal weekly hours, at most two places.
 	MaxWeekly string `json:"maxWeekly"`
 
-	// MinWeekly Exact decimal weekly hours
+	// MinWeekly Exact decimal weekly hours, at most two places.
 	MinWeekly string `json:"minWeekly"`
 }
 
@@ -1570,7 +1570,7 @@ type EvidencePage struct {
 
 // EvidenceSalary defines model for EvidenceSalary.
 type EvidenceSalary struct {
-	// ActualWeeklyHours Exact decimal weekly hours
+	// ActualWeeklyHours Exact decimal weekly hours, at most two places.
 	ActualWeeklyHours string `json:"actualWeeklyHours"`
 	AmountCents       int64  `json:"amountCents"`
 
@@ -2248,7 +2248,7 @@ type WriteEvidenceRequest struct {
 	// RoleCriterionId Stable ID from the current preference version.
 	RoleCriterionId *string `json:"roleCriterionId,omitempty"`
 
-	// RolePresence What the exact quote establishes
+	// RolePresence What the exact quote establishes, independent of require/avoid/prefer mode.
 	RolePresence *WriteEvidenceRequestRolePresence `json:"rolePresence,omitempty"`
 	Salary       *EvidenceSalary                   `json:"salary,omitempty"`
 	SourceId     string                            `json:"sourceId"`
@@ -2266,7 +2266,7 @@ type WriteEvidenceRequestCriterion string
 // WriteEvidenceRequestFinding defines model for WriteEvidenceRequest.Finding.
 type WriteEvidenceRequestFinding string
 
-// WriteEvidenceRequestRolePresence What the exact quote establishes
+// WriteEvidenceRequestRolePresence What the exact quote establishes, independent of require/avoid/prefer mode.
 type WriteEvidenceRequestRolePresence string
 
 // ActionCalendarTimezone defines model for ActionCalendarTimezone.
