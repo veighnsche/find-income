@@ -21,7 +21,9 @@ func (e *Engine) checkOfferComparison(ctx context.Context) error {
 }
 
 func offerIntakeScope(round store.Round) (string, error) {
-	if len(round.Scope.Resources) != 1 || !strings.HasPrefix(round.Scope.Resources[0], "offer_intake:") || len(round.Scope.Resources[0]) == len("offer_intake:") {
+	if len(round.Scope.Resources) < 1 || len(round.Scope.Resources) > 2 ||
+		len(round.Scope.Resources) == 2 && round.Scope.Resources[1] != "campaign:active" ||
+		!strings.HasPrefix(round.Scope.Resources[0], "offer_intake:") || len(round.Scope.Resources[0]) == len("offer_intake:") {
 		return "", store.ErrInvalid
 	}
 	return strings.TrimPrefix(round.Scope.Resources[0], "offer_intake:"), nil
@@ -59,10 +61,11 @@ func (e *Engine) launchOfferComparison(round store.Round) error {
 }
 
 type offerReport struct {
-	Code           string `json:"code"`
-	IntakeID       string `json:"intakeId"`
-	ComparisonID   string `json:"comparisonId,omitempty"`
-	TradeoffStatus string `json:"tradeoffStatus"`
+	Code           string              `json:"code"`
+	IntakeID       string              `json:"intakeId"`
+	ComparisonID   string              `json:"comparisonId,omitempty"`
+	TradeoffStatus string              `json:"tradeoffStatus"`
+	Recommendation *homeRecommendation `json:"recommendation,omitempty"`
 }
 
 func (e *Engine) runOfferComparison(ctx context.Context, initial store.Round) {
@@ -82,6 +85,8 @@ func (e *Engine) runOfferComparison(ctx context.Context, initial store.Round) {
 		if err != nil || r.State != store.RoundRunning {
 			return
 		}
+		facts := outcomeRecommendationFacts{Outcome: r.Outcome, Code: report.Code, ResultID: report.ComparisonID, TradeoffStatus: report.TradeoffStatus}
+		report.Recommendation = e.computeOutcomeRecommendation(ctx, r, facts)
 		data, _ := json.Marshal(report)
 		status := "partial"
 		if !partial {

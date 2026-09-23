@@ -38,7 +38,7 @@ func (h *Handler) prepareInterview(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"interviewId": commission.ID, "round": roundModel(prior)})
 		return
 	}
-	input := store.StartRoundInput{RequestKey: body.RequestKey, Intent: "Prepare one sourced private interview brief from the owner's complete supplied context.", Outcome: "interview_prepare", ProfileVersion: commission.ProfileVersion, Deadline: time.Now().Add(30 * time.Minute).UTC(), Scope: store.RoundScope{InputRefs: []string{"interview:" + commission.ID}, Resources: []string{"opportunity:" + commission.OpportunityID}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool, store.RoundInterviewBriefSave, store.RoundJevRequest}, Delegates: []string{"codex-runner"}}, Limits: store.RoundAllowance{Requests: 4, Items: 1, Tools: 5, Turns: 1}}
+	input := store.StartRoundInput{RequestKey: body.RequestKey, Intent: "Prepare one sourced private interview brief from the owner's complete supplied context.", Outcome: "interview_prepare", ProfileVersion: commission.ProfileVersion, Deadline: time.Now().Add(30 * time.Minute).UTC(), Scope: store.RoundScope{InputRefs: []string{"interview:" + commission.ID}, Resources: []string{"opportunity:" + commission.OpportunityID, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool, store.RoundInterviewBriefSave, store.RoundJevRequest}, Delegates: []string{"codex-runner"}}, Limits: store.RoundAllowance{Requests: 5, Items: 1, Tools: 5, Turns: 1}}
 	round, roundCreated, err := h.rounds.Start(r.Context(), actor, input)
 	if err != nil {
 		failRound(w, err)
@@ -188,7 +188,7 @@ func (h *Handler) debriefInterview(w http.ResponseWriter, r *http.Request) {
 		failRound(w, store.ErrConflict)
 		return
 	}
-	input := store.StartRoundInput{RequestKey: body.RequestKey, Intent: "Record one owner-reported interview debrief with exact note citations.", Outcome: "interview_debrief", ProfileVersion: interview.ProfileVersion, Deadline: time.Now().Add(30 * time.Minute).UTC(), Scope: store.RoundScope{InputRefs: []string{"debrief:" + commission.ID}, Resources: []string{"interview:" + interviewID}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool, store.RoundInterviewDebriefSave}, Delegates: []string{"codex-runner"}}, Limits: store.RoundAllowance{Requests: 3, Items: 1, Tools: 5, Turns: 1}}
+	input := store.StartRoundInput{RequestKey: body.RequestKey, Intent: "Record one owner-reported interview debrief with exact note citations.", Outcome: "interview_debrief", ProfileVersion: interview.ProfileVersion, Deadline: time.Now().Add(30 * time.Minute).UTC(), Scope: store.RoundScope{InputRefs: []string{"debrief:" + commission.ID}, Resources: []string{"interview:" + interviewID, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool, store.RoundInterviewDebriefSave, store.RoundJevRequest}, Delegates: []string{"codex-runner"}}, Limits: store.RoundAllowance{Requests: 4, Items: 1, Tools: 5, Turns: 1}}
 	round, roundCreated, err := h.rounds.Start(r.Context(), actor, input)
 	if err != nil {
 		failRound(w, err)

@@ -85,7 +85,7 @@ func (h *Handler) prepareRound(w http.ResponseWriter, r *http.Request) {
 	actor := store.Actor{Kind: p.Kind, ID: p.ID}
 	previous, err := h.database.RoundByRequest(r.Context(), actor, body.RequestKey)
 	if err == nil {
-		if previous.Outcome != "prepare" || len(previous.Scope.Resources) != 1 || previous.Scope.Resources[0] != "opportunity:"+body.OpportunityID || !replacementMatches(previous.Scope.InputRefs, body.ReplacePaused) {
+		if previous.Outcome != "prepare" || len(previous.Scope.Resources) != 2 || previous.Scope.Resources[0] != "opportunity:"+body.OpportunityID || previous.Scope.Resources[1] != "campaign:active" || !replacementMatches(previous.Scope.InputRefs, body.ReplacePaused) {
 			failRound(w, store.ErrRoundIdempotencyConflict)
 			return
 		}
@@ -120,8 +120,8 @@ func (h *Handler) prepareRound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input := store.StartRoundInput{RequestKey: body.RequestKey, Intent: "Prepare a private application pack for the selected sourced opportunity.", Outcome: "prepare", ProfileVersion: profile.Version,
-		Scope:  store.RoundScope{InputRefs: []string{"profile:current", "opportunity:" + opportunity.ID}, Resources: []string{"opportunity:" + opportunity.ID}, Operations: []string{store.RoundCodexTurn, store.RoundJevRequest, store.RoundPrepareApplicationPack, store.RoundContextTool}, Delegates: []string{"codex-runner"}},
-		Limits: store.RoundAllowance{Requests: 8, Items: 1, Tools: 3, Turns: 1}, Deadline: time.Now().Add(30 * time.Minute).UTC()}
+		Scope:  store.RoundScope{InputRefs: []string{"profile:current", "opportunity:" + opportunity.ID}, Resources: []string{"opportunity:" + opportunity.ID, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundJevRequest, store.RoundPrepareApplicationPack, store.RoundContextTool}, Delegates: []string{"codex-runner"}},
+		Limits: store.RoundAllowance{Requests: 9, Items: 1, Tools: 3, Turns: 1}, Deadline: time.Now().Add(30 * time.Minute).UTC()}
 	if body.ReplacePaused != nil {
 		input.Scope.InputRefs = append(input.Scope.InputRefs, replacementRef(body.ReplacePaused.RoundId, body.ReplacePaused.ExpectedRevision))
 	}

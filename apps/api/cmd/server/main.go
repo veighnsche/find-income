@@ -106,7 +106,7 @@ func runWithContext(ctx context.Context, args []string) error {
 	}
 	options.Codex = runtime
 	options.Rounds = &rounds.Service{Store: database, Readiness: worker, Canceller: runtime, Reconciler: runtime, Worker: worker}
-	options.Delivery = &deliveryservice.Service{Store: database, From: os.Getenv("JOBSEEK_SMTP_FROM")}
+	options.Delivery = &deliveryservice.Service{Store: database, Advisor: worker, From: os.Getenv("JOBSEEK_SMTP_FROM")}
 	if address := os.Getenv("JOBSEEK_SMTP_ADDRESS"); address != "" && os.Getenv("JOBSEEK_SMTP_FROM") != "" &&
 		os.Getenv("JOBSEEK_SMTP_SERVER_NAME") != "" && os.Getenv("JOBSEEK_SMTP_HELLO_NAME") != "" &&
 		os.Getenv("JOBSEEK_SMTP_USERNAME") != "" && os.Getenv("JOBSEEK_SMTP_PASSWORD") != "" {

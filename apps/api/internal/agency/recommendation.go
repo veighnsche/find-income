@@ -21,6 +21,7 @@ type recommendationTarget struct {
 	OpportunityID         string `json:"opportunityId,omitempty"`
 	OpportunityRevision   int64  `json:"opportunityRevision,omitempty"`
 	OwnerDecisionRevision int64  `json:"ownerDecisionRevision,omitempty"`
+	UpdatedAt             string `json:"updatedAt,omitempty"`
 }
 
 type recommendationSourceRef struct {
@@ -389,6 +390,11 @@ func (e *Engine) checkRecommendationTarget(ctx context.Context, round store.Roun
 			return store.ErrConflict
 		}
 		return nil
+	case "review_result":
+		if target.Kind != "round" || target.ID != round.ID || target.Revision != 0 {
+			return store.ErrConflict
+		}
+		return nil
 	case "review_opportunities":
 		expectedGeneration := round.Generation
 		if round.State == store.RoundCompleted {
@@ -409,6 +415,55 @@ func (e *Engine) checkRecommendationTarget(ctx context.Context, round store.Roun
 				screen.ProfileVersion != profile.Version || organisation.ProfileVersion != profile.Version {
 				return store.ErrConflict
 			}
+		}
+		return nil
+	case "review_comparison":
+		if target.Kind != "offer_comparison" || target.Revision != 1 {
+			return store.ErrConflict
+		}
+		comparison, err := e.Store.OfferComparisonForOwner(ctx, round.Actor, target.ID)
+		if err != nil || !comparison.Current || comparison.RoundID != round.ID || comparison.Comparison.InputSHA256 != target.ContentSHA256 {
+			return store.ErrConflict
+		}
+		return nil
+	case "review_delivery":
+		if target.Kind != "delivery_review" || target.ID == "" || target.Revision < 1 {
+			return store.ErrConflict
+		}
+		review, err := e.Store.DeliveryReview(ctx, target.ID)
+		if err != nil {
+			return store.ErrConflict
+		}
+		recorded := int64(0)
+		for _, item := range review.Items {
+			if item.RoundID == round.ID && (item.State == "accepted_by_smtp" || item.State == "failed" || item.State == "uncertain") {
+				recorded++
+			}
+		}
+		if recorded != target.Revision {
+			return store.ErrConflict
+		}
+		return nil
+	case "review_interview":
+		if target.Kind != "interview" || target.ID == "" || target.UpdatedAt == "" {
+			return store.ErrConflict
+		}
+		interview, err := e.Store.Interview(ctx, target.ID)
+		if err != nil || !interview.Current || interview.RoundID != round.ID || interview.UpdatedAt != target.UpdatedAt || len(interview.Brief) == 0 {
+			return store.ErrConflict
+		}
+		return nil
+	case "review_debrief":
+		if target.Kind != "interview_debrief" || target.ID == "" || target.UpdatedAt == "" {
+			return store.ErrConflict
+		}
+		debrief, err := e.Store.InterviewDebrief(ctx, target.ID)
+		if err != nil || debrief.RoundID != round.ID || debrief.UpdatedAt != target.UpdatedAt || len(debrief.Debrief) == 0 {
+			return store.ErrConflict
+		}
+		interview, err := e.Store.Interview(ctx, debrief.InterviewID)
+		if err != nil || !interview.Current {
+			return store.ErrConflict
 		}
 		return nil
 	case "prepare", "review_pack":

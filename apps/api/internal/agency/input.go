@@ -20,6 +20,7 @@ type inputReport struct {
 	EffectiveProfileVersion int64                     `json:"effectiveProfileVersion"`
 	AppliedChanges          []store.RoundHistoryEvent `json:"appliedChanges"`
 	Unresolved              []string                  `json:"unresolved"`
+	Recommendation          *homeRecommendation       `json:"recommendation,omitempty"`
 }
 
 func (e *Engine) CheckRoundInput(ctx context.Context, owner store.Actor, input store.StartRoundInput) error {
@@ -130,6 +131,9 @@ func (e *Engine) finishInput(ctx context.Context, roundID string, owner store.Ac
 	if len(detail.Unresolved) != 0 || len(detail.AppliedChanges) == 0 {
 		status = "partial"
 	}
+	facts := outcomeRecommendationFacts{Outcome: r.Outcome, Code: detail.Code, ResultID: r.ID,
+		AppliedChanges: len(detail.AppliedChanges), UnresolvedCount: len(detail.Unresolved)}
+	detail.Recommendation = e.computeOutcomeRecommendation(ctx, r, facts)
 	encoded, _ := json.Marshal(detail)
 	_, _ = e.Store.FinishRound(cleanup, owner, roundID, store.RoundCompleted, detail.Code, status, encoded)
 }

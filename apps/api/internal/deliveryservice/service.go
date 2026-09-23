@@ -26,11 +26,25 @@ type Sender interface {
 }
 
 type Service struct {
-	Store  *store.Store
-	Sender Sender
-	From   string
-	mu     sync.Mutex
-	active map[string]context.CancelFunc
+	Store   *store.Store
+	Sender  Sender
+	Advisor NextActionAdvisor
+	From    string
+	mu      sync.Mutex
+	active  map[string]context.CancelFunc
+}
+
+// DeliveryAdviceFacts contains only recorded state counts and the review ID.
+// It never includes a recipient, subject, body, MIME bytes, or raw offer text.
+type DeliveryAdviceFacts struct {
+	ReviewID  string
+	Recorded  int
+	Failed    int
+	Uncertain int
+}
+
+type NextActionAdvisor interface {
+	RecommendDelivery(context.Context, store.Round, DeliveryAdviceFacts) json.RawMessage
 }
 
 type SendResult struct {
@@ -187,10 +201,11 @@ func (s *Service) SendReview(ctx context.Context, owner store.Actor, reviewID st
 		}
 		resources[i] = "delivery:" + item.ID
 	}
+	resources = append(resources, "campaign:active")
 	input := store.StartRoundInput{RequestKey: requestKey, Intent: "Deliver only the exact approved application review " + reviewID,
 		Outcome: "deliver", ProfileVersion: profileVersion, Scope: store.RoundScope{InputRefs: []string{"delivery_review:" + reviewID},
-			Resources: resources, Operations: []string{store.RoundDeliverApplication}},
-		Limits:   store.RoundAllowance{Requests: int64(len(resources)), Items: int64(len(resources)), Tools: int64(len(resources))},
+			Resources: resources, Operations: []string{store.RoundDeliverApplication, store.RoundJevRequest}},
+		Limits:   store.RoundAllowance{Requests: int64(len(review.Items)) + 1, Items: int64(len(review.Items)), Tools: int64(len(review.Items))},
 		Deadline: time.Now().Add(10 * time.Minute).UTC()}
 	round, created, err := s.Store.StartRound(ctx, owner, input)
 	if errors.Is(err, store.ErrRoundIdempotencyConflict) {
@@ -285,11 +300,37 @@ func (s *Service) SendReview(ctx context.Context, owner store.Actor, reviewID st
 	}
 	current, readErr := s.Store.Round(context.Background(), round.ID)
 	if readErr == nil && current.State == store.RoundRunning {
+		adviceFacts := DeliveryAdviceFacts{ReviewID: reviewID}
+		if latestReview, reviewErr := s.Store.DeliveryReview(context.Background(), reviewID); reviewErr == nil {
+			for _, item := range latestReview.Items {
+				if item.RoundID != round.ID {
+					continue
+				}
+				switch item.State {
+				case "accepted_by_smtp":
+					adviceFacts.Recorded++
+				case "failed":
+					adviceFacts.Recorded++
+					adviceFacts.Failed++
+				case "uncertain":
+					adviceFacts.Recorded++
+					adviceFacts.Uncertain++
+				}
+			}
+		}
+		report := struct {
+			EmployerReceiptVerified bool            `json:"employerReceiptVerified"`
+			Recommendation          json.RawMessage `json:"recommendation,omitempty"`
+		}{}
+		if adviceFacts.Recorded > 0 && s.Advisor != nil && work.Err() == nil {
+			report.Recommendation = s.Advisor.RecommendDelivery(work, current, adviceFacts)
+		}
+		encoded, _ := json.Marshal(report)
 		terminal, reason := store.RoundCompleted, "delivery_attempts_recorded"
 		if workFailure != "" {
 			terminal, reason = store.RoundFailed, workFailure
 		}
-		_, _ = s.Store.FinishRound(context.Background(), owner, round.ID, terminal, reason, "submission_unverified", json.RawMessage(`{"employerReceiptVerified":false}`))
+		_, _ = s.Store.FinishRound(context.Background(), owner, round.ID, terminal, reason, "submission_unverified", encoded)
 	}
 	latest, err := s.Store.DeliveryReview(context.Background(), reviewID)
 	if err != nil {

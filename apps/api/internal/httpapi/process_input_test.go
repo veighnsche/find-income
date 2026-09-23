@@ -212,9 +212,43 @@ func TestProcessInputHTTPProcessesPastedVacancyAndRecordsOrganisation(t *testing
 		probabilities[category.ID] = 0
 	}
 	var jevCalls int
-	jevServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	jevServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		jevCalls++
 		w.Header().Set("Content-Type", "application/json")
+		var wire struct {
+			State struct {
+				Candidates []struct {
+					ID           string `json:"id"`
+					CapabilityID string `json:"capability_id"`
+				} `json:"candidates"`
+			} `json:"state"`
+			Questions map[string]struct {
+				Criteria map[string]string `json:"criteria"`
+			} `json:"questions"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&wire); err != nil {
+			t.Errorf("decode Jev request: %v", err)
+			return
+		}
+		if question, ok := wire.Questions["selected_candidate"]; ok {
+			chosen := ""
+			for _, candidate := range wire.State.Candidates {
+				if candidate.CapabilityID == "home_review_result" {
+					chosen = candidate.ID
+				}
+			}
+			if chosen == "" {
+				t.Errorf("saved result review absent from next-action choices")
+				return
+			}
+			probabilities := make(map[string]float64, len(question.Criteria))
+			for id := range question.Criteria {
+				probabilities[id] = 0
+			}
+			probabilities[chosen] = 1
+			_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-fixture", "answers": map[string]any{"selected_candidate": map[string]any{"type": "choice", "choice": chosen, "probabilities": probabilities, "confidence": 0.8}}, "usage": map[string]any{"input_tokens": 32, "output_tokens": 8}})
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-fixture", "answers": map[string]any{"organisation_category": map[string]any{"type": "choice", "choice": chosenCategory, "probabilities": probabilities, "confidence": 0.8}}, "usage": map[string]any{"input_tokens": 32, "output_tokens": 8}})
 	}))
 	defer jevServer.Close()
@@ -278,7 +312,7 @@ func TestProcessInputHTTPProcessesPastedVacancyAndRecordsOrganisation(t *testing
 		time.Sleep(5 * time.Millisecond)
 	}
 	ingestion, err := h.db.Ingestion(ctx, response.IngestionID)
-	if err != nil || finished.State != store.RoundCompleted || ingestion.OpportunityID == "" || ingestion.SourceID == "" || jevCalls != 1 {
+	if err != nil || finished.State != store.RoundCompleted || ingestion.OpportunityID == "" || ingestion.SourceID == "" || jevCalls != 2 {
 		t.Fatalf("pasted vacancy not processed: state=%s ingestion=%+v jevCalls=%d report=%s err=%v", finished.State, ingestion, jevCalls, finished.Report, err)
 	}
 	opportunity, err := h.db.Opportunity(ctx, ingestion.OpportunityID)

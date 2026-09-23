@@ -31,8 +31,7 @@ func checkRoundPackCorrectionTx(ctx context.Context, tx *sql.Tx, round Round, in
 		}
 		return nil
 	}
-	if round.Outcome != "process_input" || len(round.Scope.Resources) != 1 ||
-		round.Scope.Resources[0] != "opportunity:"+pack.OpportunityID ||
+	if round.Outcome != "process_input" || !correctionOpportunityScope(round.Scope.Resources, pack.OpportunityID) ||
 		!scopeHas(round.Scope.InputRefs, "instruction:"+input.OwnerInstructionID) || manifest.Correction == nil {
 		return ErrFenced
 	}
@@ -91,4 +90,9 @@ func checkRoundPackCorrectionTx(ctx context.Context, tx *sql.Tx, round Round, in
 		return ErrFenced
 	}
 	return err
+}
+
+func correctionOpportunityScope(resources []string, opportunityID string) bool {
+	return len(resources) == 1 && resources[0] == "opportunity:"+opportunityID ||
+		len(resources) == 2 && resources[0] == "opportunity:"+opportunityID && resources[1] == "campaign:active"
 }

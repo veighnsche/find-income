@@ -242,7 +242,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read the owner's latest completed round for a saved result view */
+        /** Read the owner's latest saved round result, including recorded partial delivery */
         get: operations["getLatestCompletedRound"];
         put?: never;
         post?: never;
@@ -3545,7 +3545,7 @@ export interface operations {
     getLatestCompletedRound: {
         parameters: {
             query: {
-                outcome: "discover" | "compare_offers";
+                outcome: "all" | "discover" | "process_input" | "prepare" | "compare_offers" | "deliver" | "interview_prepare" | "interview_debrief";
             };
             header?: never;
             path?: never;
@@ -3553,7 +3553,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Latest completed matching round, with transient currentness for discovery advice, or null when none exists */
+            /** @description Latest matching saved result with transient next-action currentness, or null when none exists */
             200: {
                 headers: {
                     [name: string]: unknown;

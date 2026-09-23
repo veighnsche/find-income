@@ -39,7 +39,8 @@ func (e *Engine) checkInterview(ctx context.Context, outcome string) error {
 }
 
 func (e *Engine) launchInterview(r store.Round) error {
-	if r.State != store.RoundRunning || r.Outcome != "interview_prepare" && r.Outcome != "interview_debrief" || len(r.Scope.Resources) != 1 {
+	if r.State != store.RoundRunning || r.Outcome != "interview_prepare" && r.Outcome != "interview_debrief" ||
+		(len(r.Scope.Resources) != 1 && len(r.Scope.Resources) != 2 || len(r.Scope.Resources) == 2 && r.Scope.Resources[1] != "campaign:active") {
 		return store.ErrFenced
 	}
 	base := e.Context
@@ -67,12 +68,13 @@ func (e *Engine) launchInterview(r store.Round) error {
 }
 
 type interviewOutcome struct {
-	Code        string   `json:"code"`
-	InterviewID string   `json:"interviewId,omitempty"`
-	DebriefID   string   `json:"debriefId,omitempty"`
-	BriefSaved  bool     `json:"briefSaved"`
-	FocusSaved  bool     `json:"focusSaved"`
-	Unknowns    []string `json:"unknowns"`
+	Code           string              `json:"code"`
+	InterviewID    string              `json:"interviewId,omitempty"`
+	DebriefID      string              `json:"debriefId,omitempty"`
+	BriefSaved     bool                `json:"briefSaved"`
+	FocusSaved     bool                `json:"focusSaved"`
+	Unknowns       []string            `json:"unknowns"`
+	Recommendation *homeRecommendation `json:"recommendation,omitempty"`
 }
 
 func (e *Engine) finishInterview(ctx context.Context, initial store.Round, result interviewOutcome) {
@@ -89,6 +91,18 @@ func (e *Engine) finishInterview(ctx context.Context, initial store.Round, resul
 	if result.Unknowns == nil {
 		result.Unknowns = []string{}
 	}
+	facts := outcomeRecommendationFacts{Outcome: r.Outcome, Code: result.Code, UnresolvedCount: len(result.Unknowns), FocusSaved: result.FocusSaved}
+	if result.BriefSaved && r.Outcome == "interview_prepare" && result.InterviewID != "" {
+		if saved, readErr := e.Store.Interview(cleanup, result.InterviewID); readErr == nil && saved.Current && saved.RoundID == r.ID && len(saved.Brief) > 0 {
+			facts.ResultID, facts.ResultUpdatedAt = saved.ID, saved.UpdatedAt
+		}
+	}
+	if result.BriefSaved && r.Outcome == "interview_debrief" && result.DebriefID != "" {
+		if saved, readErr := e.Store.InterviewDebrief(cleanup, result.DebriefID); readErr == nil && saved.RoundID == r.ID && len(saved.Debrief) > 0 {
+			facts.ResultID, facts.ResultUpdatedAt = saved.ID, saved.UpdatedAt
+		}
+	}
+	result.Recommendation = e.computeOutcomeRecommendation(ctx, r, facts)
 	encoded, _ := json.Marshal(result)
 	status := "complete"
 	if len(result.Unknowns) > 0 || !result.BriefSaved && result.DebriefID == "" || result.DebriefID != "" && !result.BriefSaved {

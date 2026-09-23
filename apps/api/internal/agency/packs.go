@@ -97,7 +97,8 @@ func (e *Engine) launchPrepareWithCorrection(r store.Round, correction *packCorr
 }
 
 func packOpportunityScope(scope store.RoundScope) (string, error) {
-	if len(scope.Resources) != 1 || !strings.HasPrefix(scope.Resources[0], "opportunity:") || len(scope.Resources[0]) <= len("opportunity:") {
+	if len(scope.Resources) < 1 || len(scope.Resources) > 2 || len(scope.Resources) == 2 && scope.Resources[1] != "campaign:active" ||
+		!strings.HasPrefix(scope.Resources[0], "opportunity:") || len(scope.Resources[0]) <= len("opportunity:") {
 		return "", store.ErrInvalid
 	}
 	return strings.TrimPrefix(scope.Resources[0], "opportunity:"), nil
@@ -252,6 +253,7 @@ type packReport struct {
 	DeliveryRouteStatus string               `json:"deliveryRouteStatus,omitempty"`
 	MaterialUnknowns    []string             `json:"materialUnknowns,omitempty"`
 	Remaining           store.RoundAllowance `json:"remaining"`
+	Recommendation      *homeRecommendation  `json:"recommendation,omitempty"`
 }
 
 func (e *Engine) finishPrepare(ctx context.Context, initial store.Round, detail packReport, partial bool) {
@@ -264,6 +266,11 @@ func (e *Engine) finishPrepare(ctx context.Context, initial store.Round, detail 
 	if !time.Now().Before(r.Deadline) {
 		_, _ = e.Store.ExpireRound(cleanup, r.ID)
 		return
+	}
+	facts := outcomeRecommendationFacts{Outcome: r.Outcome, Code: detail.Code, ResultID: detail.PackID, ResultRevision: detail.Version}
+	detail.Recommendation = e.computeOutcomeRecommendation(ctx, r, facts)
+	if current, readErr := e.Store.Round(cleanup, r.ID); readErr == nil {
+		r = current
 	}
 	detail.Remaining = store.RoundAllowance{Requests: r.Limits.Requests - r.Used.Requests, Items: r.Limits.Items - r.Used.Items,
 		Tools: r.Limits.Tools - r.Used.Tools, Turns: r.Limits.Turns - r.Used.Turns}

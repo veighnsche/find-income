@@ -84,7 +84,7 @@ func TestCommissionedOfferComparisonPersistsAndChargesCapturedTradeoff(t *testin
 		t.Fatal(err)
 	}
 	resource := "offer_intake:" + intake.ID
-	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "offer-request", Intent: "Compare offers", Outcome: "compare_offers", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Minute), Scope: store.RoundScope{InputRefs: []string{resource}, Resources: []string{resource}, Operations: []string{store.RoundCodexTurn, store.RoundPrepareOfferComparison, store.RoundJevRequest}, Delegates: []string{"codex-runner"}}, Limits: store.RoundAllowance{Requests: 4, Items: 1, Tools: 3, Turns: 1}})
+	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "offer-request", Intent: "Compare offers", Outcome: "compare_offers", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Minute), Scope: store.RoundScope{InputRefs: []string{resource}, Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundPrepareOfferComparison, store.RoundJevRequest}, Delegates: []string{"codex-runner"}}, Limits: store.RoundAllowance{Requests: 5, Items: 1, Tools: 3, Turns: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,8 +108,10 @@ func TestCommissionedOfferComparisonPersistsAndChargesCapturedTradeoff(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	decisions, adviceCalls, closeAdvice := recommendationDecisions(t, db, "home_review_comparison")
+	defer closeAdvice()
 	runtime := &offerRuntimeFixture{db: db}
-	engine := &Engine{Store: db, Runtime: runtime, Tradeoffs: jevservice.Service{Store: db, Client: client}, Context: ctx}
+	engine := &Engine{Store: db, Runtime: runtime, Tradeoffs: jevservice.Service{Store: db, Client: client}, Decisions: decisions, Context: ctx}
 	if err := engine.LaunchRound(ctx, round); err != nil {
 		t.Fatal(err)
 	}
@@ -128,8 +130,8 @@ func TestCommissionedOfferComparisonPersistsAndChargesCapturedTradeoff(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if current.State != store.RoundCompleted || current.DeliverableStatus != "complete" || current.Used.Requests != 2 || calls != 1 || runtime.turns != 1 {
-		t.Fatalf("commission: round=%+v calls=%d turns=%d", current, calls, runtime.turns)
+	if current.State != store.RoundCompleted || current.DeliverableStatus != "complete" || current.Used.Requests != 3 || calls != 1 || adviceCalls.Load() != 1 || runtime.turns != 1 {
+		t.Fatalf("commission: round=%+v tradeoff=%d advice=%d turns=%d", current, calls, adviceCalls.Load(), runtime.turns)
 	}
 	if !strings.Contains(runtime.evidence, text) || !strings.Contains(runtime.evidence, "I value predictable hours") {
 		t.Fatal("complete owner context omitted from turn")
@@ -137,6 +139,24 @@ func TestCommissionedOfferComparisonPersistsAndChargesCapturedTradeoff(t *testin
 	saved, err := db.OfferComparisonByRoundForOwner(ctx, owner, round.ID)
 	if err != nil || !saved.Current || saved.TradeoffStatus != "selected" || saved.Tradeoff.Alternative.ID != "clarify-hours" {
 		t.Fatalf("saved tradeoff: %+v %v", saved, err)
+	}
+	var outcome offerReport
+	if json.Unmarshal(current.Report, &outcome) != nil || outcome.ComparisonID != saved.ID || outcome.Recommendation == nil ||
+		outcome.Recommendation.Status != "selected" || outcome.Recommendation.Action != "review_comparison" {
+		t.Fatalf("saved comparison advice: %s", current.Report)
+	}
+	attempts, err := db.JevAttemptsForRound(ctx, round.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, attempt := range attempts {
+		if attempt.RoundAttemptID == outcome.Recommendation.DecisionAttemptID &&
+			(strings.Contains(string(attempt.LogicalRequestJSON), text) || strings.Contains(string(attempt.LogicalRequestJSON), "I value predictable hours")) {
+			t.Fatal("raw offer or owner priorities entered bounded advice request")
+		}
+	}
+	if verdict := ReadHomeRecommendationCurrentness(ctx, db, current); verdict.Status != "current" {
+		t.Fatalf("saved comparison advice changed on read: %+v", verdict)
 	}
 	if _, err := db.OfferComparisonByRoundForOwner(ctx, store.Actor{Kind: "administrator", ID: "other"}, round.ID); err != store.ErrNotFound {
 		t.Fatalf("cross-owner read: %v", err)

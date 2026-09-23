@@ -131,6 +131,17 @@ type fakeSender struct {
 	fn    func(context.Context) delivery.Outcome
 }
 
+type fakeNextActionAdvisor struct {
+	calls int
+	facts DeliveryAdviceFacts
+}
+
+func (f *fakeNextActionAdvisor) RecommendDelivery(_ context.Context, _ store.Round, facts DeliveryAdviceFacts) json.RawMessage {
+	f.calls++
+	f.facts = facts
+	return json.RawMessage(`{"status":"selected","action":"review_delivery"}`)
+}
+
 func (f *fakeSender) Send(ctx context.Context, _ delivery.Material, _ string) delivery.Outcome {
 	f.calls++
 	return f.fn(ctx)
@@ -395,13 +406,26 @@ func TestExactReviewDoubleClickAndSubmissionIsNotReceipt(t *testing.T) {
 		return delivery.Outcome{State: delivery.AcceptedBySMTP, Stage: "data_reply", SMTPCode: 250}
 	}}
 	svc.Sender = sender
+	advisor := &fakeNextActionAdvisor{}
+	svc.Advisor = advisor
 	result, err := svc.SendReview(context.Background(), owner, review.ID)
 	if err != nil || sender.calls != 1 || result.Review.Items[0].State != "accepted_by_smtp" || result.Round.State != store.RoundCompleted {
 		t.Fatalf("send result: %+v err=%v calls=%d", result, err, sender.calls)
 	}
+	if advisor.calls != 1 || advisor.facts != (DeliveryAdviceFacts{ReviewID: review.ID, Recorded: 1}) ||
+		result.Round.Limits.Requests != 2 || result.Round.Scope.Resources[len(result.Round.Scope.Resources)-1] != "campaign:active" {
+		t.Fatalf("delivery advice scope or bounded facts: round=%+v calls=%d facts=%+v", result.Round, advisor.calls, advisor.facts)
+	}
+	var report struct {
+		EmployerReceiptVerified bool            `json:"employerReceiptVerified"`
+		Recommendation          json.RawMessage `json:"recommendation"`
+	}
+	if json.Unmarshal(result.Round.Report, &report) != nil || report.EmployerReceiptVerified || len(report.Recommendation) == 0 {
+		t.Fatalf("submission report lost truth or advice: %s", result.Round.Report)
+	}
 	result, err = svc.SendReview(context.Background(), owner, review.ID)
-	if err != nil || sender.calls != 1 || result.Review.Items[0].State != "accepted_by_smtp" {
-		t.Fatalf("double click resent: %+v err=%v calls=%d", result, err, sender.calls)
+	if err != nil || sender.calls != 1 || advisor.calls != 1 || result.Review.Items[0].State != "accepted_by_smtp" {
+		t.Fatalf("double click resent or repeated advice: %+v err=%v sender=%d advice=%d", result, err, sender.calls, advisor.calls)
 	}
 	svc.Sender = nil
 	result, err = svc.SendReview(context.Background(), owner, review.ID)

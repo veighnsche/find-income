@@ -52,15 +52,22 @@ func recommendationOpportunityRevision(revision int64, decision store.OwnerDecis
 // unknown read is unavailable, while a proven changed snapshot is stale.
 func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, round store.Round) HomeRecommendationCurrentness {
 	verdict := HomeRecommendationCurrentness{Status: "unavailable", Code: "no_saved_recommendation", CheckedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-	if db == nil || ctx == nil || round.ID == "" || round.Outcome != "discover" {
+	if db == nil || ctx == nil || round.ID == "" || round.Outcome != "discover" && round.Outcome != "process_input" && round.Outcome != "prepare" && round.Outcome != "compare_offers" && round.Outcome != "deliver" && round.Outcome != "interview_prepare" && round.Outcome != "interview_debrief" {
 		return verdict
 	}
 	var detail report
-	if len(round.Report) == 0 || json.Unmarshal(round.Report, &detail) != nil {
+	var saved struct {
+		Recommendation *homeRecommendation `json:"recommendation"`
+	}
+	if len(round.Report) == 0 || json.Unmarshal(round.Report, &saved) != nil {
 		verdict.Code = "invalid_saved_report"
 		return verdict
 	}
-	advice := detail.Recommendation
+	if round.Outcome == "discover" && json.Unmarshal(round.Report, &detail) != nil {
+		verdict.Code = "invalid_saved_report"
+		return verdict
+	}
+	advice := saved.Recommendation
 	if advice == nil {
 		return verdict
 	}
@@ -68,7 +75,8 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 		verdict.Code = "recommendation_not_selected"
 		return verdict
 	}
-	if round.State != store.RoundCompleted || advice.RoundID != round.ID || advice.RoundGeneration+1 != round.Generation || advice.ProfileVersion != round.ProfileVersion {
+	if round.State != store.RoundCompleted && (round.Outcome != "deliver" || round.State != store.RoundFailed) ||
+		advice.RoundID != round.ID || advice.RoundGeneration+1 != round.Generation || advice.ProfileVersion != round.ProfileVersion {
 		verdict.Status, verdict.Code = "stale", "round_identity_changed"
 		return verdict
 	}
@@ -139,6 +147,18 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 		profileRefs[source.ID] = source.SourceRevision
 	}
 	knownOpportunities := map[string]bool{}
+	var outcomeFacts outcomeRecommendationFacts
+	if round.Outcome != "discover" {
+		outcomeFacts, err = savedOutcomeRecommendationFacts(ctx, db, round)
+		if err != nil {
+			verdict.Code = "outcome_facts_unavailable"
+			return verdict
+		}
+		if !outcomeFacts.useful() {
+			verdict.Status, verdict.Code = "stale", "outcome_result_changed"
+			return verdict
+		}
+	}
 	for _, ref := range advice.SourceRefs {
 		switch ref.Kind {
 		case "owner_profile":
@@ -149,6 +169,31 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 		case "commissioned_round_result":
 			if ref.ID != "round:"+round.ID || ref.Revision != recommendationProgressRevision(round.ID, detail) {
 				verdict.Status, verdict.Code = "stale", "round_result_changed"
+				return verdict
+			}
+		case "commissioned_outcome_facts":
+			if round.Outcome == "discover" || ref.ID != "round:"+round.ID || ref.Revision != outcomeFactsRevision(round.ID, outcomeFacts) {
+				verdict.Status, verdict.Code = "stale", "outcome_result_changed"
+				return verdict
+			}
+		case "saved_comparison_facts":
+			if round.Outcome != "compare_offers" || ref.ID != "comparison:"+outcomeFacts.ResultID {
+				verdict.Status, verdict.Code = "stale", "comparison_identity_changed"
+				return verdict
+			}
+			comparison, readErr := db.OfferComparisonForOwner(ctx, round.Actor, outcomeFacts.ResultID)
+			if readErr != nil {
+				verdict.Code = "comparison_read_unavailable"
+				return verdict
+			}
+			if !comparison.Current || comparison.RoundID != round.ID || comparison.TradeoffStatus != outcomeFacts.TradeoffStatus {
+				verdict.Status, verdict.Code = "stale", "comparison_changed"
+				return verdict
+			}
+			summary := comparisonRecommendationSummary(comparison, outcomeFacts.TradeoffStatus)
+			sum := sha256.Sum256([]byte(summary))
+			if ref.Revision != hex.EncodeToString(sum[:]) {
+				verdict.Status, verdict.Code = "stale", "comparison_changed"
 				return verdict
 			}
 		case "current_opportunity_state":
