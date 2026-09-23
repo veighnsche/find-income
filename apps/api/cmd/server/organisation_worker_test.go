@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/collector"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
@@ -220,5 +221,65 @@ func TestBackgroundFailureCancelsAndJoinsOtherRunner(t *testing.T) {
 	case <-joined:
 	default:
 		t.Fatal("other runner not joined before return")
+	}
+}
+
+func TestUnconfiguredCodexRuntimeJoinsWithoutClaimingIngestion(t *testing.T) {
+	for _, key := range []string{
+		"JOBSEEK_CODEX_SSH_HOST", "JOBSEEK_CODEX_SSH_USER", "JOBSEEK_CODEX_SSH_IDENTITY_FILE",
+		"JOBSEEK_CODEX_SSH_KNOWN_HOSTS", "JOBSEEK_CODEX_REMOTE_LAUNCHER",
+		"JOBSEEK_CODEX_ISOLATION_VERIFIED", "JOBSEEK_CODEX_BRIDGE_TOKEN",
+	} {
+		t.Setenv(key, "")
+	}
+	ctx := context.Background()
+	database, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	intake, _, err := database.SubmitIngestion(ctx, store.Actor{Kind: "administrator", ID: "test-owner"},
+		store.IngestionInput{Origin: "owner", OriginalText: "Synthetic queued vacancy.", IdempotencyKey: "unconfigured-runtime"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := codexservice.NewFromEnvironment(ctx, database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	status := runtime.Status(ctx)
+	if status.Code != "runner_not_configured" || status.IngestionAvailable {
+		t.Fatalf("unconfigured runner marked ready: %+v", status)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := newAPIServer(listener.Addr().String(), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	serviceCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	finished := make(chan error, 1)
+	go func() {
+		finished <- serveWithBackground(serviceCtx, server, listener,
+			backgroundRunner{name: "Codex ingestion", run: runtime.Run})
+	}()
+	response, err := (&http.Client{Timeout: time.Second}).Get("http://" + listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	cancel()
+	select {
+	case err := <-finished:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Codex runtime did not join after cancellation")
+	}
+	read, err := database.Ingestion(ctx, intake.ID)
+	if err != nil || read.JobState != store.JobQueued || read.Status != "pending" {
+		t.Fatalf("unconfigured runtime claimed ingestion: %+v, %v", read, err)
 	}
 }

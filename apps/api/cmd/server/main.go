@@ -22,6 +22,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
+	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/collector"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
@@ -74,15 +75,24 @@ func run() error {
 		return fmt.Errorf("configure organisation worker: %w", err)
 	}
 	collectorService := &collector.Collector{Store: database, PollInterval: time.Minute, Lease: 5 * time.Minute}
+	codexRuntime, err := codexservice.NewFromEnvironment(ctx, database)
+	if err != nil {
+		return fmt.Errorf("configure Codex ingestion: %w", err)
+	}
+	defer func() { _ = codexRuntime.Close() }()
 	options.OrganisationAvailable = organisationWorker != nil
 	options.CollectionAvailable = true
+	options.Codex = codexRuntime
 	server := newAPIServer(addr, newHandler(database, service, options))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
 	log.Printf("jobseek API listening on %s", addr)
-	background := []backgroundRunner{{name: "collector", run: collectorService.Run}}
+	background := []backgroundRunner{
+		{name: "collector", run: collectorService.Run},
+		{name: "Codex ingestion", run: codexRuntime.Run},
+	}
 	if organisationWorker != nil {
 		background = append(background, backgroundRunner{name: "organisation worker", run: organisationWorker.Run})
 	}
