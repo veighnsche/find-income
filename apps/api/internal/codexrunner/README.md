@@ -1,0 +1,41 @@
+# Runner-local process supervisor (partial T38)
+
+This stdlib package launches one pinned App Server **inside an already isolated private runner**. It is not wired to the dashboard. Working directory, environment filtering and a Unix process group are lifecycle controls, not filesystem/network/credential isolation. The production launcher, SSH/private transport, runner identity, read-only binary installation, mount restrictions, resource limits and deployment are separate work. Never run this alongside the dashboard's database, backups, Jev/admin secrets or existing user Codex configuration.
+
+`Start(ctx, Config{Executable, SHA256, StateDir, WorkDir})` returns a process satisfying `codex.Transport`. The context controls the entire process lifetime. Pass that transport to the existing client, and close it on service shutdown. `Close` is concurrent/idempotent, closes both pipe ends to unblock readers and writers, stops the owned process group and joins the lifecycle goroutine. `Done` closes after group-signal delivery and direct-leader reaping; `Err` then returns a fixed safe terminal reason. `Close` returns only cleanup failure, if any. A successful `Start` establishes OS launch, not protocol readiness/version/account/runner verification: initialization remains the client's job.
+
+## Explicit launch configuration
+
+- Executable must be an absolute canonical path to a regular executable file, not group/world writable, with a supplied 64-hex-character SHA256. Hashing is cancellable between reads and bounded to 1 GiB. File identity, size and modification time are checked after hashing. Bad paths, pins and startup errors expose only fixed sentinels, never raw OS errors or child output.
+- Executable and all path components must remain immutable to untrusted writers during launch. Portable prelaunch hashing cannot eliminate the verification-to-exec replacement race. A pin covers that file, not interpreters, libraries, configuration or tools. The deployment must install and protect the correct platform artifact. This package does not select an artifact or claim that the supplied pin is approved.
+- State/work directories must already exist, be canonical absolute paths, be owned by the effective user with mode 0700, and not overlap. The executable must be outside both. Caller must dedicate these directories to the runner and serialize use; the library does not lock state, certify its contents, or inspect existing credentials. No directories or files are copied from the caller's home. State/work contents persist; cleanup/retention is the owning runner service's responsibility.
+- Arguments are fixed: `app-server --strict-config --listen stdio://`. There is no arbitrary-argument, shell, inherited-environment or extra-environment hook.
+- The complete child environment is `HOME=StateDir`, `CODEX_HOME=StateDir`, `TMPDIR=StateDir`, `PATH=/usr/bin:/bin`, `LANG=C`, `LC_ALL=C`, `TZ=UTC`. No caller environment is read or forwarded. This prevents inherited API keys, TYPESAFE_API_KEY or admin tokens from entering the child environment; it does not make host secrets inaccessible without the separate runner boundary.
+- Stdin/stdout use directly owned OS pipes. Stdout is private untrusted protocol data, not log output. Stderr goes directly to the null device; no buffering, logs, child-error text, callbacks or diagnostic snippets can leak its content or block on a full stderr pipe. Exit cleanup discards pending stdout; there is no promise to drain final protocol messages after process exit.
+
+## Process ownership and platform limits
+
+Supported implementation targets: Linux and macOS, amd64 and arm64. Other OS/architecture combinations return `ErrUnsupported` without launching. Runtime validation here was **macOS arm64 only**. Linux amd64/arm64 builds compile, but Linux lifecycle/syscall behavior still needs target-runner tests before acceptance.
+
+The child starts in a new process group with PGID equal to its PID. A single lifecycle goroutine polls `waitid(P_PID, WEXITED | WNOWAIT | WNOHANG)` without reaping it. The reserved leader PID prevents group-ID reuse while cleanup signals that group. On context cancellation/deadline, explicit close, observed EOF/I/O error or leader exit, the supervisor closes pipes and sends **SIGKILL to the owned group before calling `Wait`**. No signal is ever sent to that numeric group after reaping. Guards reject group IDs 0/1 and the caller's own group. There is no graceful TERM interval; application-level turn interruption is separate from destructive transport shutdown.
+
+The caller must leave normal SIGCHLD semantics in place and must not ignore SIGCHLD, enable `SA_NOCLDWAIT` or externally reap this child. The runner init/subreaper must reap adopted descendants **without competing for this library's direct leader**: a blanket `waitpid(-1)` reaper in this same process violates the ownership contract. Loss of child ownership (`ECHILD`) fails cleanup without signaling an unverified group. Other wait/signal errors produce `ErrCleanup`; permission failures are never silently treated as success. Kernel-blocked uninterruptible processes can still delay `Wait`/`Close`: this library cannot guarantee a hard wall-clock bound against OS failure.
+
+`waitid` uses the Linux/Darwin amd64/arm64 ABI's first three 32-bit siginfo fields in an aligned oversized buffer; only exited/killed/dumped codes qualify as terminal. This handles Darwin's historical stopped-child return behavior without treating SIGSTOP as exit. Primary references: [Linux waitid documentation](https://man7.org/linux/man-pages/man2/waitpid.2.html), [Apple signal ABI](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/signal.h), [Apple wait flags](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/wait.h); verified additionally against local Go and Apple SDK definitions.
+
+**Darwin limitation:** a zombie-only group can yield `EPERM` from group kill because [XNU filters zombies from that iteration](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/kern/kern_sig.c). This is indistinguishable here from a real permission failure. The package conservatively returns `ErrCleanup` in that case even though the direct leader is reaped and pipes are closed. Tests explicitly retain this limitation; they do not change `EPERM` into success.
+
+SIGKILL targets members still in the owned group with signalable credentials. It cannot contain hostile descendants that change groups/sessions, credentials, or escape through another service. There is no cgroup/session-tree traversal, privileged cleanup or claim to terminate escaped descendants. The supervisor reaps only its direct child; descendant zombies belong to the runner's init/subreaper. `Done` is not proof of a quiescent process namespace. Runner teardown/containment remains necessary when cleanup is uncertain or fails. The host must also ensure supervisor death tears down the runner; no parent-death protection is implemented here.
+
+## Synthetic verification
+
+Tests execute this package's native test binary as a synthetic helper with isolated temporary state/work directories. No Codex binary, login, model, provider, SSH or actual user configuration is used. Coverage includes bad pins/configuration, startup failure with redacted errors, exact child environment/arguments, stderr flooding, client transport compatibility, EOF/crash, blocked stdin/stdout, concurrent close, context cancellation/deadline, owned descendants on close/leader crash, and repeated non-reaping exit observation. Runtime tests also verify the caller's process group survives.
+
+From `apps/api`:
+
+```sh
+GOCACHE=/private/tmp/jobseek-go-cache GOMODCACHE=/private/tmp/jobseek-go-mod go test -race -count=5 ./internal/codexrunner
+GOCACHE=/private/tmp/jobseek-go-cache GOMODCACHE=/private/tmp/jobseek-go-mod go vet ./internal/codexrunner
+```
+
+This library is partial T38. Required remaining gates include actual runner isolation and artifact approval, target-platform lifecycle tests, production transport/supervisor-death behavior, protocol handshake, owner sign-in, required MCP integration, live interruption/crash recovery and the end-to-end T42 journey.
