@@ -32,11 +32,11 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 | --- | --- | --- |
 | I13-C core corrections | Sol High | Existing round lifecycle, agency collector continuation and scoped context files/tests only. |
 | I13-N native-tool evidence | Sol High | Research exact pinned Codex controls; notes only, no runtime edits or live model calls. |
-| I14-UI | Sol Medium | Reproducible browser smoke replaces the placeholder e2e command; synthetic API only. |
+| I13-P | Sol High | Isolated Linux native-tool permission experiment with synthetic state/model transport; no deployment or account use. |
 
-Recovery and relationship workers are idle; the existing web task now owns only browser-smoke scripts and their package dependency. The delivery/pack worker is idle after committed5c3306b; no product send endpoint is registered. Core corrects the named integration findings while preserving batch collection and pending sources; runtime/ops isolation changes are not yet assigned. Four live workers maximum. The Astra independent reviewer has handed off and is idle.
+Web, delivery and relationship workers are idle. Recovery is committed; the runtime worker now owns only the isolated Linux feasibility probe. The delivery/pack worker is idle after committed5c3306b; no product send endpoint is registered. Core corrects the named integration findings while preserving batch collection and pending sources; runtime/ops isolation changes are not yet assigned. Four live workers maximum. The Astra independent reviewer has handed off and is idle.
 
-Reviewed checkpoints: API `2fdfe7d`, deployment `717ef93`, UI `8c8b66d`. Root `pnpm check`, `pnpm test`, `pnpm build` pass after contract formatting. Web has no automated test files; controlled browser interactions and screenshots were reviewed. The e2e script remains a placeholder.
+Reviewed checkpoints: API `2fdfe7d`, deployment `717ef93`, UI `8c8b66d`. Root `pnpm check`, `pnpm test`, `pnpm build` pass after contract formatting. Web has no automated test files; controlled browser interactions and screenshots were reviewed. The e2e placeholder is replaced by browser fixture smoke in a2726ed; root pnpm e2e passed.
 
 I13 found four concrete gaps despite passing tests: native tools outside round accounting, expired paused rounds retaining the active slot, missing production Lever continuation, and prepare context reads using a resource outside the prepare scope. Full acceptance is withheld until corrected and verified. Reliable commissioned processing of supplied instructions/vacancies/links, pack correction, an explicit end-paused-round path, and Jev choice among neutral discovered leads remain open. See [input integration gap](/Users/vince/Projects/find-income/implementation-notes/implementation/I11-input-orchestration-gap.md).
 
@@ -534,7 +534,7 @@ Send material updates and final files/checks/limitations to coordinator
 
 ## 6. Verification, prerequisites and product constraints
 
-Run focused package/behavior checks during implementation. At a coherent integration checkpoint, the designated integrator runs `pnpm check`, `pnpm test`, and `pnpm build` from `/Users/vince/Projects/find-income/dashboard`; use relevant Go race tests for changed concurrent state. The present `pnpm e2e` is a placeholder and must not be counted as journey coverage; I14 replaces it. Do not run all suites after each document or UI text edit, or have every worker repeat the same root checks.
+Run focused package/behavior checks during implementation. At a coherent integration checkpoint, the designated integrator runs `pnpm check`, `pnpm test`, and `pnpm build` from `/Users/vince/Projects/find-income/dashboard`; use relevant Go race tests for changed concurrent state. `pnpm e2e` builds the web bundle and runs synthetic HTTP/browser interaction smoke. It catches Prepare/Stop/Resume/version/retry/mobile regressions but does not count as live API, Codex, host or full I14 journey acceptance. Do not run all suites after each document or UI text edit, or have every worker repeat the same root checks.
 
 Concrete unresolved inputs are the private app/runner host and access, supported owner sign-in, one actually usable bounded research capability, a correspondence account for I19, and a supported/authorized delivery destination for I20–I22. Investigate available configuration without exposing secrets; ask only for genuinely missing owner information. Host/login gaps do not block offline code or fixtures. Provisioning, live account actions and external delivery are recorded separately from synthetic tests.
 
