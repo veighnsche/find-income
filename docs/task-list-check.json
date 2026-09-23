@@ -6,7 +6,7 @@
   "models_valid": true,
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
-    "I05 contextual-input independent authority review",
+    "I05 contextual-input authority corrections",
     "I11 contextual-input UI retry correction",
     "I25 offer comparison domain"
   ],
@@ -47,7 +47,7 @@
     "idle_startup": "Committed227febf: immutable-snapshot baseline failed3/10; response/client cleanup passed10/10 and whole server package passed3 runs. Production shutdown unchanged; evolving full suite still due.",
     "interview": "Focused interviewprep and jev tests passed at7299c54; production orchestration/UI still pending.",
     "native_boundary": "a22afa7: root codex/codexrunner/codexservice suite, archived native-rollout parser positive/four negatives and runtime config/shell checks pass. Exact observed raw synthetic records saved. Real host/account/MCP still unverified.",
-    "contextual_input": "Affected store/rounds/agency/httpapi/codexservice suites and generated contracts passed on frozen diff after08183f2. Race-enabled pasted-source pause/Resume test failed consistently (1 aggregate and3 isolated runs), capability unavailable/stale revision; under independent review, core uncommitted."
+    "contextual_input": "Affected store/rounds/agency/httpapi/codexservice suites and generated contracts passed on frozen diff after08183f2. Race-enabled pasted-source pause/Resume test failed consistently (1 aggregate and3 isolated runs), capability unavailable/stale revision; under independent review, core uncommitted. Independent review identified deduplicated-input identity, worker handoff and deadline expiry defects; all three assigned to core, still uncommitted."
   },
   "protected_artifacts_unchanged_prior_check": 44,
   "proposed_next_slices": [

@@ -30,7 +30,7 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I05/I11 contextual input | Sol High implementer idle; Astra High reviewer | Frozen shared process_input, profile version, paused replacement, pack guard and API/contracts; bounded authority review active. |
+| I05/I11 contextual input | Sol High | Correct three reviewed defects: deduplicated-input request identity, quick Stop/Resume worker handoff, and source-read deadline expiry. |
 | I11 contextual-input UI | Sol Medium | apps/web/src and browser fixture smoke against the published process-input contract. |
 | I25 offer comparison domain | Sol Medium | New offercomparison and Jev offer files; no shared schema or UI edits. |
 
