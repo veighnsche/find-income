@@ -255,7 +255,7 @@ CREATE TABLE job_attempts (
 -- the exact verified record mapping across retries and process restarts.
 CREATE TABLE ingestion_requests (
   id TEXT PRIMARY KEY,
-  origin TEXT NOT NULL CHECK (origin IN ('collector','owner')),
+  origin TEXT NOT NULL CHECK (origin IN ('collector','owner','agent')),
   actor_kind TEXT NOT NULL,
   actor_id TEXT NOT NULL,
   idempotency_key TEXT NOT NULL CHECK (length(idempotency_key) BETWEEN 1 AND 200),
@@ -273,6 +273,8 @@ CREATE TABLE ingestion_requests (
   codex_turn_id TEXT,
   opportunity_id TEXT REFERENCES opportunities(id),
   record_change_id TEXT REFERENCES record_changes(audit_id),
+  source_id TEXT REFERENCES evidence_sources(id),
+  organisation_job_id TEXT REFERENCES jobs(id),
   safe_error_code TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -286,6 +288,50 @@ CREATE TABLE ingestion_requests (
 CREATE INDEX ingestion_requests_recent_idx ON ingestion_requests(created_at,id);
 CREATE INDEX ingestion_requests_job_idx ON ingestion_requests(job_id);
 CREATE INDEX ingestion_requests_opportunity_idx ON ingestion_requests(opportunity_id);
+
+CREATE TABLE organisation_category_versions (
+  version INTEGER PRIMARY KEY CHECK (version > 0),
+  categories_json TEXT NOT NULL CHECK (json_valid(categories_json)),
+  created_at TEXT NOT NULL,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL
+);
+
+CREATE TABLE organisation_categories_current (
+  singleton INTEGER PRIMARY KEY CHECK (singleton=1),
+  version INTEGER NOT NULL REFERENCES organisation_category_versions(version)
+);
+
+CREATE TABLE organisation_assessments (
+  id TEXT PRIMARY KEY,
+  opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+  ingestion_id TEXT NOT NULL REFERENCES ingestion_requests(id),
+  job_id TEXT NOT NULL UNIQUE REFERENCES jobs(id),
+  category_version INTEGER NOT NULL REFERENCES organisation_category_versions(version),
+  source_fingerprint TEXT NOT NULL,
+  input_sha256 TEXT NOT NULL,
+  disposition TEXT NOT NULL CHECK (disposition IN ('category_selected','uncertain')),
+  category_id TEXT,
+  requested_model TEXT NOT NULL,
+  returned_model TEXT NOT NULL,
+  input_json TEXT NOT NULL CHECK (json_valid(input_json)),
+  result_json TEXT NOT NULL CHECK (json_valid(result_json)),
+  source_refs_json TEXT NOT NULL CHECK (json_valid(source_refs_json)),
+  created_at TEXT NOT NULL,
+  CHECK ((disposition='uncertain' AND category_id IS NULL) OR
+    (disposition='category_selected' AND category_id IS NOT NULL))
+);
+
+CREATE TABLE organisation_current (
+  opportunity_id TEXT PRIMARY KEY REFERENCES opportunities(id),
+  assessment_id TEXT NOT NULL REFERENCES organisation_assessments(id)
+);
+
+CREATE INDEX organisation_assessments_opportunity_idx ON organisation_assessments(opportunity_id,created_at,id);
+CREATE TRIGGER organisation_assessments_no_update BEFORE UPDATE ON organisation_assessments
+BEGIN SELECT RAISE(ABORT,'organisation assessments are immutable'); END;
+CREATE TRIGGER organisation_assessments_no_delete BEFORE DELETE ON organisation_assessments
+BEGIN SELECT RAISE(ABORT,'organisation assessments are immutable'); END;
 
 CREATE TABLE record_changes (
   sequence INTEGER PRIMARY KEY AUTOINCREMENT,

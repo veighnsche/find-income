@@ -16,7 +16,7 @@ import (
 const IngestionJobKind = "opportunity.ingest"
 
 type IngestionInput struct {
-	Origin         string // owner or collector
+	Origin         string // owner, agent or collector
 	SourceURL      string
 	OriginalText   string
 	ConnectorID    string
@@ -26,28 +26,30 @@ type IngestionInput struct {
 }
 
 type IngestionRequest struct {
-	ID               string
-	Origin           string
-	Actor            Actor
-	IdempotencyKey   string
-	SubmissionSHA256 string
-	SourceURL        string
-	OriginalText     string
-	ConnectorID      string
-	ExternalID       string
-	DiscoveredAt     string
-	Status           string // pending, processing, completed, needs_text, failed
-	JobID            string
-	JobState         JobState
-	AttemptsStarted  int64
-	DispatchStarted  bool
-	CodexThreadID    string
-	CodexTurnID      string
-	OpportunityID    string
-	RecordChangeID   string
-	SafeErrorCode    string
-	CreatedAt        string
-	UpdatedAt        string
+	ID                string
+	Origin            string
+	Actor             Actor
+	IdempotencyKey    string
+	SubmissionSHA256  string
+	SourceURL         string
+	OriginalText      string
+	ConnectorID       string
+	ExternalID        string
+	DiscoveredAt      string
+	Status            string // pending, processing, completed, needs_text, failed
+	JobID             string
+	JobState          JobState
+	AttemptsStarted   int64
+	DispatchStarted   bool
+	CodexThreadID     string
+	CodexTurnID       string
+	OpportunityID     string
+	RecordChangeID    string
+	SourceID          string
+	OrganisationJobID string
+	SafeErrorCode     string
+	CreatedAt         string
+	UpdatedAt         string
 }
 
 type IngestionPage struct {
@@ -74,6 +76,10 @@ func validateIngestionInput(actor Actor, input *IngestionInput) error {
 	case "owner":
 		if actor.Kind != "administrator" || input.ConnectorID != "" || input.ExternalID != "" || input.DiscoveredAt != "" {
 			return fmt.Errorf("%w: owner submission fields", ErrInvalid)
+		}
+	case "agent":
+		if actor.Kind != "agent" || input.ConnectorID != "" || input.ExternalID != "" || input.DiscoveredAt != "" {
+			return fmt.Errorf("%w: agent submission fields", ErrInvalid)
 		}
 	case "collector":
 		if actor.Kind != "system" || !boundedNonempty(input.ConnectorID, 80) ||
@@ -202,21 +208,23 @@ func (s *Store) SubmitIngestion(ctx context.Context, actor Actor, input Ingestio
 
 const ingestionColumns = `i.id,i.origin,i.actor_kind,i.actor_id,i.idempotency_key,i.submission_sha256,
   i.source_url,i.original_text,i.connector_id,i.external_id,i.discovered_at,i.status,i.job_id,
-  i.attempts_started,i.dispatch_started,i.codex_thread_id,i.codex_turn_id,i.opportunity_id,i.record_change_id,
+  i.attempts_started,i.dispatch_started,i.codex_thread_id,i.codex_turn_id,i.opportunity_id,i.record_change_id,i.source_id,i.organisation_job_id,
   i.safe_error_code,i.created_at,i.updated_at,j.state,j.last_error_code`
 
 func scanIngestion(row rowScanner) (IngestionRequest, error) {
 	var item IngestionRequest
-	var sourceURL, connectorID, externalID, discoveredAt, threadID, turnID, opportunityID, changeID, errorCode, jobError sql.NullString
+	var sourceURL, connectorID, externalID, discoveredAt, threadID, turnID, opportunityID, changeID, sourceID, organisationJobID, errorCode, jobError sql.NullString
 	err := row.Scan(&item.ID, &item.Origin, &item.Actor.Kind, &item.Actor.ID, &item.IdempotencyKey, &item.SubmissionSHA256,
 		&sourceURL, &item.OriginalText, &connectorID, &externalID, &discoveredAt, &item.Status, &item.JobID,
-		&item.AttemptsStarted, &item.DispatchStarted, &threadID, &turnID, &opportunityID, &changeID, &errorCode, &item.CreatedAt, &item.UpdatedAt,
+		&item.AttemptsStarted, &item.DispatchStarted, &threadID, &turnID, &opportunityID, &changeID, &sourceID, &organisationJobID, &errorCode, &item.CreatedAt, &item.UpdatedAt,
 		&item.JobState, &jobError)
 	if err != nil {
 		return IngestionRequest{}, err
 	}
 	item.SourceURL, item.ConnectorID, item.ExternalID, item.DiscoveredAt = sourceURL.String, connectorID.String, externalID.String, discoveredAt.String
 	item.CodexThreadID, item.CodexTurnID, item.OpportunityID, item.RecordChangeID = threadID.String, turnID.String, opportunityID.String, changeID.String
+	item.SourceID = sourceID.String
+	item.OrganisationJobID = organisationJobID.String
 	if item.Status != "completed" && item.Status != "needs_text" {
 		switch item.JobState {
 		case JobRunning:
@@ -512,6 +520,8 @@ func (s *Store) RecordIngestionResult(ctx context.Context, claim Job, opportunit
 		return err
 	}
 	var snapshot struct {
+		CompanyID    string `json:"companyId"`
+		Kind         string `json:"kind"`
 		SourceURL    string `json:"sourceUrl"`
 		OriginalText string `json:"originalText"`
 	}
@@ -523,11 +533,46 @@ func (s *Store) RecordIngestionResult(ctx context.Context, claim Job, opportunit
 		item.OriginalText != "" && snapshot.OriginalText != item.OriginalText {
 		return ErrInvalid
 	}
+	var companyID, opportunityKind, currentURL, currentText string
+	var contextVersion int64
+	err = tx.QueryRowContext(ctx, `SELECT o.company_id,o.kind,COALESCE(o.source_url,''),o.original_text,
+  v.context_version FROM opportunities o JOIN qualification_input_versions v ON v.opportunity_id=o.id
+  WHERE o.id=? AND o.archived_at IS NULL`, opportunityID).Scan(&companyID, &opportunityKind, &currentURL, &currentText, &contextVersion)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrConflict
+	}
+	if err != nil {
+		return err
+	}
+	if currentURL != snapshot.SourceURL || currentText != snapshot.OriginalText ||
+		companyID != snapshot.CompanyID || opportunityKind != snapshot.Kind {
+		return ErrConflict
+	}
+	var sourceID string
+	err = tx.QueryRowContext(ctx, `SELECT id FROM evidence_sources WHERE record_change_audit_id=? AND
+  opportunity_id=? AND context_version=?`, recordChangeID, opportunityID, contextVersion).Scan(&sourceID)
+	if errors.Is(err, sql.ErrNoRows) {
+		sourceID, err = randomID()
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO evidence_sources
+  (id,opportunity_id,company_id,opportunity_kind,context_version,source_kind,
+   record_change_audit_id,source_url,original_text,content_sha256,recorded_at,actor_kind,actor_id)
+  VALUES (?,?,?,?,?,'vacancy_snapshot',?,?,?,?,?,?,?)`, sourceID, opportunityID, companyID,
+			opportunityKind, contextVersion, recordChangeID, optionalText(snapshot.SourceURL),
+			snapshot.OriginalText, sourceDigest(snapshot.OriginalText), utcNow(), item.Actor.Kind, item.Actor.ID)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
 	result, err := tx.ExecContext(ctx, `UPDATE ingestion_requests SET status='completed',original_text=?,opportunity_id=?,
-  record_change_id=?,safe_error_code=NULL,updated_at=? WHERE id=? AND job_id=?
+  record_change_id=?,source_id=?,safe_error_code=NULL,updated_at=? WHERE id=? AND job_id=?
   AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=ingestion_requests.job_id
     AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?)`,
-		snapshot.OriginalText, opportunityID, recordChangeID, utcNow(), item.ID, claim.ID, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now()))
+		snapshot.OriginalText, opportunityID, recordChangeID, sourceID, utcNow(), item.ID, claim.ID, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now()))
 	if err != nil {
 		return err
 	}
@@ -539,6 +584,10 @@ func (s *Store) RecordIngestionResult(ctx context.Context, claim Job, opportunit
 		return ErrConflict
 	}
 	if err = writeIngestionAudit(ctx, tx, item.Actor, "ingestion.complete", item.ID); err != nil {
+		return err
+	}
+	if err = maybeScheduleOrganisationTx(ctx, tx, item.ID, opportunityID, companyID, opportunityKind,
+		currentURL, currentText, sourceID); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -666,11 +715,28 @@ func (s *Store) SaveIngestionOpportunity(ctx context.Context, claim Job, input I
 	if err != nil {
 		return Opportunity{}, "", err
 	}
+	var contextVersion int64
+	if err := tx.QueryRowContext(ctx, `SELECT context_version FROM qualification_input_versions WHERE opportunity_id=?`, opportunityID).Scan(&contextVersion); err != nil {
+		return Opportunity{}, "", err
+	}
+	sourceID, err := randomID()
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO evidence_sources
+  (id,opportunity_id,company_id,opportunity_kind,context_version,source_kind,
+   record_change_audit_id,source_url,original_text,content_sha256,recorded_at,actor_kind,actor_id)
+  VALUES (?,?,?,?,?,'vacancy_snapshot',?,?,?,?,?,?,?)`, sourceID, opportunityID, companyID,
+		opportunityInput.Kind, contextVersion, changeID, optionalText(opportunityInput.SourceURL),
+		opportunityInput.OriginalText, sourceDigest(opportunityInput.OriginalText), utcNow(), actor.Kind, actor.ID)
+	if err != nil {
+		return Opportunity{}, "", err
+	}
 	result, err := tx.ExecContext(ctx, `UPDATE ingestion_requests SET status='completed',opportunity_id=?,
-  record_change_id=?,safe_error_code=NULL,updated_at=? WHERE id=? AND job_id=? AND opportunity_id IS NULL
+  record_change_id=?,source_id=?,safe_error_code=NULL,updated_at=? WHERE id=? AND job_id=? AND opportunity_id IS NULL
   AND EXISTS(SELECT 1 FROM jobs j WHERE j.id=ingestion_requests.job_id
     AND j.state='running' AND j.lease_token=? AND j.attempt_count=? AND j.lease_until>?)`,
-		opportunityID, changeID, utcNow(), item.ID, claim.ID, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now()))
+		opportunityID, changeID, sourceID, utcNow(), item.ID, claim.ID, claim.LeaseToken, claim.AttemptCount, jobTime(time.Now()))
 	if err != nil {
 		return Opportunity{}, "", err
 	}
@@ -682,6 +748,10 @@ func (s *Store) SaveIngestionOpportunity(ctx context.Context, claim Job, input I
 		return Opportunity{}, "", ErrConflict
 	}
 	if err = writeIngestionAudit(ctx, tx, actor, "ingestion.complete", item.ID); err != nil {
+		return Opportunity{}, "", err
+	}
+	if err = maybeScheduleOrganisationTx(ctx, tx, item.ID, opportunityID, companyID, opportunityInput.Kind,
+		opportunityInput.SourceURL, opportunityInput.OriginalText, sourceID); err != nil {
 		return Opportunity{}, "", err
 	}
 	if err = tx.Commit(); err != nil {

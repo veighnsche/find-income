@@ -100,8 +100,12 @@ func TestIngestionPersistsSourceAndRequiresTrustedRecordMapping(t *testing.T) {
 		t.Fatalf("job completion: %v %v", applied, err)
 	}
 	read, err = s.Ingestion(ctx, item.ID)
-	if err != nil || read.Status != "completed" || read.OpportunityID != opportunity.ID || read.RecordChangeID != changeID || read.CodexThreadID != "thread-1" {
+	if err != nil || read.Status != "completed" || read.OpportunityID != opportunity.ID || read.RecordChangeID != changeID || read.SourceID == "" || read.CodexThreadID != "thread-1" {
 		t.Fatalf("completed mapping: %+v %v", read, err)
+	}
+	source, err := s.EvidenceSource(ctx, read.SourceID)
+	if err != nil || source.RecordChangeAuditID != changeID || source.OriginalText != input.OriginalText {
+		t.Fatalf("existing-record source: %+v %v", source, err)
 	}
 }
 
@@ -241,8 +245,12 @@ func TestSaveIngestionOpportunityIsAtomicAndIdempotent(t *testing.T) {
 		t.Fatalf("duplicate extraction: companies=%d opportunities=%d", companies, opportunities)
 	}
 	read, err := s.Ingestion(ctx, intake.ID)
-	if err != nil || read.Status != "completed" || read.OpportunityID != opportunity.ID || read.RecordChangeID != changeID {
+	if err != nil || read.Status != "completed" || read.OpportunityID != opportunity.ID || read.RecordChangeID != changeID || read.SourceID == "" {
 		t.Fatalf("mapped intake: %+v %v", read, err)
+	}
+	source, err := s.EvidenceSource(ctx, read.SourceID)
+	if err != nil || source.OriginalText != text || source.RecordChangeAuditID != changeID {
+		t.Fatalf("ingested source: %+v %v", source, err)
 	}
 }
 
@@ -271,5 +279,23 @@ func TestURLFetchTextIsPreservedOnAtomicSave(t *testing.T) {
 	read, err := s.Ingestion(ctx, intake.ID)
 	if err != nil || read.OriginalText != full || read.RecordChangeID != changeID {
 		t.Fatalf("fetched source lost: %+v %v", read, err)
+	}
+}
+
+func TestAgentSubmissionPreservesAuthenticatedActor(t *testing.T) {
+	ctx := context.Background()
+	s := openJobTestStore(t)
+	input := IngestionInput{Origin: "agent", SourceURL: "https://jobs.example.test/agent-role", IdempotencyKey: "agent-discovery-1"}
+	actor := Actor{Kind: "agent", ID: "agent-credential-42"}
+	item, created, err := s.SubmitIngestion(ctx, actor, input)
+	if err != nil || !created || item.Actor != actor || item.Origin != "agent" {
+		t.Fatalf("agent attribution: %+v created=%v err=%v", item, created, err)
+	}
+	if _, _, err = s.SubmitIngestion(ctx, ownerActor(), input); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("owner impersonated agent origin: %v", err)
+	}
+	input.Origin = "owner"
+	if _, _, err = s.SubmitIngestion(ctx, actor, input); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("agent impersonated owner origin: %v", err)
 	}
 }
