@@ -519,17 +519,17 @@ func exactExcerpt(source string, start, end int) (string, error) {
 }
 
 func (s *Store) AddEvidence(ctx context.Context, actor Actor, input EvidenceInput) (Evidence, string, error) {
-	return s.writeEvidence(ctx, actor, "", input)
+	return s.writeEvidence(ctx, actor, "", input, nil)
 }
 
 func (s *Store) SupersedeEvidence(ctx context.Context, actor Actor, priorID string, input EvidenceInput) (Evidence, string, error) {
 	if priorID == "" {
 		return Evidence{}, "", fmt.Errorf("%w: prior evidence required", ErrInvalid)
 	}
-	return s.writeEvidence(ctx, actor, priorID, input)
+	return s.writeEvidence(ctx, actor, priorID, input, nil)
 }
 
-func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, input EvidenceInput) (Evidence, string, error) {
+func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, input EvidenceInput, guard func(*sql.Tx) error) (Evidence, string, error) {
 	if err := validateEvidenceInput(input); err != nil {
 		return Evidence{}, "", err
 	}
@@ -549,6 +549,11 @@ func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, 
 	changeID, err := s.WriteAudited(ctx, actor, func(tx *sql.Tx) (Change, error) {
 		if err := lockQualificationInput(ctx, tx, input.OpportunityID); err != nil {
 			return Change{}, err
+		}
+		if guard != nil {
+			if err := guard(tx); err != nil {
+				return Change{}, err
+			}
 		}
 		var evidenceVersion, contextVersion int64
 		var companyID, opportunityKind string
@@ -755,6 +760,11 @@ func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, 
 		}
 		if _, err := evaluateCurrentTx(ctx, tx, actor, input.OpportunityID, item.ID); err != nil {
 			return Change{}, err
+		}
+		if guard != nil {
+			if err := guard(tx); err != nil {
+				return Change{}, err
+			}
 		}
 		return Change{Operation: "evidence.add", EntityKind: "evidence", EntityID: item.ID}, nil
 	})
