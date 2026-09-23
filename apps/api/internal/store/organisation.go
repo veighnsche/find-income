@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,9 @@ import (
 )
 
 const OrganisationJobKind = "organisation.evaluate"
+
+//go:embed default-organisation-categories.json
+var defaultOrganisationCategoriesFS embed.FS
 
 type OrganisationCategory struct {
 	ID          string `json:"id"`
@@ -24,6 +28,40 @@ type OrganisationCategorySet struct {
 	Categories []OrganisationCategory
 	CreatedAt  string
 	Actor      Actor
+}
+
+func DefaultOrganisationCategories() []OrganisationCategory {
+	data, err := defaultOrganisationCategoriesFS.ReadFile("default-organisation-categories.json")
+	if err != nil {
+		panic(err)
+	}
+	var categories []OrganisationCategory
+	if err := json.Unmarshal(data, &categories); err != nil {
+		panic(err)
+	}
+	return categories
+}
+
+func seedOrganisationCategories(ctx context.Context, tx *sql.Tx) error {
+	categories := DefaultOrganisationCategories()
+	if len(categories) == 0 {
+		return fmt.Errorf("%w: empty default organisation categories", ErrInvalid)
+	}
+	if err := validateOrganisationCategories(categories); err != nil {
+		return err
+	}
+	encoded, err := json.Marshal(categories)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO organisation_category_versions
+  (version,categories_json,created_at,actor_kind,actor_id) VALUES (1,?,?,?,?)`,
+		string(encoded), utcNow(), "system", "initial-organisation")
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO organisation_categories_current(singleton,version) VALUES (1,1)`)
+	return err
 }
 
 func validateOrganisationCategories(categories []OrganisationCategory) error {
@@ -66,9 +104,9 @@ func (s *Store) CurrentOrganisationCategories(ctx context.Context) (Organisation
 }
 
 // UpdateOrganisationCategories stores the owner's current caller-defined boxes.
-// Version zero creates the first set. An empty set disables new Jev jobs.
+// A fresh database starts at version one. An empty set disables new Jev jobs.
 func (s *Store) UpdateOrganisationCategories(ctx context.Context, expectedVersion int64, next []OrganisationCategory, actor Actor) (OrganisationCategorySet, error) {
-	if actor.Kind != "administrator" || expectedVersion < 0 {
+	if actor.Kind != "administrator" || expectedVersion < 1 {
 		return OrganisationCategorySet{}, ErrInvalid
 	}
 	if err := validateOrganisationCategories(next); err != nil {
@@ -91,7 +129,10 @@ func (s *Store) UpdateOrganisationCategories(ctx context.Context, expectedVersio
 	}
 	var current int64
 	err = tx.QueryRowContext(ctx, `SELECT version FROM organisation_categories_current WHERE singleton=1`).Scan(&current)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
+		return OrganisationCategorySet{}, ErrConflict
+	}
+	if err != nil {
 		return OrganisationCategorySet{}, err
 	}
 	if current != expectedVersion {
@@ -104,8 +145,7 @@ func (s *Store) UpdateOrganisationCategories(ctx context.Context, expectedVersio
 	if err != nil {
 		return OrganisationCategorySet{}, err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO organisation_categories_current(singleton,version) VALUES (1,?)
-  ON CONFLICT(singleton) DO UPDATE SET version=excluded.version`, set.Version)
+	_, err = tx.ExecContext(ctx, `UPDATE organisation_categories_current SET version=? WHERE singleton=1`, set.Version)
 	if err != nil {
 		return OrganisationCategorySet{}, err
 	}

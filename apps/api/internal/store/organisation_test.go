@@ -11,6 +11,10 @@ func TestOrganisationCategoriesQueueCompletedIntakesAndCheckVersion(t *testing.T
 	ctx := context.Background()
 	s := openJobTestStore(t)
 	owner := ownerActor()
+	defaultSet, err := s.CurrentOrganisationCategories(ctx)
+	if err != nil || defaultSet.Version != 1 || len(defaultSet.Categories) == 0 {
+		t.Fatalf("default organisation categories: %+v %v", defaultSet, err)
+	}
 	intake, _, err := s.SubmitIngestion(ctx, owner, IngestionInput{
 		Origin: "owner", OriginalText: "Build Go platform services.", IdempotencyKey: "category-replay"})
 	if err != nil {
@@ -28,25 +32,26 @@ func TestOrganisationCategoriesQueueCompletedIntakesAndCheckVersion(t *testing.T
 		t.Fatalf("complete: %v %v", applied, err)
 	}
 	read, err := s.Ingestion(ctx, intake.ID)
-	if err != nil || read.OrganisationJobID != "" {
-		t.Fatalf("unconfigured categories queued a job: %+v %v", read, err)
+	if err != nil || read.OrganisationJobID == "" {
+		t.Fatalf("default categories did not queue a job: %+v %v", read, err)
 	}
-	set, err := s.UpdateOrganisationCategories(ctx, 0, []OrganisationCategory{
+	firstJobID := read.OrganisationJobID
+	set, err := s.UpdateOrganisationCategories(ctx, 1, []OrganisationCategory{
 		{ID: "platform", Description: "Platform engineering opportunities."}}, owner)
-	if err != nil || set.Version != 1 {
+	if err != nil || set.Version != 2 {
 		t.Fatalf("configure: %+v %v", set, err)
 	}
 	read, err = s.Ingestion(ctx, intake.ID)
-	if err != nil || read.OrganisationJobID == "" {
-		t.Fatalf("completed intake not queued: %+v %v", read, err)
+	if err != nil || read.OrganisationJobID == "" || read.OrganisationJobID == firstJobID {
+		t.Fatalf("category edit did not requeue: %+v %v", read, err)
 	}
-	firstJobID := read.OrganisationJobID
-	if _, err = s.UpdateOrganisationCategories(ctx, 0, nil, owner); !errors.Is(err, ErrConflict) {
+	firstJobID = read.OrganisationJobID
+	if _, err = s.UpdateOrganisationCategories(ctx, 1, nil, owner); !errors.Is(err, ErrConflict) {
 		t.Fatalf("stale owner version accepted: %v", err)
 	}
-	set, err = s.UpdateOrganisationCategories(ctx, 1, []OrganisationCategory{
+	set, err = s.UpdateOrganisationCategories(ctx, 2, []OrganisationCategory{
 		{ID: "backend", Description: "Backend engineering opportunities."}}, owner)
-	if err != nil || set.Version != 2 {
+	if err != nil || set.Version != 3 {
 		t.Fatalf("revise: %+v %v", set, err)
 	}
 	read, err = s.Ingestion(ctx, intake.ID)
@@ -61,7 +66,7 @@ func TestOrganisationCategoriesQueueCompletedIntakesAndCheckVersion(t *testing.T
 		t.Fatalf("superseded job used current categories: %v", err)
 	}
 	current, err := s.CurrentOrganisationCategories(ctx)
-	if err != nil || current.Version != 2 || current.Categories[0].ID != "backend" {
+	if err != nil || current.Version != 3 || current.Categories[0].ID != "backend" {
 		t.Fatalf("current category set: %+v %v", current, err)
 	}
 }
@@ -70,11 +75,6 @@ func TestDistinctIntakesReuseMatchingOrganisationJob(t *testing.T) {
 	ctx := context.Background()
 	s := openJobTestStore(t)
 	owner := ownerActor()
-	_, err := s.UpdateOrganisationCategories(ctx, 0, []OrganisationCategory{
-		{ID: "platform", Description: "Platform engineering opportunities."}}, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
 	company := createFixtureCompany(t, s)
 	input := fixtureOpportunity(company.ID)
 	input.OriginalText = "Build Go platform services."

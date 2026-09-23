@@ -1,0 +1,26 @@
+[
+  {
+    "id": "backend-platform",
+    "description": "Backend and platform: primarily builds backend application services, APIs, data stores, or developer platform software."
+  },
+  {
+    "id": "data-ai",
+    "description": "Data and AI: primarily builds data pipelines, analytics systems, machine learning systems, or AI products."
+  },
+  {
+    "id": "infrastructure-security",
+    "description": "Infrastructure and security: primarily operates cloud infrastructure, reliability systems, networking, or security engineering."
+  },
+  {
+    "id": "frontend-product",
+    "description": "Frontend and product engineering: primarily builds user interfaces or product features with substantial frontend implementation."
+  },
+  {
+    "id": "technical-leadership",
+    "description": "Technical leadership: primarily leads engineering teams, sets technical architecture, or advises delivery as a technical lead or consultant."
+  },
+  {
+    "id": "other",
+    "description": "Other work: the opening has clear duties but its primary work does not fit the other supplied role families."
+  }
+]

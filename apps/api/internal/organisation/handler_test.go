@@ -51,7 +51,7 @@ func setupOrganisedIntake(t *testing.T) (*store.Store, store.IngestionRequest, s
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	owner := store.Actor{Kind: "administrator", ID: "owner"}
-	_, err = s.UpdateOrganisationCategories(ctx, 0, []store.OrganisationCategory{
+	_, err = s.UpdateOrganisationCategories(ctx, 1, []store.OrganisationCategory{
 		{ID: "backend", Description: "Backend and platform service openings."},
 		{ID: "other", Description: "Openings in other work directions."}}, owner)
 	if err != nil {
@@ -92,7 +92,7 @@ func TestAutomaticOrganisationKeepsFactualStateSeparate(t *testing.T) {
 	}
 	view, err := s.Organisation(ctx, opportunity.ID)
 	if err != nil || view.Status != "selected" || view.Current == nil || view.Current.CategoryID != "backend" ||
-		view.Current.CategoryVersion != 1 || len(view.Current.SourceRefsJSON) == 0 {
+		view.Current.CategoryVersion != 2 || len(view.Current.SourceRefsJSON) == 0 {
 		t.Fatalf("selection: %+v %v", view, err)
 	}
 	summaries, err := s.OrganisationSummaries(ctx, []string{opportunity.ID})
@@ -135,7 +135,7 @@ func TestUncertainAndChangedCategoriesRemainVisible(t *testing.T) {
 	if err != nil || summaries[opportunity.ID].Status != view.Status || summaries[opportunity.ID].CategoryID != "" {
 		t.Fatalf("bulk uncertainty: %+v %v", summaries, err)
 	}
-	_, err = s.UpdateOrganisationCategories(ctx, 1, []store.OrganisationCategory{{ID: "platform", Description: "Platform engineering roles."}},
+	_, err = s.UpdateOrganisationCategories(ctx, 2, []store.OrganisationCategory{{ID: "platform", Description: "Platform engineering roles."}},
 		store.Actor{Kind: "administrator", ID: "owner"})
 	if err != nil {
 		t.Fatal(err)
@@ -151,7 +151,7 @@ func TestCategoryChangeDuringEvaluationDiscardsStaleAnswer(t *testing.T) {
 	s, intake, opportunity := setupOrganisedIntake(t)
 	owner := store.Actor{Kind: "administrator", ID: "owner"}
 	evaluator := evaluatorFunc(func(ctx context.Context, request jev.Request) (jev.Result, error) {
-		_, err := s.UpdateOrganisationCategories(ctx, 1,
+		_, err := s.UpdateOrganisationCategories(ctx, 2,
 			[]store.OrganisationCategory{{ID: "platform", Description: "Platform engineering roles."}}, owner)
 		if err != nil {
 			return jev.Result{}, err

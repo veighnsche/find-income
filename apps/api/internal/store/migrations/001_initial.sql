@@ -289,6 +289,31 @@ CREATE INDEX ingestion_requests_recent_idx ON ingestion_requests(created_at,id);
 CREATE INDEX ingestion_requests_job_idx ON ingestion_requests(job_id);
 CREATE INDEX ingestion_requests_opportunity_idx ON ingestion_requests(opportunity_id);
 
+-- Configured public ATS boards are scanned in bounded pages. A cursor and
+-- lease make one scan resumable across service restarts and overlapping workers.
+CREATE TABLE collector_boards (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  site TEXT NOT NULL,
+  region TEXT NOT NULL,
+  enabled INTEGER NOT NULL CHECK (enabled IN (0,1)),
+  interval_minutes INTEGER NOT NULL CHECK (interval_minutes BETWEEN 15 AND 10080),
+  next_scan_at TEXT NOT NULL,
+  next_offset INTEGER NOT NULL DEFAULT 0 CHECK (next_offset >= 0),
+  lease_token TEXT,
+  lease_until TEXT,
+  last_run_at TEXT,
+  last_success_at TEXT,
+  last_error_code TEXT,
+  revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(provider,site,region),
+  CHECK ((lease_token IS NULL AND lease_until IS NULL) OR
+    (lease_token IS NOT NULL AND lease_until IS NOT NULL))
+);
+CREATE INDEX collector_boards_due_idx ON collector_boards(enabled,next_scan_at,lease_until);
+
 CREATE TABLE organisation_category_versions (
   version INTEGER PRIMARY KEY CHECK (version > 0),
   categories_json TEXT NOT NULL CHECK (json_valid(categories_json)),

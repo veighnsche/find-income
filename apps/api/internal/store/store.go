@@ -284,6 +284,9 @@ func applyMigration(ctx context.Context, db *sql.DB, m migration) error {
 	defer tx.Rollback()
 	if _, err = tx.ExecContext(ctx, m.sql); err == nil && m.version == 1 {
 		err = seedPreferences(ctx, tx)
+		if err == nil {
+			err = seedOrganisationCategories(ctx, tx)
+		}
 	}
 	if err == nil {
 		_, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations (version, name, sha256, applied_at) VALUES (?, ?, ?, ?)", m.version, m.name, m.digest, utcNow())
