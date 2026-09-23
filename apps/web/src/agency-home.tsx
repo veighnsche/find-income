@@ -25,7 +25,9 @@ const activeStates = new Set<Round['state']>(['queued', 'running', 'awaiting_inp
 const pollIntervalMs = 5000;
 
 function roundTitle(outcome: string): string {
-  return outcome === 'discover' ? 'Find my next opportunities' : outcome.replaceAll('_', ' ');
+  if (outcome === 'discover') return 'Find my next opportunities';
+  if (outcome === 'prepare') return 'Prepare an application';
+  return outcome.replaceAll('_', ' ');
 }
 
 function message(cause: unknown): string {
@@ -135,7 +137,9 @@ export function AgencyHome({
               setHistoryAvailable(false);
             }
             const [cardRead, historyRead] = await Promise.allSettled([
-              getRoundCards(current.id, controller.signal),
+              current.outcome === 'discover'
+                ? getRoundCards(current.id, controller.signal)
+                : Promise.resolve([] as RoundCard[]),
               getRoundHistory(current.id, controller.signal),
             ]);
             if (currentRead()) {
@@ -366,8 +370,9 @@ export function AgencyHome({
             )}
             {paused && !capability?.canStart && (
               <p className="hint">
-                Discovery execution is currently unavailable. Resume may leave this round paused;
-                saved results and remaining allowance remain readable.
+                {round.outcome === 'prepare' ? 'Application preparation' : 'Discovery'} execution is
+                currently unavailable. Resume may leave this round paused; saved results and
+                remaining allowance remain readable.
               </p>
             )}
             {!active && !paused && capability && (
@@ -483,7 +488,28 @@ export function AgencyHome({
           !loading && <p>Campaign brief unavailable. Refresh to try again.</p>
         )}
       </section>
-      {round && (
+      {round?.outcome === 'prepare' && (
+        <section className="op-card" aria-label="Application preparation">
+          <h2>Application preparation</h2>
+          <p>
+            Review the private pack from its opportunity when preparation finishes. This round does
+            not send an application.
+          </p>
+          {round.scope.resources
+            .filter((resource) => resource.startsWith('opportunity:'))
+            .map((resource) => (
+              <button
+                key={resource}
+                className="op-text-button"
+                type="button"
+                onClick={() => onOpenOpportunity(resource.slice('opportunity:'.length))}
+              >
+                Open selected opportunity
+              </button>
+            ))}
+        </section>
+      )}
+      {round?.outcome === 'discover' && (
         <section className="op-card" aria-label="Round results">
           <h2>Saved opportunity cards {cards.length ? `(${cards.length})` : ''}</h2>
           {cards.length === 0 && (

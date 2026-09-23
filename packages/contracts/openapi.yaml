@@ -79,8 +79,16 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/PrepareRoundRequest' }
       responses:
-        '200': { description: Existing round, content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } } }
-        '201': { description: Round created, content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } } }
+        '200':
+          {
+            description: Existing round,
+            content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
+          }
+        '201':
+          {
+            description: Round created,
+            content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
+          }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -551,7 +559,12 @@ paths:
       summary: Read current sourced Jev screening proposal, separate from confirmed qualification
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       responses:
-        '200': { description: Screening proposal status, content: { application/json: { schema: { $ref: '#/components/schemas/RoundScreeningView' } } } }
+        '200':
+          {
+            description: Screening proposal status,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/RoundScreeningView' } } },
+          }
         '404': { $ref: '#/components/responses/NotFound' }
   /opportunities/{id}/application-packs:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
@@ -560,7 +573,14 @@ paths:
       summary: List private immutable packs for one opportunity
       security: [{ cookieAuth: [] }]
       responses:
-        '200': { description: Pack versions, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationPackList' } } } }
+        '200':
+          {
+            description: Pack versions,
+            content:
+              {
+                application/json: { schema: { $ref: '#/components/schemas/ApplicationPackList' } },
+              },
+          }
         '404': { $ref: '#/components/responses/NotFound' }
   /application-packs/{id}:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
@@ -569,7 +589,15 @@ paths:
       summary: Read private pack manifest and revision metadata
       security: [{ cookieAuth: [] }]
       responses:
-        '200': { description: Pack detail, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationPackDetail' } } } }
+        '200':
+          {
+            description: Pack detail,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/ApplicationPackDetail' } },
+              },
+          }
         '404': { $ref: '#/components/responses/NotFound' }
   /application-packs/{id}/pdf:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
@@ -578,7 +606,11 @@ paths:
       summary: Preview the private PDF
       security: [{ cookieAuth: [] }]
       responses:
-        '200': { description: Inline PDF, content: { application/pdf: { schema: { type: string, format: binary } } } }
+        '200':
+          {
+            description: Inline PDF,
+            content: { application/pdf: { schema: { type: string, format: binary } } },
+          }
         '404': { $ref: '#/components/responses/NotFound' }
   /application-packs/{id}/source.zip:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
@@ -587,7 +619,11 @@ paths:
       summary: Download reproducible private Typst source
       security: [{ cookieAuth: [] }]
       responses:
-        '200': { description: Source archive, content: { application/zip: { schema: { type: string, format: binary } } } }
+        '200':
+          {
+            description: Source archive,
+            content: { application/zip: { schema: { type: string, format: binary } } },
+          }
         '404': { $ref: '#/components/responses/NotFound' }
   /relationships/counterparties:
     get:
@@ -595,14 +631,30 @@ paths:
       summary: Read sourced people and organisations in the relationship network
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       responses:
-        '200': { description: Counterparties, content: { application/json: { schema: { $ref: '#/components/schemas/RelationshipCounterpartyList' } } } }
+        '200':
+          {
+            description: Counterparties,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/RelationshipCounterpartyList' } },
+              },
+          }
   /relationships/events:
     get:
       operationId: listRelationshipEvents
       summary: Read sourced introductions and conversations, including pre-vacancy leads
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       responses:
-        '200': { description: Relationship events, content: { application/json: { schema: { $ref: '#/components/schemas/RelationshipEventList' } } } }
+        '200':
+          {
+            description: Relationship events,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/RelationshipEventList' } },
+              },
+          }
   /opportunities/{id}/routes:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     get:
@@ -610,7 +662,14 @@ paths:
       summary: Read sourced direct and relationship routes to an opportunity
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       responses:
-        '200': { description: Opportunity routes, content: { application/json: { schema: { $ref: '#/components/schemas/OpportunityRouteList' } } } }
+        '200':
+          {
+            description: Opportunity routes,
+            content:
+              {
+                application/json: { schema: { $ref: '#/components/schemas/OpportunityRouteList' } },
+              },
+          }
         '404': { $ref: '#/components/responses/NotFound' }
   /ingestions:
     get:
@@ -1422,13 +1481,28 @@ components:
       required: [attemptId, entityKind, entityId, revision, auditId]
       properties:
         attemptId: { type: string }
-        entityKind: { type: string, enum: [company, opportunity, preferences, evidence, application_pack, relationship_counterparty, relationship_event, opportunity_route] }
+        entityKind:
+          {
+            type: string,
+            enum:
+              [
+                company,
+                opportunity,
+                preferences,
+                evidence,
+                application_pack,
+                relationship_counterparty,
+                relationship_event,
+                opportunity_route,
+              ],
+          }
         entityId: { type: string }
         revision: { type: integer, format: int64 }
         auditId: { type: string }
     ApplicationPackSummary:
       type: object
-      required: [id, opportunityId, opportunityRevision, profileRevision, version, contentSha256, createdAt]
+      required:
+        [id, opportunityId, opportunityRevision, profileRevision, version, contentSha256, createdAt]
       properties:
         id: { type: string }
         opportunityId: { type: string }
@@ -1448,7 +1522,18 @@ components:
           allOf: [{ $ref: '#/components/schemas/RoundScreeningAssessment' }]
     RoundScreeningAssessment:
       type: object
-      required: [id, opportunityRevision, profileVersion, sourceId, sourceRevision, omittedBytes, input, result, createdAt]
+      required:
+        [
+          id,
+          opportunityRevision,
+          profileVersion,
+          sourceId,
+          sourceRevision,
+          omittedBytes,
+          input,
+          result,
+          createdAt,
+        ]
       properties:
         id: { type: string }
         opportunityRevision: { type: integer, format: int64 }
@@ -1496,25 +1581,46 @@ components:
         source_kind: { type: string }
     RoundScreeningObservation:
       type: object
-      required: [criterion_id, definition_sha256, scope, confidence, probabilities, proposed_support, support_state]
+      required:
+        [
+          criterion_id,
+          definition_sha256,
+          scope,
+          confidence,
+          probabilities,
+          proposed_support,
+          support_state,
+        ]
       properties:
         criterion_id: { type: string }
         definition_sha256: { type: string }
         scope: { type: string }
         confidence: { type: number }
         probabilities: { type: object, additionalProperties: { type: number } }
-        proposed_support: { type: array, items: { $ref: '#/components/schemas/RoundScreeningSupport' } }
+        proposed_support:
+          { type: array, items: { $ref: '#/components/schemas/RoundScreeningSupport' } }
         support_state: { type: string }
         support_confidence: { type: number }
     RoundScreeningResult:
       type: object
-      required: [rubric_version, preference_version, input_sha256, input_spans, observations, requested_model, returned_model, usage]
+      required:
+        [
+          rubric_version,
+          preference_version,
+          input_sha256,
+          input_spans,
+          observations,
+          requested_model,
+          returned_model,
+          usage,
+        ]
       properties:
         rubric_version: { type: integer }
         preference_version: { type: integer, format: int64 }
         input_sha256: { type: string }
         input_spans: { type: array, items: { $ref: '#/components/schemas/RoundScreeningSupport' } }
-        observations: { type: array, items: { $ref: '#/components/schemas/RoundScreeningObservation' } }
+        observations:
+          { type: array, items: { $ref: '#/components/schemas/RoundScreeningObservation' } }
         requested_model: { type: string }
         returned_model: { type: string }
         usage: { $ref: '#/components/schemas/RoundScreeningUsage' }
@@ -1547,7 +1653,17 @@ components:
         preparationRequestSha256: { type: string }
     ApplicationPackRole:
       type: object
-      required: [opportunityId, opportunityRevision, profileRevision, title, company, sourceUrl, description, destination]
+      required:
+        [
+          opportunityId,
+          opportunityRevision,
+          profileRevision,
+          title,
+          company,
+          sourceUrl,
+          description,
+          destination,
+        ]
       properties:
         opportunityId: { type: string }
         opportunityRevision: { type: integer, format: int64 }
@@ -1861,7 +1977,17 @@ components:
         status:
           {
             type: string,
-            enum: [not_assessed, unconfigured, pending, processing, selected, uncertain, failed, outdated],
+            enum:
+              [
+                not_assessed,
+                unconfigured,
+                pending,
+                processing,
+                selected,
+                uncertain,
+                failed,
+                outdated,
+              ],
           }
         current:
           allOf: [{ $ref: '#/components/schemas/OrganisationAssessment' }]
@@ -1878,7 +2004,17 @@ components:
         status:
           {
             type: string,
-            enum: [not_assessed, unconfigured, pending, processing, selected, uncertain, failed, outdated],
+            enum:
+              [
+                not_assessed,
+                unconfigured,
+                pending,
+                processing,
+                selected,
+                uncertain,
+                failed,
+                outdated,
+              ],
           }
         categoryId: { type: string }
     OrganisationSummaryList:

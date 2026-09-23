@@ -110,6 +110,57 @@
 .op-main .button-row {
   flex-wrap: wrap;
 }
+.pack-versions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+.pack-version {
+  background: #e5eee8;
+  color: #235d49;
+}
+.pack-version.active {
+  background: #235d49;
+  color: #fff;
+}
+.button-link {
+  display: inline-block;
+  border-radius: 0.4rem;
+  padding: 0.55rem 0.85rem;
+  color: #fff;
+  background: #235d49;
+  text-decoration: none;
+}
+.button-link.secondary {
+  background: #e5eee8;
+  color: #235d49;
+}
+.button-link:focus-visible {
+  outline: 3px solid #dc9d30;
+  outline-offset: 2px;
+}
+.pack-pdf-preview {
+  display: block;
+  width: 100%;
+  min-height: 35rem;
+  margin-top: 1rem;
+  border: 1px solid #d8e2da;
+  border-radius: 0.4rem;
+}
+.pack-lines {
+  padding-left: 1.35rem;
+}
+.pack-lines li {
+  margin: 0.7rem 0;
+}
+.pack-lines p {
+  margin: 0.25rem 0;
+}
+.pack-answer {
+  border-top: 1px solid #d8e2da;
+  margin-top: 1rem;
+}
 @media (max-width: 850px) {
   .op-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));

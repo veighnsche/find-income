@@ -7,6 +7,13 @@ export type RoundResults = components['schemas']['RoundResults'];
 export type RoundCapability = components['schemas']['RoundCapability'];
 export type RoundCard = components['schemas']['RoundCard'];
 export type RoundHistoryEvent = components['schemas']['RoundHistoryEvent'];
+export type PrepareRoundRequest = components['schemas']['PrepareRoundRequest'];
+export type ApplicationPackSummary = components['schemas']['ApplicationPackSummary'];
+export type ApplicationPackDetail = components['schemas']['ApplicationPackDetail'];
+export type RoundScreeningView = components['schemas']['RoundScreeningView'];
+export type RelationshipCounterparty = components['schemas']['RelationshipCounterparty'];
+export type RelationshipEvent = components['schemas']['RelationshipEvent'];
+export type OpportunityRoute = components['schemas']['OpportunityRoute'];
 export type OwnerInstructionInput = components['schemas']['OwnerInstructionInput'];
 export type OwnerInstruction = components['schemas']['OwnerInstruction'];
 export type OwnerDecision = components['schemas']['OwnerDecision'];
@@ -140,6 +147,51 @@ export function startRound(requestKey: string, csrfToken: string): Promise<Round
   });
 }
 
+export function prepareApplicationRound(
+  input: PrepareRoundRequest,
+  csrfToken: string,
+): Promise<Round> {
+  return request<Round>('/rounds/prepare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(input),
+  });
+}
+
+export function listApplicationPacks(
+  opportunityId: string,
+  signal?: AbortSignal,
+): Promise<ApplicationPackSummary[]> {
+  return request<components['schemas']['ApplicationPackList']>(
+    `/opportunities/${encodeURIComponent(opportunityId)}/application-packs`,
+    { signal },
+  ).then((page) => page.items);
+}
+
+export function getApplicationPack(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ApplicationPackDetail> {
+  return request<ApplicationPackDetail>(`/application-packs/${encodeURIComponent(id)}`, { signal });
+}
+
+export function getOpportunityScreening(
+  id: string,
+  signal?: AbortSignal,
+): Promise<RoundScreeningView> {
+  return request<RoundScreeningView>(`/opportunities/${encodeURIComponent(id)}/screening`, {
+    signal,
+  });
+}
+
+export function applicationPackPdfUrl(id: string): string {
+  return `/api/v1/application-packs/${encodeURIComponent(id)}/pdf`;
+}
+
+export function applicationPackSourceUrl(id: string): string {
+  return `/api/v1/application-packs/${encodeURIComponent(id)}/source.zip`;
+}
+
 export function getRoundResults(id: string, signal?: AbortSignal): Promise<RoundResults> {
   return request<RoundResults>(`/rounds/${encodeURIComponent(id)}/results`, { signal });
 }
@@ -153,6 +205,31 @@ export function getRoundCards(id: string, signal?: AbortSignal): Promise<RoundCa
 export function getRoundHistory(id: string, signal?: AbortSignal): Promise<RoundHistoryEvent[]> {
   return request<components['schemas']['RoundHistory']>(
     `/rounds/${encodeURIComponent(id)}/history`,
+    { signal },
+  ).then((page) => page.items);
+}
+
+export function listRelationshipCounterparties(
+  signal?: AbortSignal,
+): Promise<RelationshipCounterparty[]> {
+  return request<components['schemas']['RelationshipCounterpartyList']>(
+    '/relationships/counterparties',
+    { signal },
+  ).then((page) => page.items);
+}
+
+export function listRelationshipEvents(signal?: AbortSignal): Promise<RelationshipEvent[]> {
+  return request<components['schemas']['RelationshipEventList']>('/relationships/events', {
+    signal,
+  }).then((page) => page.items);
+}
+
+export function listOpportunityRoutes(
+  id: string,
+  signal?: AbortSignal,
+): Promise<OpportunityRoute[]> {
+  return request<components['schemas']['OpportunityRouteList']>(
+    `/opportunities/${encodeURIComponent(id)}/routes`,
     { signal },
   ).then((page) => page.items);
 }

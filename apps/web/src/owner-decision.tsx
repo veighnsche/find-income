@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   getOwnerOpportunityDecision,
   isUnauthenticated,
@@ -14,23 +14,28 @@ export function OwnerDecisionControls({
   revision,
   session,
   onSessionLost,
+  onChanged,
 }: {
   id: string;
   revision: number;
   session: Session;
   onSessionLost: () => void;
+  onChanged?: (decision: OwnerDecision | null) => void;
 }) {
   const [current, setCurrent] = useState<OwnerDecision | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<OwnerDecisionInput | null>(null);
+  const onChangedRef = useRef(onChanged);
+  onChangedRef.current = onChanged;
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     getOwnerOpportunityDecision(id, controller.signal)
       .then((decision) => {
         setCurrent(decision);
+        onChangedRef.current?.(decision);
         setPending(null);
         setError(null);
       })
@@ -61,6 +66,7 @@ export function OwnerDecisionControls({
     try {
       const saved = await setOwnerOpportunityDecision(id, input, session.csrfToken);
       setCurrent(saved);
+      onChangedRef.current?.(saved);
       setPending(null);
     } catch (cause) {
       if (isUnauthenticated(cause)) onSessionLost();
@@ -79,6 +85,7 @@ export function OwnerDecisionControls({
     try {
       const latest = await getOwnerOpportunityDecision(id);
       setCurrent(latest);
+      onChangedRef.current?.(latest);
       setPending(null);
       setError(null);
     } catch (cause) {

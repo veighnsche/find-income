@@ -3,6 +3,9 @@ import { EvidencePanel } from './evidence-panel';
 import { AgencyHome } from './agency-home';
 import { OwnerDecisionControls } from './owner-decision';
 import { OwnerInstructionPanel } from './owner-instruction';
+import { RelationshipsPanel } from './relationships-panel';
+import { ApplicationPackPanel } from './application-pack-panel';
+import { ScreeningPanel } from './screening-panel';
 import {
   getOpportunity,
   getIngestion,
@@ -23,6 +26,7 @@ import {
   type OrganisationCategory,
   type OrganisationSummary,
   type OrganisationView,
+  type OwnerDecision,
   type Opportunity,
   type OpportunityView,
   type RecordChange,
@@ -901,6 +905,7 @@ function OpportunityDetail({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
+  const [ownerDecision, setOwnerDecision] = useState<OwnerDecision | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -979,12 +984,21 @@ function OpportunityDetail({
           </section>
           <OrganisationPanel id={id} onSessionLost={onSessionLost} />
           <EvidencePanel opportunity={opportunity} onSessionLost={onSessionLost} />
+          <ScreeningPanel opportunityId={id} onSessionLost={onSessionLost} />
           <OwnerDecisionControls
             id={id}
             revision={opportunity.revision}
             session={session}
             onSessionLost={onSessionLost}
+            onChanged={setOwnerDecision}
           />
+          <ApplicationPackPanel
+            opportunity={opportunity}
+            selected={ownerDecision?.decision === 'selected'}
+            session={session}
+            onSessionLost={onSessionLost}
+          />
+          <RelationshipsPanel opportunityId={id} session={session} onSessionLost={onSessionLost} />
           <OwnerInstructionPanel
             key={`${id}-${opportunity.revision}`}
             target={{
@@ -1154,6 +1168,7 @@ export function Opportunities({
     return (
       <>
         <OpportunityDetail
+          key={selected}
           id={selected}
           session={session}
           companies={companies}
@@ -1230,6 +1245,7 @@ export function Opportunities({
         activeRequest={recovery}
         refresh={ingestionRefresh}
       />
+      <RelationshipsPanel session={session} onSessionLost={onSessionLost} />
       <section className="op-card" aria-label="Opportunity filters">
         <h2>Saved opportunities</h2>
         <div className="op-grid op-filters">

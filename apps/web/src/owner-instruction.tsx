@@ -22,12 +22,14 @@ export function OwnerInstructionPanel({
   session,
   onSessionLost,
   onClose,
+  closeLabel = 'Return to source intake',
 }: {
   target: Target;
   title: string;
   session: Session;
   onSessionLost: () => void;
   onClose?: () => void;
+  closeLabel?: string;
 }) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState<OwnerInstructionInput | null>(null);
@@ -195,7 +197,7 @@ export function OwnerInstructionPanel({
         )}
         {onClose && (
           <button type="button" className="secondary" onClick={onClose}>
-            Return to source intake
+            {closeLabel}
           </button>
         )}
       </div>
