@@ -83,7 +83,7 @@
       "thread_id": "01a0cf13-2c03-73f2-b074-6c73d7120ebe",
       "host_id": "local",
       "review": "Committed 2fdfe7d: commissioned discovery/prepare work loops and shared authority/contracts; root full API suite and generated check pass.",
-      "remaining_work": "Fix I13 expired-round slot, production Lever continuation and prepare context scope findings; then pack contextual correction and live integration acceptance.",
+      "remaining_work": "Fix I13 expired-round slot, production Lever continuation and prepare context scope findings; then pack contextual correction and live integration acceptance. Then implement the missing production contextual-input processing boundary recorded in I11-input-orchestration-gap.md.",
       "active_slice": "I13-C core corrections",
       "active_model": "gpt-6-sol",
       "active_effort": "high"
@@ -214,7 +214,7 @@
       "active_model": "gpt-6-sol",
       "active_effort": "medium",
       "review": "Committed 8c8b66d: pack controls/versions/PDF/citations, relationships and screening; browser fixtures and root check/test/build pass.",
-      "remaining_work": "Integrate pack-specific contextual correction when core supports it; verify the actual private runtime journey and owner usability."
+      "remaining_work": "Implement reliable commissioned processing for contextual instructions and owner-pasted vacancies/links, including pack correction; distinguish ending paused work from Resume; verify actual runtime journey. Saved-input browser fixtures alone are insufficient."
     },
     {
       "id": "I12",
@@ -284,8 +284,12 @@
       "selection_reason": "Sol Medium can execute a defined evidence protocol and investigate results; escalate specific ambiguous failures rather than upgrading all review work.",
       "status": "partial",
       "remaining_work": "Run actual bounded discovery after I12/I13, verify non-seed sources and useful owner results. Classifier reference calls alone do not accept the dashboard journey.",
-      "active_slice": "I14 responsibility reference evaluation complete",
-      "review": "Committed c15d85c documents ten completed Jev cases (seven real, three synthetic) and one HTTP529-incomplete case; raw evidence retained."
+      "active_slice": "I14-UI reproducible browser smoke",
+      "review": "Committed c15d85c documents ten completed Jev cases (seven real, three synthetic) and one HTTP529-incomplete case; raw evidence retained.",
+      "active_model": "gpt-6-sol",
+      "active_effort": "medium",
+      "thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
+      "host_id": "local"
     },
     {
       "id": "I15",
@@ -494,10 +498,10 @@
       "scope": "Package persistent private app/runner operation and current-format data/asset/pack backup/restore with clear account reconnection boundaries. Extend the current snapshot as later domain tables land; no legacy migration support. Do not wait for interview/offer UI to protect useful stored work.",
       "acceptance": "Restore a synthetic current-format backup with referenced assets, verify auth/restart/idle behaviour and secrets exclusion, and record real host operating steps. Final validation in I27 uses the complete current schema. No production credentials in backups/build artifacts.",
       "selection_reason": "Known persistence and operational checks fit Sol Medium; documentation handoff can use Luna after commands are verified.",
-      "status": "in_progress",
-      "remaining_work": "Review current-format backup/restore, private assets and idle/auth boundaries against synthetic data; final schema and actual host operation remain later acceptance.",
-      "active_slice": "I26-A current-format offline recovery",
-      "review": "Sol Medium implements only ops/i26 with synthetic database/asset credential canaries.",
+      "status": "partial",
+      "remaining_work": "Validate final current schema in I27 and actual private-host recovery/account reconnect/idle behavior after I12.",
+      "active_slice": "I26-A reviewed and committed; worker idle",
+      "review": "Committed3bcbd42: current-format backup/restore, credential removal/free-page purge, exact pack/assets integrity and preserved board eligibility. Five synthetic tests pass independently.",
       "thread_id": "01a0ce8e-4c6e-7c93-b63c-1084063ba7c0",
       "host_id": "local",
       "active_model": "gpt-6-sol",

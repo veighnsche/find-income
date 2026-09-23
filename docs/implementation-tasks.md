@@ -2,7 +2,7 @@
 
 Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. API/contracts are committed in `2fdfe7d`, deployment configuration in `717ef93`, and web review in `8c8b66d`. Root check/test/build pass. Core review corrections, recovery and an isolated email adapter run concurrently with focused native-tool research.
 
-**Current position: 5 tasks accepted, 10 partial, 3 active review/research/implementation tasks, 9 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I12, I14, I15, I18. Active: I13, I20, I26. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 11 partial, 2 active review/implementation tasks, 9 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I12, I14, I15, I18, I26. Active: I13, I20. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -32,16 +32,16 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 | --- | --- | --- |
 | I13-C core corrections | Sol High | Existing round lifecycle, agency collector continuation and scoped context files/tests only. |
 | I13-N native-tool evidence | Sol High | Research exact pinned Codex controls; notes only, no runtime edits or live model calls. |
-| I26-A | Sol Medium | `ops/i26/**` current-format backup/restore with synthetic records/assets. |
+| I14-UI | Sol Medium | Reproducible browser smoke replaces the placeholder e2e command; synthetic API only. |
 | I20-B | Sol High | New `internal/delivery/**` SMTP material/transport against synthetic destinations; no product send endpoint. |
 
-Web, discovery, Jev and relationship workers are idle. The pack worker now owns only the disjoint delivery package. Core may correct the three named integration findings; runtime/ops isolation changes are not yet assigned. Four live workers maximum. The Astra independent reviewer has handed off and is idle.
+Recovery and relationship workers are idle; the existing web task now owns only browser-smoke scripts and their package dependency. The pack worker now owns only the disjoint delivery package. Core corrects the named integration findings while preserving batch collection and pending sources; runtime/ops isolation changes are not yet assigned. Four live workers maximum. The Astra independent reviewer has handed off and is idle.
 
 Reviewed checkpoints: API `2fdfe7d`, deployment `717ef93`, UI `8c8b66d`. Root `pnpm check`, `pnpm test`, `pnpm build` pass after contract formatting. Web has no automated test files; controlled browser interactions and screenshots were reviewed. The e2e script remains a placeholder.
 
-I13 found four concrete gaps despite passing tests: native tools outside round accounting, expired paused rounds retaining the active slot, missing production Lever continuation, and prepare context reads using a resource outside the prepare scope. Full acceptance is withheld until corrected and verified. Pack-specific contextual correction and Jev choice among neutral discovered leads also remain open.
+I13 found four concrete gaps despite passing tests: native tools outside round accounting, expired paused rounds retaining the active slot, missing production Lever continuation, and prepare context reads using a resource outside the prepare scope. Full acceptance is withheld until corrected and verified. Reliable commissioned processing of supplied instructions/vacancies/links, pack correction, an explicit end-paused-round path, and Jev choice among neutral discovered leads remain open. See [input integration gap](/Users/vince/Projects/find-income/implementation-notes/implementation/I11-input-orchestration-gap.md).
 
-I14 retained ten completed responsibility cases (seven real, three synthetic) and one HTTP529-incomplete case. The 22 calls reported 60,960 tokens, exceeding the 60,000 target by 960 on the final response; failed-call usage is unknown. No automatic retry or general accuracy claim. See [evaluation](jev-responsibility-evaluation.md). Host/account and inbox choices remain unanswered; no live deployment, mailbox access or employer send occurred.
+I14 retained ten completed responsibility cases (seven real, three synthetic) and one HTTP529-incomplete case. The 22 calls reported 60,960 tokens, exceeding the 60,000 target by 960 on the final response; failed-call usage is unknown. No automatic retry or general accuracy claim. See [evaluation](jev-responsibility-evaluation.md). Recovery committed3bcbd42 with five passing synthetic tests. Host/account and inbox choices remain unanswered; no live deployment, mailbox access or employer send occurred.
 
 ### Initial wave ownership and handoff record
 
@@ -129,7 +129,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 | I23 | Process replies and prepare follow-ups | Not started | I09, I19 | GPT-6 Sol / Medium |
 | I24 | Prepare interviews from actual context | Not started | I15, I18 | GPT-6 Sol / Medium |
 | I25 | Compare real offer terms without invented certainty | Not started | I01, I09, I18 | GPT-6 Sol / Medium |
-| I26 | Verify current-format backup and private operation | In progress | I12, I15 | GPT-6 Sol / Medium |
+| I26 | Verify current-format backup and private operation | Partial | I12, I15 | GPT-6 Sol / Medium |
 | I27 | Review the complete journey and publish accurate operating docs | Not started | I16, I18, I19, I22, I23, I24, I25, I26 | GPT-6 Sol / Medium; docs Luna Low |
 
 ## 4. Task deliverables and acceptance
@@ -194,7 +194,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I04.
 
-**Remaining work:** Fix I13 expired-round slot, production Lever continuation and prepare context scope findings; then pack contextual correction and live integration acceptance.
+**Remaining work:** Fix I13 expired-round slot, production Lever continuation and prepare context scope findings; then pack contextual correction and live integration acceptance. Then implement the missing production contextual-input processing boundary recorded in I11-input-orchestration-gap.md.
 
 **Task scope:** Integrate round capabilities with existing authenticated domain operations, worker claims and MCP. Own OpenAPI/generated contracts and HTTP round controls for this handoff. Distinguish inert external intake, direct owner decisions and delegated mutations; permit only explicitly scoped preference corrections.
 
@@ -278,7 +278,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I05, I06.
 
-**Remaining work:** Integrate pack-specific contextual correction when core supports it; verify the actual private runtime journey and owner usability.
+**Remaining work:** Implement reliable commissioned processing for contextual instructions and owner-pasted vacancies/links, including pack correction; distinguish ending paused work from Resume; verify actual runtime journey. Saved-input browser fixtures alone are insufficient.
 
 **Task scope:** Reuse contextual-recovery work. Build the known-answer brief, named Start/Stop/Resume, partial sourced cards, preserved selection and one context-bound instruction/URL/full-text input against stable DTOs. Remove manual source/preference/record forms and inactive navigation. Use stored recommendations supplied by I10 when integrated.
 
@@ -468,9 +468,9 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 ### I26 — Verify current-format backup and private operation
 
-- [ ] **In progress** · GPT-6 Sol / Medium · Dependencies: I12, I15.
+- [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I12, I15.
 
-**Remaining work:** Review current-format backup/restore, private assets and idle/auth boundaries against synthetic data; final schema and actual host operation remain later acceptance.
+**Remaining work:** Validate final current schema in I27 and actual private-host recovery/account reconnect/idle behavior after I12.
 
 **Task scope:** Package persistent private app/runner operation and current-format data/asset/pack backup/restore with clear account reconnection boundaries. Extend the current snapshot as later domain tables land; no legacy migration support. Do not wait for interview/offer UI to protect useful stored work.
 
@@ -478,7 +478,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 **Why this model/effort:** Known persistence and operational checks fit Sol Medium; documentation handoff can use Luna after commands are verified.
 
-**Reviewed evidence:** Sol Medium implements only ops/i26 with synthetic database/asset credential canaries.
+**Reviewed evidence:** Committed3bcbd42: current-format backup/restore, credential removal/free-page purge, exact pack/assets integrity and preserved board eligibility. Five synthetic tests pass independently.
 
 ### I27 — Review the complete journey and publish accurate operating docs
 
