@@ -22,6 +22,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
+	"github.com/veighnsche/find-income-dashboard/api/internal/collector"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jobs"
@@ -72,14 +73,20 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("configure organisation worker: %w", err)
 	}
+	collectorService := &collector.Collector{Store: database, PollInterval: time.Minute, Lease: 5 * time.Minute}
 	options.OrganisationAvailable = organisationWorker != nil
+	options.CollectionAvailable = true
 	server := newAPIServer(addr, newHandler(database, service, options))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
 	log.Printf("jobseek API listening on %s", addr)
-	if err := serveWithWorker(ctx, server, listener, organisationWorker); err != nil {
+	background := []backgroundRunner{{name: "collector", run: collectorService.Run}}
+	if organisationWorker != nil {
+		background = append(background, backgroundRunner{name: "organisation worker", run: organisationWorker.Run})
+	}
+	if err := serveWithBackground(ctx, server, listener, background...); err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
 	return nil
@@ -108,30 +115,64 @@ func serveWithWorker(ctx context.Context, server *http.Server, listener net.List
 	if worker == nil {
 		return serveUntil(ctx, server, listener)
 	}
+	return serveWithBackground(ctx, server, listener, backgroundRunner{name: "organisation worker", run: worker.Run})
+}
+
+type backgroundRunner struct {
+	name string
+	run  func(context.Context) error
+}
+
+type backgroundResult struct {
+	name string
+	err  error
+}
+
+// serveWithBackground gives each configured service the same cancellation
+// boundary, and joins every service before run closes the database.
+func serveWithBackground(ctx context.Context, server *http.Server, listener net.Listener, runners ...backgroundRunner) error {
+	if len(runners) == 0 {
+		return serveUntil(ctx, server, listener)
+	}
 	serviceCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	workerDone := make(chan error, 1)
+	runnerDone := make(chan backgroundResult, len(runners))
 	serverDone := make(chan error, 1)
-	go func() { workerDone <- worker.Run(serviceCtx) }()
+	for _, runner := range runners {
+		go func() { runnerDone <- backgroundResult{name: runner.name, err: runner.run(serviceCtx)} }()
+	}
 	go func() { serverDone <- serveUntil(serviceCtx, server, listener) }()
 	select {
-	case workerErr := <-workerDone:
+	case result := <-runnerDone:
+		unexpectedStop := ctx.Err() == nil && result.err == nil
 		cancel()
 		serverErr := <-serverDone
-		if workerErr != nil {
-			return fmt.Errorf("organisation worker: %w", workerErr)
+		for range len(runners) - 1 {
+			other := <-runnerDone
+			if result.err == nil && other.err != nil {
+				result = other
+			}
+		}
+		if result.err != nil {
+			return fmt.Errorf("%s: %w", result.name, result.err)
+		}
+		if unexpectedStop {
+			return fmt.Errorf("%s stopped unexpectedly", result.name)
 		}
 		return serverErr
 	case serverErr := <-serverDone:
 		cancel()
-		workerErr := <-workerDone
+		var runnerErr error
+		for range runners {
+			result := <-runnerDone
+			if runnerErr == nil && result.err != nil {
+				runnerErr = fmt.Errorf("%s: %w", result.name, result.err)
+			}
+		}
 		if serverErr != nil {
 			return serverErr
 		}
-		if workerErr != nil {
-			return fmt.Errorf("organisation worker: %w", workerErr)
-		}
-		return nil
+		return runnerErr
 	}
 }
 

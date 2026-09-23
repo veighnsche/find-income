@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/veighnsche/find-income-dashboard/api/internal/collector"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
@@ -135,5 +136,77 @@ func TestOrganisationWorkerStartsProcessesAndJoinsOnShutdown(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("server and worker did not join after cancellation")
+	}
+}
+
+func TestCollectorStartsWithNoBoardsAndJoinsOnShutdown(t *testing.T) {
+	ctx := context.Background()
+	database, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	boards, err := database.ListCollectorBoards(ctx)
+	if err != nil || len(boards) != 0 {
+		t.Fatalf("fresh database unexpectedly has collector boards: %d, %v", len(boards), err)
+	}
+	service := &collector.Collector{Store: database, PollInterval: 5 * time.Millisecond, Lease: time.Minute}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := newAPIServer(listener.Addr().String(), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	serviceCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	finished := make(chan error, 1)
+	go func() {
+		finished <- serveWithBackground(serviceCtx, server, listener, backgroundRunner{name: "collector", run: service.Run})
+	}()
+	response, err := (&http.Client{Timeout: time.Second}).Get("http://" + listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("HTTP server did not start with collector: %d", response.StatusCode)
+	}
+	cancel()
+	select {
+	case err := <-finished:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("collector did not join after cancellation")
+	}
+}
+
+func TestBackgroundFailureCancelsAndJoinsOtherRunner(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := newAPIServer(listener.Addr().String(), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	started := make(chan struct{})
+	joined := make(chan struct{})
+	want := errors.New("synthetic collector failure")
+	err = serveWithBackground(context.Background(), server, listener,
+		backgroundRunner{name: "other", run: func(ctx context.Context) error {
+			close(started)
+			<-ctx.Done()
+			close(joined)
+			return nil
+		}},
+		backgroundRunner{name: "collector", run: func(context.Context) error {
+			<-started
+			return want
+		}})
+	if !errors.Is(err, want) {
+		t.Fatalf("background error lost: %v", err)
+	}
+	select {
+	case <-joined:
+	default:
+		t.Fatal("other runner not joined before return")
 	}
 }
