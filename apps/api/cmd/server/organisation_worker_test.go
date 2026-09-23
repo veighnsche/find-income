@@ -142,7 +142,7 @@ func TestOrganisationWorkerStartsProcessesAndJoinsOnShutdown(t *testing.T) {
 	}
 }
 
-func TestCollectorStartsWithNoBoardsAndJoinsOnShutdown(t *testing.T) {
+func TestCollectorStartsWithBoardsDisabledAndJoinsOnShutdown(t *testing.T) {
 	ctx := context.Background()
 	database, err := store.Open(ctx, t.TempDir())
 	if err != nil {
@@ -150,8 +150,17 @@ func TestCollectorStartsWithNoBoardsAndJoinsOnShutdown(t *testing.T) {
 	}
 	defer database.Close()
 	boards, err := database.ListCollectorBoards(ctx)
-	if err != nil || len(boards) != 0 {
-		t.Fatalf("fresh database unexpectedly has collector boards: %d, %v", len(boards), err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, board := range boards {
+		if !board.Enabled {
+			continue
+		}
+		if _, err := database.UpdateCollectorBoard(ctx, store.Actor{Kind: "administrator", ID: "test-owner"},
+			board.ID, board.Revision, false, board.IntervalMinutes); err != nil {
+			t.Fatalf("disable seeded board %s: %v", board.ID, err)
+		}
 	}
 	service := &collector.Collector{Store: database, PollInterval: 5 * time.Millisecond, Lease: time.Minute}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
