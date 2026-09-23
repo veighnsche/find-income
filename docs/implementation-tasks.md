@@ -1,6 +1,6 @@
 # Recruitment agency — full task list and concurrent execution guide
 
-Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. API/contracts are committed in `2fdfe7d`, deployment configuration in `717ef93`, and web review in `8c8b66d`. Root check/test/build pass. Core review corrections, recovery and an isolated email adapter run concurrently with focused native-tool research.
+Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. API/contracts are committed in `2fdfe7d`, deployment configuration in `717ef93`, and web review in `8c8b66d`. Root check/test/build pass. Core corrections are frozen for independent review while contextual pack corrections and the isolated native-tool probe finish in parallel.
 
 **Current position: 5 tasks accepted, 12 partial, 1 active review task, 9 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I12, I14, I15, I18, I20, I26. Active: I13. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
@@ -30,15 +30,15 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I13-C core corrections | Sol High | Existing round lifecycle, agency collector continuation and scoped context files/tests only. |
-| I13-N native-tool evidence | Sol High | Research exact pinned Codex controls; notes only, no runtime edits or live model calls. |
-| I13-P | Sol High | Isolated Linux native-tool permission experiment with synthetic state/model transport; no deployment or account use. |
+| I13 core rereview | Astra High | Read-only review of the frozen lifecycle, collector continuation, retained-source authority and interruption fixes. |
+| I15-D pack correction | Sol Medium | Immutable corrected pack preparation and exact owner-instruction reader; shared input/schema integration remains core-owned. |
+| I13-P | Sol High | Finish isolated Linux native-tool permission evidence; no deployment or account use. |
 
-Web, delivery and relationship workers are idle. Recovery is committed; the runtime worker now owns only the isolated Linux feasibility probe. The delivery/pack worker is idle after committed5c3306b; no product send endpoint is registered. Core corrects the named integration findings while preserving batch collection and pending sources; runtime/ops isolation changes are not yet assigned. Four live workers maximum. The Astra independent reviewer has handed off and is idle.
+Core has handed off its named fixes and is idle while Astra reviews the frozen files. Web, source-research and relationship workers are idle. Recovery and the isolated SMTP adapter are committed; no product send endpoint is registered. The pack worker implements contextual corrections in disjoint files. Native-tool research is complete and the runtime worker is finishing the synthetic Linux probe. Runtime adoption still requires review. Four live workers maximum.
 
 Reviewed checkpoints: API `2fdfe7d`, deployment `717ef93`, UI `8c8b66d`. Root `pnpm check`, `pnpm test`, `pnpm build` pass after contract formatting. Web has no automated test files; controlled browser interactions and screenshots were reviewed. The e2e placeholder is replaced by browser fixture smoke in a2726ed; root pnpm e2e passed.
 
-I13 found four concrete gaps despite passing tests: native tools outside round accounting, expired paused rounds retaining the active slot, missing production Lever continuation, and prepare context reads using a resource outside the prepare scope. Full acceptance is withheld until corrected and verified. Reliable commissioned processing of supplied instructions/vacancies/links, pack correction, an explicit end-paused-round path, and Jev choice among neutral discovered leads remain open. See [input integration gap](/Users/vince/Projects/find-income/implementation-notes/implementation/I11-input-orchestration-gap.md).
+I13 found four concrete gaps despite passing tests: native tools outside round accounting, expired paused rounds retaining the active slot, missing production Lever continuation, and prepare context reads using a resource outside the prepare scope. Full acceptance is withheld until corrected and verified. Reliable commissioned processing of supplied instructions/vacancies/links, pack correction, an explicit end-paused-round path, and Jev choice among neutral discovered leads remain open. The commissioned input, profile-version and explicit paused-round replacement design is recorded in [contextual-input-decisions.md](contextual-input-decisions.md); shared implementation follows this review. See [input integration gap](/Users/vince/Projects/find-income/implementation-notes/implementation/I11-input-orchestration-gap.md).
 
 I14 retained ten completed responsibility cases (seven real, three synthetic) and one HTTP529-incomplete case. The 22 calls reported 60,960 tokens, exceeding the 60,000 target by 960 on the final response; failed-call usage is unknown. No automatic retry or general accuracy claim. See [evaluation](jev-responsibility-evaluation.md). Recovery committed3bcbd42 with five passing synthetic tests. Host/account and inbox choices remain unanswered; no live deployment, mailbox access or employer send occurred.
 
