@@ -30,10 +30,10 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I08/I10 substantial discovery | Sol High | Neutral candidate acquisition, Jev choice before verification, useful continuation within one finite commission and durable per-source recovery. |
+| I08/I10 substantial discovery | Sol High | Three reviewed corrections: reconciled neutral-search recovery, fresh-employer full-path allowance and explicit assessment omissions. |
 | I11 contextual-input UI | Sol Medium | Reviewed and committed12b138d; worker available for the I21 web contract handoff. |
 | I21 exact approval/delivery | Sol High | Delivery service/store/API, initial schema, operation registry, HTTP/contracts and startup composition; no discovery engine or web edits. |
-| I13 discovery review | Astra High | Read-only review of frozen discovery selection, phase recovery and allowance boundaries. |
+| I13 discovery review | Astra High | Review complete with three P2 findings; bounded correction recheck follows the implementation handoff. |
 
 Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; contextual input and shared pack transaction integration committed2279c3f after independent correction review, full Go suite and race-enabled recovery tests. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. Contextual-input UI is committed12b138d after root lint/TypeScript and production-build browser checks; real runtime acceptance remains open. The web writer is available for I21; interview helpers are committed7299c54 after root review/tests, and the I25 offer helpers are reviewed and committed in de84e23; both domain slices still need commissioned persistence/UI integration. Four live workers maximum.
 

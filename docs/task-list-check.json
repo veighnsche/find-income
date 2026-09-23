@@ -6,9 +6,8 @@
   "models_valid": true,
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
-    "I08/I10 local request-context measurement; implementation frozen",
-    "I13 independent substantial-discovery review",
-    "I21 exact approval/delivery corrections"
+    "I08/I10 three reviewed discovery corrections",
+    "I21 exact approval/delivery corrections and preparation hook"
   ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",
@@ -52,7 +51,8 @@
     "native_boundary": "a22afa7: root codex/codexrunner/codexservice suite, archived native-rollout parser positive/four negatives and runtime config/shell checks pass. Exact observed raw synthetic records saved. Real host/account/MCP still unverified.",
     "contextual_input": "Committed2279c3f: independent recheck closed all3 findings. Root full Go suite and targeted race-enabled real Stop/Resume, deduplicated URL replay and deadline expiry tests passed. Generated contracts match. Synthetic providers only; live acceptance open.",
     "offers": "Root offercomparison/jev tests passed after exact numeric context/recomputed binding and unsupported-currency corrections. Commissioned execution/persistence/UI still pending.",
-    "contextual_ui": "Committed12b138d: root lint/TypeScript and production-build Chromium smoke pass. Actual inputReport/packReport, exact lost-response replay, stale409 recovery, selected older pack retention and automatic new-version refresh verified with synthetic HTTP. Earlier draft assertion failed during list/detail refresh; explicit readiness and same-node/value/storage assertions now pass with one fill. Live runtime acceptance remains open."
+    "contextual_ui": "Committed12b138d: root lint/TypeScript and production-build Chromium smoke pass. Actual inputReport/packReport, exact lost-response replay, stale409 recovery, selected older pack retention and automatic new-version refresh verified with synthetic HTTP. Earlier draft assertion failed during list/detail refresh; explicit readiness and same-node/value/storage assertions now pass with one fill. Live runtime acceptance remains open.",
+    "discovery_review": "Independent review completed with3 P2 findings and one executed failing recovery overlay; corrections assigned. No live/provider readiness claim;1200-total-token cap remains unverified."
   },
   "protected_artifacts_unchanged_prior_check": 44,
   "proposed_next_slices": [
