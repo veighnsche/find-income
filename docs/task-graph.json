@@ -82,9 +82,9 @@
       "status": "integration_slice_dispatched",
       "thread_id": "01a0cf13-2c03-73f2-b074-6c73d7120ebe",
       "host_id": "local",
-      "review": "Supported mutation/MCP/remote-dispatch and collector staging code reviewed; final-page draining and completed-source transition corrections accepted. Scoped owner correction and remaining domain integration keep full I05 open.",
+      "review": "I05-A owner instructions, corrections, decisions, typed cards/history and atomic collector/deadline integration reviewed and committed6433d40. Startup remains gated until actual work loop; full I05 incomplete.",
       "remaining_work": "Implement scoped owner instructions and delegated preference/evidence updates, direct select/dismiss/acknowledge decisions, typed result/history reads, and the remaining shared domain boundaries needed by discovery and correction. Publish contracts early. Bind implemented services through the one round authority with I06/I07/I10; remove superseded standalone write paths when replacing them. Company/opportunity creation, scoped MCP, dispatch evidence and collector staging are already accepted.",
-      "active_slice": "I05-A as defined in implementation-tasks.md",
+      "active_slice": "I05-B production Start/Resume work loop and shared integration",
       "active_model": "gpt-6-sol",
       "active_effort": "high"
     },
@@ -101,14 +101,14 @@
       "scope": "Reconcile existing lifecycle/readiness drafts. Implement generation-bound login/disconnect, uncertain dispatch reconciliation, scoped app tools and bounded research access. Keep server credentials outside the runner and no paid API fallback. Own internal/codex*, excluding shared startup and store/schema files unless handed over.",
       "acceptance": "Focused protocol/service/runner tests cover late login, quota/readiness gaps, interruption, remote uncertainty and retries without clearing dispatch identity. Show how tool requests\u2014not just turns\u2014consume the round allowance. Fake checks do not count as real login or host containment.",
       "selection_reason": "Uncertain remote lifecycle and cross-file tool integration need Sol High; do not spend Astra on routine implementation.",
-      "status": "integration_slice_dispatched",
+      "status": "integration_slice_accepted",
       "thread_id": "01a0ce8e-4c6e-7c93-b63c-1084063ba7c0",
       "host_id": "local",
-      "active_slice": "I06-A as defined in implementation-tasks.md",
+      "active_slice": "I06-A reviewed and committed; runtime worker now on I12-A.",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
       "authorization": "Owner directly authorised implementation in runtime task; worker resumed.",
-      "review": "Lifecycle and explicit turn execution code plus fake transport/store/race/vet evidence reviewed. No live runtime or complete I06 acceptance.",
+      "review": "Reviewed bounded source_links and actual Shopify link probe, corrected HTML tokenizer decoys and saved-deadline terminal handling; worker race tests and root focused integration checks pass. Full runtime/live orchestration remains pending.",
       "remaining_work": "Connect the accepted turn executor to commissioned work; implement and verify one bounded research/tool path with operation-level accounting. Complete production control/readiness/cancellation integration. Lifecycle, exact history, generation-bound capabilities and explicit fake-tested execution are already accepted. Actual host/account validation remains I12."
     },
     {
@@ -123,14 +123,14 @@
       "scope": "Reuse source-identity drafts; adapt Lever to commissioned batches with page/intra-page continuation, stable opening/sighting identity, source snapshots, unchanged-input reuse and changed-role refresh. Own internal/collector and ingestion identity files only after explicit store/schema handoff.",
       "acceptance": "Unchanged sources skip extraction; changed same-ID content updates one role with evidence history. Source failures do not close roles, uncertain matches are not silently merged, oversized pages respect item allowance, and due times never dispatch work. Run focused collector/store boundary checks.",
       "selection_reason": "Existing identity and runtime coupling justify Sol High; no general crawler or extra connector is required here.",
-      "status": "integration_slice_dispatched",
+      "status": "integration_slice_accepted",
       "thread_id": "01a0ce8e-2459-78d0-9843-ac474acffe5f",
       "host_id": "local",
-      "active_slice": "I07-A as defined in implementation-tasks.md",
+      "active_slice": "I07-A handed off; worker now on I08-A.",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
-      "review": "Collector acquisition accepted after exact-byte roundtrip correction. Full round/identity/persistence integration pending I05.",
-      "remaining_work": "Connect acquisition and staged batches to source identity, snapshots, unchanged-input reuse and changed-opening refresh. Publish results into the shared authorized domain path and persist continuation across commissioned rounds. The bounded Lever adapter and exact-byte final-page/source-switch staging already exist; do not rebuild them."
+      "review": "Reviewed exact-byte publication, same-ID refresh and verified owner-instruction protection; worker full store/collector tests and race checks pass. Three-round continuation fixture uses two HTTP fetches for 26 items. Production loop remains open.",
+      "remaining_work": "Bind AcquireLever, SaveRoundCollectorBatch and RoundCollectorOutcomes into actual Start/Resume orchestration; dispatch only current new/changed sources to Codex and Jev. Identity/refresh/cursor and owner-correction integration are implemented."
     },
     {
       "id": "I08",
@@ -145,8 +145,14 @@
       "scope": "Implement the smallest verified bounded search/career-link path from I02 alongside Lever. Produce persisted source candidates and exact employer evidence, with operation limits, unsupported-source reporting and continuation. This is candidate acquisition; I10 wires Jev selection. Do not require Ashby/general custom-site coverage to finish it.",
       "acceptance": "Deterministic source fixtures exercise discovered official links beyond the seeds, redirected/inaccessible pages and allowance exhaustion without manual board entry. A real non-seed result is verified later in I14. Search snippets alone are not vacancy evidence.",
       "selection_reason": "One verified acquisition path with established boundaries is Sol Medium; escalate if the feasibility record exposes a genuinely different integration problem.",
-      "status": "waiting",
-      "remaining_work": "Verify and implement a minimal non-seed employer-source discovery path. Persist candidate origins, evidence and continuation; feed candidates to I10. The search capability is not yet established, so do not claim an available provider or silently substitute desktop tools."
+      "status": "integration_slice_dispatched",
+      "remaining_work": "Implement researched Himalayas public read-method adapter with recorded requests/responses and bounded candidates/continuation; integrate core authority and official source verification. Root live probes and three reworded Jev consultations are saved, but no dashboard acquisition or real shortlist is accepted.",
+      "thread_id": "01a0ce8e-2459-78d0-9843-ac474acffe5f",
+      "host_id": "local",
+      "active_slice": "I08-A review correction: atomic candidate authority, durable before-send request and expiry handling",
+      "active_model": "gpt-6-sol",
+      "active_effort": "high",
+      "review": "Initial adapter slice not accepted: root found free candidate mutation without capability/item/deadline/audit boundary, after-send-only request capture and missing expiry cleanup. Escalated from Sol Medium to Sol High for these cross-store authority corrections."
     },
     {
       "id": "I09",
@@ -201,13 +207,13 @@
       "scope": "Reuse contextual-recovery work. Build the known-answer brief, named Start/Stop/Resume, partial sourced cards, preserved selection and one context-bound instruction/URL/full-text input against stable DTOs. Remove manual source/preference/record forms and inactive navigation. Use stored recommendations supplied by I10 when integrated.",
       "acceptance": "Browser fixtures show no repeated known questions, row entry, chat or extra planning click; material unknowns remain visible. Correct/dismiss/select has the right local or campaign scope. Drafts and partial results survive refresh without new work. Check narrow-screen reading and interruption states.",
       "selection_reason": "The approved interaction pattern and stable API make this ordinary Sol Medium UI work. Do not assign Luna to uncertain browser state/debugging.",
-      "status": "integration_slice_dispatched",
+      "status": "integration_slice_accepted",
       "thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
       "host_id": "local",
-      "active_slice": "I11-A server-backed owner instruction, decisions, typed cards/history integration.",
+      "active_slice": "I11-A reviewed and committed9487771; no active worker.",
       "active_model": "gpt-6-sol",
       "active_effort": "medium",
-      "review": "UI/controller code and synthetic browser evidence reviewed, including real Stop shape, automatic progress, terminal polling stop, delayed-read fencing and preserved drafts/results. Full I11 remains unchecked.",
+      "review": "Reviewed server-backed instruction/decision/cards/history code and actual narrow-screen fixture screenshots/interaction report including conflict/idempotency/Stop race. Web lint/build and root check/build pass. Live loop/onboarding/real results remain incomplete.",
       "remaining_work": "Connect the existing UI to server-backed brief corrections, record instructions, select/dismiss, documented profile history/proposals, typed source-linked results and saved next-outcome advice. Provide onboarding through existing career material plus one contextual input for genuinely missing facts. Start/Stop/Resume, automatic read-only progress, partial cards and browser-local drafts are already accepted; local drafts/selection are not completed server actions."
     },
     {
@@ -224,8 +230,13 @@
       "scope": "Complete the concrete host/account prerequisites identified in I02, private transport/MCP reachability, persistent paths and actual supported sign-in. Validate positive work access and denied/absent app-secret/DB access. Coordinate unavoidable owner login input; do not purchase a host or infer an available account.",
       "acceptance": "Record actual host/runtime identity, authenticated reachability, isolation checks and sign-in readiness. Readiness and restart trigger no recruitment. Missing host or owner login keeps this task incomplete; it must not prevent independent offline implementation from progressing.",
       "selection_reason": "Real authentication, isolation and recovery configuration are consequential cross-environment work: Sol High, with targeted Astra review in I13.",
-      "status": "waiting",
-      "remaining_work": "Select and configure the concrete private app/runner environment, supported login and MCP transport; verify actual model/tool access, containment, shutdown/restart and operation. Prepare deployable configuration/runbook from current code while missing host/account details are resolved. No host, live login or production execution has been verified."
+      "status": "independent_slice_dispatched",
+      "remaining_work": "Prepare concrete local ops packaging, then select/configure private app/isolated runner hosts and supported owner sign-in. Read-only infra/linux inventory exists; host preference remains pending. No actual isolation or live execution accepted.",
+      "thread_id": "01a0ce8e-4c6e-7c93-b63c-1084063ba7c0",
+      "host_id": "local",
+      "active_slice": "I12-A local reviewable deployment artifacts and acceptance commands; no provisioning yet",
+      "active_model": "gpt-6-sol",
+      "active_effort": "high"
     },
     {
       "id": "I13",
@@ -282,8 +293,13 @@
       "scope": "Import only the existing approved source assets needed for one pack. Inspect the selected role\u2019s actual route and required questions, use separately reviewed Jev requirement/asset relevance, generate answers and compile/render a Typst PDF. Store immutable sources, answers, destination, attachments and material versions; show review and contextual correction.",
       "acceptance": "With a sourced fixture, produce an inspectable PDF/answers with no false tenure or employment labels, no asset-entry form and no sent event. Source every claim; missing required personal facts are asked only after checking existing material. No general library, portfolio rebuild or multi-pack prerequisite. I16 supplies the real selected role.",
       "selection_reason": "Existing Typst/assets and established API make a one-pack vertical slice Sol Medium; implementation can overlap discovery validation instead of waiting for it.",
-      "status": "waiting",
-      "remaining_work": "Build one evidence-backed Typst PDF/answer pack and its review/correction flow from approved career assets and a selected role. Compile against fixtures while discovery is being finished; no asset-library project is required."
+      "status": "independent_slice_dispatched",
+      "remaining_work": "Build one evidence-backed Typst PDF/answer pack and its review/correction flow from approved career assets and a selected role. Compile against fixtures while discovery is being finished; no asset-library project is required.",
+      "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
+      "host_id": "local",
+      "active_slice": "I15-A truthful immutable application-pack service and private Typst rendering",
+      "active_model": "gpt-6-sol",
+      "active_effort": "medium"
     },
     {
       "id": "I16",
@@ -485,33 +501,33 @@
   "execution_guide": "/Users/vince/Projects/find-income/dashboard/docs/implementation-tasks.md",
   "next_proposed_slices": [
     {
-      "id": "I05-A",
+      "id": "I05-B",
       "task": "I05",
       "model": "gpt-6-sol",
       "effort": "high"
     },
     {
-      "id": "I06-A",
-      "task": "I06",
+      "id": "I12-A",
+      "task": "I12",
       "model": "gpt-6-sol",
       "effort": "high"
     },
     {
-      "id": "I07-A",
-      "task": "I07",
+      "id": "I08-A",
+      "task": "I08",
       "model": "gpt-6-sol",
       "effort": "high"
     },
     {
-      "id": "I11-A",
-      "task": "I11",
+      "id": "I15-A",
+      "task": "I15",
       "model": "gpt-6-sol",
       "effort": "medium"
     }
   ],
   "max_concurrent_live_workers": 4,
   "dispatch_status": "active_goal_four_live_workers",
-  "code_checkpoint": "5e93c0d0282ff36d55485ebf664c805c7e84de9b",
+  "code_checkpoint": "9487771",
   "goal_status": "active",
   "goal_objective": "Complete all I01\u2013I27 task acceptance using concurrent live tasks, reviewed coherent commits and actual live acceptance where required."
 }

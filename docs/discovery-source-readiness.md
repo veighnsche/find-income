@@ -1,0 +1,11 @@
+# Nonseed discovery — I08 evidence and selected adapter
+
+Coordinator checked public access on 23 September 2026. Himalayas REST search returned 20 structured listings without authentication. Its public MCP search returned previously unknown employers, and company detail exposed a website. These are candidate origins; neither a job-board description nor its country filter proves employer confirmation, personal fit, or comprehensive Amsterdam coverage.
+
+I08-A implements only a server-mediated allowlist of `search_jobs`, `get_company_details`, and `get_job_details`. Codex receives bounded recorded evidence through our authority boundary, not the provider's entire tool catalogue. Jev handles semantic choices from supplied alternatives; Go enforces scope, accounting, byte/time limits and continuation. Search parameters come from the user's brief, not fixed software-language rules. Display the provider's required source credit and backlink. [Provider MCP reference](https://himalayas.app/docs/remote-jobs-mcp), [API documentation](https://himalayas.app/api).
+
+Three fresh, fully reworded design consultations selected this route over combining REST with company MCP lookup, Remotive, or deferral. Selected probabilities were .51/.54/.67, with modest confidence. All selected retaining the existing no-redirect reader (.55/.72/.63). Agreement is advice, not proof. The alternative REST combination remained a material competitor. There was no choice disagreement; probability movement was recorded as wording sensitivity.
+
+The measured DoiT website redirected and its destination exceeded the 1MiB probe cap. Official-source verification therefore remains incomplete. Unsupported pages must stay visible, with further candidates explored inside the same commissioned allowance. I14 must determine whether those limits obstruct useful results; do not claim a real shortlist from these probes.
+
+Private raw probes, all three requests/responses, preflight equivalence checks and the full decision record live in `implementation-notes/implementation/I08-research/` in the project workspace. No application was sent and no dashboard runner was used. I08-A implementation and actual I14 acceptance remain open.
