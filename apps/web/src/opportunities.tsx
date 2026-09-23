@@ -289,6 +289,8 @@ function OpportunityHistory({ id, onSessionLost }: { id: string; onSessionLost: 
 
 function OpportunityDetail({
   id,
+  initialPackId,
+  focusPreparation,
   session,
   companies,
   onSessionLost,
@@ -296,6 +298,8 @@ function OpportunityDetail({
   onBack,
 }: {
   id: string;
+  initialPackId?: string;
+  focusPreparation?: boolean;
   session: Session;
   companies: Company[];
   onSessionLost: () => void;
@@ -400,6 +404,8 @@ function OpportunityDetail({
           <ApplicationPackPanel
             opportunity={opportunity}
             selected={ownerDecision?.decision === 'selected'}
+            initialPackId={initialPackId}
+            focusPreparation={focusPreparation}
             session={session}
             onSessionLost={onSessionLost}
           />
@@ -457,6 +463,8 @@ export function Opportunities({
       return null;
     }
   });
+  const [initialPackId, setInitialPackId] = useState('');
+  const [focusPreparation, setFocusPreparation] = useState(false);
   const [briefVersion, setBriefVersion] = useState<number | null>(null);
   const [currentProfileVersion, setCurrentProfileVersion] = useState<number | null>(null);
   const [briefInstruction, setBriefInstruction] = useState(false);
@@ -489,12 +497,22 @@ export function Opportunities({
   const [archiveFilter, setArchiveFilter] = useState<'active' | 'archived' | 'all'>('active');
   function openOpportunity(id: string | null) {
     setSelected(id);
+    setInitialPackId('');
+    setFocusPreparation(false);
     try {
       if (id) localStorage.setItem(selectedKey, id);
       else localStorage.removeItem(selectedKey);
     } catch {
       /* Selection remains available in this page. */
     }
+  }
+  function openRecommendedPack(opportunityId: string, packId: string) {
+    openOpportunity(opportunityId);
+    setInitialPackId(packId);
+  }
+  function openRecommendedPreparation(opportunityId: string) {
+    openOpportunity(opportunityId);
+    setFocusPreparation(true);
   }
   async function loadSummaries(views: OpportunityView[], append: boolean) {
     setOrganisationLoading(true);
@@ -566,6 +584,8 @@ export function Opportunities({
         <OpportunityDetail
           key={selected}
           id={selected}
+          initialPackId={initialPackId}
+          focusPreparation={focusPreparation}
           session={session}
           companies={companies}
           onSessionLost={onSessionLost}
@@ -604,6 +624,8 @@ export function Opportunities({
         onSessionLost={onSessionLost}
         onBriefLoaded={setCurrentProfileVersion}
         onOpenOpportunity={(id) => openOpportunity(id)}
+        onOpenPack={openRecommendedPack}
+        onOpenPreparation={openRecommendedPreparation}
         onEditBrief={(version) => {
           setBriefInstruction(true);
           setBriefVersion(version);

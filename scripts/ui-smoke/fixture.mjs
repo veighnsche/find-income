@@ -89,6 +89,47 @@ const pack1 = {
   contentSha256: 'a'.repeat(64),
   createdAt: '2026-09-22T12:00:00Z',
 };
+const deliveryRoute = {
+  id: 'synthetic-mail-route',
+  opportunityId: opportunity.id,
+  kind: 'direct',
+  destinationText: 'jobs@example.invalid',
+  sourceExcerpt: 'Send your application to jobs@example.invalid',
+  revision: 1,
+  createdAt: time,
+  updatedAt: time,
+};
+function deliveryReview(id, packIds) {
+  return {
+    id,
+    materialSha256: '8'.repeat(64),
+    items: packIds.map((packId, index) => ({
+      id: `${id}-item-${index + 1}`,
+      reviewId: id,
+      packId,
+      opportunityId: opportunity.id,
+      opportunityRevision: opportunity.revision,
+      sourceSha256: '1'.repeat(64),
+      profileRevision: profile.version,
+      packContentSha256: '2'.repeat(64),
+      routeId: deliveryRoute.id,
+      routeRevision: deliveryRoute.revision,
+      routeSha256: '3'.repeat(64),
+      title: opportunity.title,
+      companyName: company.name,
+      routeExcerpt: deliveryRoute.sourceExcerpt,
+      recipient: deliveryRoute.destinationText,
+      sender: 'owner@example.invalid',
+      subject: `Application: ${opportunity.title}`,
+      body: 'This synthetic research opening interests me.',
+      attachmentSha256: '4'.repeat(64),
+      mimeSha256: `${index + 5}`.repeat(64),
+      messageId: `<synthetic-${index + 1}@example.invalid>`,
+      state: 'prepared',
+      current: true,
+    })),
+  };
+}
 function manifest(pack) {
   return {
     role: {
@@ -229,6 +270,23 @@ export async function startFixture() {
     staleNextPrepare: false,
     staleNextDiscovery: false,
     discoveryReady: false,
+    latestCompletedDiscover: null,
+    recommendationCards: [],
+    delivery: {
+      reviews: new Map(),
+      keys: new Map(),
+      failFirstPrepareResponse: false,
+      failFirstSendResponse: false,
+      dropNextSendBeforeArrival: false,
+      deferSendResponse: false,
+      sendResponsePending: false,
+      releaseSend: null,
+      staleNextApproval: false,
+      senderAvailable: true,
+      routeSupported: true,
+      outcome: 'accepted_by_smtp',
+      round: null,
+    },
     requests: [],
   };
   const server = createServer(async (req, res) => {
@@ -248,6 +306,168 @@ export async function startFixture() {
         return sendJson(res, 200, { status: 'ok', service: 'jobseek-api', version: 'ui-fixture' });
       if (path === '/api/v1/preferences')
         return sendJson(res, 200, { ...profile, version: state.profileVersion });
+      if (path === '/api/v1/delivery/capability')
+        return sendJson(res, 200, {
+          submissionAvailable: state.delivery.senderAvailable,
+          receiptLookup: false,
+          reason: 'SMTP submission has no verified employer receipt lookup.',
+        });
+      if (path === '/api/v1/delivery/reviews' && req.method === 'POST') {
+        if (
+          !payload.requestKey ||
+          !Array.isArray(payload.packIds) ||
+          payload.packIds.length < 1 ||
+          payload.packIds.length > 3
+        )
+          return error(res, 400);
+        const previous = state.delivery.keys.get(payload.requestKey);
+        if (previous) {
+          if (previous.packIds.join('|') !== payload.packIds.join('|')) return error(res, 409);
+          return sendJson(res, 200, state.delivery.reviews.get(previous.id));
+        }
+        if (!state.delivery.senderAvailable) return error(res, 503);
+        if (!state.delivery.routeSupported) return error(res, 422);
+        if (!state.decision || state.decision.decision !== 'selected') return error(res, 409);
+        if (payload.packIds.some((id) => !state.packs.some((pack) => pack.id === id)))
+          return error(res, 422);
+        const id = `synthetic-delivery-${state.delivery.reviews.size + 1}`;
+        const review = deliveryReview(id, payload.packIds);
+        state.delivery.reviews.set(id, review);
+        state.delivery.keys.set(payload.requestKey, { id, packIds: payload.packIds });
+        if (state.delivery.failFirstPrepareResponse) {
+          state.delivery.failFirstPrepareResponse = false;
+          return error(res, 503);
+        }
+        return sendJson(res, 201, review);
+      }
+      if (path.startsWith('/api/v1/delivery/reviews/')) {
+        const parts = path.split('/');
+        const review = state.delivery.reviews.get(parts[5]);
+        if (!review) return error(res, 404);
+        const action = parts[6];
+        if (!action && req.method === 'GET') return sendJson(res, 200, review);
+        if (action === 'approve' && req.method === 'POST') {
+          if (state.delivery.staleNextApproval) {
+            state.delivery.staleNextApproval = false;
+            review.items[0].current = false;
+            review.items[0].blockingReason = 'route_changed';
+            return error(res, 409);
+          }
+          if (
+            payload.materialSha256 !== review.materialSha256 ||
+            review.items.some((item) => !item.current)
+          )
+            return error(res, 409);
+          review.approvedSha256 = payload.materialSha256;
+          review.approvedAt = time;
+          return sendJson(res, 200, review);
+        }
+        if (action === 'send' && req.method === 'POST') {
+          if (state.delivery.dropNextSendBeforeArrival) {
+            state.delivery.dropNextSendBeforeArrival = false;
+            return error(res, 503);
+          }
+          if (state.delivery.round?.scope.inputRefs.includes(`delivery_review:${review.id}`))
+            return sendJson(res, 200, { review, round: state.delivery.round });
+          if (
+            review.approvedSha256 !== review.materialSha256 ||
+            review.items.some((item) => !item.current || item.state !== 'prepared')
+          )
+            return error(res, 409);
+          if (state.delivery.round) return error(res, 409);
+          state.delivery.round = {
+            ...round,
+            id: `synthetic-delivery-round-${state.delivery.reviews.size}`,
+            intent: 'Deliver exact owner-approved applications',
+            outcome: 'deliver',
+            state:
+              state.delivery.outcome === 'sending'
+                ? 'running'
+                : state.delivery.outcome === 'uncertain'
+                  ? 'paused'
+                  : 'completed',
+            scope: {
+              inputRefs: [`delivery_review:${review.id}`],
+              resources: review.items.map((item) => `delivery:${item.id}`),
+              operations: ['delivery.submit'],
+              delegates: [],
+            },
+            step: state.delivery.outcome,
+            deliverableStatus:
+              state.delivery.outcome === 'accepted_by_smtp'
+                ? 'submission_recorded'
+                : 'submission_unverified',
+            reconciliationRequired: state.delivery.outcome === 'uncertain',
+          };
+          for (const [index, item] of review.items.entries()) {
+            item.state =
+              state.delivery.outcome === 'sending' && index > 0
+                ? 'prepared'
+                : state.delivery.outcome;
+            item.roundId = state.delivery.round.id;
+            if (item.state !== 'prepared') {
+              item.smtpStage =
+                state.delivery.outcome === 'accepted_by_smtp' ? 'data_reply' : 'data';
+              item.smtpCode = state.delivery.outcome === 'accepted_by_smtp' ? 250 : undefined;
+            }
+          }
+          if (state.delivery.deferSendResponse) {
+            state.delivery.sendResponsePending = true;
+            await new Promise((resolve) => {
+              state.delivery.releaseSend = resolve;
+            });
+            state.delivery.sendResponsePending = false;
+            state.delivery.releaseSend = null;
+          }
+          if (state.delivery.failFirstSendResponse) {
+            state.delivery.failFirstSendResponse = false;
+            return error(res, 503);
+          }
+          return sendJson(res, 200, { review, round: state.delivery.round });
+        }
+        if (action === 'reconcile' && req.method === 'POST')
+          return sendJson(res, 200, {
+            supported: false,
+            reason: 'No authenticated read-only receipt query.',
+          });
+        if (action === 'close' && req.method === 'POST') {
+          if (state.delivery.round?.state !== 'paused') return error(res, 409);
+          state.delivery.round = {
+            ...state.delivery.round,
+            state: 'completed',
+            deliverableStatus: 'submission_unverified',
+          };
+          return sendJson(res, 200, state.delivery.round);
+        }
+      }
+      if (state.delivery.round && path === `/api/v1/rounds/${state.delivery.round.id}`)
+        return sendJson(res, 200, state.delivery.round);
+      if (
+        state.delivery.round &&
+        path === `/api/v1/rounds/${state.delivery.round.id}/stop` &&
+        req.method === 'POST'
+      ) {
+        state.delivery.round = {
+          ...state.delivery.round,
+          state: 'paused',
+          revision: state.delivery.round.revision + 1,
+        };
+        state.delivery.reviews.forEach((review) =>
+          review.items.forEach((item) => {
+            if (item.state === 'sending') item.state = 'uncertain';
+          }),
+        );
+        state.delivery.releaseSend?.();
+        return sendJson(res, 200, state.delivery.round);
+      }
+      if (path === '/api/v1/rounds/active')
+        if (
+          state.delivery.round &&
+          ['queued', 'running', 'awaiting_input', 'stopping', 'paused'].includes(
+            state.delivery.round.state,
+          )
+        )
+          return sendJson(res, 200, state.delivery.round);
       if (path === '/api/v1/rounds/active')
         return ['queued', 'running', 'awaiting_input', 'stopping', 'paused'].includes(
           state.round.state,
@@ -273,6 +493,8 @@ export async function startFixture() {
           limits: allowance,
           sourceCount: 0,
         });
+      if (path === '/api/v1/rounds/latest-completed')
+        return sendJson(res, 200, state.latestCompletedDiscover);
       if (path === `/api/v1/rounds/${state.round.id}`) return sendJson(res, 200, state.round);
       if (
         path.startsWith('/api/v1/rounds/') &&
@@ -280,6 +502,8 @@ export async function startFixture() {
         path.split('/').length === 5
       )
         return sendJson(res, 200, state.previousRounds.get(path.split('/')[4]));
+      if (path === `/api/v1/rounds/${state.round.id}/cards` && state.round.outcome === 'discover')
+        return sendJson(res, 200, { items: state.recommendationCards });
       if (
         path === `/api/v1/rounds/${state.round.id}/history` ||
         path === `/api/v1/rounds/${state.round.id}/cards` ||
@@ -518,10 +742,11 @@ export async function startFixture() {
         path === '/api/v1/owner-instructions' ||
         path === '/api/v1/relationships/counterparties' ||
         path === '/api/v1/relationships/events' ||
-        path === `/api/v1/opportunities/${opportunity.id}/routes` ||
         path === '/api/v1/changes'
       )
         return sendJson(res, 200, { items: [] });
+      if (path === `/api/v1/opportunities/${opportunity.id}/routes`)
+        return sendJson(res, 200, { items: state.delivery.routeSupported ? [deliveryRoute] : [] });
       return error(res, 503);
     } catch (cause) {
       sendJson(res, 500, { error: { message: `Synthetic fixture error: ${cause.message}` } });

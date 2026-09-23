@@ -271,7 +271,7 @@ export function PackRoundPanel({
   const active = round && runningStates.has(round.state);
   const paused = round?.state === 'paused';
   return (
-    <section className="op-card" aria-label="Application preparation">
+    <section className="op-card" id="application-preparation" aria-label="Application preparation">
       <div className="op-heading-row">
         <h2>Prepare this application</h2>
         <button

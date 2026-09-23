@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ProcessInputReport } from './process-input-report';
 import {
+  checkRecommendationTarget,
+  readHomeRecommendation,
+  readRecommendationCurrentness,
+  recommendationExplanation,
+} from './home-recommendation';
+import {
   getActiveRound,
+  getLatestCompletedDiscoveryRound,
   getRoundCards,
   getRoundCapability,
   getRoundHistory,
@@ -67,12 +74,16 @@ export function AgencyHome({
   session,
   onSessionLost,
   onOpenOpportunity,
+  onOpenPack,
+  onOpenPreparation,
   onEditBrief,
   onBriefLoaded,
 }: {
   session: Session;
   onSessionLost: () => void;
   onOpenOpportunity: (id: string) => void;
+  onOpenPack: (opportunityId: string, packId: string) => void;
+  onOpenPreparation: (opportunityId: string) => void;
   onEditBrief: (version: number) => void;
   onBriefLoaded?: (version: number) => void;
 }) {
@@ -89,6 +100,11 @@ export function AgencyHome({
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingStart, setPendingStart] = useState<StartRoundRequest | null>(readPendingStart);
   const [staleStart, setStaleStart] = useState(false);
+  const [adviceCheck, setAdviceCheck] = useState<{ key: string; reason: string | null } | null>(
+    null,
+  );
+  const [adviceBusy, setAdviceBusy] = useState(false);
+  const [adviceError, setAdviceError] = useState('');
   const readController = useRef<AbortController | null>(null);
   const readPromise = useRef<Promise<Round | null | undefined> | null>(null);
   const readVersion = useRef(0);
@@ -125,12 +141,20 @@ export function AgencyHome({
           ]);
           let current = active;
           if (!current) {
+            let id = '';
             try {
-              const id = localStorage.getItem(lastRoundKey);
-              if (id) current = await getRound(id, controller.signal);
-            } catch (cause) {
-              if (!(cause instanceof RequestError && cause.status === 404)) throw cause;
+              id = localStorage.getItem(lastRoundKey) || '';
+            } catch {
+              /* The server can still find completed work without browser storage. */
             }
+            if (id) {
+              try {
+                current = await getRound(id, controller.signal);
+              } catch (cause) {
+                if (!(cause instanceof RequestError && cause.status === 404)) throw cause;
+              }
+            }
+            if (!current) current = await getLatestCompletedDiscoveryRound(controller.signal);
           }
           if (!currentRead()) return undefined;
           setPreferences(brief);
@@ -333,6 +357,123 @@ export function AgencyHome({
     );
   }
 
+  const recommendation = readHomeRecommendation(round);
+  const currentness = readRecommendationCurrentness(round);
+  const adviceKey =
+    recommendation && preferences
+      ? `${round?.id}:${round?.revision}:${preferences.version}:${recommendation.action || recommendation.status}:${recommendation.target?.id || ''}`
+      : '';
+  useEffect(() => {
+    if (!recommendation || !round || !preferences || currentness?.status !== 'current') {
+      setAdviceCheck(null);
+      return;
+    }
+    const controller = new AbortController();
+    void checkRecommendationTarget(recommendation, round, preferences.version, controller.signal)
+      .then((reason) => {
+        if (!controller.signal.aborted) setAdviceCheck({ key: adviceKey, reason });
+      })
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        if (isUnauthenticated(cause)) onSessionLost();
+        else
+          setAdviceCheck({
+            key: adviceKey,
+            reason: 'Current source records could not be verified.',
+          });
+      });
+    return () => controller.abort();
+  }, [
+    round,
+    preferences,
+    recommendation?.status,
+    recommendation?.action,
+    recommendation?.target?.id,
+    currentness?.status,
+    adviceKey,
+    onSessionLost,
+  ]);
+
+  async function followRecommendation() {
+    if (
+      !recommendation ||
+      !round ||
+      !preferences ||
+      !recommendation.action ||
+      !recommendation.target ||
+      currentness?.status !== 'current' ||
+      adviceCheck?.key !== adviceKey ||
+      adviceCheck.reason ||
+      adviceBusy
+    )
+      return;
+    setAdviceBusy(true);
+    setAdviceError('');
+    try {
+      const [freshRound, freshProfile, activeRound] = await Promise.all([
+        getRound(round.id),
+        getPreferences(),
+        getActiveRound(),
+      ]);
+      const freshAdvice = readHomeRecommendation(freshRound);
+      const verdict = readRecommendationCurrentness(freshRound);
+      if (
+        !freshAdvice ||
+        verdict?.status !== 'current' ||
+        freshAdvice.action !== recommendation.action ||
+        freshAdvice.target?.id !== recommendation.target.id ||
+        freshAdvice.target?.revision !== recommendation.target.revision ||
+        freshAdvice.target?.contentSha256 !== recommendation.target.contentSha256
+      ) {
+        setRound(freshRound);
+        setAdviceError(
+          'Saved advice changed or is now historical. Refresh and review the current work.',
+        );
+        return;
+      }
+      const stale = await checkRecommendationTarget(freshAdvice, freshRound, freshProfile.version);
+      if (stale || activeRound) {
+        setPreferences(freshProfile);
+        setRound(freshRound);
+        setAdviceError(
+          stale || 'Another commission is active. Finish or stop it before following this advice.',
+        );
+        return;
+      }
+      if (freshAdvice.action === 'discover') {
+        await start();
+      } else if (freshAdvice.action === 'review_opportunities') {
+        const savedCards = await getRoundCards(freshRound.id);
+        setCards(savedCards);
+        setCardsAvailable(true);
+        if (!savedCards.length) setAdviceError('No saved role cards are available for this round.');
+        else
+          window.requestAnimationFrame(() =>
+            document.getElementById('saved-round-cards')?.scrollIntoView(),
+          );
+      } else if (freshAdvice.action === 'prepare') {
+        onOpenPreparation(freshAdvice.target!.id);
+      } else if (freshAdvice.action === 'review_pack') {
+        onOpenPack(freshAdvice.target!.opportunityId!, freshAdvice.target!.id);
+      }
+    } catch (cause) {
+      if (isUnauthenticated(cause)) onSessionLost();
+      else
+        setAdviceError(`${message(cause)} No recommended action was taken; refresh current work.`);
+    } finally {
+      setAdviceBusy(false);
+    }
+  }
+
+  const recommendedActionLabel =
+    recommendation?.action === 'discover'
+      ? 'Find more sourced opportunities'
+      : recommendation?.action === 'review_opportunities'
+        ? 'Review saved opportunity cards'
+        : recommendation?.action === 'prepare'
+          ? 'Open selected role to prepare its application'
+          : 'Open exact saved application pack';
+
   const active = round && ['queued', 'running', 'awaiting_input', 'stopping'].includes(round.state);
   const paused = round?.state === 'paused';
   const reportSummary =
@@ -389,9 +530,10 @@ export function AgencyHome({
               </p>
             )}
             <details>
-              <summary>Scope and remaining allowance</summary>
+              <summary>Work details</summary>
               <p>
-                Outcome: {round.outcome}. Deadline: {new Date(round.deadline).toLocaleString()}.
+                Round <code>{round.id}</code> · outcome: {round.outcome}. Deadline:{' '}
+                {new Date(round.deadline).toLocaleString()}.
               </p>
               <p>
                 Remaining: {remaining(round.limits.requests, round.used.requests)} requests,{' '}
@@ -432,12 +574,117 @@ export function AgencyHome({
                 remaining allowance remain readable.
               </p>
             )}
+            {!active && round.outcome === 'discover' && round.state === 'completed' && (
+              <div className="agency-next" aria-label="Saved next-action advice">
+                <h3>Saved next-action advice</h3>
+                {recommendation ? (
+                  <>
+                    <p>
+                      <strong>
+                        {recommendation.status === 'selected'
+                          ? 'Suggested action'
+                          : recommendation.status === 'unresolved'
+                            ? 'No action selected'
+                            : 'Advice unavailable'}
+                        .
+                      </strong>{' '}
+                      {recommendation.status === 'selected'
+                        ? recommendation.reason ||
+                          'A supported action was saved for this completed work.'
+                        : recommendationExplanation(recommendation.code)}
+                    </p>
+                    {recommendation.code && recommendation.status !== 'selected' && (
+                      <p className="hint">Saved reason code: {recommendation.code}.</p>
+                    )}
+                    {recommendation.status === 'selected' && (
+                      <>
+                        <p
+                          className={
+                            currentness?.status === 'current' &&
+                            adviceCheck?.key === adviceKey &&
+                            !adviceCheck.reason
+                              ? 'hint'
+                              : 'error'
+                          }
+                        >
+                          {currentness?.status !== 'current'
+                            ? `Historical advice: ${currentness?.code || 'currentness could not be checked'}.`
+                            : adviceCheck?.key !== adviceKey
+                              ? 'Checking the current brief, target and saved source revisions…'
+                              : adviceCheck.reason
+                                ? `Historical advice: ${adviceCheck.reason}`
+                                : 'Current saved advice. The action still checks server state when you click.'}
+                        </p>
+                        <button
+                          type="button"
+                          disabled={
+                            busy ||
+                            adviceBusy ||
+                            currentness?.status !== 'current' ||
+                            adviceCheck?.key !== adviceKey ||
+                            Boolean(adviceCheck.reason) ||
+                            (recommendation.action === 'discover' && !capability?.canStart)
+                          }
+                          onClick={() => void followRecommendation()}
+                        >
+                          {recommendedActionLabel}
+                        </button>
+                      </>
+                    )}
+                    {recommendation.unavailableActions?.length ? (
+                      <p className="hint">
+                        Some actions were unavailable when this advice was saved:{' '}
+                        {recommendation.unavailableActions
+                          .map((value) => value.replaceAll('_', ' '))
+                          .join(', ')}
+                        .
+                      </p>
+                    ) : null}
+                    <details>
+                      <summary>Recommendation evidence</summary>
+                      <p>
+                        Saved with the completed discovery work{' '}
+                        {round.completedAt
+                          ? new Date(round.completedAt).toLocaleString()
+                          : new Date(round.updatedAt).toLocaleString()}
+                        .
+                      </p>
+                      {recommendation.sourceRefs?.length ? (
+                        <ul>
+                          {recommendation.sourceRefs.map((ref) => (
+                            <li key={ref.id}>
+                              {ref.kind.replaceAll('_', ' ')} · <code>{ref.id}</code> · revision{' '}
+                              <code>{ref.revision}</code>
+                              {ref.omittedBytes
+                                ? ` · ${ref.omittedBytes} source bytes omitted`
+                                : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>No source references were included in this saved advice.</p>
+                      )}
+                    </details>
+                  </>
+                ) : (
+                  <p>
+                    No saved next-action advice is available for this completed round. Its
+                    opportunity cards remain below.
+                  </p>
+                )}
+                {adviceError && (
+                  <p role="alert" className="error">
+                    {adviceError}
+                  </p>
+                )}
+              </div>
+            )}
             {!active && !pendingStart && capability && (
               <div className="agency-next">
-                <h3>Next useful action</h3>
+                <h3>Another search</h3>
                 <p>
-                  {capability.intent} A new round receives its own server-selected scope and
-                  allowance.
+                  Choose another bounded search if you want more sourced opportunities. A new round
+                  receives its own server-selected scope.
                 </p>
                 <button
                   type="button"
@@ -463,13 +710,16 @@ export function AgencyHome({
                 'A bounded search would return sourced roles and a coverage report.'}
             </p>
             {capability && (
-              <p>
-                Scope: the current campaign and {capability.sourceCount} board source
-                {capability.sourceCount === 1 ? '' : 's'} currently in server scope; allowance up to{' '}
-                {capability.limits.requests} requests, {capability.limits.items} item operations and{' '}
-                {capability.limits.turns} Codex turns. The server checks the actual scope when you
-                start.
-              </p>
+              <details>
+                <summary>Work details</summary>
+                <p>
+                  Scope: the current campaign and {capability.sourceCount} board source
+                  {capability.sourceCount === 1 ? '' : 's'} currently in server scope; allowance up
+                  to {capability.limits.requests} requests, {capability.limits.items} item
+                  operations and {capability.limits.turns} Codex turns. The server checks the actual
+                  scope when you start.
+                </p>
+              </details>
             )}
             {!capability?.canStart && (
               <p role="status">
@@ -593,7 +843,7 @@ export function AgencyHome({
         </section>
       )}
       {round?.outcome === 'discover' && (
-        <section className="op-card" aria-label="Round results">
+        <section className="op-card" id="saved-round-cards" aria-label="Round results">
           <h2>Saved opportunity cards {cards.length ? `(${cards.length})` : ''}</h2>
           {cards.length === 0 && (
             <p>

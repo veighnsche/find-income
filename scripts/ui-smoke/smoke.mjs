@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import { startFixture } from './fixture.mjs';
+import { runDeliverySmoke } from './delivery-smoke.mjs';
+import { runRecommendationSmoke } from './recommendation-smoke.mjs';
 
 async function launchBrowser() {
   const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
@@ -418,6 +420,8 @@ async function run() {
       `horizontal overflow: ${width.scroll} > ${width.client}`,
     );
     assert.equal(pageErrors.length, 0, `page errors: ${pageErrors.join('; ')}`);
+    await runDeliverySmoke(browser);
+    await runRecommendationSmoke(browser);
     console.log(
       'UI fixture smoke passed: contextual input reports, exact lost-response replay, stale-409 recovery, 390px layout.',
     );

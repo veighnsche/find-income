@@ -13,6 +13,7 @@ import {
   type Session,
 } from './api';
 import { PackRoundPanel } from './pack-round';
+import { DeliveryPanel } from './delivery-panel';
 import { OwnerInstructionPanel } from './owner-instruction';
 
 function SourceLink({ value }: { value: string }) {
@@ -86,11 +87,15 @@ function Freshness({
 export function ApplicationPackPanel({
   opportunity,
   selected,
+  initialPackId,
+  focusPreparation,
   session,
   onSessionLost,
 }: {
   opportunity: Opportunity;
   selected: boolean;
+  initialPackId?: string;
+  focusPreparation?: boolean;
   session: Session;
   onSessionLost: () => void;
 }) {
@@ -101,11 +106,27 @@ export function ApplicationPackPanel({
   const [profileVersion, setProfileVersion] = useState<number | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
-  const [selectedId, setSelectedId] = useState('');
+  const [selectedId, setSelectedId] = useState(initialPackId || '');
   const [detail, setDetail] = useState<ApplicationPackDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const latestId = useRef('');
+
+  useEffect(() => {
+    if (initialPackId) setSelectedId(initialPackId);
+  }, [initialPackId]);
+  useEffect(() => {
+    if (focusPreparation)
+      window.requestAnimationFrame(() =>
+        document.getElementById('application-preparation')?.scrollIntoView(),
+      );
+  }, [focusPreparation]);
+  useEffect(() => {
+    if (initialPackId && detail?.id === initialPackId)
+      window.requestAnimationFrame(() =>
+        document.getElementById('application-pack-review')?.scrollIntoView(),
+      );
+  }, [initialPackId, detail?.id]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -237,7 +258,7 @@ export function ApplicationPackPanel({
           </p>
         )}
         {detail && manifest && (
-          <div className="pack-review">
+          <div className="pack-review" id="application-pack-review">
             <h3>
               Version {detail.version}: {manifest.role.title}
             </h3>
@@ -379,6 +400,22 @@ export function ApplicationPackPanel({
           </div>
         )}
       </section>
+      <DeliveryPanel
+        opportunity={opportunity}
+        selected={selected}
+        selectedPack={packs.find((pack) => pack.id === selectedId) || null}
+        selectedPackCurrent={Boolean(
+          packs.some(
+            (pack) =>
+              pack.id === selectedId &&
+              pack.opportunityRevision === opportunity.revision &&
+              profileVersion !== null &&
+              pack.profileRevision === profileVersion,
+          ),
+        )}
+        session={session}
+        onSessionLost={onSessionLost}
+      />
     </>
   );
 }
