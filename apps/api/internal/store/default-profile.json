@@ -1,0 +1,32 @@
+{
+  "preferredLocation": "Amsterdam",
+  "allowRemote": true,
+  "allowHybrid": true,
+  "targetHoursHundredths": 3200,
+  "minMonthlyBaseCents": 450000,
+  "salaryCurrency": "EUR",
+  "timezone": "Europe/Amsterdam",
+  "roleCriteria": [
+    {
+      "id": "backend-platform",
+      "label": "Backend and platform work",
+      "description": "Backend or platform engineering is a substantive role responsibility.",
+      "kind": "role",
+      "mode": "require"
+    },
+    {
+      "id": "frontend-duties",
+      "label": "Frontend implementation duties",
+      "description": "Frontend UI implementation is an assigned responsibility in this role.",
+      "kind": "responsibility",
+      "mode": "avoid"
+    },
+    {
+      "id": "php-focused-work",
+      "label": "PHP-focused work",
+      "description": "PHP maintenance or implementation is a primary or focused responsibility in this role.",
+      "kind": "technology",
+      "mode": "avoid"
+    }
+  ]
+}

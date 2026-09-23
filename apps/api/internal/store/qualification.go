@@ -12,7 +12,7 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/fit"
 )
 
-const qualificationRulesVersion = "qualification-v2"
+const qualificationRulesVersion = "qualification-v1"
 
 // A no-op conditional write takes SQLite's writer reservation before any
 // snapshot reads. Two Store handles then serialize and stale evidence writers
@@ -45,12 +45,27 @@ type Evaluation struct {
 	Overall             fit.OverallState
 	Criteria            []fit.CriterionResult
 	Salary              fit.SalaryResult
+	OptionSetStatus     string
+	OptionSetIDs        []string
+	OptionResults       []OptionEvaluation
 	SourceRefs          []EvidenceRef
 	SourceClaimIDs      []string
 	CreatedAt           string
 	Actor               Actor
-	Legacy              bool
-	LegacyCriteriaJSON  string
+}
+
+type OptionEvaluation struct {
+	OptionID string
+	Label    string
+	Overall  fit.OverallState
+	Criteria []fit.CriterionResult
+	Salary   fit.SalaryResult
+}
+
+type optionSnapshot struct {
+	Status  string             `json:"status"`
+	SetIDs  []string           `json:"setIds"`
+	Results []OptionEvaluation `json:"results"`
 }
 
 type EvidenceRef struct {
@@ -101,24 +116,31 @@ func (s *Store) QualificationInputVersions(ctx context.Context, opportunityID st
 }
 
 type qualClaim struct {
-	ID, Criterion, Finding, ObservedValue                      string
-	SourceKind                                                 EvidenceSourceKind
-	SourceID                                                   string
-	HoursMin, HoursMax, HoursHard                              sql.NullInt64
-	ArrangementPattern, ArrangementLocation, ArrangementRemote sql.NullString
-	ArrangementDays                                            sql.NullInt64
-	OwnerArrangementID                                         sql.NullString
-	OwnerPreferencesVersion                                    sql.NullInt64
-	SalaryCurrency, SalaryPeriod, SalaryBasis                  sql.NullString
-	SalaryAmount, SalaryHours                                  sql.NullInt64
+	ID, Criterion, Finding, ObservedValue                            string
+	RoleCriterionID, RoleDefinitionHash, RolePresence, OfferOptionID sql.NullString
+	RolePreferencesVersion                                           sql.NullInt64
+	SourceKind                                                       EvidenceSourceKind
+	SourceID                                                         string
+	HoursMin, HoursMax, HoursHard                                    sql.NullInt64
+	ArrangementPattern, ArrangementLocation, ArrangementRemote       sql.NullString
+	ArrangementDays                                                  sql.NullInt64
+	OwnerArrangementID                                               sql.NullString
+	OwnerPreferencesVersion                                          sql.NullInt64
+	OwnerLocationFingerprint                                         sql.NullString
+	SalaryCurrency, SalaryPeriod, SalaryBasis                        sql.NullString
+	SalaryAnnualConversion                                           sql.NullString
+	SalaryAmount, SalaryHours                                        sql.NullInt64
 }
 
 func activeClaimsTx(ctx context.Context, tx *sql.Tx, opportunity Opportunity, contextVersion int64) ([]qualClaim, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT e.id,e.criterion,e.finding,e.observed_value,
-  s.source_kind,s.id,e.hours_min,e.hours_max,e.hours_hard,
+  e.role_criterion_id,e.role_definition_hash,e.role_presence,e.offer_option_id,e.role_preferences_version,
+  s.source_kind,s.id,e.hours_min_hundredths,e.hours_max_hundredths,e.hours_hard,
   e.arrangement_pattern,e.arrangement_location,e.arrangement_remote_geography,
-  e.arrangement_onsite_days,e.owner_arrangement_evidence_id,e.owner_preferences_version,
-  e.salary_currency,e.salary_period,e.salary_basis,e.salary_amount_cents,e.salary_weekly_hours
+  e.arrangement_onsite_days_hundredths,
+  e.owner_arrangement_evidence_id,e.owner_preferences_version,e.owner_location_fingerprint,
+  e.salary_currency,e.salary_period,e.salary_basis,e.salary_annual_conversion,
+  e.salary_amount_cents,e.salary_weekly_hours_hundredths
   FROM evidence e JOIN evidence_sources s ON s.id=e.source_id
   WHERE e.opportunity_id=? AND s.company_id=? AND s.opportunity_kind=? AND
     s.context_version=? AND NOT EXISTS(SELECT 1 FROM evidence child WHERE child.supersedes_id=e.id)
@@ -131,10 +153,14 @@ func activeClaimsTx(ctx context.Context, tx *sql.Tx, opportunity Opportunity, co
 	for rows.Next() {
 		var claim qualClaim
 		if err := rows.Scan(&claim.ID, &claim.Criterion, &claim.Finding, &claim.ObservedValue,
+			&claim.RoleCriterionID, &claim.RoleDefinitionHash, &claim.RolePresence,
+			&claim.OfferOptionID, &claim.RolePreferencesVersion,
 			&claim.SourceKind, &claim.SourceID, &claim.HoursMin, &claim.HoursMax, &claim.HoursHard,
 			&claim.ArrangementPattern, &claim.ArrangementLocation, &claim.ArrangementRemote,
 			&claim.ArrangementDays, &claim.OwnerArrangementID, &claim.OwnerPreferencesVersion,
+			&claim.OwnerLocationFingerprint,
 			&claim.SalaryCurrency, &claim.SalaryPeriod, &claim.SalaryBasis,
+			&claim.SalaryAnnualConversion,
 			&claim.SalaryAmount, &claim.SalaryHours); err != nil {
 			return nil, err
 		}
@@ -169,11 +195,13 @@ func directSource(kind EvidenceSourceKind) bool {
 
 func criterionFromClaims(claims []qualClaim, name string) fit.CriterionEvidence {
 	match, mismatch, mention, ambiguous := false, false, false, false
-	matchAuthority, mismatchAuthority := fit.UserInference, fit.UserInference
+	matchAuthority, mismatchAuthority := fit.PublishedVacancy, fit.PublishedVacancy
+	var evidenceIDs []string
 	for _, claim := range claims {
 		if claim.Criterion != name {
 			continue
 		}
+		evidenceIDs = append(evidenceIDs, claim.ID)
 		authority := fit.PublishedVacancy
 		if claim.SourceKind == EmployerStatement {
 			authority = fit.Employer
@@ -196,26 +224,44 @@ func criterionFromClaims(claims []qualClaim, name string) fit.CriterionEvidence 
 		}
 	}
 	if match && mismatch {
-		return fit.CriterionEvidence{Finding: fit.Conflicting, Authority: fit.UserInference}
+		return fit.CriterionEvidence{Finding: fit.Conflicting, Authority: fit.UserInference, EvidenceIDs: evidenceIDs}
 	}
 	if mismatch {
-		return fit.CriterionEvidence{Finding: fit.ConfirmedMismatch, Authority: mismatchAuthority}
+		return fit.CriterionEvidence{Finding: fit.ConfirmedMismatch, Authority: mismatchAuthority, EvidenceIDs: evidenceIDs}
 	}
 	if ambiguous {
-		return fit.CriterionEvidence{Finding: fit.Ambiguous, Authority: fit.UserInference}
+		return fit.CriterionEvidence{Finding: fit.Ambiguous, Authority: fit.UserInference, EvidenceIDs: evidenceIDs}
 	}
 	if match {
-		return fit.CriterionEvidence{Finding: fit.ConfirmedMatch, Authority: matchAuthority}
+		return fit.CriterionEvidence{Finding: fit.ConfirmedMatch, Authority: matchAuthority, EvidenceIDs: evidenceIDs}
 	}
 	if mention {
-		return fit.CriterionEvidence{Finding: fit.MentionOnly, Authority: fit.UserInference}
+		return fit.CriterionEvidence{Finding: fit.MentionOnly, Authority: fit.UserInference, EvidenceIDs: evidenceIDs}
 	}
 	return fit.CriterionEvidence{Finding: fit.Missing, Authority: fit.UserInference}
 }
 
+func roleFactsFromClaims(claims []qualClaim, preferences Preferences) []fit.RoleFact {
+	facts := make([]fit.RoleFact, 0, len(preferences.RoleCriteria))
+	for _, criterion := range preferences.RoleCriteria {
+		var matching []qualClaim
+		for _, claim := range claims {
+			if claim.Criterion == "role_criterion" && claim.RoleCriterionID.String == criterion.ID &&
+				claim.RoleDefinitionHash.String == criterion.DefinitionHash() {
+				claim.Criterion = criterion.ID
+				matching = append(matching, claim)
+			}
+		}
+		facts = append(facts, fit.RoleFact{Definition: fit.RoleDefinition{
+			ID: criterion.ID, Label: criterion.Label, Description: criterion.Description,
+			Kind: criterion.Kind, Mode: criterion.Mode}, Evidence: criterionFromClaims(matching, criterion.ID)})
+	}
+	return facts
+}
+
 func hoursFromClaims(claims []qualClaim, target int64) fit.CriterionEvidence {
 	match, mismatch, mention := false, false, false
-	matchAuthority, mismatchAuthority := fit.UserInference, fit.UserInference
+	matchAuthority, mismatchAuthority := fit.PublishedVacancy, fit.PublishedVacancy
 	for _, claim := range claims {
 		if claim.Criterion != "target_hours_available" || !claim.HoursMin.Valid || !claim.HoursMax.Valid {
 			continue
@@ -277,7 +323,7 @@ func locationFromClaims(claims []qualClaim, preferences Preferences) fit.Criteri
 			}
 		case "location_workable":
 			if claim.SourceKind == OwnerObservation && claim.OwnerArrangementID.Valid &&
-				claim.OwnerPreferencesVersion.Valid && claim.OwnerPreferencesVersion.Int64 == preferences.Version {
+				claim.OwnerLocationFingerprint.Valid {
 				owners[claim.OwnerArrangementID.String] = append(owners[claim.OwnerArrangementID.String], claim)
 			}
 		}
@@ -297,10 +343,16 @@ func locationFromClaims(claims []qualClaim, preferences Preferences) fit.Criteri
 	}
 	match, mismatch := false, false
 	for _, arrangement := range arrangements {
-		if !directSource(arrangement.SourceKind) {
-			continue
+		arrangementValue := WorkArrangement{Pattern: arrangement.ArrangementPattern.String,
+			BaseLocation: arrangement.ArrangementLocation.String, RemoteGeography: arrangement.ArrangementRemote.String}
+		if arrangement.ArrangementDays.Valid {
+			arrangementValue.OnsiteDaysHundredths = &arrangement.ArrangementDays.Int64
 		}
+		fingerprint := locationFingerprint(preferences, arrangementValue)
 		for _, owner := range owners[arrangement.ID] {
+			if owner.OwnerLocationFingerprint.String != fingerprint {
+				continue
+			}
 			if owner.ObservedValue == "workable" {
 				match = true
 			} else if owner.ObservedValue == "not_workable" {
@@ -330,7 +382,10 @@ func actualSalaryFromClaims(claims []qualClaim) (*fit.ActualPay, bool) {
 		}
 		candidate := fit.ActualPay{Currency: claim.SalaryCurrency.String,
 			Period: fit.PayPeriod(claim.SalaryPeriod.String), Basis: fit.PayBasis(claim.SalaryBasis.String),
-			AmountCents: claim.SalaryAmount.Int64, WeeklyHours: claim.SalaryHours.Int64}
+			AmountCents: claim.SalaryAmount.Int64, WeeklyHoursHundredths: claim.SalaryHours.Int64,
+			AnnualConversion: claim.SalaryAnnualConversion.String,
+			Source: map[EvidenceSourceKind]fit.Authority{EmployerStatement: fit.Employer,
+				RecruiterStatement: fit.Recruiter}[claim.SourceKind]}
 		if actual == nil {
 			actual = &candidate
 		} else if *actual != candidate {
@@ -341,10 +396,14 @@ func actualSalaryFromClaims(claims []qualClaim) (*fit.ActualPay, bool) {
 }
 
 func policyFromPreferences(p Preferences) fit.Policy {
-	return fit.Policy{TargetHours: p.TargetHours, MinMonthlyBaseCents: p.MinMonthlyBaseCents,
-		SalaryCurrency: p.SalaryCurrency, PreferredLocation: p.PreferredLocation,
-		RequireBackendPlatform: p.RequireBackendPlatform, ExcludeFrontendDuties: p.ExcludeFrontendDuties,
-		ExcludePHPFocusedDuties: p.ExcludePHPFocused}
+	definitions := make([]fit.RoleDefinition, 0, len(p.RoleCriteria))
+	for _, criterion := range p.RoleCriteria {
+		definitions = append(definitions, fit.RoleDefinition{ID: criterion.ID, Label: criterion.Label,
+			Description: criterion.Description, Kind: criterion.Kind, Mode: criterion.Mode})
+	}
+	return fit.Policy{TargetHoursHundredths: p.TargetHoursHundredths,
+		MinMonthlyBaseCents: p.MinMonthlyBaseCents, SalaryCurrency: p.SalaryCurrency,
+		PreferredLocation: p.PreferredLocation, RoleCriteria: definitions}
 }
 
 func compensationForFit(o Opportunity, claims []qualClaim) fit.Compensation {
@@ -352,39 +411,52 @@ func compensationForFit(o Opportunity, claims []qualClaim) fit.Compensation {
 	return fit.Compensation{Kind: fit.OpportunityKind(o.Kind), Currency: o.Compensation.Currency,
 		Period: fit.PayPeriod(o.Compensation.Period), Basis: fit.PayBasis(o.Compensation.Basis),
 		MinCents: o.Compensation.MinAmountCents, MaxCents: o.Compensation.MaxAmountCents,
-		ReferenceHours: o.Compensation.ReferenceHours, SourcedActual: actual,
+		ReferenceHoursHundredths: o.Compensation.ReferenceHoursHundredths,
+		AnnualConversion:         o.Compensation.AnnualConversion, SourcedActual: actual,
 		ActualPayConflicting: conflicting}
+}
+
+func filterClaimsForOption(claims []qualClaim, optionID string) []qualClaim {
+	selected := make([]qualClaim, 0, len(claims))
+	for _, claim := range claims {
+		if !claim.OfferOptionID.Valid || claim.OfferOptionID.String == optionID {
+			selected = append(selected, claim)
+		}
+	}
+	return selected
+}
+
+func reportFromClaims(opportunity Opportunity, preferences Preferences, claims []qualClaim, previouslyQualified bool) (fit.Report, error) {
+	criteria := fit.Criteria{Roles: roleFactsFromClaims(claims, preferences),
+		HoursAvailable:   hoursFromClaims(claims, preferences.TargetHoursHundredths),
+		LocationWorkable: locationFromClaims(claims, preferences)}
+	return fit.Evaluate(policyFromPreferences(preferences), compensationForFit(opportunity, claims), criteria, previouslyQualified)
 }
 
 func scanEvaluation(row rowScanner) (Evaluation, error) {
 	var result Evaluation
-	var criteriaJSON, salaryJSON, claimJSON string
+	var criteriaJSON, salaryJSON, claimJSON, optionJSON string
 	err := row.Scan(&result.ID, &result.OpportunityID, &result.OpportunityRevision,
 		&result.MaterialVersion, &result.EvidenceVersion, &result.ContextVersion,
 		&result.PreferencesVersion, &result.RulesVersion, &result.Overall, &criteriaJSON, &salaryJSON,
-		&claimJSON, &result.CreatedAt, &result.Actor.Kind, &result.Actor.ID)
+		&claimJSON, &optionJSON, &result.CreatedAt, &result.Actor.Kind, &result.Actor.ID)
 	if err != nil {
 		return Evaluation{}, err
 	}
-	result.Legacy = result.MaterialVersion == 0
-	if result.Legacy {
-		result.LegacyCriteriaJSON = criteriaJSON
-	}
 	if err := json.Unmarshal([]byte(criteriaJSON), &result.Criteria); err != nil {
-		if !result.Legacy {
-			return Evaluation{}, err
-		}
+		return Evaluation{}, err
 	}
 	if err := json.Unmarshal([]byte(salaryJSON), &result.Salary); err != nil {
-		if !result.Legacy {
-			return Evaluation{}, err
-		}
+		return Evaluation{}, err
 	}
 	if err := json.Unmarshal([]byte(claimJSON), &result.SourceRefs); err != nil {
-		if !result.Legacy {
-			return Evaluation{}, err
-		}
+		return Evaluation{}, err
 	}
+	var snapshot optionSnapshot
+	if err := json.Unmarshal([]byte(optionJSON), &snapshot); err != nil {
+		return Evaluation{}, err
+	}
+	result.OptionSetStatus, result.OptionSetIDs, result.OptionResults = snapshot.Status, snapshot.SetIDs, snapshot.Results
 	for _, ref := range result.SourceRefs {
 		result.SourceClaimIDs = append(result.SourceClaimIDs, ref.EvidenceID)
 	}
@@ -393,7 +465,8 @@ func scanEvaluation(row rowScanner) (Evaluation, error) {
 
 const evaluationColumns = `id,opportunity_id,opportunity_revision,material_version,
   evidence_version,context_version,preferences_version,rules_version,overall_state,
-  criterion_results_json,salary_json,source_claims_json,created_at,actor_kind,actor_id`
+  criterion_results_json,salary_json,source_claims_json,option_results_json,
+  created_at,actor_kind,actor_id`
 
 func evaluateCurrentTx(ctx context.Context, tx *sql.Tx, actor Actor, opportunityID, causeEvidenceID string) (Evaluation, error) {
 	var result Evaluation
@@ -427,19 +500,59 @@ func evaluateCurrentTx(ctx context.Context, tx *sql.Tx, actor Actor, opportunity
 	var previouslyQualified int
 	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM qualification_evaluations
   WHERE opportunity_id=? AND context_version=? AND material_version IS NOT NULL
-    AND overall_state='qualified')`, opportunityID, contextVersion).Scan(&previouslyQualified)
+    AND rules_version=? AND overall_state='qualified')`, opportunityID, contextVersion,
+		qualificationRulesVersion).Scan(&previouslyQualified)
 	if err != nil {
 		return Evaluation{}, err
 	}
-	criteria := fit.Criteria{BackendPlatform: criterionFromClaims(claims, "backend_platform"),
-		NoFrontendDuties:   criterionFromClaims(claims, "no_frontend_duties"),
-		NoPHPFocusedDuties: criterionFromClaims(claims, "no_php_focused_duties"),
-		HoursAvailable:     hoursFromClaims(claims, preference.TargetHours),
-		LocationWorkable:   locationFromClaims(claims, preference)}
-	report, err := fit.Evaluate(policyFromPreferences(preference), compensationForFit(opportunity, claims),
-		criteria, previouslyQualified == 1)
+	sets, err := currentOfferOptionSets(ctx, tx, opportunityID)
 	if err != nil {
 		return Evaluation{}, err
+	}
+	baseClaims := filterClaimsForOption(claims, "")
+	report, err := reportFromClaims(opportunity, preference, baseClaims, previouslyQualified == 1)
+	if err != nil {
+		return Evaluation{}, err
+	}
+	optionState := optionSnapshot{Status: "none", SetIDs: []string{}, Results: []OptionEvaluation{}}
+	if len(sets) > 1 {
+		optionState.Status = "conflicting"
+		for _, set := range sets {
+			optionState.SetIDs = append(optionState.SetIDs, set.ID)
+		}
+		if report.Overall == fit.Qualified {
+			report.Overall = fit.Unresolved
+		}
+	} else if len(sets) == 1 {
+		optionState.Status = "current"
+		optionState.SetIDs = append(optionState.SetIDs, sets[0].ID)
+		var selected *fit.Report
+		bestRank := -1
+		for _, option := range sets[0].Options {
+			candidate, err := reportFromClaims(opportunity, preference, filterClaimsForOption(claims, option.ID), previouslyQualified == 1)
+			if err != nil {
+				return Evaluation{}, err
+			}
+			optionState.Results = append(optionState.Results, OptionEvaluation{OptionID: option.ID, Label: option.Label,
+				Overall: candidate.Overall, Criteria: candidate.Criteria, Salary: candidate.Salary})
+			rank := 0
+			switch candidate.Overall {
+			case fit.Qualified:
+				rank = 3
+			case fit.NeedsRequalification:
+				rank = 2
+			case fit.Unresolved:
+				rank = 1
+			}
+			if rank > bestRank {
+				copy := candidate
+				selected = &copy
+				bestRank = rank
+			}
+		}
+		if selected != nil {
+			report = *selected
+		}
 	}
 	refs := make([]EvidenceRef, 0, len(claims))
 	for _, claim := range claims {
@@ -453,6 +566,7 @@ func evaluateCurrentTx(ctx context.Context, tx *sql.Tx, actor Actor, opportunity
 	criteriaJSON, _ := json.Marshal(report.Criteria)
 	salaryJSON, _ := json.Marshal(report.Salary)
 	claimsJSON, _ := json.Marshal(refs)
+	optionJSON, _ := json.Marshal(optionState)
 	id, err := randomID()
 	if err != nil {
 		return Evaluation{}, err
@@ -461,15 +575,16 @@ func evaluateCurrentTx(ctx context.Context, tx *sql.Tx, actor Actor, opportunity
 		MaterialVersion: materialVersion, EvidenceVersion: evidenceVersion, ContextVersion: contextVersion,
 		PreferencesVersion: preference.Version, RulesVersion: qualificationRulesVersion,
 		Overall: report.Overall, Criteria: report.Criteria,
-		Salary: report.Salary, SourceRefs: refs, SourceClaimIDs: claimIDs, CreatedAt: utcNow(), Actor: actor}
+		Salary: report.Salary, OptionSetStatus: optionState.Status, OptionSetIDs: optionState.SetIDs,
+		OptionResults: optionState.Results, SourceRefs: refs, SourceClaimIDs: claimIDs, CreatedAt: utcNow(), Actor: actor}
 	_, err = tx.ExecContext(ctx, `INSERT INTO qualification_evaluations
   (id,opportunity_id,opportunity_revision,preferences_version,overall_state,
    criterion_results_json,created_at,material_version,evidence_version,context_version,
-   rules_version,source_claims_json,salary_json,actor_kind,actor_id,cause_evidence_id)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, opportunityID, opportunity.Revision,
+   rules_version,source_claims_json,salary_json,option_results_json,actor_kind,actor_id,cause_evidence_id)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, opportunityID, opportunity.Revision,
 		preference.Version, report.Overall, string(criteriaJSON), result.CreatedAt,
 		materialVersion, evidenceVersion, contextVersion, qualificationRulesVersion,
-		string(claimsJSON), string(salaryJSON), actor.Kind, actor.ID, optionalText(causeEvidenceID))
+		string(claimsJSON), string(salaryJSON), string(optionJSON), actor.Kind, actor.ID, optionalText(causeEvidenceID))
 	if err != nil {
 		return Evaluation{}, err
 	}
@@ -529,7 +644,7 @@ func (s *Store) qualificationView(ctx context.Context, opportunityID string) (Qu
 	// from opposite sides of a concurrent mutation.
 	current, err := scanEvaluation(s.db.QueryRowContext(ctx, `SELECT e.id,e.opportunity_id,e.opportunity_revision,
   e.material_version,e.evidence_version,e.context_version,e.preferences_version,
-  e.rules_version,e.overall_state,e.criterion_results_json,e.salary_json,e.source_claims_json,
+  e.rules_version,e.overall_state,e.criterion_results_json,e.salary_json,e.source_claims_json,e.option_results_json,
   e.created_at,e.actor_kind,e.actor_id
   FROM qualification_current c JOIN qualification_evaluations e ON e.id=c.evaluation_id
   JOIN qualification_input_versions v ON v.opportunity_id=c.opportunity_id
@@ -615,8 +730,7 @@ type EvaluationPage struct {
 	NextCursor string
 }
 
-// ListQualificationHistory includes pre-007 rows as legacy historical results.
-// Their absent source/version provenance never makes them current.
+// ListQualificationHistory returns immutable evaluation snapshots.
 func (s *Store) ListQualificationHistory(ctx context.Context, opportunityID, cursorValue string, requestedLimit int) (EvaluationPage, error) {
 	if opportunityID == "" {
 		return EvaluationPage{}, ErrInvalid
@@ -630,10 +744,7 @@ func (s *Store) ListQualificationHistory(ctx context.Context, opportunityID, cur
 	if err != nil {
 		return EvaluationPage{}, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,opportunity_id,opportunity_revision,
-  COALESCE(material_version,0),COALESCE(evidence_version,0),COALESCE(context_version,0),
-  preferences_version,COALESCE(rules_version,''),overall_state,criterion_results_json,COALESCE(salary_json,'{}'),
-  COALESCE(source_claims_json,'[]'),created_at,COALESCE(actor_kind,''),COALESCE(actor_id,'')
+	rows, err := s.db.QueryContext(ctx, `SELECT `+evaluationColumns+`
   FROM qualification_evaluations WHERE opportunity_id=? AND
   (created_at>? OR (created_at=? AND id>?)) ORDER BY created_at,id LIMIT ?`,
 		opportunityID, cursor.CreatedAt, cursor.CreatedAt, cursor.ID, limit+1)

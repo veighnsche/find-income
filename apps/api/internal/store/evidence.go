@@ -268,30 +268,35 @@ func (s *Store) AddEvidenceSource(ctx context.Context, actor Actor, input Source
 }
 
 type HoursAvailability struct {
-	MinWeekly  int64
-	MaxWeekly  int64
-	HardBounds bool
+	MinHundredths int64
+	MaxHundredths int64
+	HardBounds    bool
 }
 
 type WorkArrangement struct {
-	Pattern         string
-	BaseLocation    string
-	RemoteGeography string
-	OnsiteDays      *int64
+	Pattern              string
+	BaseLocation         string
+	RemoteGeography      string
+	OnsiteDaysHundredths *int64
 }
 
 type ActualSalaryFacts struct {
-	Currency          string
-	Period            string
-	Basis             string
-	AmountCents       int64
-	ActualWeeklyHours int64
+	Currency                    string
+	Period                      string
+	Basis                       string
+	AmountCents                 int64
+	ActualWeeklyHoursHundredths int64
+	AnnualConversion            string
 }
 
 type EvidenceInput struct {
 	OpportunityID              string
 	SourceID                   string
 	Criterion                  string
+	CriterionID                string
+	Presence                   string
+	ExpectedPreferencesVersion int64
+	OfferOptionID              string
 	Finding                    string
 	ObservedValue              string
 	SpanStart                  int
@@ -310,8 +315,14 @@ type Evidence struct {
 	SourceKind                 string
 	SourceURL                  string
 	SourceContactText          string
-	Legacy                     bool
 	Criterion                  string
+	RoleCriterionID            string
+	RoleDefinitionHash         string
+	RoleDefinition             *RoleCriterion
+	RolePreferencesVersion     int64
+	RolePresence               string
+	OfferOptionID              string
+	OwnerLocationFingerprint   string
 	Finding                    string
 	ObservedValue              string
 	ConfirmationState          string
@@ -332,8 +343,8 @@ type Evidence struct {
 
 func validCriterion(value string) bool {
 	switch value {
-	case "backend_platform", "no_frontend_duties", "no_php_focused_duties",
-		"target_hours_available", "location_arrangement", "location_workable", "monthly_base_salary":
+	case "target_hours_available", "location_arrangement", "location_workable", "monthly_base_salary",
+		"role_criterion":
 		return true
 	}
 	return false
@@ -341,61 +352,54 @@ func validCriterion(value string) bool {
 
 func validateEvidenceInput(input EvidenceInput) error {
 	if input.OpportunityID == "" || input.SourceID == "" || !validCriterion(input.Criterion) ||
-		input.ExpectedEvidenceVersion < 0 || !boundedNonempty(input.ObservedValue, 1000) {
+		input.ExpectedEvidenceVersion < 0 || input.ExpectedPreferencesVersion < 1 ||
+		!boundedNonempty(input.ObservedValue, 1000) {
 		return fmt.Errorf("%w: evidence identity, criterion, value and version required", ErrInvalid)
 	}
-	switch input.Finding {
-	case "explicit_match", "explicit_mismatch", "mention_only", "ambiguous":
-	default:
-		return fmt.Errorf("%w: invalid evidence finding", ErrInvalid)
+	if input.Criterion == "role_criterion" {
+		if input.Finding != "" || input.CriterionID == "" || input.ExpectedPreferencesVersion < 1 ||
+			!validRolePresence(input.Presence) || input.Hours != nil || input.Arrangement != nil ||
+			input.Salary != nil || input.OwnerWorkableForEvidenceID != nil {
+			return fmt.Errorf("%w: role observation needs presence and current criterion", ErrInvalid)
+		}
+	} else {
+		if input.CriterionID != "" || input.Presence != "" {
+			return fmt.Errorf("%w: role fields on non-role evidence", ErrInvalid)
+		}
+		switch input.Finding {
+		case "explicit_match", "explicit_mismatch", "mention_only", "ambiguous":
+		default:
+			return fmt.Errorf("%w: invalid evidence finding", ErrInvalid)
+		}
 	}
 	if input.SpanStart < 0 || input.SpanEnd <= input.SpanStart || input.SpanEnd-input.SpanStart > 2000 {
 		return fmt.Errorf("%w: exact bounded excerpt required", ErrInvalid)
 	}
 	switch input.Criterion {
-	case "backend_platform":
-		if !validObservedValue(input.ObservedValue, "backend_primary", "backend_not_primary", "backend_mixed", "backend_mentioned") ||
-			!findingMatchesValue(input.ObservedValue, input.Finding, map[string]string{
-				"backend_primary": "explicit_match", "backend_not_primary": "explicit_mismatch",
-				"backend_mixed": "ambiguous", "backend_mentioned": "mention_only"}) ||
-			input.Hours != nil || input.Arrangement != nil || input.Salary != nil || input.OwnerWorkableForEvidenceID != nil {
-			return fmt.Errorf("%w: invalid backend scope observation", ErrInvalid)
-		}
-	case "no_frontend_duties":
-		if !validObservedValue(input.ObservedValue, "frontend_not_required", "frontend_required", "frontend_mentioned", "frontend_ambiguous") ||
-			!findingMatchesValue(input.ObservedValue, input.Finding, map[string]string{
-				"frontend_not_required": "explicit_match", "frontend_required": "explicit_mismatch",
-				"frontend_mentioned": "mention_only", "frontend_ambiguous": "ambiguous"}) ||
-			input.Hours != nil || input.Arrangement != nil || input.Salary != nil || input.OwnerWorkableForEvidenceID != nil {
-			return fmt.Errorf("%w: invalid frontend observation", ErrInvalid)
-		}
-	case "no_php_focused_duties":
-		if !validObservedValue(input.ObservedValue, "php_not_required", "php_required", "php_mentioned", "php_ambiguous") ||
-			!findingMatchesValue(input.ObservedValue, input.Finding, map[string]string{
-				"php_not_required": "explicit_match", "php_required": "explicit_mismatch",
-				"php_mentioned": "mention_only", "php_ambiguous": "ambiguous"}) ||
-			input.Hours != nil || input.Arrangement != nil || input.Salary != nil || input.OwnerWorkableForEvidenceID != nil {
-			return fmt.Errorf("%w: invalid PHP observation", ErrInvalid)
-		}
+	case "role_criterion":
+		// The exact quoted span is checked against the source in the writer.
 	case "target_hours_available":
-		if input.Hours == nil || input.Hours.MinWeekly < 1 || input.Hours.MaxWeekly > 168 ||
-			input.Hours.MaxWeekly < input.Hours.MinWeekly || input.Arrangement != nil || input.Salary != nil ||
-			input.OwnerWorkableForEvidenceID != nil || input.Finding != "explicit_match" ||
-			input.ObservedValue != "weekly_hours_available" {
+		if input.Arrangement != nil || input.Salary != nil || input.OwnerWorkableForEvidenceID != nil ||
+			input.Finding == "explicit_match" && (input.Hours == nil ||
+				hoursMinimum(input.Hours) < 100 || hoursMaximum(input.Hours) > 16800 ||
+				hoursMaximum(input.Hours) < hoursMinimum(input.Hours)) ||
+			(input.Finding == "mention_only" || input.Finding == "ambiguous") && input.Hours != nil ||
+			input.Finding == "explicit_mismatch" {
 			return fmt.Errorf("%w: numeric hours availability required", ErrInvalid)
 		}
 	case "location_arrangement":
-		if input.Arrangement == nil || input.Hours != nil || input.Salary != nil ||
-			input.OwnerWorkableForEvidenceID != nil || input.Finding != "explicit_match" ||
-			input.ObservedValue != "work_arrangement" {
+		if input.Hours != nil || input.Salary != nil || input.OwnerWorkableForEvidenceID != nil ||
+			input.Finding == "explicit_match" && input.Arrangement == nil ||
+			(input.Finding == "mention_only" || input.Finding == "ambiguous") && input.Arrangement != nil ||
+			input.Finding == "explicit_mismatch" {
 			return fmt.Errorf("%w: arrangement required", ErrInvalid)
 		}
-		if input.Arrangement.Pattern != "onsite" && input.Arrangement.Pattern != "hybrid" && input.Arrangement.Pattern != "remote" ||
+		if input.Arrangement != nil && (input.Arrangement.Pattern != "onsite" && input.Arrangement.Pattern != "hybrid" && input.Arrangement.Pattern != "remote" ||
 			len(input.Arrangement.BaseLocation) > 500 || len(input.Arrangement.RemoteGeography) > 500 ||
 			input.Arrangement.Pattern == "remote" && strings.TrimSpace(input.Arrangement.RemoteGeography) == "" ||
 			(input.Arrangement.Pattern == "onsite" || input.Arrangement.Pattern == "hybrid") &&
 				strings.TrimSpace(input.Arrangement.BaseLocation) == "" ||
-			input.Arrangement.OnsiteDays != nil && (*input.Arrangement.OnsiteDays < 0 || *input.Arrangement.OnsiteDays > 7) {
+			onsiteDaysHundredths(input.Arrangement) > 700) {
 			return fmt.Errorf("%w: invalid arrangement", ErrInvalid)
 		}
 	case "location_workable":
@@ -408,13 +412,17 @@ func validateEvidenceInput(input EvidenceInput) error {
 			return fmt.Errorf("%w: owner workability and arrangement link required", ErrInvalid)
 		}
 	case "monthly_base_salary":
-		if input.Salary == nil || input.Hours != nil || input.Arrangement != nil ||
-			input.OwnerWorkableForEvidenceID != nil || input.Finding != "explicit_match" ||
-			input.ObservedValue != "actual_pay_terms" || input.Salary.AmountCents < 0 || input.Salary.ActualWeeklyHours < 1 ||
-			input.Salary.ActualWeeklyHours > 168 || input.Salary.Currency == "" ||
-			!validObservedValue(input.Salary.Period, "month", "year", "hour", "project") ||
-			!validObservedValue(input.Salary.Basis, "base", "inclusive", "unknown") ||
-			!currencyCode(input.Salary.Currency) {
+		if input.Hours != nil || input.Arrangement != nil || input.OwnerWorkableForEvidenceID != nil ||
+			input.Finding == "explicit_match" && (input.Salary == nil ||
+				input.Salary.AmountCents < 0 || salaryHoursHundredths(input.Salary) < 100 ||
+				salaryHoursHundredths(input.Salary) > 16800 || !currencyCode(input.Salary.Currency) ||
+				!validObservedValue(input.Salary.Period, "month", "year", "hour", "project") ||
+				!validObservedValue(input.Salary.Basis, "base", "inclusive", "unknown") ||
+				input.Salary.AnnualConversion != "" &&
+					(input.Salary.AnnualConversion != "twelve_equal_monthly_base_payments" ||
+						input.Salary.Period != "year" || input.Salary.Basis != "base")) ||
+			(input.Finding == "mention_only" || input.Finding == "ambiguous") && input.Salary != nil ||
+			input.Finding == "explicit_mismatch" {
 			return fmt.Errorf("%w: typed actual pay required", ErrInvalid)
 		}
 	default:
@@ -426,6 +434,53 @@ func validateEvidenceInput(input EvidenceInput) error {
 		return fmt.Errorf("%w: unexpected arrangement link", ErrInvalid)
 	}
 	return nil
+}
+
+func hoursMinimum(v *HoursAvailability) int64 {
+	return v.MinHundredths
+}
+func hoursMaximum(v *HoursAvailability) int64 {
+	return v.MaxHundredths
+}
+func salaryHoursHundredths(v *ActualSalaryFacts) int64 {
+	return v.ActualWeeklyHoursHundredths
+}
+func onsiteDaysHundredths(v *WorkArrangement) int64 {
+	if v.OnsiteDaysHundredths != nil {
+		return *v.OnsiteDaysHundredths
+	}
+	return 0
+}
+
+// Workability depends on the location policy and the cited arrangement, not
+// on unrelated role, hours, salary, or timezone edits to the profile.
+func locationFingerprint(p Preferences, arrangement WorkArrangement) string {
+	value, _ := json.Marshal(struct {
+		PreferredLocation string
+		AllowRemote       bool
+		AllowHybrid       bool
+		Arrangement       WorkArrangement
+	}{p.PreferredLocation, p.AllowRemote, p.AllowHybrid, arrangement})
+	return sourceDigest(string(value))
+}
+
+func validRolePresence(value string) bool {
+	switch value {
+	case "explicit_presence", "explicit_absence", "mention_only", "ambiguous":
+		return true
+	}
+	return false
+}
+
+func findingForRolePresence(value string) string {
+	switch value {
+	case "explicit_presence":
+		return "explicit_match"
+	case "explicit_absence":
+		return "explicit_mismatch"
+	default:
+		return value
+	}
 }
 
 func validObservedValue(value string, accepted ...string) bool {
@@ -442,15 +497,13 @@ func findingMatchesValue(value, finding string, meanings map[string]string) bool
 }
 
 func currencyCode(value string) bool {
-	if len(value) != 3 {
-		return false
+	// AmountCents is a fixed 1/100 unit representation. Keep the supported
+	// set explicit until currency exponents are represented in the schema.
+	switch value {
+	case "EUR", "GBP", "USD", "CAD", "AUD", "CHF", "NZD":
+		return true
 	}
-	for _, letter := range value {
-		if letter < 'A' || letter > 'Z' {
-			return false
-		}
-	}
-	return true
+	return false
 }
 
 func exactExcerpt(source string, start, end int) (string, error) {
@@ -487,7 +540,12 @@ func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, 
 	item := Evidence{ID: id, OpportunityID: input.OpportunityID, SourceID: input.SourceID,
 		Criterion: input.Criterion, Finding: input.Finding, ObservedValue: strings.TrimSpace(input.ObservedValue),
 		SupersedesID: priorID, CreatedAt: utcNow(), Hours: input.Hours, Arrangement: input.Arrangement,
-		Salary: input.Salary, SpanStart: input.SpanStart, SpanEnd: input.SpanEnd, HasSpan: true}
+		Salary: input.Salary, SpanStart: input.SpanStart, SpanEnd: input.SpanEnd, HasSpan: true,
+		OfferOptionID: input.OfferOptionID}
+	if input.Criterion == "role_criterion" {
+		item.Finding = findingForRolePresence(input.Presence)
+		item.RolePresence = input.Presence
+	}
 	changeID, err := s.WriteAudited(ctx, actor, func(tx *sql.Tx) (Change, error) {
 		if err := lockQualificationInput(ctx, tx, input.OpportunityID); err != nil {
 			return Change{}, err
@@ -507,6 +565,29 @@ func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, 
 		if evidenceVersion != input.ExpectedEvidenceVersion {
 			return Change{}, ErrConflict
 		}
+		preferences, err := scanPreferences(tx.QueryRowContext(ctx, `SELECT `+preferenceColumns+`
+  FROM preferences_versions p JOIN preferences_current c ON c.version=p.version WHERE c.singleton=1`))
+		if err != nil {
+			return Change{}, err
+		}
+		if preferences.Version != input.ExpectedPreferencesVersion {
+			return Change{}, ErrConflict
+		}
+		if input.Criterion == "role_criterion" {
+			for _, criterion := range preferences.RoleCriteria {
+				if criterion.ID == input.CriterionID {
+					item.RoleCriterionID = criterion.ID
+					item.RoleDefinitionHash = criterion.DefinitionHash()
+					criterionCopy := criterion
+					item.RoleDefinition = &criterionCopy
+					item.RolePreferencesVersion = preferences.Version
+					break
+				}
+			}
+			if item.RoleCriterionID == "" {
+				return Change{}, fmt.Errorf("%w: criterion not in current profile", ErrInvalid)
+			}
+		}
 		var source EvidenceSource
 		source, err = scanEvidenceSource(tx.QueryRowContext(ctx,
 			`SELECT `+evidenceSourceColumns+` FROM evidence_sources WHERE id=?`, input.SourceID))
@@ -523,9 +604,32 @@ func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, 
 		item.SourceKind, item.SourceURL, item.SourceContactText = string(source.SourceKind), source.SourceURL, source.SpeakerName
 		if source.SourceKind == OwnerObservation && input.Criterion != "location_workable" ||
 			input.Criterion == "location_workable" && (source.SourceKind != OwnerObservation || actor.Kind != "administrator") ||
-			input.Criterion == "monthly_base_salary" &&
-				(source.SourceKind != EmployerStatement && source.SourceKind != RecruiterStatement || opportunityKind != "employment") {
+			input.Criterion == "monthly_base_salary" && opportunityKind != "employment" ||
+			input.Criterion == "monthly_base_salary" && input.Salary != nil && !directSource(source.SourceKind) {
 			return Change{}, fmt.Errorf("%w: source cannot establish this criterion", ErrInvalid)
+		}
+		if input.OfferOptionID != "" {
+			var setOpportunityID, setSourceURL, setSourceHash, currentURL, currentText string
+			var setSourceKind EvidenceSourceKind
+			var setContext int64
+			err := tx.QueryRowContext(ctx, `SELECT sets.opportunity_id,sets.context_version,
+  set_source.source_kind,COALESCE(set_source.source_url,''),set_source.content_sha256,
+  COALESCE(o.source_url,''),o.original_text
+  FROM offer_options option JOIN offer_option_sets sets ON sets.id=option.set_id
+  JOIN evidence_sources set_source ON set_source.id=sets.source_id
+  JOIN opportunities o ON o.id=sets.opportunity_id
+  WHERE option.id=? AND NOT EXISTS
+    (SELECT 1 FROM offer_option_sets child WHERE child.supersedes_id=sets.id)`, input.OfferOptionID).
+				Scan(&setOpportunityID, &setContext, &setSourceKind, &setSourceURL, &setSourceHash, &currentURL, &currentText)
+			if errors.Is(err, sql.ErrNoRows) || setOpportunityID != input.OpportunityID || setContext != contextVersion {
+				return Change{}, fmt.Errorf("%w: option is not current for this opportunity", ErrInvalid)
+			}
+			if err != nil {
+				return Change{}, err
+			}
+			if setSourceKind == VacancySnapshot && (setSourceURL != currentURL || setSourceHash != sourceDigest(currentText)) {
+				return Change{}, ErrConflict
+			}
 		}
 		if source.SourceKind == VacancySnapshot {
 			var currentURL, currentText string
@@ -548,39 +652,49 @@ func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, 
 		}
 		item.ConfirmationState = "unknown"
 		if source.SourceKind == EmployerStatement || source.SourceKind == RecruiterStatement {
-			if input.Finding == "explicit_match" || input.Finding == "explicit_mismatch" {
+			if item.Finding == "explicit_match" || item.Finding == "explicit_mismatch" {
 				item.ConfirmationState = "confirmed"
 			}
 		}
 		if input.Criterion == "location_workable" {
 			var arrangementSourceID string
-			err := tx.QueryRowContext(ctx, `SELECT e.source_id FROM evidence e
+			var pattern, baseLocation, remoteGeography string
+			var days sql.NullInt64
+			var optionID sql.NullString
+			err := tx.QueryRowContext(ctx, `SELECT e.source_id,e.arrangement_pattern,e.arrangement_location,
+    e.arrangement_remote_geography,e.arrangement_onsite_days_hundredths,e.offer_option_id FROM evidence e
   JOIN evidence_sources s ON s.id=e.source_id
   WHERE e.id=? AND e.opportunity_id=? AND e.criterion='location_arrangement'
-    AND s.source_kind IN ('employer_statement','recruiter_statement')
+    AND s.source_kind IN ('vacancy_snapshot','employer_statement','recruiter_statement')
     AND s.context_version=? AND s.company_id=? AND s.opportunity_kind=?
     AND NOT EXISTS(SELECT 1 FROM evidence child WHERE child.supersedes_id=e.id)`,
 				*input.OwnerWorkableForEvidenceID, input.OpportunityID, contextVersion,
-				companyID, opportunityKind).Scan(&arrangementSourceID)
+				companyID, opportunityKind).Scan(&arrangementSourceID, &pattern, &baseLocation, &remoteGeography, &days, &optionID)
 			if errors.Is(err, sql.ErrNoRows) {
 				return Change{}, ErrInvalid
 			}
 			if err != nil {
 				return Change{}, err
 			}
-			item.OwnerWorkableForEvidenceID = *input.OwnerWorkableForEvidenceID
-			if err := tx.QueryRowContext(ctx, `SELECT version FROM preferences_current WHERE singleton=1`).Scan(
-				&item.OwnerPreferencesVersion); err != nil {
-				return Change{}, err
+			if optionID.String != input.OfferOptionID {
+				return Change{}, fmt.Errorf("%w: owner assessment must cite the same option", ErrInvalid)
 			}
+			item.OwnerWorkableForEvidenceID = *input.OwnerWorkableForEvidenceID
+			item.OwnerPreferencesVersion = preferences.Version
 			if source.OwnerPreferencesVersion != item.OwnerPreferencesVersion {
 				return Change{}, ErrConflict
 			}
+			arrangement := WorkArrangement{Pattern: pattern, BaseLocation: baseLocation, RemoteGeography: remoteGeography}
+			if days.Valid {
+				arrangement.OnsiteDaysHundredths = &days.Int64
+			}
+			item.OwnerLocationFingerprint = locationFingerprint(preferences, arrangement)
 		}
 		if priorID != "" {
 			var oldOpportunity, oldCriterion string
-			err := tx.QueryRowContext(ctx, `SELECT opportunity_id,criterion FROM evidence WHERE id=?`, priorID).Scan(
-				&oldOpportunity, &oldCriterion)
+			var oldRoleID, oldRoleHash, oldOptionID sql.NullString
+			err := tx.QueryRowContext(ctx, `SELECT opportunity_id,criterion,role_criterion_id,role_definition_hash,offer_option_id
+			  FROM evidence WHERE id=?`, priorID).Scan(&oldOpportunity, &oldCriterion, &oldRoleID, &oldRoleHash, &oldOptionID)
 			if errors.Is(err, sql.ErrNoRows) {
 				return Change{}, ErrNotFound
 			}
@@ -590,6 +704,13 @@ func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, 
 			if oldOpportunity != input.OpportunityID || oldCriterion != input.Criterion {
 				return Change{}, ErrInvalid
 			}
+			if oldOptionID.String != item.OfferOptionID {
+				return Change{}, ErrConflict
+			}
+			if input.Criterion == "role_criterion" && (oldRoleID.String != item.RoleCriterionID ||
+				oldRoleHash.String != item.RoleDefinitionHash) {
+				return Change{}, ErrConflict
+			}
 			var children int
 			if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM evidence WHERE supersedes_id=?`, priorID).Scan(&children); err != nil {
 				return Change{}, err
@@ -598,24 +719,37 @@ func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, 
 				return Change{}, ErrConflict
 			}
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO evidence
-  (id,opportunity_id,criterion,observed_value,confirmation_state,source_kind,source_url,
-   source_excerpt,source_contact_text,observed_at,supersedes_id,created_at,source_id,
-   finding,span_start,span_end,excerpt_sha256,hours_min,hours_max,hours_hard,arrangement_pattern,
-   arrangement_location,arrangement_remote_geography,arrangement_onsite_days,
-   owner_arrangement_evidence_id,owner_preferences_version,salary_currency,salary_period,
-   salary_basis,salary_amount_cents,salary_weekly_hours)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		insertArgs := []any{
 			item.ID, item.OpportunityID, item.Criterion, item.ObservedValue, item.ConfirmationState,
 			source.SourceKind, optionalText(source.SourceURL), item.SourceExcerpt,
 			optionalText(source.SpeakerName), item.ObservedAt, optionalText(priorID), item.CreatedAt,
 			source.ID, item.Finding, input.SpanStart, input.SpanEnd, item.ExcerptSHA256,
-			optionalHoursMin(input.Hours), optionalHoursMax(input.Hours), optionalHoursHard(input.Hours),
+			optionalHoursHard(input.Hours),
 			optionalArrangementPattern(input.Arrangement), optionalArrangementLocation(input.Arrangement),
-			optionalArrangementRemote(input.Arrangement), optionalArrangementDays(input.Arrangement),
+			optionalArrangementRemote(input.Arrangement),
 			optionalText(item.OwnerWorkableForEvidenceID), nullablePositive(item.OwnerPreferencesVersion),
 			optionalSalaryCurrency(input.Salary), optionalSalaryPeriod(input.Salary),
-			optionalSalaryBasis(input.Salary), optionalSalaryAmount(input.Salary), optionalSalaryHours(input.Salary))
+			optionalSalaryBasis(input.Salary), optionalSalaryAmount(input.Salary),
+			optionalText(item.RoleCriterionID), optionalText(item.RoleDefinitionHash),
+			optionalRoleDefinition(item.RoleDefinition),
+			nullablePositive(item.RolePreferencesVersion), optionalText(item.RolePresence),
+			optionalText(item.OfferOptionID), optionalText(item.OwnerLocationFingerprint),
+			optionalHoursMinHundredths(input.Hours), optionalHoursMaxHundredths(input.Hours),
+			optionalOnsiteDaysHundredths(input.Arrangement), optionalSalaryHoursHundredths(input.Salary),
+			optionalSalaryAnnualConversion(input.Salary),
+		}
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(insertArgs)), ",")
+		_, err = tx.ExecContext(ctx, `INSERT INTO evidence
+  (id,opportunity_id,criterion,observed_value,confirmation_state,source_kind,source_url,
+   source_excerpt,source_contact_text,observed_at,supersedes_id,created_at,source_id,
+   finding,span_start,span_end,excerpt_sha256,hours_hard,arrangement_pattern,
+   arrangement_location,arrangement_remote_geography,
+   owner_arrangement_evidence_id,owner_preferences_version,salary_currency,salary_period,
+   salary_basis,salary_amount_cents,role_criterion_id,
+   role_definition_hash,role_definition_json,role_preferences_version,role_presence,offer_option_id,
+   owner_location_fingerprint,hours_min_hundredths,hours_max_hundredths,
+   arrangement_onsite_days_hundredths,salary_weekly_hours_hundredths,salary_annual_conversion)
+  VALUES (`+placeholders+`)`, insertArgs...)
 		if err != nil {
 			return Change{}, err
 		}
@@ -636,17 +770,17 @@ func nullablePositive(v int64) any {
 	}
 	return v
 }
-func optionalHoursMin(v *HoursAvailability) any {
+func optionalHoursMinHundredths(v *HoursAvailability) any {
 	if v == nil {
 		return nil
 	}
-	return v.MinWeekly
+	return v.MinHundredths
 }
-func optionalHoursMax(v *HoursAvailability) any {
+func optionalHoursMaxHundredths(v *HoursAvailability) any {
 	if v == nil {
 		return nil
 	}
-	return v.MaxWeekly
+	return v.MaxHundredths
 }
 func optionalHoursHard(v *HoursAvailability) any {
 	if v == nil {
@@ -672,11 +806,14 @@ func optionalArrangementRemote(v *WorkArrangement) any {
 	}
 	return v.RemoteGeography
 }
-func optionalArrangementDays(v *WorkArrangement) any {
+func optionalOnsiteDaysHundredths(v *WorkArrangement) any {
 	if v == nil {
 		return nil
 	}
-	return nullableInt(v.OnsiteDays)
+	if v.OnsiteDaysHundredths != nil {
+		return *v.OnsiteDaysHundredths
+	}
+	return nil
 }
 func optionalSalaryCurrency(v *ActualSalaryFacts) any {
 	if v == nil {
@@ -702,11 +839,25 @@ func optionalSalaryAmount(v *ActualSalaryFacts) any {
 	}
 	return v.AmountCents
 }
-func optionalSalaryHours(v *ActualSalaryFacts) any {
+func optionalSalaryHoursHundredths(v *ActualSalaryFacts) any {
 	if v == nil {
 		return nil
 	}
-	return v.ActualWeeklyHours
+	return v.ActualWeeklyHoursHundredths
+}
+func optionalSalaryAnnualConversion(v *ActualSalaryFacts) any {
+	if v == nil {
+		return nil
+	}
+	return optionalText(v.AnnualConversion)
+}
+
+func optionalRoleDefinition(value *RoleCriterion) any {
+	if value == nil {
+		return nil
+	}
+	encoded, _ := json.Marshal(value)
+	return string(encoded)
 }
 
 type EvidencePage struct {
@@ -753,35 +904,53 @@ func decodeEvidenceCursor(value, scope string) (evidenceCursor, error) {
 func scanEvidence(row rowScanner) (Evidence, error) {
 	var item Evidence
 	var sourceID, finding, supersedes, excerptDigest, sourceURL, contact sql.NullString
-	var min, max, hard, days, ownerPreference, salaryAmount, salaryHours, spanStart, spanEnd sql.NullInt64
+	var hard, ownerPreference, salaryAmount, spanStart, spanEnd sql.NullInt64
+	var minScaled, maxScaled, salaryHoursScaled, daysScaled, rolePreference sql.NullInt64
 	var pattern, location, remote, arrangementID, salaryCurrency, salaryPeriod, salaryBasis sql.NullString
+	var roleID, roleHash, roleJSON, rolePresence, optionID, locationFingerprint, annualConversion sql.NullString
 	err := row.Scan(&item.ID, &item.OpportunityID, &item.Criterion, &item.ObservedValue,
 		&item.ConfirmationState, &item.SourceExcerpt, &item.ObservedAt, &supersedes,
 		&item.CreatedAt, &sourceID, &item.SourceKind, &sourceURL, &contact,
-		&finding, &spanStart, &spanEnd, &excerptDigest, &min, &max, &hard, &pattern, &location,
-		&remote, &days, &arrangementID, &ownerPreference, &salaryCurrency,
-		&salaryPeriod, &salaryBasis, &salaryAmount, &salaryHours)
+		&finding, &spanStart, &spanEnd, &excerptDigest, &hard, &pattern, &location,
+		&remote, &arrangementID, &ownerPreference, &salaryCurrency,
+		&salaryPeriod, &salaryBasis, &salaryAmount,
+		&roleID, &roleHash, &roleJSON, &rolePreference, &rolePresence, &optionID, &locationFingerprint,
+		&minScaled, &maxScaled, &daysScaled, &salaryHoursScaled, &annualConversion)
 	if err != nil {
 		return Evidence{}, err
 	}
 	item.SourceID, item.Finding, item.SupersedesID = sourceID.String, finding.String, supersedes.String
-	item.SourceURL, item.SourceContactText, item.Legacy = sourceURL.String, contact.String, !sourceID.Valid
+	item.SourceURL, item.SourceContactText = sourceURL.String, contact.String
+	item.RoleCriterionID, item.RoleDefinitionHash = roleID.String, roleHash.String
+	if roleJSON.Valid {
+		var definition RoleCriterion
+		if err := json.Unmarshal([]byte(roleJSON.String), &definition); err != nil {
+			return Evidence{}, err
+		}
+		item.RoleDefinition = &definition
+	}
+	item.RolePreferencesVersion, item.RolePresence = rolePreference.Int64, rolePresence.String
+	item.OfferOptionID, item.OwnerLocationFingerprint = optionID.String, locationFingerprint.String
 	if spanStart.Valid && spanEnd.Valid {
 		item.SpanStart, item.SpanEnd, item.HasSpan = int(spanStart.Int64), int(spanEnd.Int64), true
 	}
 	item.ExcerptSHA256 = excerptDigest.String
-	if min.Valid && max.Valid {
-		item.Hours = &HoursAvailability{MinWeekly: min.Int64, MaxWeekly: max.Int64, HardBounds: hard.Valid && hard.Int64 == 1}
+	if minScaled.Valid && maxScaled.Valid {
+		item.Hours = &HoursAvailability{MinHundredths: minScaled.Int64, MaxHundredths: maxScaled.Int64,
+			HardBounds: hard.Valid && hard.Int64 == 1}
 	}
 	if pattern.Valid {
 		item.Arrangement = &WorkArrangement{Pattern: pattern.String, BaseLocation: location.String, RemoteGeography: remote.String}
-		if days.Valid {
-			item.Arrangement.OnsiteDays = &days.Int64
+		if daysScaled.Valid {
+			item.Arrangement.OnsiteDaysHundredths = &daysScaled.Int64
 		}
 	}
 	item.OwnerWorkableForEvidenceID, item.OwnerPreferencesVersion = arrangementID.String, ownerPreference.Int64
-	if salaryAmount.Valid && salaryHours.Valid {
-		item.Salary = &ActualSalaryFacts{Currency: salaryCurrency.String, Period: salaryPeriod.String, Basis: salaryBasis.String, AmountCents: salaryAmount.Int64, ActualWeeklyHours: salaryHours.Int64}
+	if salaryAmount.Valid && salaryHoursScaled.Valid {
+		item.Salary = &ActualSalaryFacts{Currency: salaryCurrency.String, Period: salaryPeriod.String,
+			Basis: salaryBasis.String, AmountCents: salaryAmount.Int64,
+			ActualWeeklyHoursHundredths: salaryHoursScaled.Int64,
+			AnnualConversion:            annualConversion.String}
 	}
 	return item, nil
 }
@@ -789,10 +958,13 @@ func scanEvidence(row rowScanner) (Evidence, error) {
 const evidenceColumns = `id,opportunity_id,criterion,observed_value,confirmation_state,
   COALESCE(source_excerpt,''),observed_at,supersedes_id,created_at,source_id,
   source_kind,source_url,source_contact_text,finding,span_start,span_end,excerpt_sha256,
-  hours_min,hours_max,hours_hard,arrangement_pattern,arrangement_location,
-  arrangement_remote_geography,arrangement_onsite_days,owner_arrangement_evidence_id,
+  hours_hard,arrangement_pattern,arrangement_location,
+  arrangement_remote_geography,owner_arrangement_evidence_id,
   owner_preferences_version,salary_currency,salary_period,salary_basis,
-  salary_amount_cents,salary_weekly_hours`
+  salary_amount_cents,role_criterion_id,role_definition_hash,role_definition_json,
+  role_preferences_version,role_presence,offer_option_id,owner_location_fingerprint,
+  hours_min_hundredths,hours_max_hundredths,arrangement_onsite_days_hundredths,
+  salary_weekly_hours_hundredths,salary_annual_conversion`
 
 func (s *Store) Evidence(ctx context.Context, id string) (Evidence, error) {
 	item, err := scanEvidence(s.db.QueryRowContext(ctx, `SELECT `+evidenceColumns+` FROM evidence WHERE id=?`, id))

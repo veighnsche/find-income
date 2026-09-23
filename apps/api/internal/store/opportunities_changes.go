@@ -11,7 +11,7 @@ import (
 
 // RecordChange is an immutable post-mutation snapshot. RevisionAfter belongs
 // to this event, not to a later current record fetched by another request.
-// Backfilled pre-005 audit metadata has SnapshotState unavailable_historical.
+// SnapshotState records that this event captured the post-mutation record.
 type RecordChange struct {
 	Sequence       int64
 	ChangeID       string

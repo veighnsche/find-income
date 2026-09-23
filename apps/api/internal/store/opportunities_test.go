@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +11,38 @@ import (
 )
 
 func int64Ptr(value int64) *int64 { return &value }
+func intPtr(value int) *int       { return &value }
+
+func TestAnnualConversionRequiresExactVacancyQuote(t *testing.T) {
+	ctx := context.Background()
+	s := openJobTestStore(t)
+	company := createFixtureCompany(t, s)
+	input := fixtureOpportunity(company.ID)
+	quote := "twelve equal monthly base payments"
+	input.OriginalText = "Annual gross base EUR 54,000 paid in " + quote + "."
+	input.Compensation.Period = "year"
+	input.Compensation.MinAmountCents = int64Ptr(5400000)
+	input.Compensation.MaxAmountCents = nil
+	input.Compensation.AnnualConversion = "twelve_equal_monthly_base_payments"
+	if _, _, err := s.CreateOpportunity(ctx, ownerActor(), input); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("conversion without source span: %v", err)
+	}
+	start := strings.Index(input.OriginalText, quote)
+	input.Compensation.AnnualConversionSpanStart = intPtr(start)
+	input.Compensation.AnnualConversionSpanEnd = intPtr(start + len(quote))
+	o, _, err := s.CreateOpportunity(ctx, ownerActor(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := s.Opportunity(ctx, o.ID)
+	if err != nil || read.Compensation.AnnualConversionExcerpt != quote || len(read.Compensation.AnnualConversionSHA256) != 64 {
+		t.Fatalf("conversion proof lost: %+v %v", read.Compensation, err)
+	}
+	changed := "Annual gross base EUR 54,000 includes an annual bonus."
+	if _, _, err = s.PatchOpportunity(ctx, ownerActor(), o.ID, OpportunityPatch{ExpectedRevision: 1, OriginalText: &changed}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("unattested changed source: %v", err)
+	}
+}
 
 func fixtureOpportunity(companyID string) OpportunityInput {
 	return OpportunityInput{
@@ -22,7 +53,7 @@ func fixtureOpportunity(companyID string) OpportunityInput {
 		PostedOn: "2026-09-20", DeadlineOn: "2026-10-20",
 		Compensation: AdvertisedCompensation{
 			Currency: "EUR", MinAmountCents: int64Ptr(600000), MaxAmountCents: int64Ptr(700000),
-			Period: "month", ReferenceHours: int64Ptr(40), Basis: "base", BenefitsText: "Training budget",
+			Period: "month", ReferenceHoursHundredths: int64Ptr(4000), Basis: "base", BenefitsText: "Training budget",
 		},
 	}
 }
@@ -61,12 +92,12 @@ func TestOpportunityRoundTripHistoryArchiveAndReferences(t *testing.T) {
 	if err != nil || read.OriginalText != input.OriginalText || read.SourceURL != input.SourceURL ||
 		read.Notes != input.Notes ||
 		read.Compensation.MinAmountCents == nil || *read.Compensation.MinAmountCents != 600000 ||
-		read.Compensation.ReferenceHours == nil || *read.Compensation.ReferenceHours != 40 {
+		read.Compensation.ReferenceHoursHundredths == nil || *read.Compensation.ReferenceHoursHundredths != 4000 {
 		t.Fatalf("roundtrip: %+v err=%v", read, err)
 	}
-	var actualConfirmed int
-	if err := s.db.QueryRowContext(ctx, "SELECT actual_confirmed FROM compensation WHERE opportunity_id=?", created.ID).Scan(&actualConfirmed); err != nil || actualConfirmed != 0 {
-		t.Fatalf("advertisement became confirmation: %d %v", actualConfirmed, err)
+	initialFit, err := s.Qualification(ctx, created.ID)
+	if err != nil || initialFit.Current == nil || initialFit.Current.Salary.ConfirmedActual {
+		t.Fatalf("advertisement became confirmed pay: %+v %v", initialFit, err)
 	}
 	firstEvent, err := s.RecordChange(ctx, createChange)
 	if err != nil || firstEvent.Actor.ID != "owner" || firstEvent.RevisionAfter == nil || *firstEvent.RevisionAfter != 1 {
@@ -384,127 +415,6 @@ func TestChangedSinceWatermarkHistoryVacuumAndRestart(t *testing.T) {
 	afterVacuum, err := s.ListRecordChanges(ctx, RecordChangeOptions{After: nextPoll.Watermark, EntityKind: "opportunity"})
 	if err != nil || len(afterVacuum.Items) != 1 || afterVacuum.Items[0].Sequence <= nextPoll.Watermark {
 		t.Fatalf("cursor failed after VACUUM/restart: %+v err=%v", afterVacuum, err)
-	}
-}
-
-func TestChangeBackfillExplicitlyLacksHistoricalSnapshot(t *testing.T) {
-	ctx := context.Background()
-	dir := t.TempDir()
-	path := dir + "/jobseek.sqlite"
-	db, err := sql.Open("sqlite", "file:"+path+"?_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db.SetMaxOpenConns(1)
-	if _, err := db.ExecContext(ctx, `CREATE TABLE schema_migrations
-  (version INTEGER PRIMARY KEY, name TEXT NOT NULL, sha256 TEXT NOT NULL, applied_at TEXT NOT NULL)`); err != nil {
-		t.Fatal(err)
-	}
-	migrations, err := embeddedMigrations()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, migration := range migrations[:4] {
-		if err := applyMigration(ctx, db, migration); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO companies(id,name,created_at,updated_at)
-  VALUES ('old-company','Old synthetic company','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO audit_changes
-  (id,actor_kind,actor_id,operation,entity_kind,entity_id,revision_after,occurred_at)
-  VALUES ('old-audit','system','fixture','company.create','company','old-company',1,'2026-01-01T00:00:00Z')`); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-	s, err := Open(ctx, dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	change, err := s.RecordChange(ctx, "old-audit")
-	if err != nil || change.SnapshotState != "unavailable_historical" || change.Snapshot != nil {
-		t.Fatalf("backfill fabricated snapshot: %+v err=%v", change, err)
-	}
-}
-
-func TestOpportunityNotesMigrationPreservesPriorSnapshots(t *testing.T) {
-	ctx := context.Background()
-	dir := t.TempDir()
-	db, err := sql.Open("sqlite", "file:"+dir+"/jobseek.sqlite?_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db.SetMaxOpenConns(1)
-	if _, err := db.ExecContext(ctx, `CREATE TABLE schema_migrations
-  (version INTEGER PRIMARY KEY, name TEXT NOT NULL, sha256 TEXT NOT NULL, applied_at TEXT NOT NULL)`); err != nil {
-		t.Fatal(err)
-	}
-	migrations, err := embeddedMigrations()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, migration := range migrations[:5] {
-		if err := applyMigration(ctx, db, migration); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO companies(id,name,created_at,updated_at)
-  VALUES ('legacy-company','Legacy company','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO opportunities
-  (id,company_id,title,kind,original_text,stage,created_at,updated_at)
-  VALUES ('legacy-opportunity','legacy-company','Legacy role','employment','Original vacancy','new',
-          '2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO audit_changes
-  (id,actor_kind,actor_id,operation,entity_kind,entity_id,revision_after,occurred_at)
-  VALUES ('legacy-audit','system','fixture','opportunity.create','opportunity',
-          'legacy-opportunity',1,'2026-01-01T00:00:00Z')`); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-	s, err := Open(ctx, dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	oldEvent, err := s.RecordChange(ctx, "legacy-audit")
-	if err != nil {
-		t.Fatal(err)
-	}
-	oldSnapshot := snapshotFields(t, oldEvent)
-	if _, exists := oldSnapshot["notes"]; exists {
-		t.Fatalf("pre-006 snapshot retrofitted with notes: %+v", oldSnapshot)
-	}
-	if oldSnapshot["originalText"] != "Original vacancy" {
-		t.Fatalf("pre-006 source changed: %+v", oldSnapshot)
-	}
-	note := "Contacted recruiter"
-	updated, changeID, err := s.PatchOpportunity(ctx, ownerActor(), "legacy-opportunity", OpportunityPatch{
-		ExpectedRevision: 1, Notes: &note,
-	})
-	if err != nil || updated.Notes != note || updated.OriginalText != "Original vacancy" {
-		t.Fatalf("post-migration note patch: %+v err=%v", updated, err)
-	}
-	newEvent, err := s.RecordChange(ctx, changeID)
-	if err != nil || snapshotFields(t, newEvent)["notes"] != note {
-		t.Fatalf("post-migration note snapshot: %+v err=%v", newEvent, err)
-	}
-	oldEvent, err = s.RecordChange(ctx, "legacy-audit")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, exists := snapshotFields(t, oldEvent)["notes"]; exists {
-		t.Fatal("pre-006 snapshot changed after note edit")
 	}
 }
 

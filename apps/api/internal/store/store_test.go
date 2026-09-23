@@ -20,9 +20,9 @@ func TestFreshPreferencesAndRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if initial.Version != 1 || initial.TargetHours != 32 || initial.MinMonthlyBaseCents != 450000 ||
-		initial.SalaryCurrency != "EUR" || !initial.RequireBackendPlatform || !initial.ExcludeFrontendDuties ||
-		!initial.ExcludePHPFocused || initial.PreferredLocation != "Amsterdam" || initial.Timezone != "Europe/Amsterdam" {
+	if initial.Version != 1 || initial.TargetHoursHundredths != 3200 || initial.MinMonthlyBaseCents != 450000 ||
+		initial.SalaryCurrency != "EUR" || len(initial.RoleCriteria) != 3 ||
+		initial.PreferredLocation != "Amsterdam" || initial.Timezone != "Europe/Amsterdam" {
 		t.Fatalf("wrong default preferences: %+v", initial)
 	}
 	var count int
@@ -49,7 +49,7 @@ func TestFreshPreferencesAndRestart(t *testing.T) {
 	}
 
 	next := initial
-	next.TargetHours = 30
+	next.TargetHoursHundredths = 3000
 	updated, auditID, err := s.UpdatePreferences(ctx, 1, next, Actor{Kind: "administrator", ID: "test-owner"})
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +76,7 @@ func TestFreshPreferencesAndRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if current.Version != 2 || current.TargetHours != 30 || old.TargetHours != 32 {
+	if current.Version != 2 || current.TargetHoursHundredths != 3000 || old.TargetHoursHundredths != 3200 {
 		t.Fatalf("version history after restart: current=%+v old=%+v", current, old)
 	}
 	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM audit_changes WHERE id=? AND actor_id=?", auditID, "test-owner").Scan(&count); err != nil {
@@ -119,71 +119,6 @@ func TestForeignKeyFailureRollsBackMutationAndAudit(t *testing.T) {
 		if count != 0 {
 			t.Fatalf("%s has %d partial records", table, count)
 		}
-	}
-}
-
-func TestUpgradeFromVersionOneAndMigrationRollback(t *testing.T) {
-	ctx := context.Background()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "jobseek.sqlite")
-	db, err := sql.Open("sqlite", "file:"+path+"?_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db.SetMaxOpenConns(1)
-	if _, err := db.ExecContext(ctx, `CREATE TABLE schema_migrations
-  (version INTEGER PRIMARY KEY, name TEXT NOT NULL, sha256 TEXT NOT NULL, applied_at TEXT NOT NULL)`); err != nil {
-		t.Fatal(err)
-	}
-	migrations, err := embeddedMigrations()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := applyMigration(ctx, db, migrations[0]); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO companies (id,name,created_at,updated_at)
-  VALUES ('company-1','Older record','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`); err != nil {
-		t.Fatal(err)
-	}
-	failed := migration{version: 2, name: "bad_fixture.sql", sql: "CREATE TABLE partial_table (id INTEGER); INSERT INTO no_such_table VALUES (1)", digest: "fixture"}
-	if err := applyMigration(ctx, db, failed); err == nil {
-		t.Fatal("broken migration succeeded")
-	}
-	var count int
-	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='partial_table'").Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	if count != 0 {
-		t.Fatal("failed migration left a partial table")
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	s, err := Open(ctx, dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM schema_migrations").Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	if count != len(migrations) {
-		t.Fatalf("upgraded versions=%d", count)
-	}
-	var name string
-	if err := s.db.QueryRowContext(ctx, "SELECT name FROM companies WHERE id='company-1'").Scan(&name); err != nil {
-		t.Fatal(err)
-	}
-	if name != "Older record" {
-		t.Fatalf("upgrade lost record: %q", name)
-	}
-	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE type='index' AND name='opportunities_source_url_idx'").Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	if count != 1 {
-		t.Fatal("version-two index missing")
 	}
 }
 

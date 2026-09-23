@@ -10,13 +10,18 @@ import (
 )
 
 type AdvertisedCompensation struct {
-	Currency       string
-	MinAmountCents *int64
-	MaxAmountCents *int64
-	Period         string
-	ReferenceHours *int64
-	Basis          string
-	BenefitsText   string
+	Currency                  string
+	MinAmountCents            *int64
+	MaxAmountCents            *int64
+	Period                    string
+	ReferenceHoursHundredths  *int64
+	AnnualConversion          string
+	AnnualConversionSpanStart *int
+	AnnualConversionSpanEnd   *int
+	AnnualConversionExcerpt   string
+	AnnualConversionSHA256    string
+	Basis                     string
+	BenefitsText              string
 }
 
 // Opportunity is the current record. Historical source text and compensation
@@ -95,7 +100,9 @@ type OpportunityDuplicate struct {
 const opportunityColumns = `o.id,o.company_id,o.title,o.kind,o.source_url,o.original_text,o.notes,
   o.stage,o.work_pattern,o.location_text,o.posted_on,o.deadline_on,o.archived_at,
   o.revision,o.created_at,o.updated_at,c.currency,c.min_amount_cents,
-  c.max_amount_cents,c.period,c.reference_hours,c.basis,c.benefits_text`
+  c.max_amount_cents,c.period,c.reference_hours_hundredths,c.basis,c.benefits_text,
+  c.annual_conversion,c.annual_conversion_span_start,c.annual_conversion_span_end,
+  c.annual_conversion_excerpt,c.annual_conversion_sha256`
 
 const opportunityFrom = ` FROM opportunities o LEFT JOIN compensation c ON c.opportunity_id=o.id`
 
@@ -115,18 +122,15 @@ func validateCompensation(input AdvertisedCompensation) (AdvertisedCompensation,
 		input.Basis = "unknown"
 	}
 	if input.Currency != "unknown" {
-		if len(input.Currency) != 3 {
-			return input, fmt.Errorf("%w: currency must be ISO-style uppercase code", ErrInvalid)
-		}
-		for _, r := range input.Currency {
-			if r < 'A' || r > 'Z' {
-				return input, fmt.Errorf("%w: currency must be ISO-style uppercase code", ErrInvalid)
-			}
+		if !currencyCode(input.Currency) {
+			return input, fmt.Errorf("%w: unsupported fixed-hundredth currency", ErrInvalid)
 		}
 	}
 	if input.MinAmountCents != nil && *input.MinAmountCents < 0 ||
 		input.MaxAmountCents != nil && (input.MinAmountCents == nil || *input.MaxAmountCents < *input.MinAmountCents) ||
-		input.ReferenceHours != nil && (*input.ReferenceHours < 1 || *input.ReferenceHours > 168) ||
+		input.ReferenceHoursHundredths != nil && (*input.ReferenceHoursHundredths < 100 || *input.ReferenceHoursHundredths > 16800) ||
+		input.AnnualConversion != "" && (input.AnnualConversion != "twelve_equal_monthly_base_payments" ||
+			input.Period != "year" || input.Basis != "base") ||
 		len(input.BenefitsText) > 10000 {
 		return input, fmt.Errorf("%w: invalid advertised compensation", ErrInvalid)
 	}
@@ -188,6 +192,24 @@ func validateOpportunity(input OpportunityInput) (OpportunityInput, error) {
 	}
 	var err error
 	input.Compensation, err = validateCompensation(input.Compensation)
+	if err != nil {
+		return input, err
+	}
+	conversion := &input.Compensation
+	if conversion.AnnualConversion != "" {
+		if conversion.AnnualConversionSpanStart == nil || conversion.AnnualConversionSpanEnd == nil ||
+			*conversion.AnnualConversionSpanStart < 0 || *conversion.AnnualConversionSpanEnd <= *conversion.AnnualConversionSpanStart ||
+			*conversion.AnnualConversionSpanEnd-*conversion.AnnualConversionSpanStart > 2000 {
+			return input, fmt.Errorf("%w: sourced annual conversion span required", ErrInvalid)
+		}
+		conversion.AnnualConversionExcerpt, err = exactExcerpt(input.OriginalText, *conversion.AnnualConversionSpanStart, *conversion.AnnualConversionSpanEnd)
+		if err != nil {
+			return input, err
+		}
+		conversion.AnnualConversionSHA256 = sourceDigest(conversion.AnnualConversionExcerpt)
+	} else if conversion.AnnualConversionSpanStart != nil || conversion.AnnualConversionSpanEnd != nil || conversion.AnnualConversionExcerpt != "" || conversion.AnnualConversionSHA256 != "" {
+		return input, fmt.Errorf("%w: annual conversion proof without conversion", ErrInvalid)
+	}
 	return input, err
 }
 
@@ -195,12 +217,14 @@ func scanOpportunity(row rowScanner) (Opportunity, error) {
 	var opportunity Opportunity
 	var source, posted, deadline, archived sql.NullString
 	var currency, period, basis, benefits sql.NullString
-	var minimum, maximum, hours sql.NullInt64
+	var minimum, maximum, hundredths sql.NullInt64
+	var annualConversion, conversionExcerpt, conversionHash sql.NullString
+	var conversionStart, conversionEnd sql.NullInt64
 	err := row.Scan(&opportunity.ID, &opportunity.CompanyID, &opportunity.Title, &opportunity.Kind,
 		&source, &opportunity.OriginalText, &opportunity.Notes, &opportunity.Stage, &opportunity.WorkPattern,
 		&opportunity.LocationText, &posted, &deadline, &archived, &opportunity.Revision,
 		&opportunity.CreatedAt, &opportunity.UpdatedAt, &currency, &minimum, &maximum,
-		&period, &hours, &basis, &benefits)
+		&period, &hundredths, &basis, &benefits, &annualConversion, &conversionStart, &conversionEnd, &conversionExcerpt, &conversionHash)
 	if err != nil {
 		return Opportunity{}, err
 	}
@@ -223,9 +247,20 @@ func scanOpportunity(row rowScanner) (Opportunity, error) {
 	if maximum.Valid {
 		opportunity.Compensation.MaxAmountCents = &maximum.Int64
 	}
-	if hours.Valid {
-		opportunity.Compensation.ReferenceHours = &hours.Int64
+	if hundredths.Valid {
+		opportunity.Compensation.ReferenceHoursHundredths = &hundredths.Int64
 	}
+	opportunity.Compensation.AnnualConversion = annualConversion.String
+	if conversionStart.Valid {
+		value := int(conversionStart.Int64)
+		opportunity.Compensation.AnnualConversionSpanStart = &value
+	}
+	if conversionEnd.Valid {
+		value := int(conversionEnd.Int64)
+		opportunity.Compensation.AnnualConversionSpanEnd = &value
+	}
+	opportunity.Compensation.AnnualConversionExcerpt = conversionExcerpt.String
+	opportunity.Compensation.AnnualConversionSHA256 = conversionHash.String
 	return opportunity, nil
 }
 
@@ -246,14 +281,31 @@ func nullableInt(value *int64) any {
 
 func writeAdvertisedCompensation(ctx context.Context, tx *sql.Tx, opportunityID string, value AdvertisedCompensation) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO compensation
-  (opportunity_id,currency,min_amount_cents,max_amount_cents,period,reference_hours,basis,benefits_text)
-  VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(opportunity_id) DO UPDATE SET
+  (opportunity_id,currency,min_amount_cents,max_amount_cents,period,reference_hours_hundredths,
+   basis,benefits_text,annual_conversion,annual_conversion_span_start,annual_conversion_span_end,
+   annual_conversion_excerpt,annual_conversion_sha256)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(opportunity_id) DO UPDATE SET
   currency=excluded.currency,min_amount_cents=excluded.min_amount_cents,
   max_amount_cents=excluded.max_amount_cents,period=excluded.period,
-  reference_hours=excluded.reference_hours,basis=excluded.basis,benefits_text=excluded.benefits_text`,
+  reference_hours_hundredths=excluded.reference_hours_hundredths,
+  basis=excluded.basis,benefits_text=excluded.benefits_text,
+  annual_conversion=excluded.annual_conversion,
+  annual_conversion_span_start=excluded.annual_conversion_span_start,
+  annual_conversion_span_end=excluded.annual_conversion_span_end,
+  annual_conversion_excerpt=excluded.annual_conversion_excerpt,
+  annual_conversion_sha256=excluded.annual_conversion_sha256`,
 		opportunityID, value.Currency, nullableInt(value.MinAmountCents), nullableInt(value.MaxAmountCents),
-		value.Period, nullableInt(value.ReferenceHours), value.Basis, value.BenefitsText)
+		value.Period, nullableInt(value.ReferenceHoursHundredths), value.Basis,
+		value.BenefitsText, optionalText(value.AnnualConversion), nullableIntPointer(value.AnnualConversionSpanStart),
+		nullableIntPointer(value.AnnualConversionSpanEnd), optionalText(value.AnnualConversionExcerpt), optionalText(value.AnnualConversionSHA256))
 	return err
+}
+
+func nullableIntPointer(value *int) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 func (s *Store) CreateOpportunity(ctx context.Context, actor Actor, input OpportunityInput) (Opportunity, string, error) {
@@ -365,6 +417,10 @@ func (s *Store) PatchOpportunity(ctx context.Context, actor Actor, id string, pa
 	}
 	if current.Revision != patch.ExpectedRevision || current.ArchivedAt != "" {
 		return Opportunity{}, "", ErrConflict
+	}
+	if patch.OriginalText != nil && *patch.OriginalText != current.OriginalText &&
+		patch.Compensation == nil && current.Compensation.AnnualConversion != "" {
+		return Opportunity{}, "", fmt.Errorf("%w: changed source text requires annual conversion reattestation", ErrInvalid)
 	}
 	input := opportunityInputFromRecord(current)
 	applyOpportunityPatch(&input, patch)

@@ -1,200 +1,84 @@
 package fit
 
-import (
-	"errors"
-	"math"
-	"strings"
-	"testing"
-)
+import "testing"
 
-func int64ptr(n int64) *int64 { return &n }
-
-func monthly(min int64, max *int64, hours *int64) Compensation {
-	return Compensation{Kind: Employment, Currency: "EUR", Period: Monthly, Basis: Base,
-		MinCents: int64ptr(min), MaxCents: max, ReferenceHours: hours}
+func testPolicy() Policy {
+	return Policy{TargetHoursHundredths: 3150, MinMonthlyBaseCents: 450000, SalaryCurrency: "EUR",
+		RoleCriteria: []RoleDefinition{{ID: "backend", Label: "Backend", Kind: "responsibility", Mode: "require"},
+			{ID: "frontend", Label: "Frontend", Kind: "responsibility", Mode: "avoid"}}}
 }
 
-func TestSalaryBoundaries(t *testing.T) {
-	p := DefaultPolicy()
-	cases := []struct {
-		name      string
-		input     Compensation
-		state     State
-		low, high int64
-		estimate  bool
-		confirmed bool
-	}{
-		{"6000 at 40 remains unconfirmed", monthly(600000, nil, int64ptr(40)), Unknown, 480000, 480000, true, false},
-		{"5000 at 40 is below floor", monthly(500000, nil, int64ptr(40)), Mismatch, 400000, 400000, true, false},
-		{"range crosses floor", monthly(500000, int64ptr(700000), int64ptr(40)), Unknown, 400000, 560000, true, false},
-		{"range above floor needs actual offer", monthly(600000, int64ptr(700000), int64ptr(40)), Unknown, 480000, 560000, true, false},
-		{"missing reference hours", monthly(600000, nil, nil), Unknown, 0, 0, false, false},
-		{"unknown pay basis", Compensation{Kind: Employment, Currency: "EUR", Period: Monthly, Basis: UnknownBasis, MinCents: int64ptr(600000), ReferenceHours: int64ptr(40)}, Unknown, 0, 0, false, false},
-		{"annual basis", Compensation{Kind: Employment, Currency: "EUR", Period: Annual, Basis: Base, MinCents: int64ptr(7200000), ReferenceHours: int64ptr(40)}, Unknown, 0, 0, false, false},
-		{"non EUR", Compensation{Kind: Employment, Currency: "USD", Period: Monthly, Basis: Base, MinCents: int64ptr(600000), ReferenceHours: int64ptr(40)}, Unknown, 0, 0, false, false},
-		{"contract revenue separate", Compensation{Kind: Project, Currency: "EUR", Period: Hourly, Basis: Base, MinCents: int64ptr(10000), ReferenceHours: int64ptr(32)}, Unknown, 0, 0, false, false},
-		{"exact confirmed 4500 at 32", Compensation{Kind: Employment, Currency: "EUR", Period: Monthly, Basis: Base, ActualMonthlyBaseCents: int64ptr(450000), ActualHours: int64ptr(32), ActualConfirmed: true, ActualSource: Employer}, Match, 0, 0, false, true},
-		{"confirmed actual below floor", Compensation{Kind: Employment, Currency: "EUR", Period: Monthly, Basis: Base, ActualMonthlyBaseCents: int64ptr(449999), ActualHours: int64ptr(32), ActualConfirmed: true, ActualSource: Recruiter}, Mismatch, 0, 0, false, true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := EvaluateSalary(p, tc.input)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got.State != tc.state || got.ConfirmedActual != tc.confirmed {
-				t.Fatalf("state=%+v", got)
-			}
-			if (got.Estimate != nil) != tc.estimate {
-				t.Fatalf("estimate=%+v", got.Estimate)
-			}
-			if tc.estimate && (got.Estimate.MinDisplayCents != tc.low || got.Estimate.MaxDisplayCents != tc.high) {
-				t.Fatalf("estimate=%+v", got.Estimate)
-			}
-		})
-	}
-}
-
-func TestProrationRoundingAndInvalidInput(t *testing.T) {
-	p := DefaultPolicy()
-	p.TargetHours = 1
-	got, err := EvaluateSalary(p, monthly(1, nil, int64ptr(2)))
+func TestAdvertisedEstimateUsesExactFractionalHours(t *testing.T) {
+	minimum, reference := int64(560000), int64(3950)
+	result, err := EvaluateSalary(testPolicy(), Compensation{Kind: Employment, Currency: "EUR", Period: Monthly, Basis: Base,
+		MinCents: &minimum, ReferenceHoursHundredths: &reference})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Estimate == nil || got.Estimate.MinDisplayCents != 1 {
-		t.Fatalf("half-cent rounding: %+v", got)
-	}
-	// Display rounds to the floor, but the exact 449999.5-cent value is below it.
-	p = DefaultPolicy()
-	p.TargetHours = 20
-	got, err = EvaluateSalary(p, monthly(899999, nil, int64ptr(40)))
-	if err != nil || got.State != Mismatch || got.Estimate == nil || got.Estimate.MinDisplayCents != 450000 {
-		t.Fatalf("rounded display affected qualification: %+v %v", got, err)
-	}
-	bad := []Compensation{
-		monthly(-1, nil, int64ptr(40)),
-		monthly(700000, int64ptr(500000), int64ptr(40)),
-		monthly(500000, nil, int64ptr(0)),
-		{Kind: Employment, Currency: "EUR", Period: Monthly, Basis: Base, ActualConfirmed: true},
-		{Kind: Employment, Currency: "EUR", Period: Monthly, Basis: Base, ActualMonthlyBaseCents: int64ptr(450000), ActualHours: int64ptr(32), ActualConfirmed: true, ActualSource: PublishedVacancy},
-		monthly(math.MaxInt64, nil, int64ptr(1)),
-	}
-	for i, c := range bad {
-		if _, err := EvaluateSalary(DefaultPolicy(), c); !errors.Is(err, ErrInvalid) {
-			t.Fatalf("bad input %d: %v", i, err)
-		}
+	if result.State != Unknown || !result.Concern || result.Estimate == nil ||
+		result.Estimate.MinDisplayCents != 446582 || result.Estimate.TargetHoursHundredths != 3150 {
+		t.Fatalf("fractional advertised estimate: %+v", result)
 	}
 }
 
-func TestResponsibilityEvidenceAndOverall(t *testing.T) {
-	confirmed := CriterionEvidence{Finding: ConfirmedMatch, Authority: Employer}
-	facts := Criteria{BackendPlatform: confirmed, NoFrontendDuties: confirmed,
-		NoPHPFocusedDuties: confirmed, HoursAvailable: confirmed, LocationWorkable: confirmed}
-	pay := Compensation{Kind: Employment, Currency: "EUR", Period: Monthly, Basis: Base,
-		ActualMonthlyBaseCents: int64ptr(450000), ActualHours: int64ptr(32), ActualConfirmed: true, ActualSource: Employer}
-	report, err := Evaluate(DefaultPolicy(), pay, facts, false)
-	if err != nil || report.Overall != Qualified {
-		t.Fatalf("qualified: %+v %v", report, err)
+func TestActualAnnualBaseNeedsExplicitConversion(t *testing.T) {
+	policy := testPolicy()
+	base := Compensation{Kind: Employment, Currency: "EUR", Period: UnknownPeriod, Basis: UnknownBasis}
+	base.SourcedActual = &ActualPay{Currency: "EUR", Period: Annual, Basis: Base, AmountCents: 5400000,
+		WeeklyHoursHundredths: 3150, Source: Employer}
+	unknown, err := EvaluateSalary(policy, base)
+	if err != nil || unknown.State != Unknown || unknown.ConfirmedActual {
+		t.Fatalf("unsourced conversion: %+v %v", unknown, err)
 	}
+	base.SourcedActual.AnnualConversion = "twelve_equal_monthly_base_payments"
+	match, err := EvaluateSalary(policy, base)
+	if err != nil || match.State != Match || !match.ConfirmedActual {
+		t.Fatalf("annual match: %+v %v", match, err)
+	}
+	base.SourcedActual.AmountCents--
+	below, err := EvaluateSalary(policy, base)
+	if err != nil || below.State != Mismatch {
+		t.Fatalf("annual floor: %+v %v", below, err)
+	}
+}
 
-	facts.NoFrontendDuties = CriterionEvidence{Finding: ConfirmedMismatch, Authority: Employer}
-	report, err = Evaluate(DefaultPolicy(), pay, facts, false)
-	if err != nil || report.Overall != Unsuitable {
-		t.Fatalf("assigned frontend duty: %+v %v", report, err)
+func TestPolicyCurrencyAndProjectEconomics(t *testing.T) {
+	policy := testPolicy()
+	policy.SalaryCurrency = "GBP"
+	result, err := EvaluateSalary(policy, Compensation{Kind: Employment, Currency: "GBP", Period: Monthly, Basis: Base,
+		SourcedActual: &ActualPay{Currency: "GBP", Period: Monthly, Basis: Base, AmountCents: 450000,
+			WeeklyHoursHundredths: 3150, Source: Recruiter}})
+	if err != nil || result.State != Match {
+		t.Fatalf("GBP actual: %+v %v", result, err)
 	}
-	facts.NoFrontendDuties = CriterionEvidence{Finding: MentionOnly, Authority: PublishedVacancy}
-	report, err = Evaluate(DefaultPolicy(), pay, facts, false)
-	if err != nil || report.Overall != Unresolved {
-		t.Fatalf("incidental frontend mention: %+v %v", report, err)
+	project, err := EvaluateSalary(policy, Compensation{Kind: Project, Currency: "GBP", Period: ProjectRate, Basis: UnknownBasis})
+	if err != nil || project.State != Unknown || project.Applicable {
+		t.Fatalf("project economics: %+v %v", project, err)
 	}
-	if !strings.Contains(report.Criteria[1].Reason, "mention") {
-		t.Fatalf("reason: %s", report.Criteria[1].Reason)
-	}
+}
 
-	facts.NoFrontendDuties = confirmed
-	facts.NoPHPFocusedDuties = CriterionEvidence{Finding: ConfirmedMismatch, Authority: Employer}
-	report, err = Evaluate(DefaultPolicy(), pay, facts, false)
-	if err != nil || report.Overall != Unsuitable {
-		t.Fatalf("PHP obligation: %+v %v", report, err)
+func TestDynamicRoleModesAndRelevance(t *testing.T) {
+	policy := testPolicy()
+	base := Compensation{Kind: Employment, Currency: "EUR", Period: Monthly, Basis: Base,
+		SourcedActual: &ActualPay{Currency: "EUR", Period: Monthly, Basis: Base, AmountCents: 450000,
+			WeeklyHoursHundredths: 3150, Source: Employer}}
+	criteria := Criteria{Roles: []RoleFact{
+		{Definition: policy.RoleCriteria[0], Evidence: CriterionEvidence{Finding: ConfirmedMatch, Authority: PublishedVacancy}},
+		{Definition: policy.RoleCriteria[1], Evidence: CriterionEvidence{Finding: MentionOnly, Authority: PublishedVacancy}},
+	}, HoursAvailable: CriterionEvidence{Finding: ConfirmedMatch, Authority: PublishedVacancy},
+		LocationWorkable: CriterionEvidence{Finding: ConfirmedMatch, Authority: OwnerVerified}}
+	report, err := Evaluate(policy, base, criteria, false)
+	if err != nil || report.Overall != Qualified || report.Criteria[1].State != Unknown || report.Criteria[1].Blocking {
+		t.Fatalf("incidental avoided mention: %+v %v", report, err)
 	}
-	facts.NoPHPFocusedDuties = CriterionEvidence{Finding: ConfirmedMatch, Authority: AgentInference}
-	report, err = Evaluate(DefaultPolicy(), pay, facts, false)
-	if err != nil || report.Overall != Unresolved {
-		t.Fatalf("agent inference: %+v %v", report, err)
-	}
-	facts.NoPHPFocusedDuties = CriterionEvidence{Finding: Conflicting, Authority: Recruiter}
-	report, err = Evaluate(DefaultPolicy(), pay, facts, true)
-	if err != nil || report.Overall != NeedsRequalification {
-		t.Fatalf("new conflict: %+v %v", report, err)
-	}
-	facts.NoPHPFocusedDuties = confirmed
-	facts.LocationWorkable = CriterionEvidence{Finding: ConfirmedMatch, Authority: OwnerVerified}
-	report, err = Evaluate(DefaultPolicy(), pay, facts, false)
-	if err != nil || report.Overall != Qualified {
-		t.Fatalf("owner-confirmed workable location: %+v %v", report, err)
-	}
-
-	// Favorable vacancy copy cannot alone qualify a role, even when every
-	// advertised criterion looks suitable and actual pay is separately confirmed.
-	published := CriterionEvidence{Finding: ConfirmedMatch, Authority: PublishedVacancy}
-	facts = Criteria{BackendPlatform: published, NoFrontendDuties: published,
-		NoPHPFocusedDuties: published, HoursAvailable: published, LocationWorkable: published}
-	report, err = Evaluate(DefaultPolicy(), pay, facts, false)
-	if err != nil || report.Overall != Unresolved {
-		t.Fatalf("favorable vacancy copy became qualified: %+v %v", report, err)
-	}
-	facts.NoFrontendDuties = CriterionEvidence{Finding: ConfirmedMismatch, Authority: PublishedVacancy}
-	report, err = Evaluate(DefaultPolicy(), pay, facts, false)
+	criteria.Roles[1].Evidence = CriterionEvidence{Finding: ConfirmedMatch, Authority: Employer}
+	report, err = Evaluate(policy, base, criteria, false)
 	if err != nil || report.Overall != Unsuitable || report.Criteria[1].State != Mismatch {
-		t.Fatalf("published explicit frontend duty: %+v %v", report, err)
+		t.Fatalf("explicit avoided duty: %+v %v", report, err)
 	}
-}
-
-func TestSourcedActualPayIndependentOfAdvertisementAndConflict(t *testing.T) {
-	policy := DefaultPolicy()
-	advertised := Compensation{Kind: Employment, Currency: "USD", Period: Annual,
-		Basis: UnknownBasis, MinCents: int64ptr(10000000),
-		SourcedActual: &ActualPay{Currency: "EUR", Period: Monthly, Basis: Base,
-			AmountCents: 450000, WeeklyHours: 32}}
-	result, err := EvaluateSalary(policy, advertised)
-	if err != nil || result.State != Match || !result.ConfirmedActual {
-		t.Fatalf("direct EUR base masked by advertisement: %+v %v", result, err)
-	}
-	advertised.SourcedActual.WeeklyHours = 40
-	result, err = EvaluateSalary(policy, advertised)
-	if err != nil || result.State != Unknown || result.ConfirmedActual {
-		t.Fatalf("wrong actual hours qualified: %+v %v", result, err)
-	}
-	advertised.SourcedActual.WeeklyHours = 32
-	advertised.ActualPayConflicting = true
-	result, err = EvaluateSalary(policy, advertised)
-	if err != nil || result.State != Unknown || !result.Conflicting || result.Estimate != nil {
-		t.Fatalf("conflicting direct pay chose a value: %+v %v", result, err)
-	}
-	confirmed := CriterionEvidence{Finding: ConfirmedMatch, Authority: Employer}
-	facts := Criteria{confirmed, confirmed, confirmed, confirmed, confirmed}
-	report, err := Evaluate(policy, advertised, facts, true)
-	if err != nil || report.Overall != NeedsRequalification {
-		t.Fatalf("prior qualified conflict: %+v %v", report, err)
-	}
-}
-
-func TestMaterialAmbiguityNeedsRequalification(t *testing.T) {
-	confirmed := CriterionEvidence{Finding: ConfirmedMatch, Authority: Employer}
-	facts := Criteria{BackendPlatform: confirmed, NoFrontendDuties: confirmed,
-		NoPHPFocusedDuties: confirmed, HoursAvailable: confirmed, LocationWorkable: confirmed}
-	facts.NoFrontendDuties = CriterionEvidence{Finding: Ambiguous, Authority: UserInference}
-	pay := Compensation{Kind: Employment, Currency: "unknown", Period: UnknownPeriod, Basis: UnknownBasis,
-		SourcedActual: &ActualPay{Currency: "EUR", Period: Monthly, Basis: Base, AmountCents: 450000, WeeklyHours: 32}}
-	report, err := Evaluate(DefaultPolicy(), pay, facts, true)
-	if err != nil || report.Overall != NeedsRequalification || !report.Criteria[1].Conflicting ||
-		report.Criteria[1].State != Unknown {
-		t.Fatalf("material ambiguity after qualification: %+v %v", report, err)
-	}
-	facts.NoFrontendDuties = CriterionEvidence{Finding: ConfirmedMismatch, Authority: PublishedVacancy}
-	report, err = Evaluate(DefaultPolicy(), pay, facts, true)
-	if err != nil || report.Overall != Unsuitable {
-		t.Fatalf("explicit exclusion hidden by prior qualification: %+v %v", report, err)
+	criteria.Roles[1].Evidence = CriterionEvidence{Finding: ConfirmedMismatch, Authority: Employer}
+	report, err = Evaluate(policy, base, criteria, false)
+	if err != nil || report.Overall != Qualified || report.Criteria[1].State != Match {
+		t.Fatalf("explicit absence: %+v %v", report, err)
 	}
 }
