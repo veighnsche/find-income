@@ -482,15 +482,18 @@
       "selection_reason": "Existing evidence and known outcome boundaries fit Sol Medium.",
       "status": "partial",
       "remaining_work": "Finish commissioned backend integration in /private/tmp/find-income-i24-backend at base b4f1080; review and integrate its isolated commit after main delivery stabilises. Then add concise contextual UI and verify real quality cases.",
-      "active_slice": "Commissioned interview backend integration in isolated checkout; UI follows contract handoff",
+      "active_slice": "Isolated commissioned interview backend and concurrent main UI against stable c55f562 contract",
       "thread_id": "01a0cfa3-1a77-7b21-af23-7e2bafefad41",
       "host_id": "local",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
-      "review": "Root reviewed sourced interview/debrief and Jev focus helpers; focused interviewprep/jev tests passed at7299c54.",
+      "review": "Root reviewed sourced interview/debrief and Jev focus helpers; focused interviewprep/jev tests passed at7299c54. Contract c55f562 publishes the stable owner DTO; compile and generated checks pass. Backend execution/recovery and UI remain unaccepted.",
       "worktree": "/private/tmp/find-income-i24-backend",
       "worktree_base": "b4f1080",
-      "active_selection_reason": "Cross-file controller/runtime/persistence integration can proceed independently while main delivery authority files remain frozen."
+      "active_selection_reason": "Cross-file controller/runtime/persistence integration can proceed independently while main delivery authority files remain frozen.",
+      "ui_thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
+      "ui_model": "gpt-6-sol",
+      "ui_effort": "medium"
     },
     {
       "id": "I25",
