@@ -35,7 +35,7 @@ enabled = false
 [mcp_servers.jobseek]
 url = "https://PRIVATE_APP_FQDN/api/v1/codex/mcp"
 required = true
-enabled_tools = ["round_context", "round_mutation", "round_evidence_correction", "source_links", "source_discovery", "discovery_candidate_stage", "discovery_official_links", "discovery_board_register", "application_pack_prepare"]
+enabled_tools = ["round_context", "round_mutation", "round_evidence_correction", "source_links", "source_discovery", "discovery_candidate_stage", "discovery_official_links", "discovery_board_register", "application_pack_prepare", "offer_comparison_prepare", "interview_prepare", "interview_debrief"]
 
 [mcp_servers.jobseek.http_headers]
 Authorization = "Bearer REPLACE_FROM_SECRET_STORE"

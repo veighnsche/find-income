@@ -357,6 +357,39 @@ CREATE TABLE delivery_items (
 CREATE INDEX delivery_items_by_review ON delivery_items(review_id);
 CREATE UNIQUE INDEX delivery_one_possible_submission ON delivery_items(pack_id)
   WHERE state IN ('sending','accepted_by_smtp','uncertain');
+CREATE TABLE interviews (
+  id TEXT PRIMARY KEY,
+  opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+  opportunity_revision INTEGER NOT NULL CHECK(opportunity_revision>0),
+  profile_version INTEGER NOT NULL REFERENCES preferences_versions(version),
+  actor_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  request_sha256 TEXT NOT NULL,
+  context_text TEXT NOT NULL CHECK(length(context_text)>0 AND length(context_text)<=30000),
+  context_sha256 TEXT NOT NULL,
+  round_id TEXT REFERENCES rounds(id),
+  brief_json TEXT CHECK(brief_json IS NULL OR json_valid(brief_json)),
+  brief_sha256 TEXT,
+  focus_json TEXT CHECK(focus_json IS NULL OR json_valid(focus_json)),
+  focus_jev_attempt_id TEXT REFERENCES jev_attempts(id),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(actor_id,request_key)
+);
+
+CREATE TABLE interview_debriefs (
+  id TEXT PRIMARY KEY,
+  interview_id TEXT NOT NULL REFERENCES interviews(id),
+  actor_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  request_sha256 TEXT NOT NULL,
+  owner_notes TEXT NOT NULL CHECK(length(owner_notes)>0 AND length(owner_notes)<=30000),
+  round_id TEXT REFERENCES rounds(id),
+  debrief_json TEXT CHECK(debrief_json IS NULL OR json_valid(debrief_json)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(actor_id,request_key)
+);
 
 -- A commissioned round is the sole authority for recruitment work. The
 -- partial unique index includes paused rounds so restart never frees a slot.
