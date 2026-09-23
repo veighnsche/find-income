@@ -300,6 +300,57 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /rounds/compare-offers:
+    post:
+      operationId: compareOffersRound
+      summary: Commission one bounded comparison of complete owner supplied offer texts
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompareOffersRoundRequest' }
+      responses:
+        '200':
+          description: Existing intake and round for the exact request key
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompareOffersRoundResponse' }
+        '201':
+          description: New intake and round
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompareOffersRoundResponse' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /offer-comparisons/by-round/{roundId}:
+    get:
+      operationId: getOfferComparisonByRound
+      summary: Read the requesting owner's saved comparison for one commissioned round
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: roundId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Saved comparison and captured qualitative selection status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OfferComparisonResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /offer-comparisons/{id}:
+    get:
+      operationId: getOfferComparison
+      summary: Read the requesting owner's immutable saved comparison
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Saved comparison and captured qualitative selection status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OfferComparisonResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /rounds/process-input:
     post:
       operationId: processOwnerInput
@@ -1769,6 +1820,201 @@ components:
         requestKey: { type: string, minLength: 1, maxLength: 200 }
         opportunityId: { type: string, minLength: 1 }
         replacePaused: { $ref: '#/components/schemas/ReplacePausedRound' }
+    CompareOffersRoundRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey, offers]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 180 }
+        offers:
+          {
+            type: array,
+            minItems: 1,
+            maxItems: 5,
+            items: { type: string, minLength: 1, maxLength: 20000 },
+          }
+        prioritiesText: { type: string, maxLength: 5000 }
+    CompareOffersRoundResponse:
+      type: object
+      required: [round, intakeId]
+      properties:
+        round: { $ref: '#/components/schemas/Round' }
+        intakeId: { type: string }
+    OfferComparisonResult:
+      type: object
+      required: [id, intakeId, roundId, comparison, tradeoffStatus, current, createdAt]
+      properties:
+        id: { type: string }
+        intakeId: { type: string }
+        roundId: { type: string }
+        comparison: { $ref: '#/components/schemas/OfferComparisonSnapshot' }
+        tradeoffStatus:
+          {
+            type: string,
+            enum:
+              [
+                not_requested,
+                pending,
+                selected,
+                unresolved,
+                invalid,
+                failed,
+                unavailable,
+                uncertain,
+              ],
+          }
+        tradeoff: { $ref: '#/components/schemas/OfferTradeoffSelection' }
+        current: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    OfferComparisonSnapshot:
+      type: object
+      required: [input, inputSha256, views, pay, missing]
+      properties:
+        input: { $ref: '#/components/schemas/OfferComparisonInput' }
+        inputSha256: { type: string }
+        views: { type: array, items: { $ref: '#/components/schemas/OfferPayView' } }
+        pay: { type: array, items: { $ref: '#/components/schemas/OfferPayPair' } }
+        missing: { type: array, items: { $ref: '#/components/schemas/OfferMissingTerms' } }
+    OfferComparisonInput:
+      type: object
+      required: [sources, offers]
+      properties:
+        sources: { type: array, items: { $ref: '#/components/schemas/OfferComparisonSource' } }
+        offers: { type: array, items: { $ref: '#/components/schemas/OfferComparisonOffer' } }
+        alternatives:
+          { type: array, items: { $ref: '#/components/schemas/OfferReviewAlternative' } }
+    OfferComparisonSource:
+      type: object
+      required: [id, kind, revision, sha256, body]
+      properties:
+        id: { type: string }
+        offerId: { type: string }
+        kind: { type: string }
+        revision: { type: string }
+        sha256: { type: string }
+        body: { type: string }
+    OfferCitation:
+      type: object
+      required: [sourceId, excerpt]
+      properties:
+        sourceId: { type: string }
+        excerpt: { type: string }
+    OfferCitedText:
+      type: object
+      required: [text, citations]
+      properties:
+        text: { type: string }
+        citations: { type: array, items: { $ref: '#/components/schemas/OfferCitation' } }
+    OfferComparisonOffer:
+      type: object
+      required: [id, employer, engagement, pay, hours, holiday]
+      properties:
+        id: { type: string }
+        employer: { type: string }
+        employerCitation: { $ref: '#/components/schemas/OfferCitation' }
+        engagement: { type: string, enum: [employment, project, unknown] }
+        engagementCitation: { $ref: '#/components/schemas/OfferCitation' }
+        pay: { $ref: '#/components/schemas/OfferPayTerm' }
+        hours: { $ref: '#/components/schemas/OfferHoursTerm' }
+        holiday: { $ref: '#/components/schemas/OfferHolidayTerm' }
+        benefits: { type: array, items: { $ref: '#/components/schemas/OfferCitedText' } }
+        arrangement: { type: array, items: { $ref: '#/components/schemas/OfferCitedText' } }
+        unknowns: { type: array, items: { type: string } }
+    OfferPayTerm:
+      type: object
+      required: [amountKind, period, basis]
+      properties:
+        amountKind: { type: string, enum: [exact, range, from, raw, unknown] }
+        rawAmountText: { type: string }
+        minCents: { type: integer, format: int64 }
+        maxCents: { type: integer, format: int64 }
+        currency: { type: string }
+        period: { type: string }
+        basis: { type: string }
+        annualConversion: { type: string }
+        citation: { $ref: '#/components/schemas/OfferCitation' }
+        conversionCitation: { $ref: '#/components/schemas/OfferCitation' }
+    OfferHoursTerm:
+      type: object
+      properties:
+        weeklyHundredths: { type: integer, format: int64 }
+        citation: { $ref: '#/components/schemas/OfferCitation' }
+    OfferHolidayTerm:
+      type: object
+      required: [treatment]
+      properties:
+        treatment: { type: string, enum: [included, excluded, unknown] }
+        rateBps: { type: integer, format: int64 }
+        citation: { $ref: '#/components/schemas/OfferCitation' }
+    OfferReviewAlternative:
+      type: object
+      required: [id, kind, why]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [review, clarify, weigh] }
+        why: { $ref: '#/components/schemas/OfferCitedText' }
+    OfferExactCents:
+      type: object
+      required: [numerator, denominator]
+      properties:
+        numerator: { type: integer, format: int64 }
+        denominator: { type: integer, format: int64 }
+    OfferExactRange:
+      type: object
+      required: [kind, min]
+      properties:
+        kind: { type: string, enum: [exact, range, from] }
+        min: { $ref: '#/components/schemas/OfferExactCents' }
+        max: { $ref: '#/components/schemas/OfferExactCents' }
+    OfferPayView:
+      type: object
+      required: [offerId, engagement, period, basis, holidayTreatment]
+      properties:
+        offerId: { type: string }
+        engagement: { type: string }
+        currency: { type: string }
+        period: { type: string }
+        basis: { type: string }
+        weeklyHoursHundredths: { type: integer, format: int64 }
+        holidayTreatment: { type: string }
+        reported: { $ref: '#/components/schemas/OfferExactRange' }
+        reportedText: { type: string }
+        monthlyEquivalent: { $ref: '#/components/schemas/OfferExactRange' }
+        monthlyAssumption: { type: string }
+    OfferPayPair:
+      type: object
+      required: [leftId, rightId, status, reason]
+      properties:
+        leftId: { type: string }
+        rightId: { type: string }
+        status: { type: string, enum: [comparable, unknown, incompatible, project_economics] }
+        reason: { type: string }
+        currency: { type: string }
+        period: { type: string }
+        left: { $ref: '#/components/schemas/OfferExactRange' }
+        right: { $ref: '#/components/schemas/OfferExactRange' }
+        deltaRightMinusLeft: { $ref: '#/components/schemas/OfferExactRange' }
+    OfferMissingTerms:
+      type: object
+      required: [offerId, terms]
+      properties:
+        offerId: { type: string }
+        terms: { type: array, items: { type: string } }
+    OfferTradeoffSelection:
+      type: object
+      required: [comparison, selection]
+      properties:
+        comparison: { $ref: '#/components/schemas/OfferComparisonSnapshot' }
+        alternative: { $ref: '#/components/schemas/OfferReviewAlternative' }
+        selection:
+          type: object
+          required: [disposition, input_sha256, request_snapshot, provider_result]
+          properties:
+            disposition: { type: string, enum: [selected, unresolved] }
+            selected_id: { type: string }
+            input_sha256: { type: string }
+            request_snapshot: { type: object, additionalProperties: true }
+            provider_result: { type: object, additionalProperties: true }
     ProcessInputRequest:
       type: object
       additionalProperties: false

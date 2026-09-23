@@ -688,6 +688,195 @@ func (e InterviewScheduleClaimMode) Valid() bool {
 	}
 }
 
+// Defines values for OfferComparisonOfferEngagement.
+const (
+	OfferComparisonOfferEngagementEmployment OfferComparisonOfferEngagement = "employment"
+	OfferComparisonOfferEngagementProject    OfferComparisonOfferEngagement = "project"
+	OfferComparisonOfferEngagementUnknown    OfferComparisonOfferEngagement = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the OfferComparisonOfferEngagement enum.
+func (e OfferComparisonOfferEngagement) Valid() bool {
+	switch e {
+	case OfferComparisonOfferEngagementEmployment:
+		return true
+	case OfferComparisonOfferEngagementProject:
+		return true
+	case OfferComparisonOfferEngagementUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OfferComparisonResultTradeoffStatus.
+const (
+	OfferComparisonResultTradeoffStatusFailed       OfferComparisonResultTradeoffStatus = "failed"
+	OfferComparisonResultTradeoffStatusInvalid      OfferComparisonResultTradeoffStatus = "invalid"
+	OfferComparisonResultTradeoffStatusNotRequested OfferComparisonResultTradeoffStatus = "not_requested"
+	OfferComparisonResultTradeoffStatusPending      OfferComparisonResultTradeoffStatus = "pending"
+	OfferComparisonResultTradeoffStatusSelected     OfferComparisonResultTradeoffStatus = "selected"
+	OfferComparisonResultTradeoffStatusUnavailable  OfferComparisonResultTradeoffStatus = "unavailable"
+	OfferComparisonResultTradeoffStatusUncertain    OfferComparisonResultTradeoffStatus = "uncertain"
+	OfferComparisonResultTradeoffStatusUnresolved   OfferComparisonResultTradeoffStatus = "unresolved"
+)
+
+// Valid indicates whether the value is a known member of the OfferComparisonResultTradeoffStatus enum.
+func (e OfferComparisonResultTradeoffStatus) Valid() bool {
+	switch e {
+	case OfferComparisonResultTradeoffStatusFailed:
+		return true
+	case OfferComparisonResultTradeoffStatusInvalid:
+		return true
+	case OfferComparisonResultTradeoffStatusNotRequested:
+		return true
+	case OfferComparisonResultTradeoffStatusPending:
+		return true
+	case OfferComparisonResultTradeoffStatusSelected:
+		return true
+	case OfferComparisonResultTradeoffStatusUnavailable:
+		return true
+	case OfferComparisonResultTradeoffStatusUncertain:
+		return true
+	case OfferComparisonResultTradeoffStatusUnresolved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OfferExactRangeKind.
+const (
+	OfferExactRangeKindExact OfferExactRangeKind = "exact"
+	OfferExactRangeKindFrom  OfferExactRangeKind = "from"
+	OfferExactRangeKindRange OfferExactRangeKind = "range"
+)
+
+// Valid indicates whether the value is a known member of the OfferExactRangeKind enum.
+func (e OfferExactRangeKind) Valid() bool {
+	switch e {
+	case OfferExactRangeKindExact:
+		return true
+	case OfferExactRangeKindFrom:
+		return true
+	case OfferExactRangeKindRange:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OfferHolidayTermTreatment.
+const (
+	OfferHolidayTermTreatmentExcluded OfferHolidayTermTreatment = "excluded"
+	OfferHolidayTermTreatmentIncluded OfferHolidayTermTreatment = "included"
+	OfferHolidayTermTreatmentUnknown  OfferHolidayTermTreatment = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the OfferHolidayTermTreatment enum.
+func (e OfferHolidayTermTreatment) Valid() bool {
+	switch e {
+	case OfferHolidayTermTreatmentExcluded:
+		return true
+	case OfferHolidayTermTreatmentIncluded:
+		return true
+	case OfferHolidayTermTreatmentUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OfferPayPairStatus.
+const (
+	OfferPayPairStatusComparable       OfferPayPairStatus = "comparable"
+	OfferPayPairStatusIncompatible     OfferPayPairStatus = "incompatible"
+	OfferPayPairStatusProjectEconomics OfferPayPairStatus = "project_economics"
+	OfferPayPairStatusUnknown          OfferPayPairStatus = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the OfferPayPairStatus enum.
+func (e OfferPayPairStatus) Valid() bool {
+	switch e {
+	case OfferPayPairStatusComparable:
+		return true
+	case OfferPayPairStatusIncompatible:
+		return true
+	case OfferPayPairStatusProjectEconomics:
+		return true
+	case OfferPayPairStatusUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OfferPayTermAmountKind.
+const (
+	OfferPayTermAmountKindExact   OfferPayTermAmountKind = "exact"
+	OfferPayTermAmountKindFrom    OfferPayTermAmountKind = "from"
+	OfferPayTermAmountKindRange   OfferPayTermAmountKind = "range"
+	OfferPayTermAmountKindRaw     OfferPayTermAmountKind = "raw"
+	OfferPayTermAmountKindUnknown OfferPayTermAmountKind = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the OfferPayTermAmountKind enum.
+func (e OfferPayTermAmountKind) Valid() bool {
+	switch e {
+	case OfferPayTermAmountKindExact:
+		return true
+	case OfferPayTermAmountKindFrom:
+		return true
+	case OfferPayTermAmountKindRange:
+		return true
+	case OfferPayTermAmountKindRaw:
+		return true
+	case OfferPayTermAmountKindUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OfferReviewAlternativeKind.
+const (
+	Clarify OfferReviewAlternativeKind = "clarify"
+	Review  OfferReviewAlternativeKind = "review"
+	Weigh   OfferReviewAlternativeKind = "weigh"
+)
+
+// Valid indicates whether the value is a known member of the OfferReviewAlternativeKind enum.
+func (e OfferReviewAlternativeKind) Valid() bool {
+	switch e {
+	case Clarify:
+		return true
+	case Review:
+		return true
+	case Weigh:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OfferTradeoffSelectionSelectionDisposition.
+const (
+	OfferTradeoffSelectionSelectionDispositionSelected   OfferTradeoffSelectionSelectionDisposition = "selected"
+	OfferTradeoffSelectionSelectionDispositionUnresolved OfferTradeoffSelectionSelectionDisposition = "unresolved"
+)
+
+// Valid indicates whether the value is a known member of the OfferTradeoffSelectionSelectionDisposition enum.
+func (e OfferTradeoffSelectionSelectionDisposition) Valid() bool {
+	switch e {
+	case OfferTradeoffSelectionSelectionDispositionSelected:
+		return true
+	case OfferTradeoffSelectionSelectionDispositionUnresolved:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OpportunityKind.
 const (
 	OpportunityKindEmployment OpportunityKind = "employment"
@@ -2200,6 +2389,19 @@ type CompanyView struct {
 	LikelyDuplicates []CompanyDuplicate `json:"likelyDuplicates"`
 }
 
+// CompareOffersRoundRequest defines model for CompareOffersRoundRequest.
+type CompareOffersRoundRequest struct {
+	Offers         []string `json:"offers"`
+	PrioritiesText *string  `json:"prioritiesText,omitempty"`
+	RequestKey     string   `json:"requestKey"`
+}
+
+// CompareOffersRoundResponse defines model for CompareOffersRoundResponse.
+type CompareOffersRoundResponse struct {
+	IntakeId string `json:"intakeId"`
+	Round    Round  `json:"round"`
+}
+
 // CreateActionRequest defines model for CreateActionRequest.
 type CreateActionRequest struct {
 	Description string `json:"description"`
@@ -2722,6 +2924,115 @@ type LoginRequest struct {
 	Password *string `json:"password,omitempty"`
 }
 
+// OfferCitation defines model for OfferCitation.
+type OfferCitation struct {
+	Excerpt  string `json:"excerpt"`
+	SourceId string `json:"sourceId"`
+}
+
+// OfferCitedText defines model for OfferCitedText.
+type OfferCitedText struct {
+	Citations []OfferCitation `json:"citations"`
+	Text      string          `json:"text"`
+}
+
+// OfferComparisonInput defines model for OfferComparisonInput.
+type OfferComparisonInput struct {
+	Alternatives *[]OfferReviewAlternative `json:"alternatives,omitempty"`
+	Offers       []OfferComparisonOffer    `json:"offers"`
+	Sources      []OfferComparisonSource   `json:"sources"`
+}
+
+// OfferComparisonOffer defines model for OfferComparisonOffer.
+type OfferComparisonOffer struct {
+	Arrangement        *[]OfferCitedText              `json:"arrangement,omitempty"`
+	Benefits           *[]OfferCitedText              `json:"benefits,omitempty"`
+	Employer           string                         `json:"employer"`
+	EmployerCitation   *OfferCitation                 `json:"employerCitation,omitempty"`
+	Engagement         OfferComparisonOfferEngagement `json:"engagement"`
+	EngagementCitation *OfferCitation                 `json:"engagementCitation,omitempty"`
+	Holiday            OfferHolidayTerm               `json:"holiday"`
+	Hours              OfferHoursTerm                 `json:"hours"`
+	Id                 string                         `json:"id"`
+	Pay                OfferPayTerm                   `json:"pay"`
+	Unknowns           *[]string                      `json:"unknowns,omitempty"`
+}
+
+// OfferComparisonOfferEngagement defines model for OfferComparisonOffer.Engagement.
+type OfferComparisonOfferEngagement string
+
+// OfferComparisonResult defines model for OfferComparisonResult.
+type OfferComparisonResult struct {
+	Comparison     OfferComparisonSnapshot             `json:"comparison"`
+	CreatedAt      time.Time                           `json:"createdAt"`
+	Current        bool                                `json:"current"`
+	Id             string                              `json:"id"`
+	IntakeId       string                              `json:"intakeId"`
+	RoundId        string                              `json:"roundId"`
+	Tradeoff       *OfferTradeoffSelection             `json:"tradeoff,omitempty"`
+	TradeoffStatus OfferComparisonResultTradeoffStatus `json:"tradeoffStatus"`
+}
+
+// OfferComparisonResultTradeoffStatus defines model for OfferComparisonResult.TradeoffStatus.
+type OfferComparisonResultTradeoffStatus string
+
+// OfferComparisonSnapshot defines model for OfferComparisonSnapshot.
+type OfferComparisonSnapshot struct {
+	Input       OfferComparisonInput `json:"input"`
+	InputSha256 string               `json:"inputSha256"`
+	Missing     []OfferMissingTerms  `json:"missing"`
+	Pay         []OfferPayPair       `json:"pay"`
+	Views       []OfferPayView       `json:"views"`
+}
+
+// OfferComparisonSource defines model for OfferComparisonSource.
+type OfferComparisonSource struct {
+	Body     string  `json:"body"`
+	Id       string  `json:"id"`
+	Kind     string  `json:"kind"`
+	OfferId  *string `json:"offerId,omitempty"`
+	Revision string  `json:"revision"`
+	Sha256   string  `json:"sha256"`
+}
+
+// OfferExactCents defines model for OfferExactCents.
+type OfferExactCents struct {
+	Denominator int64 `json:"denominator"`
+	Numerator   int64 `json:"numerator"`
+}
+
+// OfferExactRange defines model for OfferExactRange.
+type OfferExactRange struct {
+	Kind OfferExactRangeKind `json:"kind"`
+	Max  *OfferExactCents    `json:"max,omitempty"`
+	Min  OfferExactCents     `json:"min"`
+}
+
+// OfferExactRangeKind defines model for OfferExactRange.Kind.
+type OfferExactRangeKind string
+
+// OfferHolidayTerm defines model for OfferHolidayTerm.
+type OfferHolidayTerm struct {
+	Citation  *OfferCitation            `json:"citation,omitempty"`
+	RateBps   *int64                    `json:"rateBps,omitempty"`
+	Treatment OfferHolidayTermTreatment `json:"treatment"`
+}
+
+// OfferHolidayTermTreatment defines model for OfferHolidayTerm.Treatment.
+type OfferHolidayTermTreatment string
+
+// OfferHoursTerm defines model for OfferHoursTerm.
+type OfferHoursTerm struct {
+	Citation         *OfferCitation `json:"citation,omitempty"`
+	WeeklyHundredths *int64         `json:"weeklyHundredths,omitempty"`
+}
+
+// OfferMissingTerms defines model for OfferMissingTerms.
+type OfferMissingTerms struct {
+	OfferId string   `json:"offerId"`
+	Terms   []string `json:"terms"`
+}
+
 // OfferOption defines model for OfferOption.
 type OfferOption struct {
 	Id    string `json:"id"`
@@ -2756,6 +3067,80 @@ type OfferOptionSetMutation struct {
 	CurrentInputVersions QualificationInputVersions `json:"currentInputVersions"`
 	Set                  OfferOptionSet             `json:"set"`
 }
+
+// OfferPayPair defines model for OfferPayPair.
+type OfferPayPair struct {
+	Currency            *string            `json:"currency,omitempty"`
+	DeltaRightMinusLeft *OfferExactRange   `json:"deltaRightMinusLeft,omitempty"`
+	Left                *OfferExactRange   `json:"left,omitempty"`
+	LeftId              string             `json:"leftId"`
+	Period              *string            `json:"period,omitempty"`
+	Reason              string             `json:"reason"`
+	Right               *OfferExactRange   `json:"right,omitempty"`
+	RightId             string             `json:"rightId"`
+	Status              OfferPayPairStatus `json:"status"`
+}
+
+// OfferPayPairStatus defines model for OfferPayPair.Status.
+type OfferPayPairStatus string
+
+// OfferPayTerm defines model for OfferPayTerm.
+type OfferPayTerm struct {
+	AmountKind         OfferPayTermAmountKind `json:"amountKind"`
+	AnnualConversion   *string                `json:"annualConversion,omitempty"`
+	Basis              string                 `json:"basis"`
+	Citation           *OfferCitation         `json:"citation,omitempty"`
+	ConversionCitation *OfferCitation         `json:"conversionCitation,omitempty"`
+	Currency           *string                `json:"currency,omitempty"`
+	MaxCents           *int64                 `json:"maxCents,omitempty"`
+	MinCents           *int64                 `json:"minCents,omitempty"`
+	Period             string                 `json:"period"`
+	RawAmountText      *string                `json:"rawAmountText,omitempty"`
+}
+
+// OfferPayTermAmountKind defines model for OfferPayTerm.AmountKind.
+type OfferPayTermAmountKind string
+
+// OfferPayView defines model for OfferPayView.
+type OfferPayView struct {
+	Basis                 string           `json:"basis"`
+	Currency              *string          `json:"currency,omitempty"`
+	Engagement            string           `json:"engagement"`
+	HolidayTreatment      string           `json:"holidayTreatment"`
+	MonthlyAssumption     *string          `json:"monthlyAssumption,omitempty"`
+	MonthlyEquivalent     *OfferExactRange `json:"monthlyEquivalent,omitempty"`
+	OfferId               string           `json:"offerId"`
+	Period                string           `json:"period"`
+	Reported              *OfferExactRange `json:"reported,omitempty"`
+	ReportedText          *string          `json:"reportedText,omitempty"`
+	WeeklyHoursHundredths *int64           `json:"weeklyHoursHundredths,omitempty"`
+}
+
+// OfferReviewAlternative defines model for OfferReviewAlternative.
+type OfferReviewAlternative struct {
+	Id   string                     `json:"id"`
+	Kind OfferReviewAlternativeKind `json:"kind"`
+	Why  OfferCitedText             `json:"why"`
+}
+
+// OfferReviewAlternativeKind defines model for OfferReviewAlternative.Kind.
+type OfferReviewAlternativeKind string
+
+// OfferTradeoffSelection defines model for OfferTradeoffSelection.
+type OfferTradeoffSelection struct {
+	Alternative *OfferReviewAlternative `json:"alternative,omitempty"`
+	Comparison  OfferComparisonSnapshot `json:"comparison"`
+	Selection   struct {
+		Disposition     OfferTradeoffSelectionSelectionDisposition `json:"disposition"`
+		InputSha256     string                                     `json:"input_sha256"`
+		ProviderResult  map[string]interface{}                     `json:"provider_result"`
+		RequestSnapshot map[string]interface{}                     `json:"request_snapshot"`
+		SelectedId      *string                                    `json:"selected_id,omitempty"`
+	} `json:"selection"`
+}
+
+// OfferTradeoffSelectionSelectionDisposition defines model for OfferTradeoffSelection.Selection.Disposition.
+type OfferTradeoffSelectionSelectionDisposition string
 
 // Opportunity defines model for Opportunity.
 type Opportunity struct {
@@ -4027,6 +4412,9 @@ type AddOwnerInstructionJSONRequestBody = OwnerInstructionInput
 
 // StartRoundJSONRequestBody defines body for StartRound for application/json ContentType.
 type StartRoundJSONRequestBody = StartRoundRequest
+
+// CompareOffersRoundJSONRequestBody defines body for CompareOffersRound for application/json ContentType.
+type CompareOffersRoundJSONRequestBody = CompareOffersRoundRequest
 
 // PrepareRoundJSONRequestBody defines body for PrepareRound for application/json ContentType.
 type PrepareRoundJSONRequestBody = PrepareRoundRequest

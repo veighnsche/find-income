@@ -306,6 +306,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rounds/compare-offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commission one bounded comparison of complete owner supplied offer texts */
+        post: operations["compareOffersRound"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/offer-comparisons/by-round/{roundId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the requesting owner's saved comparison for one commissioned round */
+        get: operations["getOfferComparisonByRound"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/offer-comparisons/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the requesting owner's immutable saved comparison */
+        get: operations["getOfferComparison"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rounds/process-input": {
         parameters: {
             query?: never;
@@ -1638,6 +1689,160 @@ export interface components {
             requestKey: string;
             opportunityId: string;
             replacePaused?: components["schemas"]["ReplacePausedRound"];
+        };
+        CompareOffersRoundRequest: {
+            requestKey: string;
+            offers: string[];
+            prioritiesText?: string;
+        };
+        CompareOffersRoundResponse: {
+            round: components["schemas"]["Round"];
+            intakeId: string;
+        };
+        OfferComparisonResult: {
+            id: string;
+            intakeId: string;
+            roundId: string;
+            comparison: components["schemas"]["OfferComparisonSnapshot"];
+            /** @enum {string} */
+            tradeoffStatus: "not_requested" | "pending" | "selected" | "unresolved" | "invalid" | "failed" | "unavailable" | "uncertain";
+            tradeoff?: components["schemas"]["OfferTradeoffSelection"];
+            current: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        OfferComparisonSnapshot: {
+            input: components["schemas"]["OfferComparisonInput"];
+            inputSha256: string;
+            views: components["schemas"]["OfferPayView"][];
+            pay: components["schemas"]["OfferPayPair"][];
+            missing: components["schemas"]["OfferMissingTerms"][];
+        };
+        OfferComparisonInput: {
+            sources: components["schemas"]["OfferComparisonSource"][];
+            offers: components["schemas"]["OfferComparisonOffer"][];
+            alternatives?: components["schemas"]["OfferReviewAlternative"][];
+        };
+        OfferComparisonSource: {
+            id: string;
+            offerId?: string;
+            kind: string;
+            revision: string;
+            sha256: string;
+            body: string;
+        };
+        OfferCitation: {
+            sourceId: string;
+            excerpt: string;
+        };
+        OfferCitedText: {
+            text: string;
+            citations: components["schemas"]["OfferCitation"][];
+        };
+        OfferComparisonOffer: {
+            id: string;
+            employer: string;
+            employerCitation?: components["schemas"]["OfferCitation"];
+            /** @enum {string} */
+            engagement: "employment" | "project" | "unknown";
+            engagementCitation?: components["schemas"]["OfferCitation"];
+            pay: components["schemas"]["OfferPayTerm"];
+            hours: components["schemas"]["OfferHoursTerm"];
+            holiday: components["schemas"]["OfferHolidayTerm"];
+            benefits?: components["schemas"]["OfferCitedText"][];
+            arrangement?: components["schemas"]["OfferCitedText"][];
+            unknowns?: string[];
+        };
+        OfferPayTerm: {
+            /** @enum {string} */
+            amountKind: "exact" | "range" | "from" | "raw" | "unknown";
+            rawAmountText?: string;
+            /** Format: int64 */
+            minCents?: number;
+            /** Format: int64 */
+            maxCents?: number;
+            currency?: string;
+            period: string;
+            basis: string;
+            annualConversion?: string;
+            citation?: components["schemas"]["OfferCitation"];
+            conversionCitation?: components["schemas"]["OfferCitation"];
+        };
+        OfferHoursTerm: {
+            /** Format: int64 */
+            weeklyHundredths?: number;
+            citation?: components["schemas"]["OfferCitation"];
+        };
+        OfferHolidayTerm: {
+            /** @enum {string} */
+            treatment: "included" | "excluded" | "unknown";
+            /** Format: int64 */
+            rateBps?: number;
+            citation?: components["schemas"]["OfferCitation"];
+        };
+        OfferReviewAlternative: {
+            id: string;
+            /** @enum {string} */
+            kind: "review" | "clarify" | "weigh";
+            why: components["schemas"]["OfferCitedText"];
+        };
+        OfferExactCents: {
+            /** Format: int64 */
+            numerator: number;
+            /** Format: int64 */
+            denominator: number;
+        };
+        OfferExactRange: {
+            /** @enum {string} */
+            kind: "exact" | "range" | "from";
+            min: components["schemas"]["OfferExactCents"];
+            max?: components["schemas"]["OfferExactCents"];
+        };
+        OfferPayView: {
+            offerId: string;
+            engagement: string;
+            currency?: string;
+            period: string;
+            basis: string;
+            /** Format: int64 */
+            weeklyHoursHundredths?: number;
+            holidayTreatment: string;
+            reported?: components["schemas"]["OfferExactRange"];
+            reportedText?: string;
+            monthlyEquivalent?: components["schemas"]["OfferExactRange"];
+            monthlyAssumption?: string;
+        };
+        OfferPayPair: {
+            leftId: string;
+            rightId: string;
+            /** @enum {string} */
+            status: "comparable" | "unknown" | "incompatible" | "project_economics";
+            reason: string;
+            currency?: string;
+            period?: string;
+            left?: components["schemas"]["OfferExactRange"];
+            right?: components["schemas"]["OfferExactRange"];
+            deltaRightMinusLeft?: components["schemas"]["OfferExactRange"];
+        };
+        OfferMissingTerms: {
+            offerId: string;
+            terms: string[];
+        };
+        OfferTradeoffSelection: {
+            comparison: components["schemas"]["OfferComparisonSnapshot"];
+            alternative?: components["schemas"]["OfferReviewAlternative"];
+            selection: {
+                /** @enum {string} */
+                disposition: "selected" | "unresolved";
+                selected_id?: string;
+                input_sha256: string;
+                request_snapshot: {
+                    [key: string]: unknown;
+                };
+                provider_result: {
+                    [key: string]: unknown;
+                };
+            };
         };
         ProcessInputRequest: {
             requestKey: string;
@@ -3448,6 +3653,87 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
             503: components["responses"]["Unavailable"];
+        };
+    };
+    compareOffersRound: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompareOffersRoundRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing intake and round for the exact request key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompareOffersRoundResponse"];
+                };
+            };
+            /** @description New intake and round */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompareOffersRoundResponse"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getOfferComparisonByRound: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roundId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved comparison and captured qualitative selection status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferComparisonResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getOfferComparison: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved comparison and captured qualitative selection status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferComparisonResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     processOwnerInput: {
