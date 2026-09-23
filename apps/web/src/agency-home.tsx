@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getActiveRound,
+  getRoundCards,
   getRoundCapability,
+  getRoundHistory,
   getPreferences,
   getRound,
-  getRoundResults,
   isUnauthenticated,
   RequestError,
   resumeRound,
@@ -12,7 +13,9 @@ import {
   stopRound,
   type Preferences,
   type Round,
+  type RoundCard,
   type RoundCapability,
+  type RoundHistoryEvent,
   type Session,
 } from './api';
 
@@ -31,26 +34,6 @@ function message(cause: unknown): string {
 
 function remaining(limit: number, used: number): number {
   return Math.max(0, limit - used);
-}
-
-function resultDetails(value: unknown): {
-  title: string;
-  sourceUrl: string;
-  summary: string;
-  opportunityId: string;
-  unknown: string;
-} {
-  if (!value || typeof value !== 'object')
-    return { title: 'Saved result', sourceUrl: '', summary: '', opportunityId: '', unknown: '' };
-  const item = value as Record<string, unknown>;
-  const field = (key: string) => (typeof item[key] === 'string' ? (item[key] as string) : '');
-  return {
-    title: field('title') || field('role') || 'Saved result',
-    sourceUrl: field('sourceUrl'),
-    summary: field('summary') || field('duties'),
-    opportunityId: field('opportunityId'),
-    unknown: field('mainUnknown') || field('conflict'),
-  };
 }
 
 function SafeSource({ value }: { value: string }) {
@@ -77,12 +60,15 @@ export function AgencyHome({
   session: Session;
   onSessionLost: () => void;
   onOpenOpportunity: (id: string) => void;
-  onEditBrief: () => void;
+  onEditBrief: (version: number) => void;
 }) {
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [round, setRound] = useState<Round | null>(null);
   const [capability, setCapability] = useState<RoundCapability | null>(null);
-  const [results, setResults] = useState<unknown[]>([]);
+  const [cards, setCards] = useState<RoundCard[]>([]);
+  const [history, setHistory] = useState<RoundHistoryEvent[]>([]);
+  const [cardsAvailable, setCardsAvailable] = useState(false);
+  const [historyAvailable, setHistoryAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,20 +129,42 @@ export function AgencyHome({
             }
             if (resultsRoundId.current !== current.id) {
               resultsRoundId.current = current.id;
-              setResults([]);
+              setCards([]);
+              setHistory([]);
+              setCardsAvailable(false);
+              setHistoryAvailable(false);
             }
-            try {
-              const page = await getRoundResults(current.id, controller.signal);
-              if (currentRead()) setResults(page.items);
-            } catch (cause) {
-              if (currentRead())
+            const [cardRead, historyRead] = await Promise.allSettled([
+              getRoundCards(current.id, controller.signal),
+              getRoundHistory(current.id, controller.signal),
+            ]);
+            if (currentRead()) {
+              if (cardRead.status === 'fulfilled') {
+                setCards(cardRead.value);
+                setCardsAvailable(true);
+              }
+              if (historyRead.status === 'fulfilled') {
+                setHistory(historyRead.value);
+                setHistoryAvailable(true);
+              }
+              if (cardRead.status === 'rejected' || historyRead.status === 'rejected') {
+                const cause =
+                  cardRead.status === 'rejected'
+                    ? cardRead.reason
+                    : historyRead.status === 'rejected'
+                      ? historyRead.reason
+                      : undefined;
                 setError(
-                  `${message(cause)} Saved results remain visible; the next status read will retry.`,
+                  `${message(cause)} The affected round view will retry on the next status read.`,
                 );
+              }
             }
           } else {
             resultsRoundId.current = null;
-            setResults([]);
+            setCards([]);
+            setHistory([]);
+            setCardsAvailable(false);
+            setHistoryAvailable(false);
           }
           return current;
         } catch (cause) {
@@ -421,7 +429,12 @@ export function AgencyHome({
       <section className="op-card" aria-label="Campaign brief">
         <div className="op-heading-row">
           <h2>What we know about your search</h2>
-          <button className="secondary" type="button" onClick={onEditBrief}>
+          <button
+            className="secondary"
+            type="button"
+            disabled={!preferences}
+            onClick={() => preferences && onEditBrief(preferences.version)}
+          >
             Correct this brief
           </button>
         </div>
@@ -472,46 +485,68 @@ export function AgencyHome({
       </section>
       {round && (
         <section className="op-card" aria-label="Round results">
-          <h2>Saved results {results.length ? `(${results.length})` : ''}</h2>
-          {results.length === 0 && (
+          <h2>Saved opportunity cards {cards.length ? `(${cards.length})` : ''}</h2>
+          {cards.length === 0 && (
             <p>
-              No committed results are available for this round yet. A running or stopped round may
-              still have useful work recorded elsewhere.
+              {cardsAvailable
+                ? 'No opportunity cards have been saved for this round yet.'
+                : 'Opportunity cards are unavailable. Refresh to try again.'}
             </p>
           )}
           <ul className="op-list">
-            {results.map((value, index) => {
-              const item = resultDetails(value);
-              return (
-                <li
-                  className="op-card"
-                  key={`${item.opportunityId || item.sourceUrl || 'result'}-${index}`}
+            {cards.map((item) => (
+              <li className="op-card" key={item.opportunityId}>
+                <h3>{item.title}</h3>
+                <p>
+                  {item.companyName} · {item.kind} · {item.decision || 'No owner decision'}
+                </p>
+                <p>
+                  Pay, hours and fit: unknown in this card. Inspect the saved opportunity for
+                  recorded detail.
+                </p>
+                {item.sourceStale && (
+                  <p role="status">
+                    Source changed since this card was saved. Inspect the current opportunity.
+                  </p>
+                )}
+                {item.sourceUrl && (
+                  <p>
+                    <SafeSource value={item.sourceUrl} />
+                  </p>
+                )}
+                {item.sourceText && (
+                  <details>
+                    <summary>Saved source text</summary>
+                    <pre className="op-source">{item.sourceText}</pre>
+                  </details>
+                )}
+                <button
+                  type="button"
+                  className="op-text-button"
+                  onClick={() => onOpenOpportunity(item.opportunityId)}
                 >
-                  <h3>{item.title}</h3>
-                  {item.summary && <p>{item.summary}</p>}
-                  {item.unknown && (
-                    <p>
-                      <strong>Conflict or unknown:</strong> {item.unknown}
-                    </p>
-                  )}
-                  {item.sourceUrl && (
-                    <p>
-                      <SafeSource value={item.sourceUrl} />
-                    </p>
-                  )}
-                  {item.opportunityId && (
-                    <button
-                      type="button"
-                      className="op-text-button"
-                      onClick={() => onOpenOpportunity(item.opportunityId)}
-                    >
-                      Inspect saved opportunity
-                    </button>
-                  )}
-                </li>
-              );
-            })}
+                  Inspect saved opportunity
+                </button>
+              </li>
+            ))}
           </ul>
+          <details>
+            <summary>Round history ({history.length})</summary>
+            {!historyAvailable ? (
+              <p>Round history is unavailable. Refresh to try again.</p>
+            ) : history.length ? (
+              <ol>
+                {history.map((event) => (
+                  <li key={event.auditId}>
+                    {event.operation.replaceAll('_', ' ')} · {event.entityKind.replaceAll('_', ' ')}{' '}
+                    · {new Date(event.occurredAt).toLocaleString()}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p>No recorded round events are available yet.</p>
+            )}
+          </details>
         </section>
       )}
     </>

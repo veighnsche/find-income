@@ -5,6 +5,12 @@ export type Session = components['schemas']['SessionResponse'];
 export type Round = components['schemas']['Round'];
 export type RoundResults = components['schemas']['RoundResults'];
 export type RoundCapability = components['schemas']['RoundCapability'];
+export type RoundCard = components['schemas']['RoundCard'];
+export type RoundHistoryEvent = components['schemas']['RoundHistoryEvent'];
+export type OwnerInstructionInput = components['schemas']['OwnerInstructionInput'];
+export type OwnerInstruction = components['schemas']['OwnerInstruction'];
+export type OwnerDecision = components['schemas']['OwnerDecision'];
+export type OwnerDecisionInput = components['schemas']['OwnerDecisionInput'];
 export type Preferences = components['schemas']['PreferencesResponse'];
 export type Company = components['schemas']['Company'];
 export type CompanyPage = components['schemas']['CompanyPage'];
@@ -136,6 +142,71 @@ export function startRound(requestKey: string, csrfToken: string): Promise<Round
 
 export function getRoundResults(id: string, signal?: AbortSignal): Promise<RoundResults> {
   return request<RoundResults>(`/rounds/${encodeURIComponent(id)}/results`, { signal });
+}
+
+export function getRoundCards(id: string, signal?: AbortSignal): Promise<RoundCard[]> {
+  return request<components['schemas']['RoundCards']>(`/rounds/${encodeURIComponent(id)}/cards`, {
+    signal,
+  }).then((page) => page.items);
+}
+
+export function getRoundHistory(id: string, signal?: AbortSignal): Promise<RoundHistoryEvent[]> {
+  return request<components['schemas']['RoundHistory']>(
+    `/rounds/${encodeURIComponent(id)}/history`,
+    { signal },
+  ).then((page) => page.items);
+}
+
+export function listOwnerInstructions(
+  roundId = '',
+  signal?: AbortSignal,
+): Promise<OwnerInstruction[]> {
+  const query = roundId ? `?${new URLSearchParams({ roundId })}` : '';
+  return request<components['schemas']['OwnerInstructions']>(`/owner-instructions${query}`, {
+    signal,
+  }).then((page) => page.items);
+}
+
+export function addOwnerInstruction(
+  input: OwnerInstructionInput,
+  csrfToken: string,
+): Promise<OwnerInstruction> {
+  return request<OwnerInstruction>('/owner-instructions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(input),
+  });
+}
+
+export function revokeOwnerInstruction(id: string, csrfToken: string): Promise<void> {
+  return request<void>(`/owner-instructions/${encodeURIComponent(id)}/revoke`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': csrfToken },
+  });
+}
+
+export function getOwnerOpportunityDecision(
+  id: string,
+  signal?: AbortSignal,
+): Promise<OwnerDecision | null> {
+  return request<OwnerDecision>(`/opportunities/${encodeURIComponent(id)}/decision`, {
+    signal,
+  }).catch((cause: unknown) => {
+    if (cause instanceof RequestError && cause.status === 404) return null;
+    throw cause;
+  });
+}
+
+export function setOwnerOpportunityDecision(
+  id: string,
+  input: OwnerDecisionInput,
+  csrfToken: string,
+): Promise<OwnerDecision> {
+  return request<OwnerDecision>(`/opportunities/${encodeURIComponent(id)}/decision`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(input),
+  });
 }
 
 export function getRound(id: string, signal?: AbortSignal): Promise<Round> {

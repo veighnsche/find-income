@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { EvidencePanel } from './evidence-panel';
 import { AgencyHome } from './agency-home';
+import { OwnerDecisionControls } from './owner-decision';
+import { OwnerInstructionPanel } from './owner-instruction';
 import {
   getOpportunity,
   getIngestion,
@@ -32,9 +34,7 @@ import './opportunities.css';
 const draftKey = 'jobseek.vacancy-intake-draft';
 const recoveryKey = 'jobseek.vacancy-recovery';
 const selectedKey = 'jobseek.selected-opportunity';
-const reviewSelectionKey = 'jobseek.review-selection';
 const correctionKey = 'jobseek.correction-draft.';
-const briefContextKey = 'jobseek.brief-instruction-active';
 
 function recoveryDraftKey(item: IngestionRequest): string {
   return `${recoveryKey}.${item.id}`;
@@ -884,12 +884,14 @@ function OpportunityHistory({ id, onSessionLost }: { id: string; onSessionLost: 
 
 function OpportunityDetail({
   id,
+  session,
   companies,
   onSessionLost,
   onOpen,
   onBack,
 }: {
   id: string;
+  session: Session;
   companies: Company[];
   onSessionLost: () => void;
   onOpen: (id: string) => void;
@@ -977,6 +979,23 @@ function OpportunityDetail({
           </section>
           <OrganisationPanel id={id} onSessionLost={onSessionLost} />
           <EvidencePanel opportunity={opportunity} onSessionLost={onSessionLost} />
+          <OwnerDecisionControls
+            id={id}
+            revision={opportunity.revision}
+            session={session}
+            onSessionLost={onSessionLost}
+          />
+          <OwnerInstructionPanel
+            key={`${id}-${opportunity.revision}`}
+            target={{
+              targetKind: 'opportunity',
+              targetId: id,
+              expectedRevision: opportunity.revision,
+            }}
+            title="Instruction for this opportunity"
+            session={session}
+            onSessionLost={onSessionLost}
+          />
           <section className="op-card">
             <h2>Possible duplicates</h2>
             {view!.likelyDuplicates.length === 0 ? (
@@ -998,12 +1017,6 @@ function OpportunityDetail({
               </ul>
             )}
           </section>
-          {!opportunity.archivedAt && (
-            <p className="hint">
-              Dismissing this role awaits a scoped owner action. A dismissal will not change your
-              campaign preferences.
-            </p>
-          )}
           <OpportunityHistory id={id} onSessionLost={onSessionLost} />
         </>
       )}
@@ -1025,22 +1038,9 @@ export function Opportunities({
       return null;
     }
   });
-  const [reviewSelection, setReviewSelection] = useState<string[]>(() => {
-    try {
-      const value: unknown = JSON.parse(localStorage.getItem(reviewSelectionKey) || '[]');
-      return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
-    } catch {
-      return [];
-    }
-  });
+  const [briefVersion, setBriefVersion] = useState<number | null>(null);
   const [recovery, setRecovery] = useState<IngestionRequest | null>(null);
-  const [briefInstruction, setBriefInstruction] = useState(() => {
-    try {
-      return localStorage.getItem(briefContextKey) === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [briefInstruction, setBriefInstruction] = useState(false);
   const [ingestionRefresh, setIngestionRefresh] = useState(0);
   const [items, setItems] = useState<OpportunityView[]>([]);
   const [organisationSummaries, setOrganisationSummaries] = useState<
@@ -1070,25 +1070,9 @@ export function Opportunities({
       /* Selection remains available in this page. */
     }
   }
-  function toggleReviewSelection(id: string) {
-    setReviewSelection((old) => {
-      const next = old.includes(id) ? old.filter((value) => value !== id) : [...old, id];
-      try {
-        localStorage.setItem(reviewSelectionKey, JSON.stringify(next));
-      } catch {
-        /* Selection remains in this page. */
-      }
-      return next;
-    });
-  }
   function selectRecovery(item: IngestionRequest | null) {
     if (item) {
       setBriefInstruction(false);
-      try {
-        localStorage.removeItem(briefContextKey);
-      } catch {
-        /* Context remains in this page. */
-      }
     }
     setRecovery(item);
     try {
@@ -1169,18 +1153,9 @@ export function Opportunities({
   if (selected)
     return (
       <>
-        <VacancyIntake
-          key={`correction-${selected}`}
-          session={session}
-          onSessionLost={onSessionLost}
-          onSubmitted={() => setIngestionRefresh((value) => value + 1)}
-          recovery={null}
-          correction={selected}
-          onClearRecovery={() => selectRecovery(null)}
-          onUpdateRecovery={selectRecovery}
-        />
         <OpportunityDetail
           id={selected}
+          session={session}
           companies={companies}
           onSessionLost={onSessionLost}
           onOpen={(id) => openOpportunity(id)}
@@ -1217,34 +1192,37 @@ export function Opportunities({
         session={session}
         onSessionLost={onSessionLost}
         onOpenOpportunity={(id) => openOpportunity(id)}
-        onEditBrief={() => {
+        onEditBrief={(version) => {
           selectRecovery(null);
           setBriefInstruction(true);
-          try {
-            localStorage.setItem(briefContextKey, 'true');
-          } catch {
-            /* Context remains in this page. */
-          }
+          setBriefVersion(version);
         }}
       />
-      <VacancyIntake
-        key={briefInstruction ? 'brief' : recovery?.id || 'new'}
-        session={session}
-        onSessionLost={onSessionLost}
-        onSubmitted={() => setIngestionRefresh((value) => value + 1)}
-        recovery={briefInstruction ? null : recovery}
-        correction={briefInstruction ? 'brief' : undefined}
-        onClearRecovery={() => {
-          selectRecovery(null);
-          setBriefInstruction(false);
-          try {
-            localStorage.removeItem(briefContextKey);
-          } catch {
-            /* Context remains in this page. */
-          }
-        }}
-        onUpdateRecovery={selectRecovery}
-      />
+      {briefInstruction && briefVersion !== null ? (
+        <OwnerInstructionPanel
+          target={{ targetKind: 'profile', targetId: 'current', expectedRevision: briefVersion }}
+          title="Instruction for your campaign brief"
+          session={session}
+          onSessionLost={onSessionLost}
+          onClose={() => {
+            setBriefInstruction(false);
+          }}
+        />
+      ) : (
+        <VacancyIntake
+          key={briefInstruction ? 'brief' : recovery?.id || 'new'}
+          session={session}
+          onSessionLost={onSessionLost}
+          onSubmitted={() => setIngestionRefresh((value) => value + 1)}
+          recovery={briefInstruction ? null : recovery}
+          correction={briefInstruction ? 'brief' : undefined}
+          onClearRecovery={() => {
+            selectRecovery(null);
+            setBriefInstruction(false);
+          }}
+          onUpdateRecovery={selectRecovery}
+        />
+      )}
       <IngestionActivity
         onSessionLost={onSessionLost}
         onOpen={(id) => openOpportunity(id)}
@@ -1254,12 +1232,6 @@ export function Opportunities({
       />
       <section className="op-card" aria-label="Opportunity filters">
         <h2>Saved opportunities</h2>
-        {reviewSelection.length > 0 && (
-          <p className="hint">
-            {reviewSelection.length} selected for your review in this browser. Preparing
-            applications from this selection awaits a server-supported round.
-          </p>
-        )}
         <div className="op-grid op-filters">
           <label>
             Search title, location or source URL
@@ -1423,16 +1395,12 @@ export function Opportunities({
               </div>
               <span className="op-revision">Revision {opportunity.revision}</span>
             </div>
-            <button
-              className="secondary"
-              type="button"
-              aria-pressed={reviewSelection.includes(opportunity.id)}
-              onClick={() => toggleReviewSelection(opportunity.id)}
-            >
-              {reviewSelection.includes(opportunity.id)
-                ? 'Deselect for review'
-                : 'Select for review'}
-            </button>
+            <OwnerDecisionControls
+              id={opportunity.id}
+              revision={opportunity.revision}
+              session={session}
+              onSessionLost={onSessionLost}
+            />
             <p>
               {opportunity.locationText || 'Location unknown'} · {opportunity.workPattern} ·{' '}
               {compensationText(opportunity.compensation)}
