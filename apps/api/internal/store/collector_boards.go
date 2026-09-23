@@ -12,6 +12,8 @@ import (
 var collectorSitePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$`)
 var collectorErrorPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,79}$`)
 
+const collectorContinuationDelay = time.Minute
+
 type CollectorBoardInput struct {
 	Provider        string
 	Site            string
@@ -94,12 +96,20 @@ func (s *Store) CreateCollectorBoard(ctx context.Context, actor Actor, input Col
 		return CollectorBoard{}, err
 	}
 	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, `INSERT INTO collector_boards
+	result, err := tx.ExecContext(ctx, `INSERT INTO collector_boards
   (id,provider,site,region,enabled,interval_minutes,next_scan_at,created_at,updated_at)
-  VALUES (?,?,?,?,?,?,?,?,?)`, id, input.Provider, input.Site, input.Region, input.Enabled,
+  VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(provider,site,region) DO NOTHING`,
+		id, input.Provider, input.Site, input.Region, input.Enabled,
 		input.IntervalMinutes, now, now, now)
 	if err != nil {
 		return CollectorBoard{}, err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return CollectorBoard{}, err
+	}
+	if count != 1 {
+		return CollectorBoard{}, ErrConflict
 	}
 	auditID, err := randomID()
 	if err != nil {
@@ -204,13 +214,15 @@ func (s *Store) ClaimDueCollectorBoard(ctx context.Context, now time.Time, lease
 }
 
 type CollectorBoardResult struct {
-	NextOffset int
-	ErrorCode  string // Empty on success; safe machine code on failure.
+	NextOffset  int
+	ErrorCode   string // Empty on success; safe machine code on failure.
+	WarningCode string // Safe code for skipped invalid postings on an otherwise successful page.
 }
 
 func (s *Store) FinishCollectorBoard(ctx context.Context, claim CollectorBoard, result CollectorBoardResult, now time.Time) (bool, error) {
 	if claim.ID == "" || claim.LeaseToken == "" || result.NextOffset < 0 ||
-		(result.ErrorCode != "" && !collectorErrorPattern.MatchString(result.ErrorCode)) {
+		(result.ErrorCode != "" && !collectorErrorPattern.MatchString(result.ErrorCode)) ||
+		(result.WarningCode != "" && !collectorErrorPattern.MatchString(result.WarningCode)) {
 		return false, ErrInvalid
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -223,6 +235,14 @@ func (s *Store) FinishCollectorBoard(ctx context.Context, claim CollectorBoard, 
 		nextOffset = claim.NextOffset
 	}
 	finishedAt := jobTime(now)
+	nextScan := now.Add(time.Duration(claim.IntervalMinutes) * time.Minute)
+	if result.ErrorCode == "" && nextOffset > 0 {
+		nextScan = now.Add(collectorContinuationDelay)
+	}
+	lastCode := result.ErrorCode
+	if lastCode == "" {
+		lastCode = result.WarningCode
+	}
 	var lastSuccess any
 	if result.ErrorCode == "" {
 		lastSuccess = finishedAt
@@ -230,8 +250,8 @@ func (s *Store) FinishCollectorBoard(ctx context.Context, claim CollectorBoard, 
 	res, err := tx.ExecContext(ctx, `UPDATE collector_boards SET next_offset=?,next_scan_at=?,
   lease_token=NULL,lease_until=NULL,last_run_at=?,last_success_at=COALESCE(?,last_success_at),
   last_error_code=?,updated_at=? WHERE id=? AND lease_token=? AND lease_until>?`,
-		nextOffset, jobTime(now.Add(time.Duration(claim.IntervalMinutes)*time.Minute)), finishedAt,
-		lastSuccess, optionalText(result.ErrorCode), finishedAt, claim.ID, claim.LeaseToken, finishedAt)
+		nextOffset, jobTime(nextScan), finishedAt,
+		lastSuccess, optionalText(lastCode), finishedAt, claim.ID, claim.LeaseToken, finishedAt)
 	if err != nil {
 		return false, err
 	}
@@ -249,6 +269,8 @@ func (s *Store) FinishCollectorBoard(ctx context.Context, claim CollectorBoard, 
 	operation := "collector.board.scan"
 	if result.ErrorCode != "" {
 		operation = "collector.board.scan_failed"
+	} else if result.WarningCode != "" {
+		operation = "collector.board.scan_with_rejections"
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO audit_changes
   (id,actor_kind,actor_id,operation,entity_kind,entity_id,occurred_at)

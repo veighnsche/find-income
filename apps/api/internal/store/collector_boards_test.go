@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -18,6 +19,10 @@ func TestCollectorBoardLeaseCursorAndOwnerConfiguration(t *testing.T) {
 		Provider: "lever", Site: "example", Region: "eu", Enabled: true, IntervalMinutes: 15})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := s.CreateCollectorBoard(ctx, owner, CollectorBoardInput{
+		Provider: "lever", Site: "example", Region: "eu", Enabled: true, IntervalMinutes: 15}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("duplicate board did not conflict: %v", err)
 	}
 	now := time.Now().UTC().Add(time.Second)
 	first, found, err := s.ClaimDueCollectorBoard(ctx, now, time.Minute)
@@ -39,7 +44,8 @@ func TestCollectorBoardLeaseCursorAndOwnerConfiguration(t *testing.T) {
 		t.Fatalf("current lease finish: %v %v", applied, err)
 	}
 	boards, err := s.ListCollectorBoards(ctx)
-	if err != nil || len(boards) != 1 || boards[0].NextOffset != 25 || boards[0].LastSuccessAt.IsZero() {
+	if err != nil || len(boards) != 1 || boards[0].NextOffset != 25 || boards[0].LastSuccessAt.IsZero() ||
+		boards[0].NextScanAt.Sub(later) != time.Minute {
 		t.Fatalf("completed scan: %+v %v", boards, err)
 	}
 	updated, err := s.UpdateCollectorBoard(ctx, owner, board.ID, 1, false, 30)

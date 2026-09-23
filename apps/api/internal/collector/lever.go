@@ -41,12 +41,14 @@ type Collector struct {
 }
 
 type RunReport struct {
-	BoardID    string
-	Found      bool
-	Submitted  int
-	Duplicates int
-	NextOffset int
-	ErrorCode  string
+	BoardID     string
+	Found       bool
+	Submitted   int
+	Duplicates  int
+	Rejected    int
+	NextOffset  int
+	ErrorCode   string
+	WarningCode string
 }
 
 func (c *Collector) now() time.Time {
@@ -190,8 +192,9 @@ func (c *Collector) RunDueOnce(ctx context.Context) (RunReport, error) {
 			for _, raw := range postings {
 				posting, code := validateLeverPosting(board, raw)
 				if code != "" {
-					report.ErrorCode = code
-					break
+					report.Rejected++
+					report.WarningCode = code
+					continue
 				}
 				digest := sha256.Sum256(raw)
 				input := store.IngestionInput{
@@ -222,7 +225,8 @@ func (c *Collector) RunDueOnce(ctx context.Context) (RunReport, error) {
 			report.NextOffset += len(postings)
 		}
 	}
-	result := store.CollectorBoardResult{NextOffset: report.NextOffset, ErrorCode: report.ErrorCode}
+	result := store.CollectorBoardResult{NextOffset: report.NextOffset,
+		ErrorCode: report.ErrorCode, WarningCode: report.WarningCode}
 	if applied, finishErr := c.Store.FinishCollectorBoard(ctx, board, result, c.now()); finishErr != nil {
 		return report, finishErr
 	} else if !applied {

@@ -102,13 +102,17 @@ func TestLeverCollectorResumesBoundedPages(t *testing.T) {
 	if len(offsets) != 2 || offsets[0] != 0 || offsets[1] != 25 {
 		t.Fatalf("unbounded or wrong requests: %+v", offsets)
 	}
+	boards, err := db.ListCollectorBoards(ctx)
+	if err != nil || len(boards) != 1 || boards[0].NextScanAt.Sub(collector.Now()) != time.Minute {
+		t.Fatalf("partial sweep waited full interval: %+v %v", boards, err)
+	}
 	previous := collector.Now()
-	collector.Now = func() time.Time { return previous.Add(16 * time.Minute) }
+	collector.Now = func() time.Time { return previous.Add(2 * time.Minute) }
 	report, err = collector.RunDueOnce(ctx)
 	if err != nil || report.Submitted != 1 || report.NextOffset != 0 || report.ErrorCode != "" {
 		t.Fatalf("resumed batch: %+v %v", report, err)
 	}
-	boards, err := db.ListCollectorBoards(ctx)
+	boards, err = db.ListCollectorBoards(ctx)
 	if err != nil || len(boards) != 1 || boards[0].ID != board.ID || boards[0].NextOffset != 0 {
 		t.Fatalf("cursor not persisted: %+v %v", boards, err)
 	}
@@ -118,20 +122,26 @@ func TestLeverCollectorResumesBoundedPages(t *testing.T) {
 	}
 }
 
-func TestLeverCollectorRejectsUntrustedPostingURL(t *testing.T) {
+func TestLeverCollectorSkipsUntrustedPostingAndSubmitsNext(t *testing.T) {
 	ctx := context.Background()
+	valid := fixturePosting("good-123")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[{"id":"123","text":"Backend Engineer","descriptionPlain":"Build Go services.","hostedUrl":"https://other.example/123"}]`))
+		_, _ = w.Write([]byte(`[{"id":"123","text":"Backend Engineer","descriptionPlain":"Build Go services.","hostedUrl":"https://other.example/123"},` + string(valid) + `]`))
 	}))
 	defer server.Close()
 	db, _, collector := setupCollector(t, server.URL)
 	report, err := collector.RunDueOnce(ctx)
-	if err != nil || report.ErrorCode != "lever_invalid_posting" || report.Submitted != 0 {
-		t.Fatalf("untrusted URL accepted: %+v %v", report, err)
+	if err != nil || report.ErrorCode != "" || report.WarningCode != "lever_invalid_posting" ||
+		report.Rejected != 1 || report.Submitted != 1 {
+		t.Fatalf("bad posting blocked valid next entry: %+v %v", report, err)
 	}
 	page, err := db.ListIngestions(ctx, "", 10)
-	if err != nil || len(page.Items) != 0 {
-		t.Fatalf("invalid source queued: %+v %v", page, err)
+	if err != nil || len(page.Items) != 1 || page.Items[0].ExternalID != "good-123" {
+		t.Fatalf("wrong source queued: %+v %v", page, err)
+	}
+	boards, err := db.ListCollectorBoards(ctx)
+	if err != nil || len(boards) != 1 || boards[0].LastErrorCode != "lever_invalid_posting" {
+		t.Fatalf("skipped posting not reported safely: %+v %v", boards, err)
 	}
 }
