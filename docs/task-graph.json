@@ -488,13 +488,14 @@
       "scope": "Implement sourced offer intake/comparison, Go exact comparable amounts and Jev qualitative tradeoffs with separate real-case evaluation. Accept complete supplied offers as well as later inbox-derived evidence; no inbox dependency.",
       "acceptance": "Unknown/incompatible pay, hours, benefits, arrangements and project economics remain explicit; no hiring probability or silent acceptance/rejection. The owner can understand consequential differences and authorise any later action separately.",
       "selection_reason": "Sol Medium can implement defined comparison rules; escalate a specific unresolved economic/semantic policy rather than inventing one.",
-      "status": "in_progress",
-      "remaining_work": "Implement sourced offer comparison, exact comparable arithmetic and Jev qualitative tradeoffs, preserving unknowns.",
-      "active_slice": "I25 independent offer comparison domain",
+      "status": "partial",
+      "remaining_work": "Integrate commissioned complete-offer extraction, bounded Jev capture/charging, immutable persistence/UI and separately reviewed actual offer cases. Domain helpers are not full I25 acceptance.",
+      "active_slice": "I25 domain reviewed and committed; integration pending",
       "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
       "host_id": "local",
       "active_model": "gpt-6-sol",
-      "active_effort": "medium"
+      "active_effort": "medium",
+      "review": "Committedde84e23: Root reviewed exact pay/range calculations, unsupported-currency preservation and recomputed Jev input/result binding; offercomparison/jev tests passed."
     },
     {
       "id": "I26",
@@ -569,8 +570,8 @@
     }
   ],
   "max_concurrent_live_workers": 4,
-  "dispatch_status": "active_goal_three_live_workers",
-  "code_checkpoint": "a22afa7",
+  "dispatch_status": "active_goal_two_live_workers",
+  "code_checkpoint": "de84e23",
   "goal_status": "active",
   "goal_objective": "Complete all I01\u2013I27 task acceptance using concurrent live tasks, reviewed coherent commits and actual live acceptance where required."
 }

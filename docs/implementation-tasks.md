@@ -2,7 +2,7 @@
 
 Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. API/contracts are committed in `2fdfe7d`, deployment configuration in `717ef93`, and web review in `8c8b66d`. Root check/test/build pass. Core corrections and immutable pack-correction preparation are committed; commissioned input integration and native runner configuration now run concurrently.
 
-**Current position: 5 tasks accepted, 14 partial, 1 active task, 7 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20, I24, I26. Active: I25. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 15 partial, 7 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20, I24–I26. I05/I11 partial implementations remain active. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -32,9 +32,8 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 | --- | --- | --- |
 | I05/I11 contextual input | Sol High | Correct three reviewed defects: deduplicated-input request identity, quick Stop/Resume worker handoff, and source-read deadline expiry. |
 | I11 contextual-input UI | Sol Medium | apps/web/src and browser fixture smoke against the published process-input contract. |
-| I25 offer comparison domain | Sol Medium | New offercomparison and Jev offer files; no shared schema or UI edits. |
 
-Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; shared storage/commission integration remains open. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. The web writer consumes the published contextual-input contract; interview helpers are committed7299c54 after root review/tests, and the worker now implements the independent I25 offer domain. Four live workers maximum.
+Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; shared storage/commission integration remains open. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. The web writer consumes the published contextual-input contract; interview helpers are committed7299c54 after root review/tests, and the I25 offer helpers are reviewed and committed in de84e23; both domain slices still need commissioned persistence/UI integration. Four live workers maximum.
 
 Reviewed checkpoints: API `2fdfe7d`, deployment `717ef93`, UI `8c8b66d`. Root `pnpm check`, `pnpm test`, `pnpm build` pass after contract formatting. Web has no automated test files; controlled browser interactions and screenshots were reviewed. The e2e placeholder is replaced by browser fixture smoke in a2726ed; root pnpm e2e passed.
 
@@ -127,7 +126,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 | I22 | Review delivery authority and verify a controlled send | Not started | I21 | GPT-6 Astra / High |
 | I23 | Process replies and prepare follow-ups | Not started | I09, I19 | GPT-6 Sol / Medium |
 | I24 | Prepare interviews from actual context | Partial | I15, I18 | GPT-6 Sol / Medium |
-| I25 | Compare real offer terms without invented certainty | In progress | I01, I09, I18 | GPT-6 Sol / Medium |
+| I25 | Compare real offer terms without invented certainty | Partial | I01, I09, I18 | GPT-6 Sol / Medium |
 | I26 | Verify current-format backup and private operation | Partial | I12, I15 | GPT-6 Sol / Medium |
 | I27 | Review the complete journey and publish accurate operating docs | Not started | I16, I18, I19, I22, I23, I24, I25, I26 | GPT-6 Sol / Medium; docs Luna Low |
 
@@ -458,15 +457,16 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 ### I25 — Compare real offer terms without invented certainty
 
-- [ ] **In progress** · GPT-6 Sol / Medium · Dependencies: I01, I09, I18.
+- [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I01, I09, I18.
 
-**Remaining work:** Implement sourced offer comparison, exact comparable arithmetic and Jev qualitative tradeoffs, preserving unknowns.
+**Remaining work:** Domain helpers committedde84e23 after root review and passing offercomparison/jev tests. Integrate commissioned extraction, bounded Jev capture/charging, immutable persistence/UI and separate actual offer quality cases; preserve unknowns and unsupported numeric terms.
 
 **Task scope:** Implement sourced offer intake/comparison, Go exact comparable amounts and Jev qualitative tradeoffs with separate real-case evaluation. Accept complete supplied offers as well as later inbox-derived evidence; no inbox dependency.
 
 **Acceptance:** Unknown/incompatible pay, hours, benefits, arrangements and project economics remain explicit; no hiring probability or silent acceptance/rejection. The owner can understand consequential differences and authorise any later action separately.
 
 **Why this model/effort:** Sol Medium can implement defined comparison rules; escalate a specific unresolved economic/semantic policy rather than inventing one.
+
 
 ### I26 — Verify current-format backup and private operation
 
