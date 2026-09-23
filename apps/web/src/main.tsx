@@ -15,6 +15,7 @@ import {
   type Preferences,
   type Session,
 } from './api';
+import { Opportunities } from './opportunities';
 import './style.css';
 
 const scopeOptions = [
@@ -152,7 +153,7 @@ function Today({ onSessionLost }: { onSessionLost: () => void }) {
     <main id="today">
       <p className="eyebrow">Your workspace</p>
       <h1>Today</h1>
-      <p>Opportunity tracking will appear here as the service is built.</p>
+      <p>Open Opportunities to save a sourced vacancy and track its details.</p>
       <section className="status" aria-live="polite">
         <h2>Current search preferences</h2>
         {!preferences && !error && <p>Loading preferences…</p>}
@@ -343,7 +344,7 @@ function Settings({ session, onSessionLost }: { session: Session; onSessionLost:
 function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState<'today' | 'settings'>('today');
+  const [page, setPage] = useState<'today' | 'opportunities' | 'settings'>('today');
   const [signingOut, setSigningOut] = useState(false);
   const loseSession = useCallback(() => {
     setSession(null);
@@ -430,7 +431,14 @@ function App() {
             >
               Today
             </button>
-            <span>Opportunities</span>
+            <button
+              type="button"
+              className={page === 'opportunities' ? 'active' : 'nav-button'}
+              onClick={() => setPage('opportunities')}
+              aria-current={page === 'opportunities' ? 'page' : undefined}
+            >
+              Opportunities
+            </button>
             <span>People</span>
             <span>Applications</span>
             <button
@@ -445,11 +453,11 @@ function App() {
               Sign out
             </button>
           </nav>
-          {page === 'today' ? (
-            <Today onSessionLost={loseSession} />
-          ) : (
-            <Settings session={session} onSessionLost={loseSession} />
+          {page === 'today' && <Today onSessionLost={loseSession} />}
+          {page === 'opportunities' && (
+            <Opportunities session={session} onSessionLost={loseSession} />
           )}
+          {page === 'settings' && <Settings session={session} onSessionLost={loseSession} />}
           {error && (
             <p role="alert" className="global-error">
               {error}
