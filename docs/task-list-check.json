@@ -6,8 +6,8 @@
   "models_valid": true,
   "unnecessary_milestone_gates_absent": true,
   "dispatched": [
-    "I05 contextual-input authority corrections",
-    "I11 contextual-input UI retry correction"
+    "I08/I10 substantial neutral-candidate discovery",
+    "I11 contextual-input UI final retry correction"
   ],
   "implementation_acceptance": [
     "I01 bounded startup/qualification slice",
@@ -30,16 +30,17 @@
     "Committed 2fdfe7d: sourced relationships and scope-guarded reassociation; no fabricated referral advantage.",
     "Root reviewed sourced interview/debrief and Jev focus helpers; focused interviewprep/jev tests passed at7299c54.",
     "Core authority corrections independently reviewed at7310026. Native boundary committeda22afa7; root runtime package suite, exact saved-rollout baseline/negative parser checks and config/shell checks passed.",
-    "Root reviewed exact pay/range calculations, unsupported-currency preservation and recomputed Jev input/result binding; offercomparison/jev tests passed."
+    "Root reviewed exact pay/range calculations, unsupported-currency preservation and recomputed Jev input/result binding; offercomparison/jev tests passed.",
+    "Committed2279c3f after independent three-finding correction recheck, root full Go suite, targeted race tests and generated-contract verification."
   ],
   "documentation_validated_at": "2026-09-23",
-  "code_checkpoint": "de84e23",
+  "code_checkpoint": "2279c3f",
   "root_validation": {
     "check": "passed at 8c8b66d after OpenAPI formatting",
     "test": "passed full Go API suite; web runner has no test files; controlled I11 browser fixture reviewed",
     "build": "passed at 8c8b66d",
     "e2e": "pnpm e2e now runs real headless browser fixture smoke; root passed after permitted macOS sandbox escalation. Synthetic HTTP only; no live API/runtime acceptance.",
-    "latest_slices": "Root affected core package tests, exact replay/import interruption checks, pack rendering/provenance and exact instruction reader passed. Worker full API suite hit cmd/server shutdown timeout; isolated server test passed. Preserve this unresolved full-suite limit for final verification.",
+    "latest_slices": "Root full Go suite passes at2279c3f, including cmd/server; prior startup fixture and concurrent offer build limitations are resolved. Core is now implementing a new discovery slice.",
     "active_integration": "Core I13 corrections committed7310026 after independent review and root exact replay/import tests. Pack correction preparation committed1c8417f; process_input/schema/transaction integration active.",
     "recovery": "Five current-format synthetic tests and shell syntax pass at3bcbd42; no real data or host touched.",
     "delivery": "Root synthetic SMTP protocol suite passes after non-ASCII/bounds and uncertain-positive-reply corrections; no real send.",
@@ -47,7 +48,7 @@
     "idle_startup": "Committed227febf: immutable-snapshot baseline failed3/10; response/client cleanup passed10/10 and whole server package passed3 runs. Production shutdown unchanged; evolving full suite still due.",
     "interview": "Focused interviewprep and jev tests passed at7299c54; production orchestration/UI still pending.",
     "native_boundary": "a22afa7: root codex/codexrunner/codexservice suite, archived native-rollout parser positive/four negatives and runtime config/shell checks pass. Exact observed raw synthetic records saved. Real host/account/MCP still unverified.",
-    "contextual_input": "Affected store/rounds/agency/httpapi/codexservice suites and generated contracts passed on frozen diff after08183f2. Race-enabled pasted-source pause/Resume test failed consistently (1 aggregate and3 isolated runs), capability unavailable/stale revision; under independent review, core uncommitted. Independent review identified deduplicated-input identity, worker handoff and deadline expiry defects; all three assigned to core, still uncommitted.",
+    "contextual_input": "Committed2279c3f: independent recheck closed all3 findings. Root full Go suite and targeted race-enabled real Stop/Resume, deduplicated URL replay and deadline expiry tests passed. Generated contracts match. Synthetic providers only; live acceptance open.",
     "offers": "Root offercomparison/jev tests passed after exact numeric context/recomputed binding and unsupported-currency corrections. Commissioned execution/persistence/UI still pending."
   },
   "protected_artifacts_unchanged_prior_check": 44,

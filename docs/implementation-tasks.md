@@ -1,8 +1,8 @@
 # Recruitment agency — full task list and concurrent execution guide
 
-Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. API/contracts are committed in `2fdfe7d`, deployment configuration in `717ef93`, and web review in `8c8b66d`. Root check/test/build pass. Core corrections and immutable pack-correction preparation are committed; commissioned input integration and native runner configuration now run concurrently.
+Updated 23 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. Current ownership, reviewed checkpoints and remaining acceptance are recorded below; historical test passes do not establish completion of the evolving worktree.
 
-**Current position: 5 tasks accepted, 15 partial, 7 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20, I24–I26. I05/I11 partial implementations remain active. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 15 partial, 7 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20, I24–I26. I08/I10/I11 partial implementations remain active. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -30,14 +30,14 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I05/I11 contextual input | Sol High | Correct three reviewed defects: deduplicated-input request identity, quick Stop/Resume worker handoff, and source-read deadline expiry. |
+| I08/I10 substantial discovery | Sol High | Neutral candidate acquisition, Jev choice before verification, useful continuation within one finite commission and durable per-source recovery. |
 | I11 contextual-input UI | Sol Medium | apps/web/src and browser fixture smoke against the published process-input contract. |
 
-Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; shared storage/commission integration remains open. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. The web writer consumes the published contextual-input contract; interview helpers are committed7299c54 after root review/tests, and the I25 offer helpers are reviewed and committed in de84e23; both domain slices still need commissioned persistence/UI integration. Four live workers maximum.
+Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; contextual input and shared pack transaction integration committed2279c3f after independent correction review, full Go suite and race-enabled recovery tests. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. The web writer consumes the published contextual-input contract; interview helpers are committed7299c54 after root review/tests, and the I25 offer helpers are reviewed and committed in de84e23; both domain slices still need commissioned persistence/UI integration. Four live workers maximum.
 
 Reviewed checkpoints: API `2fdfe7d`, deployment `717ef93`, UI `8c8b66d`. Root `pnpm check`, `pnpm test`, `pnpm build` pass after contract formatting. Web has no automated test files; controlled browser interactions and screenshots were reviewed. The e2e placeholder is replaced by browser fixture smoke in a2726ed; root pnpm e2e passed.
 
-I13 found four concrete gaps despite passing tests: native tools outside round accounting, expired paused rounds retaining the active slot, missing production Lever continuation, and prepare context reads using a resource outside the prepare scope. The three core findings are corrected and reviewed in7310026; native runner and live acceptance remain open. Reliable commissioned input processing, corrected-pack persistence, explicit paused-round replacement and Jev choice among neutral discovered leads remain open. The commissioned input, profile-version and explicit paused-round replacement design is recorded in [contextual-input-decisions.md](contextual-input-decisions.md); shared implementation follows this review. See [input integration gap](/Users/vince/Projects/find-income/implementation-notes/implementation/I11-input-orchestration-gap.md).
+I13 found four concrete gaps despite passing tests: native tools outside round accounting, expired paused rounds retaining the active slot, missing production Lever continuation, and prepare context reads using a resource outside the prepare scope. The three core findings are corrected and reviewed in7310026; native code/configuration is reviewed in a22afa7 and selected-host live acceptance remains open. Contextual input processing, corrected-pack persistence and explicit paused replacement are implemented in2279c3f; real account/runner and final UI acceptance remain open. Jev choice among neutral discovered leads and substantial discovery continuation are now assigned. The commissioned input, profile-version and explicit paused-round replacement design is recorded in [contextual-input-decisions.md](contextual-input-decisions.md); the three independently reviewed recovery defects are corrected and rechecked in2279c3f. See [input integration gap](/Users/vince/Projects/find-income/implementation-notes/implementation/I11-input-orchestration-gap.md).
 
 I14 retained ten completed responsibility cases (seven real, three synthetic) and one HTTP529-incomplete case. The 22 calls reported 60,960 tokens, exceeding the 60,000 target by 960 on the final response; failed-call usage is unknown. No automatic retry or general accuracy claim. See [evaluation](jev-responsibility-evaluation.md). Recovery committed3bcbd42 with five passing synthetic tests. Host/account and inbox choices remain unanswered; no live deployment, mailbox access or employer send occurred.
 
@@ -192,7 +192,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I04.
 
-**Remaining work:** Fix I13 expired-round slot, production Lever continuation and prepare context scope findings; then pack contextual correction and live integration acceptance. Then implement the missing production contextual-input processing boundary recorded in I11-input-orchestration-gap.md.
+**Remaining work:** Contextual input committed2279c3f after independent review, root full Go suite and targeted race tests. Verify real account/runner execution and final UI; exceptionally long sources are preserved with explicit unresolved processing at the current context bounds.
 
 **Task scope:** Integrate round capabilities with existing authenticated domain operations, worker claims and MCP. Own OpenAPI/generated contracts and HTTP round controls for this handoff. Distinguish inert external intake, direct owner decisions and delegated mutations; permit only explicitly scoped preference corrections.
 
@@ -201,6 +201,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 **Why this model/effort:** Authority spans transports and workers, making Sol High appropriate. Do not fork separate business logic per adapter.
 
 **Reviewed evidence:** Committed 2fdfe7d: commissioned discovery/prepare work loops and shared authority/contracts; root full API suite and generated check pass.
+
 
 ### I06 — Finish Codex lifecycle and bounded research tools
 
