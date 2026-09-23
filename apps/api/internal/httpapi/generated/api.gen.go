@@ -559,6 +559,135 @@ func (e IngestionRequestStatus) Valid() bool {
 	}
 }
 
+// Defines values for InterviewContextSourceKind.
+const (
+	InterviewContextSourceKindEmployer   InterviewContextSourceKind = "employer"
+	InterviewContextSourceKindInvitation InterviewContextSourceKind = "invitation"
+	InterviewContextSourceKindOwnerInput InterviewContextSourceKind = "owner_input"
+	InterviewContextSourceKindRole       InterviewContextSourceKind = "role"
+)
+
+// Valid indicates whether the value is a known member of the InterviewContextSourceKind enum.
+func (e InterviewContextSourceKind) Valid() bool {
+	switch e {
+	case InterviewContextSourceKindEmployer:
+		return true
+	case InterviewContextSourceKindInvitation:
+		return true
+	case InterviewContextSourceKindOwnerInput:
+		return true
+	case InterviewContextSourceKindRole:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InterviewDebriefObservationKind.
+const (
+	Discussed InterviewDebriefObservationKind = "discussed"
+	FollowUp  InterviewDebriefObservationKind = "follow_up"
+	Unclear   InterviewDebriefObservationKind = "unclear"
+	WentWell  InterviewDebriefObservationKind = "went_well"
+)
+
+// Valid indicates whether the value is a known member of the InterviewDebriefObservationKind enum.
+func (e InterviewDebriefObservationKind) Valid() bool {
+	switch e {
+	case Discussed:
+		return true
+	case FollowUp:
+		return true
+	case Unclear:
+		return true
+	case WentWell:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InterviewDebriefRecordAttribution.
+const (
+	OwnerReported InterviewDebriefRecordAttribution = "owner_reported"
+)
+
+// Valid indicates whether the value is a known member of the InterviewDebriefRecordAttribution enum.
+func (e InterviewDebriefRecordAttribution) Valid() bool {
+	switch e {
+	case OwnerReported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InterviewExampleExperienceKind.
+const (
+	InterviewExampleExperienceKindEducation       InterviewExampleExperienceKind = "education"
+	InterviewExampleExperienceKindEmployment      InterviewExampleExperienceKind = "employment"
+	InterviewExampleExperienceKindOther           InterviewExampleExperienceKind = "other"
+	InterviewExampleExperienceKindPersonalProject InterviewExampleExperienceKind = "personal_project"
+	InterviewExampleExperienceKindVolunteer       InterviewExampleExperienceKind = "volunteer"
+)
+
+// Valid indicates whether the value is a known member of the InterviewExampleExperienceKind enum.
+func (e InterviewExampleExperienceKind) Valid() bool {
+	switch e {
+	case InterviewExampleExperienceKindEducation:
+		return true
+	case InterviewExampleExperienceKindEmployment:
+		return true
+	case InterviewExampleExperienceKindOther:
+		return true
+	case InterviewExampleExperienceKindPersonalProject:
+		return true
+	case InterviewExampleExperienceKindVolunteer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InterviewFocusSummaryDisposition.
+const (
+	InterviewFocusSummaryDispositionSelected   InterviewFocusSummaryDisposition = "selected"
+	InterviewFocusSummaryDispositionUnresolved InterviewFocusSummaryDisposition = "unresolved"
+)
+
+// Valid indicates whether the value is a known member of the InterviewFocusSummaryDisposition enum.
+func (e InterviewFocusSummaryDisposition) Valid() bool {
+	switch e {
+	case InterviewFocusSummaryDispositionSelected:
+		return true
+	case InterviewFocusSummaryDispositionUnresolved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InterviewScheduleClaimMode.
+const (
+	InPerson InterviewScheduleClaimMode = "in_person"
+	Phone    InterviewScheduleClaimMode = "phone"
+	Video    InterviewScheduleClaimMode = "video"
+)
+
+// Valid indicates whether the value is a known member of the InterviewScheduleClaimMode enum.
+func (e InterviewScheduleClaimMode) Valid() bool {
+	switch e {
+	case InPerson:
+		return true
+	case Phone:
+		return true
+	case Video:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OpportunityKind.
 const (
 	OpportunityKindEmployment OpportunityKind = "employment"
@@ -2161,6 +2290,20 @@ type CreatedAgentCredential struct {
 	Token string `json:"token"`
 }
 
+// DebriefInterviewRequest defines model for DebriefInterviewRequest.
+type DebriefInterviewRequest struct {
+	// Notes Complete owner reported debrief notes
+	Notes      string `json:"notes"`
+	RequestKey string `json:"requestKey"`
+}
+
+// DebriefInterviewResponse defines model for DebriefInterviewResponse.
+type DebriefInterviewResponse struct {
+	DebriefId   string `json:"debriefId"`
+	InterviewId string `json:"interviewId"`
+	Round       Round  `json:"round"`
+}
+
 // DeliveryCapability defines model for DeliveryCapability.
 type DeliveryCapability struct {
 	Reason              *string `json:"reason,omitempty"`
@@ -2410,6 +2553,169 @@ type IngestionRequestJobState string
 
 // IngestionRequestStatus defines model for IngestionRequest.Status.
 type IngestionRequestStatus string
+
+// InterviewBrief defines model for InterviewBrief.
+type InterviewBrief struct {
+	Input struct {
+		CareerSources []InterviewCareerSource  `json:"careerSources"`
+		Context       []InterviewContextSource `json:"context"`
+		Draft         InterviewDraft           `json:"draft"`
+		EmployerName  string                   `json:"employerName"`
+		InterviewId   string                   `json:"interviewId"`
+		OpportunityId string                   `json:"opportunityId"`
+		RoleTitle     string                   `json:"roleTitle"`
+	} `json:"input"`
+	InputSha256 string `json:"inputSha256"`
+}
+
+// InterviewCareerSource defines model for InterviewCareerSource.
+type InterviewCareerSource struct {
+	Approved bool   `json:"approved"`
+	Body     string `json:"body"`
+	Id       string `json:"id"`
+	Name     string `json:"name"`
+	Sha256   string `json:"sha256"`
+}
+
+// InterviewCitation defines model for InterviewCitation.
+type InterviewCitation struct {
+	Excerpt  string `json:"excerpt"`
+	SourceId string `json:"sourceId"`
+}
+
+// InterviewCitedText defines model for InterviewCitedText.
+type InterviewCitedText struct {
+	Citations []InterviewCitation `json:"citations"`
+	Text      string              `json:"text"`
+}
+
+// InterviewCommissionResponse defines model for InterviewCommissionResponse.
+type InterviewCommissionResponse struct {
+	InterviewId string `json:"interviewId"`
+	Round       Round  `json:"round"`
+}
+
+// InterviewContextSource defines model for InterviewContextSource.
+type InterviewContextSource struct {
+	Body     string                     `json:"body"`
+	Id       string                     `json:"id"`
+	Kind     InterviewContextSourceKind `json:"kind"`
+	Revision string                     `json:"revision"`
+	Sha256   string                     `json:"sha256"`
+}
+
+// InterviewContextSourceKind defines model for InterviewContextSource.Kind.
+type InterviewContextSourceKind string
+
+// InterviewDebriefObservation defines model for InterviewDebriefObservation.
+type InterviewDebriefObservation struct {
+	Detail InterviewCitedText              `json:"detail"`
+	Kind   InterviewDebriefObservationKind `json:"kind"`
+}
+
+// InterviewDebriefObservationKind defines model for InterviewDebriefObservation.Kind.
+type InterviewDebriefObservationKind string
+
+// InterviewDebriefRecord defines model for InterviewDebriefRecord.
+type InterviewDebriefRecord struct {
+	Attribution  *InterviewDebriefRecordAttribution `json:"attribution,omitempty"`
+	CreatedAt    time.Time                          `json:"createdAt"`
+	Id           string                             `json:"id"`
+	InterviewId  string                             `json:"interviewId"`
+	Notes        string                             `json:"notes"`
+	Observations *[]InterviewDebriefObservation     `json:"observations,omitempty"`
+	RoundId      *string                            `json:"roundId,omitempty"`
+	Unknowns     *[]string                          `json:"unknowns,omitempty"`
+	UpdatedAt    time.Time                          `json:"updatedAt"`
+}
+
+// InterviewDebriefRecordAttribution defines model for InterviewDebriefRecord.Attribution.
+type InterviewDebriefRecordAttribution string
+
+// InterviewDetail defines model for InterviewDetail.
+type InterviewDetail struct {
+	Debriefs  []InterviewDebriefRecord `json:"debriefs"`
+	Interview InterviewView            `json:"interview"`
+}
+
+// InterviewDraft defines model for InterviewDraft.
+type InterviewDraft struct {
+	Examples       []InterviewExample          `json:"examples"`
+	Focus          []InterviewFocusAlternative `json:"focus"`
+	Questions      []InterviewQuestion         `json:"questions"`
+	ScheduleClaims *[]InterviewScheduleClaim   `json:"scheduleClaims,omitempty"`
+	Unknowns       *[]string                   `json:"unknowns,omitempty"`
+}
+
+// InterviewExample defines model for InterviewExample.
+type InterviewExample struct {
+	Action         InterviewCitedText             `json:"action"`
+	ContextBasis   InterviewCitation              `json:"contextBasis"`
+	ExperienceKind InterviewExampleExperienceKind `json:"experienceKind"`
+	Result         *InterviewCitedText            `json:"result,omitempty"`
+	Situation      InterviewCitedText             `json:"situation"`
+	Title          string                         `json:"title"`
+	UnknownResult  *string                        `json:"unknownResult,omitempty"`
+}
+
+// InterviewExampleExperienceKind defines model for InterviewExample.ExperienceKind.
+type InterviewExampleExperienceKind string
+
+// InterviewFocusAlternative defines model for InterviewFocusAlternative.
+type InterviewFocusAlternative struct {
+	Id  string             `json:"id"`
+	Why InterviewCitedText `json:"why"`
+}
+
+// InterviewFocusSummary defines model for InterviewFocusSummary.
+type InterviewFocusSummary struct {
+	Disposition  InterviewFocusSummaryDisposition `json:"disposition"`
+	InputSha256  string                           `json:"inputSha256"`
+	JevAttemptId *string                          `json:"jevAttemptId,omitempty"`
+	SelectedId   *string                          `json:"selectedId,omitempty"`
+}
+
+// InterviewFocusSummaryDisposition defines model for InterviewFocusSummary.Disposition.
+type InterviewFocusSummaryDisposition string
+
+// InterviewList defines model for InterviewList.
+type InterviewList struct {
+	Items []InterviewView `json:"items"`
+}
+
+// InterviewQuestion defines model for InterviewQuestion.
+type InterviewQuestion struct {
+	Text string             `json:"text"`
+	Why  InterviewCitedText `json:"why"`
+}
+
+// InterviewScheduleClaim defines model for InterviewScheduleClaim.
+type InterviewScheduleClaim struct {
+	Citation     InterviewCitation           `json:"citation"`
+	EndRfc3339   *time.Time                  `json:"endRfc3339,omitempty"`
+	Mode         *InterviewScheduleClaimMode `json:"mode,omitempty"`
+	StartRfc3339 *time.Time                  `json:"startRfc3339,omitempty"`
+	Venue        *string                     `json:"venue,omitempty"`
+}
+
+// InterviewScheduleClaimMode defines model for InterviewScheduleClaim.Mode.
+type InterviewScheduleClaimMode string
+
+// InterviewView defines model for InterviewView.
+type InterviewView struct {
+	Brief               *InterviewBrief        `json:"brief,omitempty"`
+	Context             string                 `json:"context"`
+	ContextSha256       string                 `json:"contextSha256"`
+	CreatedAt           time.Time              `json:"createdAt"`
+	Current             bool                   `json:"current"`
+	Focus               *InterviewFocusSummary `json:"focus,omitempty"`
+	Id                  string                 `json:"id"`
+	OpportunityId       string                 `json:"opportunityId"`
+	OpportunityRevision int64                  `json:"opportunityRevision"`
+	ProfileVersion      int64                  `json:"profileVersion"`
+	RoundId             *string                `json:"roundId,omitempty"`
+	UpdatedAt           time.Time              `json:"updatedAt"`
+}
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
@@ -2774,6 +3080,14 @@ type PreferencesResponse struct {
 type PrepareDeliveryReviewRequest struct {
 	PackIds    []string `json:"packIds"`
 	RequestKey string   `json:"requestKey"`
+}
+
+// PrepareInterviewRequest defines model for PrepareInterviewRequest.
+type PrepareInterviewRequest struct {
+	// Context Complete owner supplied invitation and relevant context in one payload
+	Context       string `json:"context"`
+	OpportunityId string `json:"opportunityId"`
+	RequestKey    string `json:"requestKey"`
 }
 
 // PrepareRoundRequest Owner selects an existing sourced opportunity; the server derives all pack details and authority.
@@ -3698,6 +4012,12 @@ type SubmitIngestionJSONRequestBody = SubmitIngestionRequest
 
 // RetryIngestionJSONRequestBody defines body for RetryIngestion for application/json ContentType.
 type RetryIngestionJSONRequestBody = RetryIngestionRequest
+
+// PrepareInterviewJSONRequestBody defines body for PrepareInterview for application/json ContentType.
+type PrepareInterviewJSONRequestBody = PrepareInterviewRequest
+
+// DebriefInterviewJSONRequestBody defines body for DebriefInterview for application/json ContentType.
+type DebriefInterviewJSONRequestBody = DebriefInterviewRequest
 
 // SetOwnerOpportunityDecisionJSONRequestBody defines body for SetOwnerOpportunityDecision for application/json ContentType.
 type SetOwnerOpportunityDecisionJSONRequestBody = OwnerDecisionInput

@@ -4,6 +4,74 @@
  */
 
 export interface paths {
+    "/interviews/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commission one interview brief from complete owner supplied context */
+        post: operations["prepareInterview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List private owner interview preparations */
+        get: operations["listInterviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one sourced interview brief and owner debriefs */
+        get: operations["getInterview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interviews/{id}/debrief": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commission a cited owner reported debrief from complete notes */
+        post: operations["debriefInterview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1340,6 +1408,147 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        PrepareInterviewRequest: {
+            requestKey: string;
+            opportunityId: string;
+            /** @description Complete owner supplied invitation and relevant context in one payload */
+            context: string;
+        };
+        DebriefInterviewRequest: {
+            requestKey: string;
+            /** @description Complete owner reported debrief notes */
+            notes: string;
+        };
+        InterviewCommissionResponse: {
+            interviewId: string;
+            round: components["schemas"]["Round"];
+        };
+        DebriefInterviewResponse: {
+            debriefId: string;
+            interviewId: string;
+            round: components["schemas"]["Round"];
+        };
+        InterviewCitation: {
+            sourceId: string;
+            excerpt: string;
+        };
+        InterviewCitedText: {
+            text: string;
+            citations: components["schemas"]["InterviewCitation"][];
+        };
+        InterviewContextSource: {
+            id: string;
+            /** @enum {string} */
+            kind: "invitation" | "owner_input" | "role" | "employer";
+            revision: string;
+            sha256: string;
+            body: string;
+        };
+        InterviewCareerSource: {
+            id: string;
+            name: string;
+            sha256: string;
+            approved: boolean;
+            body: string;
+        };
+        InterviewFocusAlternative: {
+            id: string;
+            why: components["schemas"]["InterviewCitedText"];
+        };
+        InterviewQuestion: {
+            text: string;
+            why: components["schemas"]["InterviewCitedText"];
+        };
+        InterviewExample: {
+            title: string;
+            /** @enum {string} */
+            experienceKind: "personal_project" | "employment" | "education" | "volunteer" | "other";
+            contextBasis: components["schemas"]["InterviewCitation"];
+            situation: components["schemas"]["InterviewCitedText"];
+            action: components["schemas"]["InterviewCitedText"];
+            result?: components["schemas"]["InterviewCitedText"];
+            unknownResult?: string;
+        };
+        InterviewScheduleClaim: {
+            /** Format: date-time */
+            startRfc3339?: string;
+            /** Format: date-time */
+            endRfc3339?: string;
+            /** @enum {string} */
+            mode?: "video" | "phone" | "in_person";
+            venue?: string;
+            citation: components["schemas"]["InterviewCitation"];
+        };
+        InterviewDraft: {
+            focus: components["schemas"]["InterviewFocusAlternative"][];
+            questions: components["schemas"]["InterviewQuestion"][];
+            examples: components["schemas"]["InterviewExample"][];
+            scheduleClaims?: components["schemas"]["InterviewScheduleClaim"][];
+            unknowns?: string[];
+        };
+        InterviewBrief: {
+            input: {
+                interviewId: string;
+                opportunityId: string;
+                roleTitle: string;
+                employerName: string;
+                context: components["schemas"]["InterviewContextSource"][];
+                careerSources: components["schemas"]["InterviewCareerSource"][];
+                draft: components["schemas"]["InterviewDraft"];
+            };
+            inputSha256: string;
+        };
+        InterviewFocusSummary: {
+            /** @enum {string} */
+            disposition: "selected" | "unresolved";
+            selectedId?: string;
+            inputSha256: string;
+            jevAttemptId?: string;
+        };
+        InterviewView: {
+            id: string;
+            opportunityId: string;
+            /** Format: int64 */
+            opportunityRevision: number;
+            /** Format: int64 */
+            profileVersion: number;
+            context: string;
+            contextSha256: string;
+            roundId?: string;
+            current: boolean;
+            brief?: components["schemas"]["InterviewBrief"];
+            focus?: components["schemas"]["InterviewFocusSummary"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        InterviewList: {
+            items: components["schemas"]["InterviewView"][];
+        };
+        InterviewDebriefObservation: {
+            /** @enum {string} */
+            kind: "discussed" | "went_well" | "unclear" | "follow_up";
+            detail: components["schemas"]["InterviewCitedText"];
+        };
+        InterviewDebriefRecord: {
+            id: string;
+            interviewId: string;
+            notes: string;
+            roundId?: string;
+            observations?: components["schemas"]["InterviewDebriefObservation"][];
+            unknowns?: string[];
+            /** @enum {string} */
+            attribution?: "owner_reported";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        InterviewDetail: {
+            interview: components["schemas"]["InterviewView"];
+            debriefs: components["schemas"]["InterviewDebriefRecord"][];
+        };
         DeliveryCapability: {
             submissionAvailable: boolean;
             receiptLookup: boolean;
@@ -2804,6 +3013,121 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    prepareInterview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepareInterviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing commission */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewCommissionResponse"];
+                };
+            };
+            /** @description Commission created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewCommissionResponse"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listInterviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Interview list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewList"];
+                };
+            };
+        };
+    };
+    getInterview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Interview and debriefs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    debriefInterview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DebriefInterviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing debrief commission */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebriefInterviewResponse"];
+                };
+            };
+            /** @description Debrief commission created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebriefInterviewResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     getHealth: {
         parameters: {
             query?: never;

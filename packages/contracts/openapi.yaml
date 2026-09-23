@@ -6,6 +6,95 @@ info:
 servers:
   - url: /api/v1
 paths:
+  /interviews/prepare:
+    post:
+      operationId: prepareInterview
+      summary: Commission one interview brief from complete owner supplied context
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/PrepareInterviewRequest' } } }
+      responses:
+        '200':
+          {
+            description: Existing commission,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/InterviewCommissionResponse' } },
+              },
+          }
+        '201':
+          {
+            description: Commission created,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/InterviewCommissionResponse' } },
+              },
+          }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /interviews:
+    get:
+      operationId: listInterviews
+      summary: List private owner interview preparations
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Interview list,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/InterviewList' } } },
+          }
+  /interviews/{id}:
+    get:
+      operationId: getInterview
+      summary: Read one sourced interview brief and owner debriefs
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          {
+            description: Interview and debriefs,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/InterviewDetail' } } },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /interviews/{id}/debrief:
+    post:
+      operationId: debriefInterview
+      summary: Commission a cited owner reported debrief from complete notes
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/DebriefInterviewRequest' } } }
+      responses:
+        '200':
+          {
+            description: Existing debrief commission,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/DebriefInterviewResponse' } },
+              },
+          }
+        '201':
+          {
+            description: Debrief commission created,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/DebriefInterviewResponse' } },
+              },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /health:
     get:
       operationId: getHealth
@@ -1345,6 +1434,203 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
+    PrepareInterviewRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey, opportunityId, context]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        opportunityId: { type: string, minLength: 1 }
+        context:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 30000,
+            description: Complete owner supplied invitation and relevant context in one payload,
+          }
+    DebriefInterviewRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey, notes]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        notes:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 30000,
+            description: Complete owner reported debrief notes,
+          }
+    InterviewCommissionResponse:
+      type: object
+      required: [interviewId, round]
+      properties:
+        interviewId: { type: string }
+        round: { $ref: '#/components/schemas/Round' }
+    DebriefInterviewResponse:
+      type: object
+      required: [debriefId, interviewId, round]
+      properties:
+        debriefId: { type: string }
+        interviewId: { type: string }
+        round: { $ref: '#/components/schemas/Round' }
+    InterviewCitation:
+      type: object
+      required: [sourceId, excerpt]
+      properties:
+        sourceId: { type: string }
+        excerpt: { type: string }
+    InterviewCitedText:
+      type: object
+      required: [text, citations]
+      properties:
+        text: { type: string }
+        citations: { type: array, items: { $ref: '#/components/schemas/InterviewCitation' } }
+    InterviewContextSource:
+      type: object
+      required: [id, kind, revision, sha256, body]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [invitation, owner_input, role, employer] }
+        revision: { type: string }
+        sha256: { type: string }
+        body: { type: string }
+    InterviewCareerSource:
+      type: object
+      required: [id, name, sha256, approved, body]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        sha256: { type: string }
+        approved: { type: boolean }
+        body: { type: string }
+    InterviewFocusAlternative:
+      type: object
+      required: [id, why]
+      properties:
+        id: { type: string }
+        why: { $ref: '#/components/schemas/InterviewCitedText' }
+    InterviewQuestion:
+      type: object
+      required: [text, why]
+      properties:
+        text: { type: string }
+        why: { $ref: '#/components/schemas/InterviewCitedText' }
+    InterviewExample:
+      type: object
+      required: [title, experienceKind, contextBasis, situation, action]
+      properties:
+        title: { type: string }
+        experienceKind:
+          { type: string, enum: [personal_project, employment, education, volunteer, other] }
+        contextBasis: { $ref: '#/components/schemas/InterviewCitation' }
+        situation: { $ref: '#/components/schemas/InterviewCitedText' }
+        action: { $ref: '#/components/schemas/InterviewCitedText' }
+        result: { $ref: '#/components/schemas/InterviewCitedText' }
+        unknownResult: { type: string }
+    InterviewScheduleClaim:
+      type: object
+      required: [citation]
+      properties:
+        startRfc3339: { type: string, format: date-time }
+        endRfc3339: { type: string, format: date-time }
+        mode: { type: string, enum: [video, phone, in_person] }
+        venue: { type: string }
+        citation: { $ref: '#/components/schemas/InterviewCitation' }
+    InterviewDraft:
+      type: object
+      required: [focus, questions, examples]
+      properties:
+        focus: { type: array, items: { $ref: '#/components/schemas/InterviewFocusAlternative' } }
+        questions: { type: array, items: { $ref: '#/components/schemas/InterviewQuestion' } }
+        examples: { type: array, items: { $ref: '#/components/schemas/InterviewExample' } }
+        scheduleClaims:
+          { type: array, items: { $ref: '#/components/schemas/InterviewScheduleClaim' } }
+        unknowns: { type: array, items: { type: string } }
+    InterviewBrief:
+      type: object
+      required: [input, inputSha256]
+      properties:
+        input:
+          type: object
+          required:
+            [interviewId, opportunityId, roleTitle, employerName, context, careerSources, draft]
+          properties:
+            interviewId: { type: string }
+            opportunityId: { type: string }
+            roleTitle: { type: string }
+            employerName: { type: string }
+            context: { type: array, items: { $ref: '#/components/schemas/InterviewContextSource' } }
+            careerSources:
+              { type: array, items: { $ref: '#/components/schemas/InterviewCareerSource' } }
+            draft: { $ref: '#/components/schemas/InterviewDraft' }
+        inputSha256: { type: string }
+    InterviewFocusSummary:
+      type: object
+      required: [disposition, inputSha256]
+      properties:
+        disposition: { type: string, enum: [selected, unresolved] }
+        selectedId: { type: string }
+        inputSha256: { type: string }
+        jevAttemptId: { type: string }
+    InterviewView:
+      type: object
+      required:
+        [
+          id,
+          opportunityId,
+          opportunityRevision,
+          profileVersion,
+          context,
+          contextSha256,
+          current,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        opportunityRevision: { type: integer, format: int64 }
+        profileVersion: { type: integer, format: int64 }
+        context: { type: string }
+        contextSha256: { type: string }
+        roundId: { type: string }
+        current: { type: boolean }
+        brief: { $ref: '#/components/schemas/InterviewBrief' }
+        focus: { $ref: '#/components/schemas/InterviewFocusSummary' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    InterviewList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/InterviewView' } }
+    InterviewDebriefObservation:
+      type: object
+      required: [kind, detail]
+      properties:
+        kind: { type: string, enum: [discussed, went_well, unclear, follow_up] }
+        detail: { $ref: '#/components/schemas/InterviewCitedText' }
+    InterviewDebriefRecord:
+      type: object
+      required: [id, interviewId, notes, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        interviewId: { type: string }
+        notes: { type: string }
+        roundId: { type: string }
+        observations:
+          { type: array, items: { $ref: '#/components/schemas/InterviewDebriefObservation' } }
+        unknowns: { type: array, items: { type: string } }
+        attribution: { type: string, enum: [owner_reported] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    InterviewDetail:
+      type: object
+      required: [interview, debriefs]
+      properties:
+        interview: { $ref: '#/components/schemas/InterviewView' }
+        debriefs: { type: array, items: { $ref: '#/components/schemas/InterviewDebriefRecord' } }
     DeliveryCapability:
       type: object
       required: [submissionAvailable, receiptLookup]
@@ -1382,7 +1668,32 @@ components:
           items: { $ref: '#/components/schemas/DeliveryItem' }
     DeliveryItem:
       type: object
-      required: [id, reviewId, packId, opportunityId, opportunityRevision, sourceSha256, profileRevision, packContentSha256, routeId, routeRevision, routeSha256, title, companyName, routeExcerpt, recipient, sender, subject, body, attachmentSha256, mimeSha256, messageId, state, current]
+      required:
+        [
+          id,
+          reviewId,
+          packId,
+          opportunityId,
+          opportunityRevision,
+          sourceSha256,
+          profileRevision,
+          packContentSha256,
+          routeId,
+          routeRevision,
+          routeSha256,
+          title,
+          companyName,
+          routeExcerpt,
+          recipient,
+          sender,
+          subject,
+          body,
+          attachmentSha256,
+          mimeSha256,
+          messageId,
+          state,
+          current,
+        ]
       properties:
         id: { type: string }
         reviewId: { type: string }
@@ -1464,7 +1775,11 @@ components:
       required: [requestKey, targetKind, targetId, expectedRevision]
       properties:
         requestKey: { type: string, minLength: 1, maxLength: 200 }
-        targetKind: { type: string, enum: [campaign, profile, opportunity, evidence, relationship, application_pack] }
+        targetKind:
+          {
+            type: string,
+            enum: [campaign, profile, opportunity, evidence, relationship, application_pack],
+          }
         targetId: { type: string, minLength: 1 }
         expectedRevision: { type: integer, format: int64, minimum: 1 }
         text: { type: string, minLength: 1, maxLength: 20000 }
@@ -1618,7 +1933,11 @@ components:
       required: [requestKey, targetKind, targetId, expectedRevision, text]
       properties:
         requestKey: { type: string, minLength: 1, maxLength: 200 }
-        targetKind: { type: string, enum: [campaign, profile, opportunity, evidence, relationship, application_pack] }
+        targetKind:
+          {
+            type: string,
+            enum: [campaign, profile, opportunity, evidence, relationship, application_pack],
+          }
         targetId: { type: string }
         expectedRevision: { type: integer, format: int64, minimum: 1 }
         roundId: { type: string }
