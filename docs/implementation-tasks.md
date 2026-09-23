@@ -2,7 +2,7 @@
 
 Updated 24 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. Current ownership, reviewed checkpoints and remaining acceptance are recorded below; historical test passes do not establish completion of the evolving worktree.
 
-**Current position: 5 tasks accepted, 15 partial, 2 active tasks, 5 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20, I24–I26. I21 and I22 are active. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 17 partial, 5 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20–I22, I24–I26. I24 and I25 backend slices are active. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -30,12 +30,10 @@ Dependencies in the task index gate **full integration and acceptance**. They do
 
 | Task | Model / reasoning | Owned work |
 | --- | --- | --- |
-| I10 next-action recommendation | Sol High | Charged Jev advice during commissioned discovery, persisted report/replay, and a new read-only HTTP currentness helper. I21 alone applies the existing GET handler call; no schema or web edits. |
-| I11 saved recommendation UI | Sol Medium | Consume saved advice and the server currentness verdict, navigate exact targets, move technical evidence into details, and preserve the root-tested delivery controls; web/smoke only. |
-| I21 exact approval/delivery | Sol High | Delivery service/store/API, initial schema, operation registry, HTTP/contracts and startup composition; no discovery engine or web edits. |
-| I22 delivery review | Astra High | Review complete: one P1 and two P2 findings; bounded recheck follows source-binding, local recovery and HTTP response corrections. |
-| I24 interview backend | Sol High | Isolated checkout /private/tmp/find-income-i24-backend at b4f1080; commissioned runtime/store/API integration; no main or web edits. |
-| I10 context-budget evaluation | Sol Medium | Completed: two HTTP200 calls,4645 reported tokens; both valid abstentions exceeded1200. Core owns the bounded cap correction. |
+| I24 interview backend | Sol High | Isolated checkout `/private/tmp/find-income-i24-backend` at b4f1080; commissioned runtime/store/API integration; no main or web edits. |
+| I25 offer backend | Sol High | Isolated checkout `/private/tmp/find-income-i25-backend` at f1533a8; complete supplied offer extraction, exact comparison, charged Jev tradeoff and persistence/API; no main or web edits. |
+
+The main backend checkpoint is **d9679af**, and the web checkpoint is **235441d**. The coordinator ran the full Go suite, both generated-contract checks, web lint/TypeScript and production-build Chromium smoke. Independent I22 recheck closed all three delivery findings; all13 reviewed file hashes matched before commit. Root reproduced and rechecked the omitted preexisting dismissal defect. Saved recommendations are now recoverable in a fresh browser through a pure latest-completed read. These are local/synthetic checks, not live recruitment acceptance. Core, web and reviewer tasks are idle until a concrete next handoff; the two isolated integration tasks remain active.
 
 Core corrections committed7310026 after independent review, final retry/import fixes and root focused tests. Immutable pack-correction preparation committed1c8417f; contextual input and shared pack transaction integration committed2279c3f after independent correction review, full Go suite and race-enabled recovery tests. Native research and synthetic Linux evidence are complete; three fresh Jev consultations advised the profile direction with material confidence variation, recorded in [native-tool-boundary.md](native-tool-boundary.md). Native correction committeda22afa7 after root runtime tests and saved-rollout parser verification; the runtime worker is idle until a concrete next slice or selected-host input is available. Contextual-input UI is committed12b138d after root lint/TypeScript and production-build browser checks; real runtime acceptance remains open. The web writer has passed root synthetic delivery checks and is integrating the saved home recommendation; interview helpers are committed7299c54 after root review/tests, and the I25 offer helpers are reviewed and committed in de84e23; both domain slices still need commissioned persistence/UI integration. Four live workers maximum.
 
@@ -130,8 +128,8 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 | I18 | Add lightweight recruiter, referral and contact records | Partial | I15 | GPT-6 Sol / Medium |
 | I19 | Connect bounded read-only correspondence | Not started | I12, I18 | GPT-6 Sol / Medium |
 | I20 | Implement one supported application delivery route | Partial | I12, I15 | GPT-6 Sol / High |
-| I21 | Bind exact approval to bounded delivery | In progress | I15, I20 | GPT-6 Sol / High |
-| I22 | Review delivery authority and verify a controlled send | In progress | I21 | GPT-6 Astra / High |
+| I21 | Bind exact approval to bounded delivery | Partial | I15, I20 | GPT-6 Sol / High |
+| I22 | Review delivery authority and verify a controlled send | Partial | I21 | GPT-6 Astra / High |
 | I23 | Process replies and prepare follow-ups | Not started | I09, I19 | GPT-6 Sol / Medium |
 | I24 | Prepare interviews from actual context | Partial | I15, I18 | GPT-6 Sol / Medium |
 | I25 | Compare real offer terms without invented certainty | Partial | I01, I09, I18 | GPT-6 Sol / Medium |
@@ -271,7 +269,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I05, I07, I08, I09.
 
-**Remaining work:** Integrate persisted cross-outcome agency recommendations during commissioned work and verify real useful discovery. Neutral lead choice, multiple saved-source continuation, recovery and measured token-cap correction are committedcd2f9ab; two real budget-check responses abstained.
+**Remaining work:** Verify real useful discovery and recommendation quality. Persisted Jev advice, exact saved evidence/replay, owner-decision attribution and read-only currentness/latest completed retrieval are committed d9679af; synthetic proof does not establish real usefulness.
 
 **Task scope:** Integrate durable assessments and bounded candidate selection with the controller and acquisition services. Include organisation, factual scope, lead/research priority and next useful implemented outcome. Persist full request/response, versions, options, source support and usage; treat facts and require/avoid/prefer policy separately.
 
@@ -285,7 +283,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I05, I06.
 
-**Remaining work:** Verify the actual authenticated runtime journey for contextual input and corrected packs. Core2279c3f and UI12b138d implement commissioning, explicit paused replacement, exact replay and production results; synthetic fixtures do not establish live acceptance. Finish the persisted Jev cross-outcome home recommendation among implemented actions, with technical ceilings in expandable details; current home offers static discovery and discovery next-outcome only chooses retained postings or finishes.
+**Remaining work:** Verify the actual authenticated runtime journey. Contextual UI12b138d and recommendation/delivery UI235441d pass root synthetic browser checks, including fresh-browser recovery and exact action navigation; real runtime acceptance remains open.
 
 **Task scope:** Reuse contextual-recovery work. Build the known-answer brief, named Start/Stop/Resume, partial sourced cards, preserved selection and one context-bound instruction/URL/full-text input against stable DTOs. Remove manual source/preference/record forms and inactive navigation. Use stored recommendations supplied by I10 when integrated.
 
@@ -406,7 +404,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I12, I15.
 
-**Remaining work:** Finish reviewed I21 integration and verify a real sender account. The implemented adapter truthfully reports receipt lookup unsupported; controlled live delivery needs exact owner authorization and I22 evidence. The send endpoint is implemented but unaccepted pending corrections.
+**Remaining work:** Verify a real sender account and exact authorized controlled delivery. Reviewed approval/intent/recovery integration is committed d9679af; SMTP receipt lookup remains explicitly unsupported.
 
 **Task scope:** Implement a verified employer-accepted email or supported candidate-portal route with exact required fields/attachments, bounded tool actions and read-only receipt lookup. Portal delivery must not wait for an email adapter. Exercise fake destination paths before real external action.
 
@@ -418,9 +416,9 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 ### I21 — Bind exact approval to bounded delivery
 
-- [ ] **In progress** · GPT-6 Sol / High · Dependencies: I15, I20.
+- [ ] **Partial** · GPT-6 Sol / High · Dependencies: I15, I20.
 
-**Remaining work:** Correct the three I22 findings: substantive pack/source binding before review, local captured-Jev reconciliation through production Resume without extra charge, and nested HTTP Round serialization. Then freeze for bounded recheck and commit the reviewed backend/contracts/UI; live acceptance remains open.
+**Remaining work:** Complete selected-host/account and exact owner-authorized live delivery acceptance. Backend d9679af and UI235441d are reviewed/committed; synthetic send/replay/Stop evidence does not prove employer delivery.
 
 **Task scope:** Implement one-item and small exact-batch review, immutable approved material/destination, send intent, preflight substantive route checks, per-item outcomes and reconciliation under remaining allowance. New material invalidates affected approval; cosmetic changes alone do not.
 
@@ -430,9 +428,9 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 ### I22 — Review delivery authority and verify a controlled send
 
-- [ ] **In progress** · GPT-6 Astra / High · Dependencies: I21.
+- [ ] **Partial** · GPT-6 Astra / High · Dependencies: I21.
 
-**Remaining work:** Recheck the three corrected findings against production coordinator and HTTP regressions, then validate a specifically authorized controlled live send. Saved independent reproductions establish defects, not delivery acceptance.
+**Remaining work:** Validate a specifically owner-authorized controlled live send and its actual outcome. Independent bounded code recheck is complete, all three findings resolved; no live account or employer action has occurred.
 
 **Task scope:** Review the exact send/approval/reconciliation diff independently, using requirements and raw evidence without earlier verdicts. Verify only a specifically approved controlled destination or actual reviewed batch; no employer outreach follows merely from this task’s existence.
 
@@ -468,7 +466,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I01, I09, I18.
 
-**Remaining work:** Domain helpers committedde84e23 after root review and passing offercomparison/jev tests. Integrate commissioned extraction, bounded Jev capture/charging, immutable persistence/UI and separate actual offer quality cases; preserve unknowns and unsupported numeric terms.
+**Remaining work:** Finish commissioned offer backend in /private/tmp/find-income-i25-backend at f1533a8, review and integrate its isolated commit, then add concise contextual UI and actual offer-case evaluation. Domain helpers alone are not full I25 acceptance.
 
 **Task scope:** Implement sourced offer intake/comparison, Go exact comparable amounts and Jev qualitative tradeoffs with separate real-case evaluation. Accept complete supplied offers as well as later inbox-derived evidence; no inbox dependency.
 

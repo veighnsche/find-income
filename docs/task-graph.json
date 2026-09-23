@@ -188,11 +188,11 @@
       "status": "partial",
       "thread_id": "01a0cf13-2c03-73f2-b074-6c73d7120ebe",
       "host_id": "local",
-      "active_slice": "Persisted cross-outcome recommendation during commissioned discovery, existing round report only",
+      "active_slice": "Recommendation backend committed d9679af; real usefulness pending",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
       "review": "Committed 2fdfe7d: recorded choices, guarded current screening/organisation projection and pack relevance; responsibility evaluation has ten complete cases.",
-      "remaining_work": "Integrate persisted cross-outcome agency recommendations during commissioned work and verify real useful discovery. Neutral lead choice, multiple saved-source continuation, recovery and measured token-cap correction are committedcd2f9ab; two real budget-check responses abstained."
+      "remaining_work": "Verify real useful discovery and recommendation quality. Persisted Jev advice, exact saved evidence/replay, owner-decision attribution and read-only currentness/latest completed retrieval are committed d9679af; synthetic proof does not establish real usefulness."
     },
     {
       "id": "I11",
@@ -210,11 +210,11 @@
       "status": "partial",
       "thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
       "host_id": "local",
-      "active_slice": "Reviewed and committed12b138d; available for I21 web handoff",
+      "active_slice": "Recommendation and delivery UI committed235441d; worker idle pending next stable domain DTO",
       "active_model": "gpt-6-sol",
       "active_effort": "medium",
       "review": "Core2279c3f independently reviewed with full Go/race checks. UI12b138d root-reviewed with passing lint/TypeScript and production-build Chromium fixture; actual input/pack reports, exact retry, draft persistence and automatic corrected-pack refresh covered.",
-      "remaining_work": "Verify the actual authenticated runtime journey for contextual input and corrected packs. Core2279c3f and UI12b138d implement commissioning, explicit paused replacement, exact replay and production results; synthetic fixtures do not establish live acceptance. Finish the persisted Jev cross-outcome home recommendation among implemented actions, with technical ceilings in expandable details; current home offers static discovery and discovery next-outcome only chooses retained postings or finishes."
+      "remaining_work": "Verify the actual authenticated runtime journey. Contextual UI12b138d and recommendation/delivery UI235441d pass root synthetic browser checks, including fresh-browser recovery and exact action navigation; real runtime acceptance remains open."
     },
     {
       "id": "I12",
@@ -397,7 +397,7 @@
       "acceptance": "Route requirements, login/challenge/attestation stops and supported/unsupported states are truthful. Public ATS GET access is not treated as submission permission. Unsupported routes may offer optional prepared handoff, never a claimed send.",
       "selection_reason": "Browser/provider side effects and uncertain outcomes require Sol High.",
       "status": "partial",
-      "remaining_work": "Finish reviewed I21 integration and verify a real sender account. The implemented adapter truthfully reports receipt lookup unsupported; controlled live delivery needs exact owner authorization and I22 evidence. The send endpoint is implemented but unaccepted pending corrections.",
+      "remaining_work": "Verify a real sender account and exact authorized controlled delivery. Reviewed approval/intent/recovery integration is committed d9679af; SMTP receipt lookup remains explicitly unsupported.",
       "active_slice": "I20-B reviewed and committed; worker idle",
       "review": "Committed5c3306b: immutable UTF-8 MIME, verified implicit-TLS SMTP and explicit negative/accepted/uncertain outcomes. Root synthetic protocol tests pass, including unexpected positive DATA reply remaining uncertain.",
       "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
@@ -418,16 +418,17 @@
       "scope": "Implement one-item and small exact-batch review, immutable approved material/destination, send intent, preflight substantive route checks, per-item outcomes and reconciliation under remaining allowance. New material invalidates affected approval; cosmetic changes alone do not.",
       "acceptance": "Fake boundary tests cover stale approval, altered attachments, double clicks, timeout-after-send, restart and no blind retry. Preparation never sends; receipt/verified evidence alone establishes sent. Unknown outcome offers explicit delivery checking without replenishing budget.",
       "selection_reason": "Authority plus external side effects spans storage, UI and adapters; use Sol High and a bounded independent review.",
-      "status": "in_progress",
-      "remaining_work": "Correct the three I22 findings: substantive pack/source binding before review, local captured-Jev reconciliation through production Resume without extra charge, and nested HTTP Round serialization. Then freeze for bounded recheck and commit the reviewed backend/contracts/UI; live acceptance remains open.",
+      "status": "partial",
+      "remaining_work": "Complete selected-host/account and exact owner-authorized live delivery acceptance. Backend d9679af and UI235441d are reviewed/committed; synthetic send/replay/Stop evidence does not prove employer delivery.",
       "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
       "host_id": "local",
-      "active_slice": "Correct immutable pack source binding, local captured-Jev Resume and HTTP send Round model",
+      "active_slice": "Reviewed delivery backend and UI committed; live acceptance pending",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
       "web_thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
       "web_model": "gpt-6-sol",
-      "web_effort": "high"
+      "web_effort": "high",
+      "review": "Independent I22 recheck closed all three findings with role-content matrix, production Lazy/Resume capture recovery and successful authenticated HTTP send/replay. Root full Go suite and generated checks passed; root Chromium delivery UI passed."
     },
     {
       "id": "I22",
@@ -441,14 +442,14 @@
       "scope": "Review the exact send/approval/reconciliation diff independently, using requirements and raw evidence without earlier verdicts. Verify only a specifically approved controlled destination or actual reviewed batch; no employer outreach follows merely from this task\u2019s existence.",
       "acceptance": "No stale or unapproved material is sent and uncertain outcomes cannot duplicate submission on retry/restart. Coordinator verifies corrections and actual receipt evidence; if no destination is authorised, code review may finish but live delivery acceptance remains pending.",
       "selection_reason": "Astra High is reserved for this second concentrated external-action authority review, not routine message drafting.",
-      "status": "in_progress",
-      "remaining_work": "Recheck the three corrected findings against production coordinator and HTTP regressions, then validate a specifically authorized controlled live send. Saved independent reproductions establish defects, not delivery acceptance.",
+      "status": "partial",
+      "remaining_work": "Validate a specifically owner-authorized controlled live send and its actual outcome. Independent bounded code recheck is complete, all three findings resolved; no live account or employer action has occurred.",
       "thread_id": "01a0ce8e-4c6e-7c93-b63c-1084063ba7c0",
       "host_id": "local",
-      "active_slice": "Review complete with1 P1 and2 P2 findings; scoped corrections assigned",
+      "active_slice": "Independent three-finding recheck complete; controlled live acceptance pending",
       "active_model": "gpt-6-astra",
       "active_effort": "high",
-      "review": "Executed service and production-coordinator overlays reproduced stale pre-review pack acceptance and captured-Jev Resume failure; HTTP Send nested Round serialization mismatch also reproduced. No live send; delivery not accepted."
+      "review": "All three findings resolved on frozen I21 implementation. Independent role/currentness and captured-response matrices plus successful HTTP first-send/replay passed; root verified all13 reviewed hashes unchanged before d9679af."
     },
     {
       "id": "I23",
@@ -506,13 +507,16 @@
       "acceptance": "Unknown/incompatible pay, hours, benefits, arrangements and project economics remain explicit; no hiring probability or silent acceptance/rejection. The owner can understand consequential differences and authorise any later action separately.",
       "selection_reason": "Sol Medium can implement defined comparison rules; escalate a specific unresolved economic/semantic policy rather than inventing one.",
       "status": "partial",
-      "remaining_work": "Integrate commissioned complete-offer extraction, bounded Jev capture/charging, immutable persistence/UI and separately reviewed actual offer cases. Domain helpers are not full I25 acceptance.",
-      "active_slice": "I25 domain reviewed and committed; integration pending",
+      "remaining_work": "Finish commissioned offer backend in /private/tmp/find-income-i25-backend at f1533a8, review and integrate its isolated commit, then add concise contextual UI and actual offer-case evaluation. Domain helpers alone are not full I25 acceptance.",
+      "active_slice": "Commissioned offer backend integration in isolated checkout; UI follows stable DTO",
       "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
       "host_id": "local",
       "active_model": "gpt-6-sol",
-      "active_effort": "medium",
-      "review": "Committedde84e23: Root reviewed exact pay/range calculations, unsupported-currency preservation and recomputed Jev input/result binding; offercomparison/jev tests passed."
+      "active_effort": "high",
+      "review": "Committedde84e23: Root reviewed exact pay/range calculations, unsupported-currency preservation and recomputed Jev input/result binding; offercomparison/jev tests passed.",
+      "worktree": "/private/tmp/find-income-i25-backend",
+      "worktree_base": "f1533a8",
+      "active_selection_reason": "Coupled runtime, finite authority, persistence and exact sourced comparison integration; separate physical checkout avoids I24/main shared-path writers."
     },
     {
       "id": "I26",
