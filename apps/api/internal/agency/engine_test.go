@@ -60,12 +60,27 @@ func (r *savingRuntime) ExecuteRoundTurn(ctx context.Context, agent store.Actor,
 		return turn, err
 	}
 	var evidence struct {
-		SourceOpeningID   string `json:"sourceOpeningId"`
-		ExistingCompanyID string `json:"existingCompanyId"`
-		ExpectedRevision  int64  `json:"expectedRevision"`
+		SourceOpeningID    string `json:"sourceOpeningId"`
+		ExistingCompanyID  string `json:"existingCompanyId"`
+		ExpectedRevision   int64  `json:"expectedRevision"`
+		BoardCompanyName   string `json:"boardCompanyName"`
+		OfficialCareersURL string `json:"officialCareersUrl"`
 	}
 	if err := json.Unmarshal([]byte(input.Evidence), &evidence); err != nil {
 		return turn, err
+	}
+	if evidence.ExistingCompanyID == "" {
+		profile, profileErr := r.db.CurrentPreferences(ctx)
+		if profileErr != nil {
+			return turn, profileErr
+		}
+		company, _, createErr := r.db.ApplyRoundMutation(ctx, agent, roundID, store.RoundMutationInput{RequestKey: "company:" + evidence.SourceOpeningID,
+			Operation: store.RoundCreateCompany, ResourceID: "campaign:active", ExpectedRevision: profile.Version, Capability: capability,
+			Company: &store.CompanyInput{Name: evidence.BoardCompanyName, Website: evidence.OfficialCareersURL}})
+		if createErr != nil {
+			return turn, createErr
+		}
+		evidence.ExistingCompanyID, evidence.ExpectedRevision = company.EntityID, company.Revision
 	}
 	_, _, err = r.db.ApplyRoundMutation(ctx, agent, roundID, store.RoundMutationInput{RequestKey: "save:" + evidence.SourceOpeningID, Operation: store.RoundSaveSourceOpportunity,
 		ResourceID: "source-opening:" + evidence.SourceOpeningID, ExpectedRevision: evidence.ExpectedRevision, Capability: capability,

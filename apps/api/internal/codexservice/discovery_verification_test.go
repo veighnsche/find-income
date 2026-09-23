@@ -74,6 +74,14 @@ func TestDiscoveredOfficialLinkRegistersAndCollects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	r, err = db.Round(ctx, r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pin, _ := json.Marshal(map[string]any{"research": map[string]any{"criterion": map[string]any{"label": "platform"}, "page": 1}, "selectedDiscovery": map[string]any{"candidateId": stage.CandidateID, "sourceAttemptId": search.AttemptID, "verificationRequestKey": "verify-selected"}})
+	if _, err := db.SaveRoundProgress(ctx, owner, r.ID, r.Revision, store.RoundProgress{Step: "discovery_lead_selected", Cursor: pin, Unresolved: r.Unresolved, Report: r.Report}); err != nil {
+		t.Fatal(err)
+	}
 	detail, err := reader.Read(ctx, discovery.Input{RoundID: r.ID, Capability: capability, RequestKey: "company-detail", ResourceID: "discovery:himalayas", Method: "get_company_details", CompanySlug: "newco"})
 	if err != nil {
 		t.Fatal(err)
@@ -104,6 +112,15 @@ func TestDiscoveredOfficialLinkRegistersAndCollects(t *testing.T) {
 			return SourceLinksSnapshot{}, errors.New("unexpected URL")
 		}
 	}}
+	if err := svc.checkDiscoveryToolPhase(ctx, r.ID, "search_jobs", "platform", "", 1, "", ""); !errors.Is(err, store.ErrFenced) {
+		t.Fatalf("selected lead still allowed unrelated search: %v", err)
+	}
+	if err := svc.checkDiscoveryToolPhase(ctx, r.ID, "get_company_details", "", "", 0, "newco", ""); err != nil {
+		t.Fatalf("selected company detail fenced: %v", err)
+	}
+	if err := svc.checkDiscoveryToolPhase(ctx, r.ID, "get_company_details", "", "", 0, "otherco", ""); !errors.Is(err, store.ErrFenced) {
+		t.Fatalf("unselected company detail allowed: %v", err)
+	}
 	if _, err := svc.RoundDiscoveryOfficialLinks(ctx, DiscoveryOfficialLinksArgs{RoundID: r.ID, Capability: capability, RequestKey: "wrong-detail", CandidateID: stage.CandidateID, CompanyDetailAttemptID: otherDetail.AttemptID}); !errors.Is(err, store.ErrFenced) || officialCalls != 0 {
 		t.Fatalf("wrong company provenance %v calls=%d", err, officialCalls)
 	}

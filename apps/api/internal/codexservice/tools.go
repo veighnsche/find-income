@@ -90,6 +90,9 @@ func (s *Service) newBridge() http.Handler {
 }
 
 func (s *Service) sourceDiscoveryTool(ctx context.Context, args sourceDiscoveryArgs) (map[string]any, error) {
+	if err := s.checkDiscoveryToolPhase(ctx, args.RoundID, args.Method, args.Keyword, args.Country, args.Page, args.CompanySlug, args.JobSlug); err != nil {
+		return nil, err
+	}
 	reader := &discovery.Reader{Store: s.db}
 	page, err := reader.Read(ctx, discovery.Input{RoundID: args.RoundID, Capability: args.Capability, RequestKey: args.RequestKey, ResourceID: "discovery:himalayas", Method: args.Method, Keyword: args.Keyword, Country: args.Country, Page: args.Page, CompanySlug: args.CompanySlug, JobSlug: args.JobSlug})
 	if err != nil {
@@ -99,6 +102,9 @@ func (s *Service) sourceDiscoveryTool(ctx context.Context, args sourceDiscoveryA
 }
 
 func (s *Service) discoveryCandidateTool(ctx context.Context, args discoveryCandidateArgs) (map[string]any, error) {
+	if err := s.checkDiscoveryStagePhase(ctx, args.RoundID); err != nil {
+		return nil, err
+	}
 	result, err := s.db.StageDiscoveryCandidate(ctx, store.DiscoveryStageInput{RoundID: args.RoundID, Capability: args.Capability, RequestKey: args.RequestKey, Candidate: store.DiscoveryCandidate{AttemptID: args.SourceAttemptID, Kind: args.Kind, Title: args.Title, URL: args.URL, CompanyURL: args.CompanyURL, EvidenceQuote: args.EvidenceQuote}})
 	if err != nil {
 		return nil, err

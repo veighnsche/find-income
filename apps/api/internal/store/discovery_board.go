@@ -175,7 +175,8 @@ func (s *Store) RegisterDiscoveryBoard(ctx context.Context, in DiscoveryBoardInp
 	if err != nil {
 		return out, err
 	}
-	if !scopeAllowsActor(r.Scope, authority.Actor) || !scopeAllows(r.Scope, RoundRegisterDiscoveryBoard, "discovery:himalayas") {
+	if !scopeAllowsActor(r.Scope, authority.Actor) || !scopeAllows(r.Scope, RoundRegisterDiscoveryBoard, "discovery:himalayas") ||
+		!selectedDiscoveryCandidate(r, in.CandidateID) {
 		return out, ErrFenced
 	}
 	if r.Actor != initialRound.Actor {

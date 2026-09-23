@@ -47,6 +47,10 @@ func TestSelectDecisionUsesSuppliedContextAndRetainsOutput(t *testing.T) {
 	if err := json.Unmarshal(got.RequestSnapshot, &snapshot); err != nil || len(snapshot["questions"]) == 0 || len(snapshot["state"]) == 0 {
 		t.Fatalf("request snapshot malformed: %s %v", got.RequestSnapshot, err)
 	}
+	preflight, err := DecisionLogicalRequest(input)
+	if err != nil || !reflect.DeepEqual(preflight, []byte(got.RequestSnapshot)) {
+		t.Fatalf("decision preflight differs from dispatched logical request: %v", err)
+	}
 	input.Candidates[0], input.Candidates[1] = input.Candidates[1], input.Candidates[0]
 	input.Capabilities[0], input.Capabilities[1] = input.Capabilities[1], input.Capabilities[0]
 	reordered, err := SelectDecision(context.Background(), fake, input)

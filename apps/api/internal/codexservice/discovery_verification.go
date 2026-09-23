@@ -62,6 +62,9 @@ func (s *Service) RoundDiscoveryOfficialLinks(ctx context.Context, args Discover
 	if err != nil {
 		return DiscoveryOfficialSnapshot{}, err
 	}
+	if err := s.db.CheckSelectedDiscoveryCandidate(ctx, args.RoundID, args.CandidateID); err != nil {
+		return DiscoveryOfficialSnapshot{}, err
+	}
 	claim, err := s.db.DiscoveryCompanyClaim(ctx, args.CandidateID, args.CompanyDetailAttemptID, round.Actor.ID)
 	if err != nil {
 		return DiscoveryOfficialSnapshot{}, err
