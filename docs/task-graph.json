@@ -83,8 +83,8 @@
       "thread_id": "01a0cf13-2c03-73f2-b074-6c73d7120ebe",
       "host_id": "local",
       "review": "Committed 2fdfe7d: commissioned discovery/prepare work loops and shared authority/contracts; root full API suite and generated check pass.",
-      "remaining_work": "Fix I13 expired-round slot, production Lever continuation and prepare context scope findings; then pack contextual correction and live integration acceptance. Then implement the missing production contextual-input processing boundary recorded in I11-input-orchestration-gap.md.",
-      "active_slice": "I13-C core corrections",
+      "remaining_work": "Finish commissioned contextual input, effective profile revision, explicit paused replacement and atomic selected-pack correction; review integration and live acceptance. Core I13 expiry/continuation/context findings were corrected in7310026.",
+      "active_slice": "I05/I11 contextual input integration",
       "active_model": "gpt-6-sol",
       "active_effort": "high"
     },
@@ -465,13 +465,14 @@
       "scope": "Implement one-interview preparation using employer/context evidence and truthful examples, plus contextual debrief capture. Accept owner-supplied complete interview context without requiring inbox or calendar integration.",
       "acceptance": "One commission returns a useful brief/questions with evidence and unknowns. New schedule messages/bookings remain proposals until the supported exact-approval path is available. No invented experience or automatic booking.",
       "selection_reason": "Existing evidence and known outcome boundaries fit Sol Medium.",
-      "status": "in_progress",
-      "remaining_work": "Implement the independent sourced preparation/debrief and Jev-focus helpers, then integrate commissioned Codex execution, persistence/UI and separately reviewed quality cases. No interview acceptance yet.",
-      "active_slice": "I24 interview domain and Jev focus",
+      "status": "partial",
+      "remaining_work": "Integrate commissioned Codex execution, bounded Jev capture/charging, immutable persistence and concise UI; separately review real quality cases. Domain helpers alone are not interview acceptance.",
+      "active_slice": "I24 domain committed7299c54; integration pending",
       "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
       "host_id": "local",
       "active_model": "gpt-6-sol",
-      "active_effort": "medium"
+      "active_effort": "medium",
+      "review": "Root reviewed sourced interview/debrief and Jev focus helpers; focused interviewprep/jev tests passed at7299c54."
     },
     {
       "id": "I25",
@@ -487,8 +488,13 @@
       "scope": "Implement sourced offer intake/comparison, Go exact comparable amounts and Jev qualitative tradeoffs with separate real-case evaluation. Accept complete supplied offers as well as later inbox-derived evidence; no inbox dependency.",
       "acceptance": "Unknown/incompatible pay, hours, benefits, arrangements and project economics remain explicit; no hiring probability or silent acceptance/rejection. The owner can understand consequential differences and authorise any later action separately.",
       "selection_reason": "Sol Medium can implement defined comparison rules; escalate a specific unresolved economic/semantic policy rather than inventing one.",
-      "status": "waiting",
-      "remaining_work": "Implement sourced offer comparison, exact comparable arithmetic and Jev qualitative tradeoffs, preserving unknowns."
+      "status": "in_progress",
+      "remaining_work": "Implement sourced offer comparison, exact comparable arithmetic and Jev qualitative tradeoffs, preserving unknowns.",
+      "active_slice": "I25 independent offer comparison domain",
+      "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
+      "host_id": "local",
+      "active_model": "gpt-6-sol",
+      "active_effort": "medium"
     },
     {
       "id": "I26",
@@ -564,7 +570,7 @@
   ],
   "max_concurrent_live_workers": 4,
   "dispatch_status": "active_goal_four_live_workers",
-  "code_checkpoint": "5147633",
+  "code_checkpoint": "7299c54",
   "goal_status": "active",
   "goal_objective": "Complete all I01\u2013I27 task acceptance using concurrent live tasks, reviewed coherent commits and actual live acceptance where required."
 }
