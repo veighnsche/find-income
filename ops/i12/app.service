@@ -1,0 +1,27 @@
+[Unit]
+Description=Private Jobseek API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jobseek-api
+Group=jobseek-api
+EnvironmentFile=/etc/jobseek/api.env
+WorkingDirectory=/var/lib/jobseek
+ExecStart=/opt/jobseek/bin/jobseek-api
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/jobseek
+StateDirectory=jobseek
+StateDirectoryMode=0700
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+# Replace PRIVATE_APP_FQDN and PRIVATE_APP_IP with the selected private DNS/IP.
+# Firewall permits only the owner's private access and the dedicated runner VM.
+https://PRIVATE_APP_FQDN {
+    bind PRIVATE_APP_IP
+    tls /etc/jobseek/tls/fullchain.pem /etc/jobseek/tls/key.pem
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8080
+    }
+    handle {
+        root * /opt/jobseek/web
+        try_files {path} /index.html
+        file_server
+    }
+}

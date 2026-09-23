@@ -1,0 +1,13 @@
+# Install as root-owned /etc/jobseek/runner-config.toml, group jobseek-runner,
+# mode 0640. Bind it read-only onto CODEX_HOME/config.toml in the transient unit.
+forced_login_method = "chatgpt"
+cli_auth_credentials_store = "file"
+approvals_reviewer = "user"
+
+[mcp_servers.jobseek]
+url = "https://PRIVATE_APP_FQDN/api/v1/codex/mcp"
+required = true
+enabled_tools = ["round_context", "round_mutation", "round_evidence_correction", "source_links", "source_discovery", "discovery_candidate_stage"]
+
+[mcp_servers.jobseek.http_headers]
+Authorization = "Bearer REPLACE_FROM_SECRET_STORE"

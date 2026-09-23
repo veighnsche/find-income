@@ -1,0 +1,2 @@
+# Replace the key and app private IP only on the runner VM. sshd must enable StrictModes.
+from="APP_PRIVATE_IP",command="/usr/local/libexec/jobseek-runner-launch",restrict ssh-ed25519 REPLACE_WITH_APP_PUBLIC_KEY jobseek-app
