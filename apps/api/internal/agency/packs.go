@@ -245,12 +245,13 @@ func (e *Engine) loadPackCorrection(ctx context.Context, round store.Round, targ
 }
 
 type packReport struct {
-	Code             string               `json:"code"`
-	OpportunityID    string               `json:"opportunityId,omitempty"`
-	PackID           string               `json:"packId,omitempty"`
-	Version          int64                `json:"version,omitempty"`
-	MaterialUnknowns []string             `json:"materialUnknowns,omitempty"`
-	Remaining        store.RoundAllowance `json:"remaining"`
+	Code                string               `json:"code"`
+	OpportunityID       string               `json:"opportunityId,omitempty"`
+	PackID              string               `json:"packId,omitempty"`
+	Version             int64                `json:"version,omitempty"`
+	DeliveryRouteStatus string               `json:"deliveryRouteStatus,omitempty"`
+	MaterialUnknowns    []string             `json:"materialUnknowns,omitempty"`
+	Remaining           store.RoundAllowance `json:"remaining"`
 }
 
 func (e *Engine) finishPrepare(ctx context.Context, initial store.Round, detail packReport, partial bool) {
@@ -308,7 +309,7 @@ func (e *Engine) runPrepareWithCorrection(ctx context.Context, initial store.Rou
 	}
 	if target == nil {
 		if found := e.findPackForRound(ctx, r.ID, opportunityID, opportunity.Revision, nil); found.PackID != "" {
-			detail = found
+			detail = e.completeSavedPackRoute(ctx, r.ID, found)
 			partial = false
 			return
 		}
@@ -336,7 +337,7 @@ func (e *Engine) runPrepareWithCorrection(ctx context.Context, initial store.Rou
 			return
 		}
 		if found := e.findPackForRound(ctx, r.ID, opportunityID, opportunity.Revision, correction); found.PackID != "" {
-			detail = found
+			detail = e.completeSavedPackRoute(ctx, r.ID, found)
 			partial = false
 			return
 		}
@@ -379,11 +380,29 @@ func (e *Engine) runPrepareWithCorrection(ctx context.Context, initial store.Rou
 		return
 	}
 	if found := e.findPackForRound(ctx, r.ID, opportunityID, opportunity.Revision, correction); found.PackID != "" {
-		detail = found
+		detail = e.completeSavedPackRoute(ctx, r.ID, found)
 		partial = false
 		return
 	}
 	detail.Code = "pack_not_prepared"
+}
+
+type packRouteCompleter interface {
+	CompletePackDeliveryRoute(context.Context, string, string) (string, error)
+}
+
+func (e *Engine) completeSavedPackRoute(ctx context.Context, roundID string, report packReport) packReport {
+	completer, ok := e.Runtime.(packRouteCompleter)
+	if !ok {
+		return report
+	}
+	status, err := completer.CompletePackDeliveryRoute(ctx, roundID, report.PackID)
+	if err != nil {
+		report.DeliveryRouteStatus = "route_assessment_unavailable"
+	} else {
+		report.DeliveryRouteStatus = status
+	}
+	return report
 }
 
 func (e *Engine) requireSelectedPackOpportunity(ctx context.Context, opportunity store.Opportunity) error {

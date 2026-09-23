@@ -24,6 +24,8 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
 	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/collector"
+	"github.com/veighnsche/find-income-dashboard/api/internal/delivery"
+	"github.com/veighnsche/find-income-dashboard/api/internal/deliveryservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevservice"
@@ -94,6 +96,18 @@ func runWithContext(ctx context.Context, args []string) error {
 	worker := &agency.Engine{Store: database, Runtime: runtime, Decisions: decisions, Collector: &collector.Collector{}, PackSources: packSources, Context: ctx}
 	options.Codex = runtime
 	options.Rounds = &rounds.Service{Store: database, Readiness: worker, Canceller: runtime, Reconciler: runtime, Worker: worker}
+	options.Delivery = &deliveryservice.Service{Store: database, From: os.Getenv("JOBSEEK_SMTP_FROM")}
+	if address := os.Getenv("JOBSEEK_SMTP_ADDRESS"); address != "" && os.Getenv("JOBSEEK_SMTP_FROM") != "" &&
+		os.Getenv("JOBSEEK_SMTP_SERVER_NAME") != "" && os.Getenv("JOBSEEK_SMTP_HELLO_NAME") != "" &&
+		os.Getenv("JOBSEEK_SMTP_USERNAME") != "" && os.Getenv("JOBSEEK_SMTP_PASSWORD") != "" {
+		sender, err := delivery.NewSMTP(delivery.SMTPConfig{Address: address, ServerName: os.Getenv("JOBSEEK_SMTP_SERVER_NAME"),
+			HelloName: os.Getenv("JOBSEEK_SMTP_HELLO_NAME"), Username: os.Getenv("JOBSEEK_SMTP_USERNAME"),
+			Password: os.Getenv("JOBSEEK_SMTP_PASSWORD"), Timeout: 45 * time.Second})
+		if err != nil {
+			return fmt.Errorf("configure delivery sender: %w", err)
+		}
+		options.Delivery.Sender = sender
+	}
 	server := newAPIServer(addr, newHandler(database, service, options))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {

@@ -151,6 +151,7 @@ type report struct {
 	UnreviewedCandidates     int                  `json:"unreviewedCandidates,omitempty"`
 	Remaining                store.RoundAllowance `json:"remaining"`
 	AssessedSources          []assessedSource     `json:"assessedSources,omitempty"`
+	Recommendation           *homeRecommendation  `json:"recommendation,omitempty"`
 }
 
 type assessedSource struct {
@@ -386,6 +387,7 @@ func (e *Engine) run(ctx context.Context, initial store.Round) {
 	code, partial, detail := "no_supported_source", true, report{}
 	defer func() {
 		if !errors.Is(ctx.Err(), context.Canceled) {
+			detail.Recommendation = e.computeHomeRecommendation(ctx, initial, detail)
 			e.finish(ctx, initial.ID, owner, code, partial, detail)
 		}
 	}()

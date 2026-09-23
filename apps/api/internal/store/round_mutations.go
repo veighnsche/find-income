@@ -32,6 +32,7 @@ const (
 	RoundCodexTurn                      = "codex.turn"
 	RoundContextTool                    = "round.context"
 	RoundJevRequest                     = "jev.request"
+	RoundDeliverApplication             = "application.delivery"
 )
 
 // The caller chooses an operation, never its charge. Later connectors can add
@@ -48,6 +49,8 @@ func RoundOperationCost(operation string) (RoundAllowance, bool) {
 		return RoundAllowance{Tools: 1}, true
 	case RoundJevRequest:
 		return RoundAllowance{Requests: 1}, true
+	case RoundDeliverApplication:
+		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
 	case RoundStageDiscovery, RoundRegisterDiscoveryBoard:
 		return RoundAllowance{Items: 1, Tools: 1}, true
 	case RoundPrepareApplicationPack:

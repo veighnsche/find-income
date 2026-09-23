@@ -98,9 +98,13 @@ func (s *Service) applicationPackPrepareTool(ctx context.Context, args applicati
 		if readErr := json.Unmarshal(pack.ManifestJSON, &snapshot); readErr != nil {
 			return nil, readErr
 		}
+		s.mu.Lock()
+		replayConfig := s.packConfig
+		s.mu.Unlock()
+		routeStatus := s.assessPreparedPackRoute(ctx, round, authority, args, previous.EntityID, replayConfig.Relevance)
 		return map[string]any{"packId": previous.EntityID, "version": previous.Revision, "created": false,
 			"contentSha256": pack.ContentSHA256, "materialUnknowns": snapshot.Draft.MaterialUnknowns,
-			"relevanceCount": len(snapshot.Draft.Relevance)}, nil
+			"relevanceCount": len(snapshot.Draft.Relevance), "deliveryRouteStatus": routeStatus}, nil
 	}
 	if err != nil && err != store.ErrNotFound {
 		return nil, err
@@ -251,9 +255,10 @@ func (s *Service) applicationPackPrepareTool(ctx context.Context, args applicati
 	if err != nil {
 		return nil, err
 	}
+	routeStatus := s.assessPreparedPackRoute(ctx, round, authority, args, result.EntityID, cfg.Relevance)
 	return map[string]any{"packId": result.EntityID, "version": result.Revision, "created": created,
 		"contentSha256": prepared.SHA256, "materialUnknowns": draft.MaterialUnknowns,
-		"relevanceCount": len(draft.Relevance)}, nil
+		"relevanceCount": len(draft.Relevance), "deliveryRouteStatus": routeStatus}, nil
 }
 
 // packCorrection ties an agent's draft to one saved owner instruction and one

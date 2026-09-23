@@ -21,6 +21,135 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/delivery/capability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read configured submission and receipt-check capabilities */
+        get: operations["getDeliveryCapability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/delivery/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Derive exact review material for one to three saved packs */
+        post: operations["prepareDeliveryReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/delivery/reviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Read exact material, currentness and submission state */
+        get: operations["getDeliveryReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/delivery/reviews/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner approves the exact immutable material digest */
+        post: operations["approveDeliveryReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/delivery/reviews/{id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner starts one finite exact delivery commission */
+        post: operations["sendDeliveryReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/delivery/reviews/{id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report read-only receipt lookup capability without resending */
+        post: operations["reconcileDeliveryReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/delivery/reviews/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner closes a paused unresolved delivery commission without resending */
+        post: operations["closeDeliveryReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rounds/active": {
         parameters: {
             query?: never;
@@ -30,6 +159,23 @@ export interface paths {
         };
         /** Read the active commissioned round */
         get: operations["getActiveRound"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rounds/latest-completed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the owner's latest completed discovery round for saved home advice */
+        get: operations["getLatestCompletedRound"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1194,6 +1340,69 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        DeliveryCapability: {
+            submissionAvailable: boolean;
+            receiptLookup: boolean;
+            reason?: string;
+        };
+        PrepareDeliveryReviewRequest: {
+            requestKey: string;
+            packIds: string[];
+        };
+        ApproveDeliveryReviewRequest: {
+            materialSha256: string;
+        };
+        DeliveryReview: {
+            id: string;
+            materialSha256: string;
+            approvedSha256?: string;
+            /** Format: date-time */
+            approvedAt?: string;
+            items: components["schemas"]["DeliveryItem"][];
+        };
+        DeliveryItem: {
+            id: string;
+            reviewId: string;
+            packId: string;
+            opportunityId: string;
+            /** Format: int64 */
+            opportunityRevision: number;
+            sourceSha256: string;
+            /** Format: int64 */
+            profileRevision: number;
+            packContentSha256: string;
+            routeId: string;
+            /** Format: int64 */
+            routeRevision: number;
+            routeSha256: string;
+            title: string;
+            companyName: string;
+            routeExcerpt: string;
+            recipient: string;
+            sender: string;
+            subject: string;
+            body: string;
+            attachmentSha256: string;
+            mimeSha256: string;
+            messageId: string;
+            /** @enum {string} */
+            state: "prepared" | "sending" | "accepted_by_smtp" | "failed" | "uncertain";
+            roundId?: string;
+            attemptId?: string;
+            smtpStage?: string;
+            smtpCode?: number;
+            outcomeDetail?: string;
+            current: boolean;
+            blockingReason?: string;
+        };
+        DeliverySendResult: {
+            review: components["schemas"]["DeliveryReview"];
+            round: components["schemas"]["Round"];
+        };
+        DeliveryReconciliation: {
+            supported: boolean;
+            reason: string;
+        };
         RoundAllowance: {
             /** Format: int64 */
             requests: number;
@@ -2616,6 +2825,172 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    getDeliveryCapability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Delivery capability */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryCapability"];
+                };
+            };
+        };
+    };
+    prepareDeliveryReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepareDeliveryReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Immutable review prepared without sending */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryReview"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getDeliveryReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Delivery review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryReview"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    approveDeliveryReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveDeliveryReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Approved review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryReview"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    sendDeliveryReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-item submission outcomes and commissioned round */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverySendResult"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    reconcileDeliveryReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Actual adapter lookup capability */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryReconciliation"];
+                };
+            };
+        };
+    };
+    closeDeliveryReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed round; uncertain item remains unresolved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Round"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
     getActiveRound: {
         parameters: {
             query?: never;
@@ -2635,6 +3010,29 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    getLatestCompletedRound: {
+        parameters: {
+            query: {
+                outcome: "discover";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Latest completed discovery round with transient recommendation currentness, or null when none exists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Round"] | null;
+                };
+            };
+            400: components["responses"]["ValidationError"];
         };
     };
     getRoundCapability: {

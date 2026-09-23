@@ -64,6 +64,21 @@ func (m Material) MessageID() string { return m.messageID }
 func (m Material) Digest() string    { return m.digest }
 func (m Material) Bytes() []byte     { return bytes.Clone(m.mime) }
 
+// RestoreMaterial rebuilds only a previously prepared immutable message from
+// private storage. Its digest and envelope/header identity are rechecked.
+func RestoreMaterial(from, to, messageID, digest string, mimeBytes []byte) (Material, error) {
+	if validateAddress(from) != nil || validateAddress(to) != nil || !messageIDPattern.MatchString(messageID) ||
+		len(mimeBytes) == 0 || len(mimeBytes) > maxMIMEBytes || len(digest) != 64 ||
+		!bytes.Contains(mimeBytes, []byte("\r\nFrom: <"+from+">\r\nTo: <"+to+">\r\nMessage-ID: "+messageID+"\r\n")) {
+		return Material{}, errors.New("invalid stored MIME identity")
+	}
+	actual := sha256.Sum256(mimeBytes)
+	if hex.EncodeToString(actual[:]) != digest {
+		return Material{}, errors.New("stored MIME digest mismatch")
+	}
+	return Material{from: from, to: to, messageID: messageID, mime: bytes.Clone(mimeBytes), digest: digest}, nil
+}
+
 func Prepare(in Input) (Material, error) {
 	if err := validateAddress(in.From); err != nil {
 		return Material{}, fmt.Errorf("from: %w", err)

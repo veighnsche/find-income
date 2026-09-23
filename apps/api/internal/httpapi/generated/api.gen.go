@@ -301,6 +301,33 @@ func (e CreateOpportunityRequestWorkPattern) Valid() bool {
 	}
 }
 
+// Defines values for DeliveryItemState.
+const (
+	DeliveryItemStateAcceptedBySmtp DeliveryItemState = "accepted_by_smtp"
+	DeliveryItemStateFailed         DeliveryItemState = "failed"
+	DeliveryItemStatePrepared       DeliveryItemState = "prepared"
+	DeliveryItemStateSending        DeliveryItemState = "sending"
+	DeliveryItemStateUncertain      DeliveryItemState = "uncertain"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryItemState enum.
+func (e DeliveryItemState) Valid() bool {
+	switch e {
+	case DeliveryItemStateAcceptedBySmtp:
+		return true
+	case DeliveryItemStateFailed:
+		return true
+	case DeliveryItemStatePrepared:
+		return true
+	case DeliveryItemStateSending:
+		return true
+	case DeliveryItemStateUncertain:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EvidenceArrangementPattern.
 const (
 	EvidenceArrangementPatternHybrid EvidenceArrangementPattern = "hybrid"
@@ -1720,6 +1747,21 @@ func (e ListOpportunitiesParamsKind) Valid() bool {
 	}
 }
 
+// Defines values for GetLatestCompletedRoundParamsOutcome.
+const (
+	Discover GetLatestCompletedRoundParamsOutcome = "discover"
+)
+
+// Valid indicates whether the value is a known member of the GetLatestCompletedRoundParamsOutcome enum.
+func (e GetLatestCompletedRoundParamsOutcome) Valid() bool {
+	switch e {
+	case Discover:
+		return true
+	default:
+		return false
+	}
+}
+
 // Action defines model for Action.
 type Action struct {
 	CompletedAt *time.Time `json:"completedAt,omitempty"`
@@ -1928,6 +1970,11 @@ type ApplicationPackSummary struct {
 	Version             int64     `json:"version"`
 }
 
+// ApproveDeliveryReviewRequest defines model for ApproveDeliveryReviewRequest.
+type ApproveDeliveryReviewRequest struct {
+	MaterialSha256 string `json:"materialSha256"`
+}
+
 // ArchiveRequest defines model for ArchiveRequest.
 type ArchiveRequest struct {
 	ExpectedRevision int64 `json:"expectedRevision"`
@@ -2112,6 +2159,70 @@ type CreatedAgentCredential struct {
 
 	// Token Only returned at creation; store securely.
 	Token string `json:"token"`
+}
+
+// DeliveryCapability defines model for DeliveryCapability.
+type DeliveryCapability struct {
+	Reason              *string `json:"reason,omitempty"`
+	ReceiptLookup       bool    `json:"receiptLookup"`
+	SubmissionAvailable bool    `json:"submissionAvailable"`
+}
+
+// DeliveryItem defines model for DeliveryItem.
+type DeliveryItem struct {
+	AttachmentSha256    string            `json:"attachmentSha256"`
+	AttemptId           *string           `json:"attemptId,omitempty"`
+	BlockingReason      *string           `json:"blockingReason,omitempty"`
+	Body                string            `json:"body"`
+	CompanyName         string            `json:"companyName"`
+	Current             bool              `json:"current"`
+	Id                  string            `json:"id"`
+	MessageId           string            `json:"messageId"`
+	MimeSha256          string            `json:"mimeSha256"`
+	OpportunityId       string            `json:"opportunityId"`
+	OpportunityRevision int64             `json:"opportunityRevision"`
+	OutcomeDetail       *string           `json:"outcomeDetail,omitempty"`
+	PackContentSha256   string            `json:"packContentSha256"`
+	PackId              string            `json:"packId"`
+	ProfileRevision     int64             `json:"profileRevision"`
+	Recipient           string            `json:"recipient"`
+	ReviewId            string            `json:"reviewId"`
+	RoundId             *string           `json:"roundId,omitempty"`
+	RouteExcerpt        string            `json:"routeExcerpt"`
+	RouteId             string            `json:"routeId"`
+	RouteRevision       int64             `json:"routeRevision"`
+	RouteSha256         string            `json:"routeSha256"`
+	Sender              string            `json:"sender"`
+	SmtpCode            *int              `json:"smtpCode,omitempty"`
+	SmtpStage           *string           `json:"smtpStage,omitempty"`
+	SourceSha256        string            `json:"sourceSha256"`
+	State               DeliveryItemState `json:"state"`
+	Subject             string            `json:"subject"`
+	Title               string            `json:"title"`
+}
+
+// DeliveryItemState defines model for DeliveryItem.State.
+type DeliveryItemState string
+
+// DeliveryReconciliation defines model for DeliveryReconciliation.
+type DeliveryReconciliation struct {
+	Reason    string `json:"reason"`
+	Supported bool   `json:"supported"`
+}
+
+// DeliveryReview defines model for DeliveryReview.
+type DeliveryReview struct {
+	ApprovedAt     *time.Time     `json:"approvedAt,omitempty"`
+	ApprovedSha256 *string        `json:"approvedSha256,omitempty"`
+	Id             string         `json:"id"`
+	Items          []DeliveryItem `json:"items"`
+	MaterialSha256 string         `json:"materialSha256"`
+}
+
+// DeliverySendResult defines model for DeliverySendResult.
+type DeliverySendResult struct {
+	Review DeliveryReview `json:"review"`
+	Round  Round          `json:"round"`
 }
 
 // ErrorEnvelope defines model for ErrorEnvelope.
@@ -2657,6 +2768,12 @@ type PreferencesResponse struct {
 	TargetHours         string              `json:"targetHours"`
 	Timezone            string              `json:"timezone"`
 	Version             int64               `json:"version"`
+}
+
+// PrepareDeliveryReviewRequest defines model for PrepareDeliveryReviewRequest.
+type PrepareDeliveryReviewRequest struct {
+	PackIds    []string `json:"packIds"`
+	RequestKey string   `json:"requestKey"`
 }
 
 // PrepareRoundRequest Owner selects an existing sourced opportunity; the server derives all pack details and authority.
@@ -3545,6 +3662,14 @@ type ListOwnerInstructionsParams struct {
 	RoundId *string `form:"roundId,omitempty" json:"roundId,omitempty"`
 }
 
+// GetLatestCompletedRoundParams defines parameters for GetLatestCompletedRound.
+type GetLatestCompletedRoundParams struct {
+	Outcome GetLatestCompletedRoundParamsOutcome `form:"outcome" json:"outcome"`
+}
+
+// GetLatestCompletedRoundParamsOutcome defines parameters for GetLatestCompletedRound.
+type GetLatestCompletedRoundParamsOutcome string
+
 // ApplyRoundMutationParams defines parameters for ApplyRoundMutation.
 type ApplyRoundMutationParams struct {
 	XRoundCapability string `json:"X-Round-Capability"`
@@ -3561,6 +3686,12 @@ type CreateAgentCredentialJSONRequestBody = CreateAgentCredentialRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
+
+// PrepareDeliveryReviewJSONRequestBody defines body for PrepareDeliveryReview for application/json ContentType.
+type PrepareDeliveryReviewJSONRequestBody = PrepareDeliveryReviewRequest
+
+// ApproveDeliveryReviewJSONRequestBody defines body for ApproveDeliveryReview for application/json ContentType.
+type ApproveDeliveryReviewJSONRequestBody = ApproveDeliveryReviewRequest
 
 // SubmitIngestionJSONRequestBody defines body for SubmitIngestion for application/json ContentType.
 type SubmitIngestionJSONRequestBody = SubmitIngestionRequest

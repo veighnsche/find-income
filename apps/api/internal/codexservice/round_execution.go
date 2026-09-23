@@ -179,6 +179,13 @@ func (s *Service) CancelDispatch(ctx context.Context, attemptID string) error {
 }
 
 // Exact saved IDs are required; missing or in-progress history stays uncertain.
+func (s *Service) RecoverLocalDispatch(ctx context.Context, roundID, attemptID string, generation int64) (bool, bool, error) {
+	if s == nil || s.db == nil {
+		return false, false, ErrUnavailable
+	}
+	return s.db.RecoverCapturedDeliveryRouteAttempt(ctx, roundID, attemptID, generation)
+}
+
 func (s *Service) ObserveDispatch(ctx context.Context, attemptID string) (rounds.Observation, error) {
 	attempt, err := s.db.RoundAttempt(ctx, attemptID)
 	if err != nil {

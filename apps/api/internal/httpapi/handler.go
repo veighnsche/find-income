@@ -14,6 +14,7 @@ import (
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
 	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
+	"github.com/veighnsche/find-income-dashboard/api/internal/deliveryservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
@@ -27,6 +28,7 @@ type Options struct {
 	CollectionAvailable   bool
 	Codex                 CodexControl
 	Rounds                *rounds.Service
+	Delivery              *deliveryservice.Service
 }
 
 type CodexControl interface {
@@ -46,6 +48,7 @@ type Handler struct {
 	collectionAvailable   bool
 	codex                 CodexControl
 	rounds                *rounds.Service
+	delivery              *deliveryservice.Service
 	limiter               *loginLimiter
 }
 
@@ -55,6 +58,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 		collectionAvailable: options.CollectionAvailable,
 		codex:               options.Codex,
 		rounds:              options.Rounds,
+		delivery:            options.Delivery,
 		limiter:             newLoginLimiter()}
 	for _, origin := range options.AllowedOrigins {
 		h.origins[origin] = true
@@ -66,6 +70,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/auth/session", h.session)
 	mux.HandleFunc("GET /api/v1/preferences", h.preferences)
 	mux.HandleFunc("GET /api/v1/rounds/active", h.activeRound)
+	mux.HandleFunc("GET /api/v1/rounds/latest-completed", h.latestCompletedRound)
 	mux.HandleFunc("GET /api/v1/rounds/capability", h.roundCapability)
 	mux.HandleFunc("POST /api/v1/rounds", h.startRound)
 	mux.HandleFunc("POST /api/v1/rounds/prepare", h.prepareRound)
@@ -74,8 +79,8 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/rounds/{id}/results", h.roundResults)
 	mux.HandleFunc("GET /api/v1/rounds/{id}/cards", h.roundCards)
 	mux.HandleFunc("GET /api/v1/rounds/{id}/history", h.roundHistory)
-	mux.HandleFunc("POST /api/v1/rounds/{id}/stop", h.stopRound)
-	mux.HandleFunc("POST /api/v1/rounds/{id}/resume", h.resumeRound)
+	mux.HandleFunc("POST /api/v1/rounds/{id}/stop", h.stopAnyRound)
+	mux.HandleFunc("POST /api/v1/rounds/{id}/resume", h.resumeAnyRound)
 	mux.HandleFunc("POST /api/v1/rounds/{id}/mutations", h.roundMutation)
 	mux.HandleFunc("GET /api/v1/owner-instructions", h.ownerInstructions)
 	mux.HandleFunc("POST /api/v1/owner-instructions", h.addOwnerInstruction)
@@ -119,6 +124,13 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/application-packs/{id}", h.getApplicationPack)
 	mux.HandleFunc("GET /api/v1/application-packs/{id}/pdf", h.applicationPackPDF)
 	mux.HandleFunc("GET /api/v1/application-packs/{id}/source.zip", h.applicationPackSourceArchive)
+	mux.HandleFunc("GET /api/v1/delivery/capability", h.deliveryCapability)
+	mux.HandleFunc("POST /api/v1/delivery/reviews", h.prepareDeliveryReview)
+	mux.HandleFunc("GET /api/v1/delivery/reviews/{id}", h.getDeliveryReview)
+	mux.HandleFunc("POST /api/v1/delivery/reviews/{id}/approve", h.approveDeliveryReview)
+	mux.HandleFunc("POST /api/v1/delivery/reviews/{id}/send", h.sendDeliveryReview)
+	mux.HandleFunc("POST /api/v1/delivery/reviews/{id}/reconcile", h.reconcileDeliveryReview)
+	mux.HandleFunc("POST /api/v1/delivery/reviews/{id}/close", h.closeDeliveryReview)
 	mux.HandleFunc("PATCH /api/v1/opportunities/{id}", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/archive", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/actions", h.listActions)

@@ -97,6 +97,9 @@ func Open(ctx context.Context, privateDataDir string) (_ *Store, err error) {
 	if err = recoverRounds(ctx, db); err != nil {
 		return nil, fmt.Errorf("pause interrupted rounds: %w", err)
 	}
+	if err = recoverDelivery(ctx, db); err != nil {
+		return nil, fmt.Errorf("mark interrupted delivery uncertain: %w", err)
+	}
 	return &Store{db: db}, nil
 }
 

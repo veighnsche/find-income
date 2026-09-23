@@ -121,7 +121,7 @@ func (h *Handler) prepareRound(w http.ResponseWriter, r *http.Request) {
 	}
 	input := store.StartRoundInput{RequestKey: body.RequestKey, Intent: "Prepare a private application pack for the selected sourced opportunity.", Outcome: "prepare", ProfileVersion: profile.Version,
 		Scope:  store.RoundScope{InputRefs: []string{"profile:current", "opportunity:" + opportunity.ID}, Resources: []string{"opportunity:" + opportunity.ID}, Operations: []string{store.RoundCodexTurn, store.RoundJevRequest, store.RoundPrepareApplicationPack, store.RoundContextTool}, Delegates: []string{"codex-runner"}},
-		Limits: store.RoundAllowance{Requests: 7, Items: 1, Tools: 3, Turns: 1}, Deadline: time.Now().Add(30 * time.Minute).UTC()}
+		Limits: store.RoundAllowance{Requests: 8, Items: 1, Tools: 3, Turns: 1}, Deadline: time.Now().Add(30 * time.Minute).UTC()}
 	if body.ReplacePaused != nil {
 		input.Scope.InputRefs = append(input.Scope.InputRefs, replacementRef(body.ReplacePaused.RoundId, body.ReplacePaused.ExpectedRevision))
 	}
@@ -257,7 +257,7 @@ func (h *Handler) getRound(w http.ResponseWriter, r *http.Request) {
 		failRound(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, roundModel(round))
+	writeJSON(w, http.StatusOK, h.roundWithRecommendationCurrentness(r.Context(), round))
 }
 
 func (h *Handler) roundResults(w http.ResponseWriter, r *http.Request) {

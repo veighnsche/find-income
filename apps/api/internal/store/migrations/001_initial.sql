@@ -293,6 +293,71 @@ CREATE TABLE opportunity_routes (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE delivery_route_assessments (
+  id TEXT PRIMARY KEY,
+  opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+  route_id TEXT NOT NULL REFERENCES opportunity_routes(id),
+  source_sha256 TEXT NOT NULL,
+  route_sha256 TEXT NOT NULL,
+  input_sha256 TEXT NOT NULL,
+  choice TEXT NOT NULL CHECK (choice IN ('application_mailbox','other_contact','unresolved')),
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  jev_attempt_id TEXT NOT NULL UNIQUE REFERENCES jev_attempts(id),
+  result_json TEXT NOT NULL CHECK (json_valid(result_json)),
+  created_at TEXT NOT NULL,
+  UNIQUE(route_id,source_sha256,route_sha256)
+);
+
+CREATE TABLE delivery_reviews (
+  id TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  pack_ids_json TEXT NOT NULL CHECK (json_valid(pack_ids_json)),
+  material_sha256 TEXT NOT NULL,
+  approved_sha256 TEXT,
+  approved_at TEXT,
+  created_at TEXT NOT NULL,
+  CHECK ((approved_sha256 IS NULL) = (approved_at IS NULL)),
+  UNIQUE(owner_id,request_key)
+);
+CREATE TABLE delivery_items (
+  id TEXT PRIMARY KEY,
+  review_id TEXT NOT NULL REFERENCES delivery_reviews(id),
+  pack_id TEXT NOT NULL REFERENCES application_packs(id),
+  opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+  opportunity_revision INTEGER NOT NULL,
+  source_sha256 TEXT NOT NULL,
+  profile_revision INTEGER NOT NULL,
+  pack_content_sha256 TEXT NOT NULL,
+  route_id TEXT NOT NULL REFERENCES opportunity_routes(id),
+  route_revision INTEGER NOT NULL,
+  route_sha256 TEXT NOT NULL,
+  title TEXT NOT NULL,
+  company_name TEXT NOT NULL,
+  route_excerpt TEXT NOT NULL,
+  recipient TEXT NOT NULL,
+  sender TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  body TEXT NOT NULL,
+  attachment_sha256 TEXT NOT NULL,
+  mime_sha256 TEXT NOT NULL,
+  mime_bytes BLOB NOT NULL,
+  message_id TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('prepared','sending','accepted_by_smtp','failed','uncertain')),
+  round_id TEXT REFERENCES rounds(id),
+  attempt_id TEXT REFERENCES round_attempts(id),
+  smtp_stage TEXT NOT NULL DEFAULT '',
+  smtp_code INTEGER NOT NULL DEFAULT 0,
+  outcome_detail TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(review_id,pack_id),
+  UNIQUE(message_id)
+);
+CREATE INDEX delivery_items_by_review ON delivery_items(review_id);
+CREATE UNIQUE INDEX delivery_one_possible_submission ON delivery_items(pack_id)
+  WHERE state IN ('sending','accepted_by_smtp','uncertain');
+
 -- A commissioned round is the sole authority for recruitment work. The
 -- partial unique index includes paused rounds so restart never frees a slot.
 CREATE TABLE rounds (

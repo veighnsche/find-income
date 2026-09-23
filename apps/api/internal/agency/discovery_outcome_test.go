@@ -77,6 +77,8 @@ func completingDiscoveryDecisions(t *testing.T) (jevservice.Service, func()) {
 		for id, question := range wire.Questions {
 			selected := ""
 			switch {
+			case id == "selected_candidate" && wire.State.Kind == string(jev.DecisionNextOutcome) && len(wire.State.Candidates) > 0 && strings.HasPrefix(wire.State.Candidates[0].CapabilityID, "home_"):
+				selected = wire.State.Candidates[0].ID
 			case id == "selected_candidate" && wire.State.Kind == string(jev.DecisionNextOutcome):
 				selected = "finish"
 				for _, candidate := range wire.State.Candidates {
@@ -308,7 +310,9 @@ func runTwoRoleDiscovery(t *testing.T, interruptAfterNextChoice bool) {
 	var service *rounds.Service
 	stopped := make(chan error, 1)
 	if interruptAfterNextChoice {
-		interrupted = &interruptDiscoveryDecision{base: decisions, trigger: func(input jev.DecisionInput) bool { return input.Kind == jev.DecisionNextOutcome }}
+		interrupted = &interruptDiscoveryDecision{base: decisions, trigger: func(input jev.DecisionInput) bool {
+			return input.Kind == jev.DecisionNextOutcome && len(input.Candidates) > 0 && input.Candidates[0].CapabilityID == "finish_round"
+		}}
 		interrupted.stop = func(_ context.Context, id string) {
 			_, stopErr := service.Stop(context.Background(), owner, id)
 			stopped <- stopErr
@@ -371,8 +375,11 @@ func runTwoRoleDiscovery(t *testing.T, interruptAfterNextChoice bool) {
 		len(report.AssessedSources) != 2 || report.Opportunities != 2 || calls.Load() != 1 || runtime.turns.Load() != 2 {
 		t.Fatalf("two-role result: state=%s report=%s used=%+v provider=%d turns=%d", round.State, round.Report, round.Used, calls.Load(), runtime.turns.Load())
 	}
-	if round.Used != (store.RoundAllowance{Requests: 12, Items: 6, Tools: 5, Turns: 2}) {
+	if round.Used != (store.RoundAllowance{Requests: 13, Items: 6, Tools: 5, Turns: 2}) {
 		t.Fatalf("default discovery allowance changed: used=%+v report=%s", round.Used, round.Report)
+	}
+	if verdict := ReadHomeRecommendationCurrentness(ctx, db, round); verdict.Status != "current" {
+		t.Fatalf("completed sourced result has stale saved advice: %+v report=%s", verdict, round.Report)
 	}
 	batchJSON, err := db.RoundCollectorBatch(ctx, report.CollectorAttemptID)
 	if err != nil {
@@ -725,7 +732,7 @@ func TestFourNeutralLeadsNewEmployerCompletesSourcedAssessmentWithinDefaultAllow
 	if json.Unmarshal(finished.Report, &result) != nil || finished.State != store.RoundCompleted || result.Code != "sourced_opportunity_assessed" || len(result.AssessedSources) != 1 || result.AssessedSources[0].ScreeningStatus != "proposed" || result.AssessedSources[0].OrganisationStatus != "selected" || providerCalls.Load() != 1 {
 		t.Fatalf("new employer discovery incomplete: state=%s report=%s used=%+v board=%+v", finished.State, finished.Report, finished.Used, board)
 	}
-	if finished.Used != (store.RoundAllowance{Requests: 11, Items: 10, Tools: 14, Turns: 3}) || finished.Limits != (store.RoundAllowance{Requests: 16, Items: 10, Tools: 18, Turns: 4}) {
+	if finished.Used != (store.RoundAllowance{Requests: 12, Items: 10, Tools: 14, Turns: 3}) || finished.Limits != (store.RoundAllowance{Requests: 16, Items: 10, Tools: 18, Turns: 4}) {
 		t.Fatalf("default allowance accounting: used=%+v limits=%+v", finished.Used, finished.Limits)
 	}
 	batchJSON, err := db.RoundCollectorBatch(ctx, result.CollectorAttemptID)

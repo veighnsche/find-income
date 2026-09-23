@@ -19,6 +19,106 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
         '500':
           $ref: '#/components/responses/InternalError'
+  /delivery/capability:
+    get:
+      operationId: getDeliveryCapability
+      summary: Read configured submission and receipt-check capabilities
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Delivery capability
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryCapability' }
+  /delivery/reviews:
+    post:
+      operationId: prepareDeliveryReview
+      summary: Derive exact review material for one to three saved packs
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PrepareDeliveryReviewRequest' }
+      responses:
+        '201':
+          description: Immutable review prepared without sending
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryReview' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /delivery/reviews/{id}:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getDeliveryReview
+      summary: Read exact material, currentness and submission state
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Delivery review
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryReview' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /delivery/reviews/{id}/approve:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: approveDeliveryReview
+      summary: Owner approves the exact immutable material digest
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApproveDeliveryReviewRequest' }
+      responses:
+        '200':
+          description: Approved review
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryReview' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /delivery/reviews/{id}/send:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: sendDeliveryReview
+      summary: Owner starts one finite exact delivery commission
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Per-item submission outcomes and commissioned round
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliverySendResult' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /delivery/reviews/{id}/reconcile:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: reconcileDeliveryReview
+      summary: Report read-only receipt lookup capability without resending
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Actual adapter lookup capability
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryReconciliation' }
+  /delivery/reviews/{id}/close:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: closeDeliveryReview
+      summary: Owner closes a paused unresolved delivery commission without resending
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Closed round; uncertain item remains unresolved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Round' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /rounds/active:
     get:
       operationId: getActiveRound
@@ -31,6 +131,25 @@ paths:
             content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
           }
         '404': { $ref: '#/components/responses/NotFound' }
+  /rounds/latest-completed:
+    get:
+      operationId: getLatestCompletedRound
+      summary: Read the owner's latest completed discovery round for saved home advice
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: outcome
+          required: true
+          schema: { type: string, enum: [discover] }
+      responses:
+        '200':
+          description: Latest completed discovery round with transient recommendation currentness, or null when none exists
+          content:
+            application/json:
+              schema:
+                allOf: [{ $ref: '#/components/schemas/Round' }]
+                nullable: true
+        '400': { $ref: '#/components/responses/ValidationError' }
   /rounds/capability:
     get:
       operationId: getRoundCapability
@@ -1226,6 +1345,86 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
+    DeliveryCapability:
+      type: object
+      required: [submissionAvailable, receiptLookup]
+      properties:
+        submissionAvailable: { type: boolean }
+        receiptLookup: { type: boolean }
+        reason: { type: string }
+    PrepareDeliveryReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey, packIds]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 180 }
+        packIds:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { type: string }
+    ApproveDeliveryReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [materialSha256]
+      properties:
+        materialSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+    DeliveryReview:
+      type: object
+      required: [id, materialSha256, items]
+      properties:
+        id: { type: string }
+        materialSha256: { type: string }
+        approvedSha256: { type: string }
+        approvedAt: { type: string, format: date-time }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DeliveryItem' }
+    DeliveryItem:
+      type: object
+      required: [id, reviewId, packId, opportunityId, opportunityRevision, sourceSha256, profileRevision, packContentSha256, routeId, routeRevision, routeSha256, title, companyName, routeExcerpt, recipient, sender, subject, body, attachmentSha256, mimeSha256, messageId, state, current]
+      properties:
+        id: { type: string }
+        reviewId: { type: string }
+        packId: { type: string }
+        opportunityId: { type: string }
+        opportunityRevision: { type: integer, format: int64 }
+        sourceSha256: { type: string }
+        profileRevision: { type: integer, format: int64 }
+        packContentSha256: { type: string }
+        routeId: { type: string }
+        routeRevision: { type: integer, format: int64 }
+        routeSha256: { type: string }
+        title: { type: string }
+        companyName: { type: string }
+        routeExcerpt: { type: string }
+        recipient: { type: string }
+        sender: { type: string }
+        subject: { type: string }
+        body: { type: string }
+        attachmentSha256: { type: string }
+        mimeSha256: { type: string }
+        messageId: { type: string }
+        state: { type: string, enum: [prepared, sending, accepted_by_smtp, failed, uncertain] }
+        roundId: { type: string }
+        attemptId: { type: string }
+        smtpStage: { type: string }
+        smtpCode: { type: integer }
+        outcomeDetail: { type: string }
+        current: { type: boolean }
+        blockingReason: { type: string }
+    DeliverySendResult:
+      type: object
+      required: [review, round]
+      properties:
+        review: { $ref: '#/components/schemas/DeliveryReview' }
+        round: { $ref: '#/components/schemas/Round' }
+    DeliveryReconciliation:
+      type: object
+      required: [supported, reason]
+      properties:
+        supported: { type: boolean }
+        reason: { type: string }
     RoundAllowance:
       type: object
       required: [requests, items, tools, turns]

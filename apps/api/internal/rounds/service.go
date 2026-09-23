@@ -32,6 +32,13 @@ type Reconciler interface {
 	ObserveDispatch(context.Context, string) (Observation, error)
 }
 
+// LocalReconciler can resolve a complete saved exchange without another
+// external request. handled with resolved=false is a local-only uncertainty;
+// Resume must leave it paused without charging an unsupported remote check.
+type LocalReconciler interface {
+	RecoverLocalDispatch(context.Context, string, string, int64) (handled, resolved bool, err error)
+}
+
 // Worker accepts only a round already committed by owner Start or Resume.
 // LaunchRound returns after ownership is established, not after provider work.
 type Worker interface {
@@ -219,6 +226,18 @@ func (s *Service) Resume(ctx context.Context, actor store.Actor, roundID string)
 		return store.Round{}, store.ErrUncertain
 	}
 	for _, attempt := range attempts {
+		if local, ok := s.Reconciler.(LocalReconciler); ok {
+			handled, resolved, err := local.RecoverLocalDispatch(ctx, roundID, attempt.ID, r.Generation)
+			if err != nil {
+				return store.Round{}, err
+			}
+			if handled {
+				if !resolved {
+					return store.Round{}, store.ErrUncertain
+				}
+				continue
+			}
+		}
 		check, err := s.Store.BeginRoundReconciliation(ctx, roundID, attempt.ID, r.Generation)
 		if err != nil {
 			if errors.Is(err, store.ErrExpired) {

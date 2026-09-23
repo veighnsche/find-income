@@ -17,12 +17,17 @@ import (
 )
 
 type packRuntimeFixture struct {
-	db       *store.Store
-	turns    int
-	evidence string
+	db               *store.Store
+	turns            int
+	routeCompletions int
+	evidence         string
 }
 
 func (f *packRuntimeFixture) CheckRound(context.Context, string) error { return nil }
+func (f *packRuntimeFixture) CompletePackDeliveryRoute(context.Context, string, string) (string, error) {
+	f.routeCompletions++
+	return "application_mailbox", nil
+}
 func (f *packRuntimeFixture) ExecuteRoundTurn(ctx context.Context, agent store.Actor, roundID string, input codexservice.RoundTurnInput) (store.RoundAttempt, error) {
 	f.turns++
 	f.evidence = input.Evidence
@@ -161,7 +166,7 @@ func TestPrepareCommissionSuppliesApprovedEvidenceAndReportsPack(t *testing.T) {
 		t.Fatal(err)
 	}
 	finished := waitPackRound(t, db, round.ID)
-	if finished.DeliverableStatus != "complete" || runtime.turns != 1 {
+	if finished.DeliverableStatus != "complete" || runtime.turns != 1 || runtime.routeCompletions != 1 {
 		t.Fatalf("round=%+v turns=%d", finished, runtime.turns)
 	}
 	var evidence packTurnEvidence
@@ -180,6 +185,50 @@ func TestPrepareCommissionSuppliesApprovedEvidenceAndReportsPack(t *testing.T) {
 	}
 	if report.Code != "pack_ready" || report.PackID == "" || report.Version != 1 || len(report.MaterialUnknowns) != 1 {
 		t.Fatalf("report=%+v", report)
+	}
+}
+
+func TestResumeAfterPackCommitCompletesRouteWithoutAnotherTurn(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	root, err := filepath.Abs("../../../../../")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := &packRuntimeFixture{db: db}
+	engine := &Engine{Store: db, Runtime: runtime, PackSources: LocalPackSources{ProjectRoot: root}, Context: ctx}
+	round, opportunity := prepareRoundFixture(t, db, true)
+	if _, err := runtime.ExecuteRoundTurn(ctx, store.Actor{Kind: "agent", ID: "codex-runner"}, round.ID,
+		codexservice.RoundTurnInput{RequestKey: "prepare:" + opportunity.ID + ":1", ResourceID: "opportunity:" + opportunity.ID,
+			Brief: "Save the selected application pack", Evidence: "fixture"}); err != nil {
+		t.Fatal(err)
+	}
+	stopping, _, err := db.StopRound(ctx, round.Actor, round.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paused, err := db.PauseStoppedRound(ctx, round.Actor, stopping.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := db.ResumeRound(ctx, round.Actor, paused.ID, paused.Generation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := engine.launchPrepare(resumed); err != nil {
+		t.Fatal(err)
+	}
+	finished := waitPackRound(t, db, round.ID)
+	var report packReport
+	if err := json.Unmarshal(finished.Report, &report); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.turns != 1 || runtime.routeCompletions != 1 || report.Code != "pack_ready" || report.DeliveryRouteStatus != "application_mailbox" {
+		t.Fatalf("resume did not complete pending step: turns=%d route=%d report=%+v", runtime.turns, runtime.routeCompletions, report)
 	}
 }
 
