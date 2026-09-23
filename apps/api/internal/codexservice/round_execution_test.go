@@ -12,6 +12,9 @@ import (
 )
 
 func roundTurnFixture(t *testing.T, db *store.Store) (store.Round, store.Actor, store.Actor) {
+	return roundTurnFixtureWithDeadline(t, db, time.Now().Add(time.Hour))
+}
+func roundTurnFixtureWithDeadline(t *testing.T, db *store.Store, deadline time.Time) (store.Round, store.Actor, store.Actor) {
 	t.Helper()
 	ctx := context.Background()
 	owner := store.Actor{Kind: "administrator", ID: "owner"}
@@ -20,7 +23,7 @@ func roundTurnFixture(t *testing.T, db *store.Store) (store.Round, store.Actor, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, created, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "commission", Intent: "Find roles", Outcome: "discover", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour), Scope: store.RoundScope{Resources: []string{"campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool}, Delegates: []string{agent.ID}}, Limits: store.RoundAllowance{Requests: 4, Tools: 8, Turns: 3}})
+	r, created, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "commission", Intent: "Find roles", Outcome: "discover", ProfileVersion: p.Version, Deadline: deadline, Scope: store.RoundScope{Resources: []string{"campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool}, Delegates: []string{agent.ID}}, Limits: store.RoundAllowance{Requests: 4, Tools: 8, Turns: 3}})
 	if err != nil || !created {
 		t.Fatalf("start: %v", err)
 	}
@@ -143,5 +146,22 @@ func TestRoundTurnMalformedStartPausesUncertainWithoutRetry(t *testing.T) {
 	_, err = s.ExecuteRoundTurn(ctx, agent, r.ID, turnInput())
 	if err == nil || f.count("thread/start") != 1 {
 		t.Fatalf("uncertain dispatch repeated: %v", err)
+	}
+}
+func TestRoundTurnDeadlineFencesRemoteIntentAndReleasesSlot(t *testing.T) {
+	s, db := testService(t, testConfig())
+	f := installRuntime(t, s)
+	r, _, agent := roundTurnFixtureWithDeadline(t, db, time.Now().Add(800*time.Millisecond))
+	ctx := boundedContext(t)
+	_, err := s.ExecuteRoundTurn(ctx, agent, r.ID, turnInput())
+	if !errors.Is(err, store.ErrUncertain) {
+		t.Fatalf("expected uncertain deadline, got %v", err)
+	}
+	if f.count("turn/start") != 1 {
+		t.Fatalf("turn count %d", f.count("turn/start"))
+	}
+	current, e := db.Round(ctx, r.ID)
+	if e != nil || current.State != store.RoundFailed || current.StopReason != "deadline_reached" || !current.ReconciliationRequired {
+		t.Fatalf("deadline did not fence: %+v %v", current, e)
 	}
 }

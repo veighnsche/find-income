@@ -397,3 +397,56 @@ func requireRoundState(r Round, state RoundState) error {
 	}
 	return nil
 }
+
+// ExpireRound fences work whose saved deadline has passed. A terminal failed
+// state releases the single active slot; uncertain dispatch identities and
+// any later evidence remain available for audit and separate reconciliation.
+func (s *Store) ExpireRound(ctx context.Context, roundID string) (Round, error) {
+	if roundID == "" {
+		return Round{}, ErrInvalid
+	}
+	tx, r, err := s.roundWriter(ctx, roundID)
+	if err != nil {
+		return Round{}, err
+	}
+	defer tx.Rollback()
+	if r.State == RoundFailed && r.StopReason == "deadline_reached" {
+		return r, nil
+	}
+	if r.State == RoundCompleted || r.State == RoundFailed {
+		return Round{}, ErrFenced
+	}
+	if time.Now().Before(r.Deadline) {
+		return Round{}, ErrFenced
+	}
+	now := utcNow()
+	if _, err := tx.ExecContext(ctx, `UPDATE round_attempts SET state='uncertain',updated_at=?
+	  WHERE round_id=? AND state='dispatched'`, now, roundID); err != nil {
+		return Round{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE round_attempts SET state='cancelled',updated_at=?,finished_at=?,error_code='deadline_reached'
+	  WHERE round_id=? AND state='reserved'`, now, now, roundID); err != nil {
+		return Round{}, err
+	}
+	var uncertain int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM round_attempts WHERE round_id=? AND state='uncertain'`, roundID).Scan(&uncertain); err != nil {
+		return Round{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE round_reconciliation_checks SET state='fenced',finished_at=?
+	  WHERE round_id=? AND state='pending'`, now, roundID); err != nil {
+		return Round{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE rounds SET state='failed',generation=generation+1,revision=revision+1,
+	  reconciliation_required=?,stop_reason='deadline_reached',deliverable_status='partial',
+	  updated_at=?,completed_at=? WHERE id=?`, uncertain > 0, now, now, roundID); err != nil {
+		return Round{}, err
+	}
+	if err := writeRoundAudit(ctx, tx, Actor{Kind: "system", ID: "round-deadline"}, "round.deadline_reached", roundID); err != nil {
+		return Round{}, err
+	}
+	r, err = scanRound(tx.QueryRowContext(ctx, `SELECT `+roundColumns+` FROM rounds WHERE id=?`, roundID))
+	if err != nil {
+		return Round{}, err
+	}
+	return r, tx.Commit()
+}

@@ -93,6 +93,9 @@ func (s *Store) SaveRoundCollectorBatch(ctx context.Context, actor Actor, roundI
 		attemptID, roundID, []byte(payload), len(payload), now); err != nil {
 		return RoundCollectorBatchRef{}, err
 	}
+	if err = publishCollectorBatchTx(ctx, tx, actor, roundID, attemptID, payload); err != nil {
+		return RoundCollectorBatchRef{}, err
+	}
 	refJSON, _ := json.Marshal(ref)
 	if _, err = tx.ExecContext(ctx, `UPDATE round_attempts SET state='succeeded',result_json=?,finished_at=?,updated_at=?
 	  WHERE id=? AND round_id=? AND state='dispatched' AND generation=?`,

@@ -124,6 +124,7 @@ func (s *Service) Disconnect(ctx context.Context) error {
 		run.cancel()
 	}
 	s.mu.Unlock()
+	s.cancelSourceCalls()
 	defer func() { s.mu.Lock(); s.disconnecting = false; s.mu.Unlock() }()
 	if run != nil {
 		select {
@@ -150,6 +151,7 @@ func (s *Service) Close() error {
 		run.cancel()
 	}
 	s.mu.Unlock()
+	s.cancelSourceCalls()
 	if client != nil {
 		_ = client.Close()
 	}

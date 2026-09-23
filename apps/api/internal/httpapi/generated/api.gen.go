@@ -655,6 +655,96 @@ func (e OrganisationViewStatus) Valid() bool {
 	}
 }
 
+// Defines values for OwnerDecisionDecision.
+const (
+	OwnerDecisionDecisionAcknowledged OwnerDecisionDecision = "acknowledged"
+	OwnerDecisionDecisionDismissed    OwnerDecisionDecision = "dismissed"
+	OwnerDecisionDecisionSelected     OwnerDecisionDecision = "selected"
+)
+
+// Valid indicates whether the value is a known member of the OwnerDecisionDecision enum.
+func (e OwnerDecisionDecision) Valid() bool {
+	switch e {
+	case OwnerDecisionDecisionAcknowledged:
+		return true
+	case OwnerDecisionDecisionDismissed:
+		return true
+	case OwnerDecisionDecisionSelected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerDecisionInputDecision.
+const (
+	OwnerDecisionInputDecisionAcknowledged OwnerDecisionInputDecision = "acknowledged"
+	OwnerDecisionInputDecisionDismissed    OwnerDecisionInputDecision = "dismissed"
+	OwnerDecisionInputDecisionSelected     OwnerDecisionInputDecision = "selected"
+)
+
+// Valid indicates whether the value is a known member of the OwnerDecisionInputDecision enum.
+func (e OwnerDecisionInputDecision) Valid() bool {
+	switch e {
+	case OwnerDecisionInputDecisionAcknowledged:
+		return true
+	case OwnerDecisionInputDecisionDismissed:
+		return true
+	case OwnerDecisionInputDecisionSelected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerInstructionTargetKind.
+const (
+	OwnerInstructionTargetKindCampaign    OwnerInstructionTargetKind = "campaign"
+	OwnerInstructionTargetKindEvidence    OwnerInstructionTargetKind = "evidence"
+	OwnerInstructionTargetKindOpportunity OwnerInstructionTargetKind = "opportunity"
+	OwnerInstructionTargetKindProfile     OwnerInstructionTargetKind = "profile"
+)
+
+// Valid indicates whether the value is a known member of the OwnerInstructionTargetKind enum.
+func (e OwnerInstructionTargetKind) Valid() bool {
+	switch e {
+	case OwnerInstructionTargetKindCampaign:
+		return true
+	case OwnerInstructionTargetKindEvidence:
+		return true
+	case OwnerInstructionTargetKindOpportunity:
+		return true
+	case OwnerInstructionTargetKindProfile:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerInstructionInputTargetKind.
+const (
+	OwnerInstructionInputTargetKindCampaign    OwnerInstructionInputTargetKind = "campaign"
+	OwnerInstructionInputTargetKindEvidence    OwnerInstructionInputTargetKind = "evidence"
+	OwnerInstructionInputTargetKindOpportunity OwnerInstructionInputTargetKind = "opportunity"
+	OwnerInstructionInputTargetKindProfile     OwnerInstructionInputTargetKind = "profile"
+)
+
+// Valid indicates whether the value is a known member of the OwnerInstructionInputTargetKind enum.
+func (e OwnerInstructionInputTargetKind) Valid() bool {
+	switch e {
+	case OwnerInstructionInputTargetKindCampaign:
+		return true
+	case OwnerInstructionInputTargetKindEvidence:
+		return true
+	case OwnerInstructionInputTargetKindOpportunity:
+		return true
+	case OwnerInstructionInputTargetKindProfile:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PatchOpportunityRequestKind.
 const (
 	PatchOpportunityRequestKindEmployment PatchOpportunityRequestKind = "employment"
@@ -1068,8 +1158,11 @@ func (e RoundState) Valid() bool {
 
 // Defines values for RoundMutationRequestOperation.
 const (
-	CompanyCreate     RoundMutationRequestOperation = "company.create"
-	OpportunityCreate RoundMutationRequestOperation = "opportunity.create"
+	CompanyCreate              RoundMutationRequestOperation = "company.create"
+	OpportunityCreate          RoundMutationRequestOperation = "opportunity.create"
+	OpportunityOwnerCorrection RoundMutationRequestOperation = "opportunity.owner_correction"
+	OpportunitySourceSave      RoundMutationRequestOperation = "opportunity.source_save"
+	PreferencesCorrect         RoundMutationRequestOperation = "preferences.correct"
 )
 
 // Valid indicates whether the value is a known member of the RoundMutationRequestOperation enum.
@@ -1079,6 +1172,12 @@ func (e RoundMutationRequestOperation) Valid() bool {
 		return true
 	case OpportunityCreate:
 		return true
+	case OpportunityOwnerCorrection:
+		return true
+	case OpportunitySourceSave:
+		return true
+	case PreferencesCorrect:
+		return true
 	default:
 		return false
 	}
@@ -1087,7 +1186,9 @@ func (e RoundMutationRequestOperation) Valid() bool {
 // Defines values for RoundMutationResultEntityKind.
 const (
 	RoundMutationResultEntityKindCompany     RoundMutationResultEntityKind = "company"
+	RoundMutationResultEntityKindEvidence    RoundMutationResultEntityKind = "evidence"
 	RoundMutationResultEntityKindOpportunity RoundMutationResultEntityKind = "opportunity"
+	RoundMutationResultEntityKindPreferences RoundMutationResultEntityKind = "preferences"
 )
 
 // Valid indicates whether the value is a known member of the RoundMutationResultEntityKind enum.
@@ -1095,7 +1196,53 @@ func (e RoundMutationResultEntityKind) Valid() bool {
 	switch e {
 	case RoundMutationResultEntityKindCompany:
 		return true
+	case RoundMutationResultEntityKindEvidence:
+		return true
 	case RoundMutationResultEntityKindOpportunity:
+		return true
+	case RoundMutationResultEntityKindPreferences:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoundOpportunityCorrectionKind.
+const (
+	RoundOpportunityCorrectionKindEmployment RoundOpportunityCorrectionKind = "employment"
+	RoundOpportunityCorrectionKindProject    RoundOpportunityCorrectionKind = "project"
+)
+
+// Valid indicates whether the value is a known member of the RoundOpportunityCorrectionKind enum.
+func (e RoundOpportunityCorrectionKind) Valid() bool {
+	switch e {
+	case RoundOpportunityCorrectionKindEmployment:
+		return true
+	case RoundOpportunityCorrectionKindProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoundOpportunityCorrectionWorkPattern.
+const (
+	RoundOpportunityCorrectionWorkPatternHybrid  RoundOpportunityCorrectionWorkPattern = "hybrid"
+	RoundOpportunityCorrectionWorkPatternOnsite  RoundOpportunityCorrectionWorkPattern = "onsite"
+	RoundOpportunityCorrectionWorkPatternRemote  RoundOpportunityCorrectionWorkPattern = "remote"
+	RoundOpportunityCorrectionWorkPatternUnknown RoundOpportunityCorrectionWorkPattern = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the RoundOpportunityCorrectionWorkPattern enum.
+func (e RoundOpportunityCorrectionWorkPattern) Valid() bool {
+	switch e {
+	case RoundOpportunityCorrectionWorkPatternHybrid:
+		return true
+	case RoundOpportunityCorrectionWorkPatternOnsite:
+		return true
+	case RoundOpportunityCorrectionWorkPatternRemote:
+		return true
+	case RoundOpportunityCorrectionWorkPatternUnknown:
 		return true
 	default:
 		return false
@@ -1924,6 +2071,66 @@ type OrganisationView struct {
 // OrganisationViewStatus defines model for OrganisationView.Status.
 type OrganisationViewStatus string
 
+// OwnerDecision defines model for OwnerDecision.
+type OwnerDecision struct {
+	AuditId             string                `json:"auditId"`
+	CreatedAt           time.Time             `json:"createdAt"`
+	Decision            OwnerDecisionDecision `json:"decision"`
+	Id                  string                `json:"id"`
+	OpportunityId       string                `json:"opportunityId"`
+	OpportunityRevision int64                 `json:"opportunityRevision"`
+	Revision            int64                 `json:"revision"`
+}
+
+// OwnerDecisionDecision defines model for OwnerDecision.Decision.
+type OwnerDecisionDecision string
+
+// OwnerDecisionInput defines model for OwnerDecisionInput.
+type OwnerDecisionInput struct {
+	Decision                    OwnerDecisionInputDecision `json:"decision"`
+	ExpectedDecisionRevision    int64                      `json:"expectedDecisionRevision"`
+	ExpectedOpportunityRevision int64                      `json:"expectedOpportunityRevision"`
+	RequestKey                  string                     `json:"requestKey"`
+}
+
+// OwnerDecisionInputDecision defines model for OwnerDecisionInput.Decision.
+type OwnerDecisionInputDecision string
+
+// OwnerInstruction defines model for OwnerInstruction.
+type OwnerInstruction struct {
+	ActorId          string                     `json:"actorId"`
+	CreatedAt        time.Time                  `json:"createdAt"`
+	ExpectedRevision int64                      `json:"expectedRevision"`
+	Id               string                     `json:"id"`
+	RequestKey       string                     `json:"requestKey"`
+	RevokedAt        *time.Time                 `json:"revokedAt,omitempty"`
+	RoundId          *string                    `json:"roundId,omitempty"`
+	TargetId         string                     `json:"targetId"`
+	TargetKind       OwnerInstructionTargetKind `json:"targetKind"`
+	Text             string                     `json:"text"`
+}
+
+// OwnerInstructionTargetKind defines model for OwnerInstruction.TargetKind.
+type OwnerInstructionTargetKind string
+
+// OwnerInstructionInput defines model for OwnerInstructionInput.
+type OwnerInstructionInput struct {
+	ExpectedRevision int64                           `json:"expectedRevision"`
+	RequestKey       string                          `json:"requestKey"`
+	RoundId          *string                         `json:"roundId,omitempty"`
+	TargetId         string                          `json:"targetId"`
+	TargetKind       OwnerInstructionInputTargetKind `json:"targetKind"`
+	Text             string                          `json:"text"`
+}
+
+// OwnerInstructionInputTargetKind defines model for OwnerInstructionInput.TargetKind.
+type OwnerInstructionInputTargetKind string
+
+// OwnerInstructions defines model for OwnerInstructions.
+type OwnerInstructions struct {
+	Items []OwnerInstruction `json:"items"`
+}
+
 // OwnerObservationSourceInput defines model for OwnerObservationSourceInput.
 type OwnerObservationSourceInput struct {
 	ExpectedPreferencesVersion int64     `json:"expectedPreferencesVersion"`
@@ -2273,6 +2480,46 @@ type RoundCapability struct {
 	SourceCount int            `json:"sourceCount"`
 }
 
+// RoundCard defines model for RoundCard.
+type RoundCard struct {
+	CompanyId           string    `json:"companyId"`
+	CompanyName         string    `json:"companyName"`
+	CreatedAt           time.Time `json:"createdAt"`
+	Decision            string    `json:"decision"`
+	DecisionRevision    int64     `json:"decisionRevision"`
+	Kind                string    `json:"kind"`
+	OpportunityId       string    `json:"opportunityId"`
+	OpportunityRevision int64     `json:"opportunityRevision"`
+	SourceAuditId       string    `json:"sourceAuditId"`
+	SourceRevision      int64     `json:"sourceRevision"`
+	SourceStale         bool      `json:"sourceStale"`
+	SourceText          string    `json:"sourceText"`
+	SourceUrl           string    `json:"sourceUrl"`
+	Title               string    `json:"title"`
+}
+
+// RoundCards defines model for RoundCards.
+type RoundCards struct {
+	Items []RoundCard `json:"items"`
+}
+
+// RoundHistory defines model for RoundHistory.
+type RoundHistory struct {
+	Items []RoundHistoryEvent `json:"items"`
+}
+
+// RoundHistoryEvent defines model for RoundHistoryEvent.
+type RoundHistoryEvent struct {
+	AttemptId      string    `json:"attemptId"`
+	AuditId        string    `json:"auditId"`
+	EntityId       string    `json:"entityId"`
+	EntityKind     string    `json:"entityKind"`
+	OccurredAt     time.Time `json:"occurredAt"`
+	Operation      string    `json:"operation"`
+	RevisionAfter  *int64    `json:"revisionAfter,omitempty"`
+	RevisionBefore *int64    `json:"revisionBefore,omitempty"`
+}
+
 // RoundMutationRequest defines model for RoundMutationRequest.
 type RoundMutationRequest struct {
 	Company          *CreateCompanyRequest         `json:"company,omitempty"`
@@ -2280,9 +2527,13 @@ type RoundMutationRequest struct {
 	Operation        RoundMutationRequestOperation `json:"operation"`
 
 	// Opportunity Provide sourceUrl or originalText; notes are separate from the source. No actor or confirmed-pay fields are accepted.
-	Opportunity *CreateOpportunityRequest `json:"opportunity,omitempty"`
-	RequestKey  string                    `json:"requestKey"`
-	ResourceId  string                    `json:"resourceId"`
+	Opportunity        *CreateOpportunityRequest   `json:"opportunity,omitempty"`
+	OpportunityPatch   *RoundOpportunityCorrection `json:"opportunityPatch,omitempty"`
+	OwnerInstructionId *string                     `json:"ownerInstructionId,omitempty"`
+	Preferences        *RoundPreferences           `json:"preferences,omitempty"`
+	RequestKey         string                      `json:"requestKey"`
+	ResourceId         string                      `json:"resourceId"`
+	SourceOpportunity  *RoundSourceOpportunity     `json:"sourceOpportunity,omitempty"`
 }
 
 // RoundMutationRequestOperation defines model for RoundMutationRequest.Operation.
@@ -2300,6 +2551,39 @@ type RoundMutationResult struct {
 // RoundMutationResultEntityKind defines model for RoundMutationResult.EntityKind.
 type RoundMutationResultEntityKind string
 
+// RoundOpportunityCorrection defines model for RoundOpportunityCorrection.
+type RoundOpportunityCorrection struct {
+	// Compensation Advertised inputs only. No inferred or employer-confirmed actual-hours pay.
+	Compensation     *AdvertisedCompensation                `json:"compensation,omitempty"`
+	DeadlineOn       *string                                `json:"deadlineOn,omitempty"`
+	ExpectedRevision int64                                  `json:"expectedRevision"`
+	Kind             *RoundOpportunityCorrectionKind        `json:"kind,omitempty"`
+	LocationText     *string                                `json:"locationText,omitempty"`
+	Notes            *string                                `json:"notes,omitempty"`
+	PostedOn         *string                                `json:"postedOn,omitempty"`
+	Stage            *string                                `json:"stage,omitempty"`
+	Title            *string                                `json:"title,omitempty"`
+	WorkPattern      *RoundOpportunityCorrectionWorkPattern `json:"workPattern,omitempty"`
+}
+
+// RoundOpportunityCorrectionKind defines model for RoundOpportunityCorrection.Kind.
+type RoundOpportunityCorrectionKind string
+
+// RoundOpportunityCorrectionWorkPattern defines model for RoundOpportunityCorrection.WorkPattern.
+type RoundOpportunityCorrectionWorkPattern string
+
+// RoundPreferences defines model for RoundPreferences.
+type RoundPreferences struct {
+	AllowHybrid           bool            `json:"allowHybrid"`
+	AllowRemote           bool            `json:"allowRemote"`
+	MinMonthlyBaseCents   int64           `json:"minMonthlyBaseCents"`
+	PreferredLocation     string          `json:"preferredLocation"`
+	RoleCriteria          []RoleCriterion `json:"roleCriteria"`
+	SalaryCurrency        string          `json:"salaryCurrency"`
+	TargetHoursHundredths int64           `json:"targetHoursHundredths"`
+	Timezone              string          `json:"timezone"`
+}
+
 // RoundResults defines model for RoundResults.
 type RoundResults struct {
 	Items []interface{} `json:"items"`
@@ -2311,6 +2595,16 @@ type RoundScope struct {
 	InputRefs  []string `json:"inputRefs"`
 	Operations []string `json:"operations"`
 	Resources  []string `json:"resources"`
+}
+
+// RoundSourceOpportunity defines model for RoundSourceOpportunity.
+type RoundSourceOpportunity struct {
+	CompanyId        string `json:"companyId"`
+	ExpectedRevision int64  `json:"expectedRevision"`
+
+	// Opportunity Provide sourceUrl or originalText; notes are separate from the source. No actor or confirmed-pay fields are accepted.
+	Opportunity     CreateOpportunityRequest `json:"opportunity"`
+	SourceOpeningId string                   `json:"sourceOpeningId"`
 }
 
 // RuntimeStatus defines model for RuntimeStatus.
@@ -2570,6 +2864,11 @@ type GetOrganisationSummariesParams struct {
 	Ids string `form:"ids" json:"ids"`
 }
 
+// ListOwnerInstructionsParams defines parameters for ListOwnerInstructions.
+type ListOwnerInstructionsParams struct {
+	RoundId *string `form:"roundId,omitempty" json:"roundId,omitempty"`
+}
+
 // ApplyRoundMutationParams defines parameters for ApplyRoundMutation.
 type ApplyRoundMutationParams struct {
 	XRoundCapability string `json:"X-Round-Capability"`
@@ -2592,6 +2891,12 @@ type SubmitIngestionJSONRequestBody = SubmitIngestionRequest
 
 // RetryIngestionJSONRequestBody defines body for RetryIngestion for application/json ContentType.
 type RetryIngestionJSONRequestBody = RetryIngestionRequest
+
+// SetOwnerOpportunityDecisionJSONRequestBody defines body for SetOwnerOpportunityDecision for application/json ContentType.
+type SetOwnerOpportunityDecisionJSONRequestBody = OwnerDecisionInput
+
+// AddOwnerInstructionJSONRequestBody defines body for AddOwnerInstruction for application/json ContentType.
+type AddOwnerInstructionJSONRequestBody = OwnerInstructionInput
 
 // StartRoundJSONRequestBody defines body for StartRound for application/json ContentType.
 type StartRoundJSONRequestBody = StartRoundRequest

@@ -32,17 +32,17 @@ func (c RoleCriterion) DefinitionHash() string {
 }
 
 type Preferences struct {
-	Version               int64
-	PreferredLocation     string
-	AllowRemote           bool
-	AllowHybrid           bool
-	TargetHoursHundredths int64
-	MinMonthlyBaseCents   int64
-	SalaryCurrency        string
-	RoleCriteria          []RoleCriterion
-	Timezone              string
-	CreatedAt             string
-	Actor                 Actor
+	Version               int64           `json:"version"`
+	PreferredLocation     string          `json:"preferredLocation"`
+	AllowRemote           bool            `json:"allowRemote"`
+	AllowHybrid           bool            `json:"allowHybrid"`
+	TargetHoursHundredths int64           `json:"targetHoursHundredths"`
+	MinMonthlyBaseCents   int64           `json:"minMonthlyBaseCents"`
+	SalaryCurrency        string          `json:"salaryCurrency"`
+	RoleCriteria          []RoleCriterion `json:"roleCriteria"`
+	Timezone              string          `json:"timezone"`
+	CreatedAt             string          `json:"createdAt"`
+	Actor                 Actor           `json:"actor"`
 }
 
 func DefaultPreferences() Preferences {

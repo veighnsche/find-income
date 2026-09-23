@@ -67,10 +67,6 @@ func runWithContext(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	// Recruitment work requires a commissioned round. Until that boundary exists,
-	// queued collector, intake and organisation jobs stay inert even with keys.
-	// The controller is available for saved round reads and Stop. No readiness
-	// provider is attached until a bounded runtime/collector is implemented.
 	options.Rounds = &rounds.Service{Store: database}
 	server := newAPIServer(addr, newHandler(database, service, options))
 	listener, err := net.Listen("tcp", addr)

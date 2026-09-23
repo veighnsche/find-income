@@ -50,6 +50,13 @@ type Client struct {
 	httpClient *http.Client
 }
 
+func (c *Client) RequestedModel() string {
+	if c == nil {
+		return ""
+	}
+	return c.cfg.Model
+}
+
 // NewFromEnvironment is the sole production path for reading the provider key.
 // Disabled mode does not read it. The key is never included in an error.
 func NewFromEnvironment(cfg Config, httpClient *http.Client) (*Client, error) {
@@ -106,11 +113,21 @@ func isLoopbackIP(host string) bool {
 }
 
 func (c *Client) Evaluate(ctx context.Context, request Request) (Result, error) {
+	body, err := c.EncodedRequest(request)
+	if err != nil {
+		return Result{}, err
+	}
+	return c.evaluateEncoded(ctx, request, body)
+}
+
+// EncodedRequest returns the exact JSON body Evaluate sends. It excludes the
+// Authorization header. A round-bound caller can persist it before dispatch.
+func (c *Client) EncodedRequest(request Request) ([]byte, error) {
 	if c == nil || !c.cfg.Enabled {
-		return Result{}, &Error{Kind: ErrDisabled}
+		return nil, &Error{Kind: ErrDisabled}
 	}
 	if err := validateRequest(request); err != nil {
-		return Result{}, err
+		return nil, err
 	}
 	body, err := json.Marshal(struct {
 		State     any                 `json:"state"`
@@ -118,11 +135,15 @@ func (c *Client) Evaluate(ctx context.Context, request Request) (Result, error) 
 		Questions map[string]Question `json:"questions"`
 	}{State: request.State, Model: c.cfg.Model, Questions: request.Questions})
 	if err != nil {
-		return Result{}, &Error{Kind: ErrInvalidRequest}
+		return nil, &Error{Kind: ErrInvalidRequest}
 	}
 	if int64(len(body)) > c.cfg.MaxRequestBytes {
-		return Result{}, &Error{Kind: ErrRequestTooLarge}
+		return nil, &Error{Kind: ErrRequestTooLarge}
 	}
+	return body, nil
+}
+
+func (c *Client) evaluateEncoded(ctx context.Context, request Request, body []byte) (Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.cfg.Timeout)
 	defer cancel()
 	for attempt := 1; attempt <= c.cfg.MaxAttempts; attempt++ {

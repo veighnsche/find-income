@@ -11,6 +11,21 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/codex"
 )
 
+// CheckRound is the rounds.Start/Resume readiness gate for the one supported
+// discovery outcome. It checks the live connection, ChatGPT account, selected
+// model/effort, quota and required MCP tools, but starts no work. The caller
+// must still explicitly commission ExecuteRoundTurn through the work loop.
+func (s *Service) CheckRound(ctx context.Context, outcome string) error {
+	if s == nil || ctx == nil || outcome != "discover" {
+		return ErrUnavailable
+	}
+	status := s.Status(ctx)
+	if status.State != "ready" || !status.Connected || ctx.Err() != nil {
+		return ErrUnavailable
+	}
+	return nil
+}
+
 // UsageWindow contains only non-secret quota metadata. Missing numbers remain nil.
 type UsageWindow struct {
 	LimitID            string   `json:"limitId"`

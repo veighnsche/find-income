@@ -168,6 +168,26 @@ func boundedContext(t *testing.T) context.Context {
 	t.Cleanup(cancel)
 	return ctx
 }
+func TestCheckRoundRequiresSupportedReadyConnectionWithoutDispatch(t *testing.T) {
+	s, _ := testService(t, testConfig())
+	f := installRuntime(t, s)
+	ctx := boundedContext(t)
+	if err := s.CheckRound(ctx, "discover"); err != nil {
+		t.Fatalf("ready discovery unavailable: %v", err)
+	}
+	if err := s.CheckRound(ctx, "deliver"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("unsupported outcome: %v", err)
+	}
+	if f.count("thread/start") != 0 || f.count("turn/start") != 0 {
+		t.Fatal("readiness dispatched a model turn")
+	}
+	f.mu.Lock()
+	f.limitFails = true
+	f.mu.Unlock()
+	if err := s.CheckRound(ctx, "discover"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("unreadable quota passed: %v", err)
+	}
+}
 func submitFixture(t *testing.T, db *store.Store, key string) store.IngestionRequest {
 	t.Helper()
 	item, _, err := db.SubmitIngestion(context.Background(), store.Actor{Kind: "administrator", ID: "owner"}, store.IngestionInput{Origin: "owner", OriginalText: "Synthetic vacancy " + key, IdempotencyKey: key})

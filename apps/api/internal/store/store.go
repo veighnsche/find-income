@@ -138,6 +138,10 @@ type Change struct {
 // the same transaction. Callers must derive Actor from authentication, never
 // from a request body. The callback must not do network or long-running work.
 func (s *Store) WriteAudited(ctx context.Context, actor Actor, fn func(*sql.Tx) (Change, error)) (auditID string, err error) {
+	return s.writeAuditedAfter(ctx, actor, fn, nil)
+}
+
+func (s *Store) writeAuditedAfter(ctx context.Context, actor Actor, fn func(*sql.Tx) (Change, error), after func(*sql.Tx, string) error) (auditID string, err error) {
 	if strings.TrimSpace(actor.Kind) == "" || strings.TrimSpace(actor.ID) == "" || fn == nil {
 		return "", fmt.Errorf("%w: actor and mutation required", ErrInvalid)
 	}
@@ -163,6 +167,11 @@ func (s *Store) WriteAudited(ctx context.Context, actor Actor, fn func(*sql.Tx) 
 		change.EntityKind, change.EntityID, change.RevisionBefore, change.RevisionAfter, utcNow())
 	if err != nil {
 		return "", fmt.Errorf("write audit change: %w", err)
+	}
+	if after != nil {
+		if err := after(tx, auditID); err != nil {
+			return "", err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return "", err

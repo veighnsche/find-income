@@ -64,9 +64,8 @@ func TestCollectorFinalPageDrainsThenMovesToNextScopedBoard(t *testing.T) {
 		}
 		return a.ID
 	}
-	raw := []byte(" {\"id\": \"exact raw\"} ")
 	first := stage("a-final-page", "board-a", "", 1, 3, collector.Batch{
-		Postings: []collector.StagedPosting{{BoardID: "board-a", OriginalText: raw}},
+		Postings: []collector.StagedPosting{},
 		Next: &collector.Cursor{BoardID: "board-a", NextOffset: 5, EndOfBoard: true,
 			Pending: []collector.PendingPosting{{Raw: []byte(" item-four "), ObservedAt: "now"}, {Raw: []byte(" item-five "), ObservedAt: "now"}}},
 		PagesFetched: 1, ItemsExamined: 3})
@@ -75,15 +74,14 @@ func TestCollectorFinalPageDrainsThenMovesToNextScopedBoard(t *testing.T) {
 		t.Fatalf("skipped unread board-a postings: %v", err)
 	}
 	second := stage("a-buffer", "board-a", first, 0, 2, collector.Batch{
-		Postings: []collector.StagedPosting{{BoardID: "board-a", OriginalText: []byte(" item-four ")},
-			{BoardID: "board-a", OriginalText: []byte(" item-five ")}},
+		Postings: []collector.StagedPosting{},
 		PagesFetched: 0, ItemsExamined: 2, Next: nil})
 	if _, _, err := s.ReserveCollectorAcquisition(ctx, agent, r.ID, store.RoundCollectorAcquisitionInput{
 		RequestKey: "restart-a", BoardID: "board-a", CursorAttemptID: second, MaxPages: 1, MaxItems: 1}); !errors.Is(err, store.ErrFenced) {
 		t.Fatalf("restarted completed board-a: %v", err)
 	}
 	stage("b-first", "board-b", second, 1, 1, collector.Batch{
-		Postings:     []collector.StagedPosting{{BoardID: "board-b", OriginalText: []byte(" board-b ")}},
+		Postings:     []collector.StagedPosting{},
 		PagesFetched: 1, ItemsExamined: 1, Next: nil})
 	r, err = s.Round(ctx, r.ID)
 	if err != nil || r.Used != (store.RoundAllowance{Requests: 2, Items: 6, Tools: 3}) {

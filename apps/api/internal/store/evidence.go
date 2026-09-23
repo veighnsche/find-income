@@ -530,6 +530,11 @@ func (s *Store) SupersedeEvidence(ctx context.Context, actor Actor, priorID stri
 }
 
 func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, input EvidenceInput, guard func(*sql.Tx) error) (Evidence, string, error) {
+	return s.writeEvidenceAfter(ctx, actor, priorID, input, guard, nil)
+}
+
+func (s *Store) writeEvidenceAfter(ctx context.Context, actor Actor, priorID string, input EvidenceInput,
+	guard func(*sql.Tx) error, after func(*sql.Tx, string, Evidence) error) (Evidence, string, error) {
 	if err := validateEvidenceInput(input); err != nil {
 		return Evidence{}, "", err
 	}
@@ -546,7 +551,7 @@ func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, 
 		item.Finding = findingForRolePresence(input.Presence)
 		item.RolePresence = input.Presence
 	}
-	changeID, err := s.WriteAudited(ctx, actor, func(tx *sql.Tx) (Change, error) {
+	changeID, err := s.writeAuditedAfter(ctx, actor, func(tx *sql.Tx) (Change, error) {
 		if err := lockQualificationInput(ctx, tx, input.OpportunityID); err != nil {
 			return Change{}, err
 		}
@@ -766,7 +771,16 @@ func (s *Store) writeEvidence(ctx context.Context, actor Actor, priorID string, 
 				return Change{}, err
 			}
 		}
-		return Change{Operation: "evidence.add", EntityKind: "evidence", EntityID: item.ID}, nil
+		operation := "evidence.add"
+		if priorID != "" {
+			operation = "evidence.supersede"
+		}
+		return Change{Operation: operation, EntityKind: "evidence", EntityID: item.ID}, nil
+	}, func(tx *sql.Tx, auditID string) error {
+		if after != nil {
+			return after(tx, auditID, item)
+		}
+		return nil
 	})
 	if err != nil {
 		return Evidence{}, "", err

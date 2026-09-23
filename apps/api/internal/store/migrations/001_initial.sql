@@ -289,6 +289,44 @@ CREATE TABLE rounds (
 CREATE UNIQUE INDEX one_active_round ON rounds((1))
   WHERE state IN ('queued','running','awaiting_input','stopping','paused');
 
+CREATE TABLE owner_instructions (
+  id TEXT PRIMARY KEY,
+  actor_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  request_sha256 TEXT NOT NULL,
+  target_kind TEXT NOT NULL CHECK (target_kind IN ('campaign','profile','opportunity','evidence')),
+  target_id TEXT NOT NULL,
+  expected_revision INTEGER NOT NULL CHECK (expected_revision > 0),
+  round_id TEXT REFERENCES rounds(id),
+  text TEXT NOT NULL CHECK (length(trim(text)) BETWEEN 1 AND 20000),
+  created_at TEXT NOT NULL,
+  revoked_at TEXT,
+  UNIQUE(actor_id,request_key)
+);
+CREATE INDEX owner_instructions_by_round ON owner_instructions(round_id,created_at);
+CREATE INDEX owner_instructions_by_target ON owner_instructions(target_kind,target_id,created_at);
+
+CREATE TABLE owner_instruction_applications (
+  audit_id TEXT PRIMARY KEY REFERENCES audit_changes(id),
+  instruction_id TEXT NOT NULL REFERENCES owner_instructions(id)
+);
+
+CREATE TABLE owner_opportunity_decisions (
+  id TEXT PRIMARY KEY,
+  opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+  actor_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  request_sha256 TEXT NOT NULL,
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  opportunity_revision INTEGER NOT NULL CHECK (opportunity_revision > 0),
+  decision TEXT NOT NULL CHECK (decision IN ('selected','dismissed','acknowledged')),
+  audit_id TEXT NOT NULL REFERENCES audit_changes(id),
+  created_at TEXT NOT NULL,
+  UNIQUE(actor_id,request_key),
+  UNIQUE(opportunity_id,revision)
+);
+CREATE INDEX owner_opportunity_decisions_latest ON owner_opportunity_decisions(opportunity_id,revision DESC);
+
 CREATE TABLE round_attempts (
   id TEXT PRIMARY KEY,
   round_id TEXT NOT NULL REFERENCES rounds(id),
@@ -374,6 +412,60 @@ CREATE TABLE round_reconciliation_checks (
   finished_at TEXT
 );
 
+CREATE TABLE jev_attempts (
+  id TEXT PRIMARY KEY,
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  round_attempt_id TEXT NOT NULL REFERENCES round_attempts(id),
+  step_index INTEGER NOT NULL,
+  purpose TEXT NOT NULL,
+  input_sha256 TEXT NOT NULL,
+  source_refs_json TEXT NOT NULL CHECK (json_valid(source_refs_json)),
+  candidate_set_json TEXT NOT NULL CHECK (json_valid(candidate_set_json)),
+  profile_version INTEGER NOT NULL,
+  rubric_version TEXT NOT NULL,
+  requested_model TEXT,
+  returned_model TEXT,
+  logical_request_json BLOB,
+  transport_request_bytes BLOB,
+  raw_response_bytes BLOB,
+  response_truncated INTEGER NOT NULL DEFAULT 0 CHECK (response_truncated IN (0,1)),
+  response_read_error INTEGER NOT NULL DEFAULT 0 CHECK (response_read_error IN (0,1)),
+  status TEXT NOT NULL CHECK (status IN ('dispatched','succeeded','invalid_response','failed','budget_exceeded','uncertain')),
+  error_kind TEXT,
+  http_status INTEGER,
+  input_tokens INTEGER,
+  output_tokens INTEGER,
+  created_at TEXT NOT NULL,
+  finished_at TEXT,
+  UNIQUE(round_attempt_id,step_index)
+);
+
+CREATE TABLE discovery_http (
+  attempt_id TEXT PRIMARY KEY REFERENCES round_attempts(id),
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  method TEXT NOT NULL,
+  request_json TEXT NOT NULL,
+  endpoint TEXT NOT NULL,
+  status_code INTEGER NOT NULL,
+  response_body BLOB NOT NULL,
+  response_sha256 TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  error_code TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX discovery_http_round ON discovery_http(round_id,observed_at);
+
+CREATE TABLE discovery_candidates (
+  id TEXT PRIMARY KEY,
+  attempt_id TEXT NOT NULL REFERENCES discovery_http(attempt_id),
+  kind TEXT NOT NULL CHECK(kind IN ('job','company')),
+  title TEXT NOT NULL,
+  url TEXT NOT NULL,
+  company_url TEXT NOT NULL DEFAULT '',
+  evidence_quote TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(attempt_id,kind,url)
+);
+
 -- Both scheduled discoveries and owner submissions enter this same durable
 -- intake. Jobs provide leases/attempt history; this row preserves source and
 -- the exact verified record mapping across retries and process restarts.
@@ -451,7 +543,10 @@ CREATE TABLE source_sightings (
   recorded_at TEXT NOT NULL,
   actor_kind TEXT NOT NULL,
   actor_id TEXT NOT NULL,
-  decision TEXT NOT NULL CHECK (decision IN ('new','changed','unchanged','older'))
+  decision TEXT NOT NULL CHECK (decision IN ('new','changed','unchanged','older')),
+  collector_attempt_id TEXT REFERENCES round_attempts(id),
+  posting_index INTEGER,
+  UNIQUE(collector_attempt_id,posting_index)
 );
 CREATE INDEX source_sightings_opening_idx ON source_sightings(source_opening_id,observed_at,id);
 CREATE TRIGGER source_sightings_no_update BEFORE UPDATE ON source_sightings

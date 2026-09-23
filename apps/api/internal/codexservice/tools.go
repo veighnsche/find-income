@@ -12,7 +12,7 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-var requiredTools = []string{"round_context", "round_mutation"}
+var requiredTools = []string{"round_context", "round_mutation", "round_evidence_correction", "source_links"}
 var errTool = errors.New("Round tool input or authority is invalid; refresh round_context.")
 
 type roundContextArgs struct {
@@ -24,6 +24,11 @@ type roundMutationArgs struct {
 	RoundID    string `json:"roundId"`
 	Capability string `json:"capability"`
 	store.RoundMutationInput
+}
+type roundEvidenceCorrectionArgs struct {
+	RoundID    string `json:"roundId"`
+	Capability string `json:"capability"`
+	store.RoundEvidenceCorrectionInput
 }
 
 func registerTool[I any](server *mcp.Server, name, description string, handler func(context.Context, I) (map[string]any, error)) {
@@ -39,6 +44,8 @@ func (s *Service) newBridge() http.Handler {
 	server := mcp.NewServer(&mcp.Implementation{Name: "jobseek", Version: "0.1.0"}, nil)
 	registerTool(server, "round_context", "Read one delegated active round and its exact scope and remaining allowance.", s.roundContextTool)
 	registerTool(server, "round_mutation", "Create a company or opportunity in a delegated running round with an exact resource, revision and idempotency key.", s.roundMutationTool)
+	registerTool(server, "round_evidence_correction", "Supersede one owner-selected evidence claim with an exact source quote and round authority.", s.roundEvidenceCorrectionTool)
+	registerTool(server, "source_links", "Inspect bounded public career links from a scoped company's saved website.", s.sourceLinksTool)
 	bridge := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Dedicated bridge authentication: browser cookies and Origin-bearing
@@ -52,6 +59,14 @@ func (s *Service) newBridge() http.Handler {
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		bridge.ServeHTTP(w, r)
 	})
+}
+
+func (s *Service) sourceLinksTool(ctx context.Context, args SourceLinksArgs) (map[string]any, error) {
+	snapshot, err := s.RoundSourceLinks(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"snapshot": snapshot}, nil
 }
 
 func (s *Service) roundContextTool(ctx context.Context, args roundContextArgs) (map[string]any, error) {
@@ -83,14 +98,34 @@ func (s *Service) roundContextTool(ctx context.Context, args roundContextArgs) (
 	if err != nil {
 		return nil, err
 	}
+	allInstructions, err := s.db.OwnerInstructions(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	instructions := make([]store.OwnerInstruction, 0)
+	for _, instruction := range allInstructions {
+		if instruction.ActorID == r.Actor.ID && (instruction.RoundID == r.ID || instruction.RoundID == "" && scopeContains(r.Scope.InputRefs, "instruction:"+instruction.ID)) {
+			instructions = append(instructions, instruction)
+		}
+	}
 	result := map[string]any{"roundId": r.ID, "outcome": r.Outcome, "intent": r.Intent,
 		"profileVersion": r.ProfileVersion, "scope": r.Scope, "generation": r.Generation,
-		"revision": r.Revision, "deadline": r.Deadline, "limits": r.Limits, "used": r.Used}
+		"revision": r.Revision, "deadline": r.Deadline, "limits": r.Limits, "used": r.Used,
+		"ownerInstructions": instructions}
 	encoded, _ := json.Marshal(result)
 	if _, err := s.db.FinishRoundAttempt(ctx, authority.Actor, args.RoundID, attempt.ID, true, encoded, ""); err != nil {
 		return nil, err
 	}
 	return result, nil
+}
+
+func scopeContains(items []string, value string) bool {
+	for _, item := range items {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) roundMutationTool(ctx context.Context, args roundMutationArgs) (map[string]any, error) {
@@ -101,6 +136,20 @@ func (s *Service) roundMutationTool(ctx context.Context, args roundMutationArgs)
 	input := args.RoundMutationInput
 	input.Capability = args.Capability
 	result, created, err := s.db.ApplyRoundMutation(ctx, authority.Actor, args.RoundID, input)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"result": result, "created": created}, nil
+}
+
+func (s *Service) roundEvidenceCorrectionTool(ctx context.Context, args roundEvidenceCorrectionArgs) (map[string]any, error) {
+	authority, err := s.db.VerifyRoundToolCapability(ctx, args.Capability, args.RoundID)
+	if err != nil {
+		return nil, err
+	}
+	input := args.RoundEvidenceCorrectionInput
+	input.Capability = args.Capability
+	result, created, err := s.db.CorrectRoundEvidence(ctx, authority.Actor, args.RoundID, input)
 	if err != nil {
 		return nil, err
 	}

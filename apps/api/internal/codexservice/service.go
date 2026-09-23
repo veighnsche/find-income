@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -51,6 +52,9 @@ type Service struct {
 	closed          bool
 	dial            func(context.Context, Config) (io.ReadWriteCloser, error)
 	bridge          http.Handler
+	sourceMu        sync.Mutex
+	sourceCalls     map[string]*sourceCall
+	linkFetch       func(context.Context, string, SourceLinkPage) (SourceLinksSnapshot, error)
 }
 
 func NewFromEnvironment(ctx context.Context, db *store.Store) (*Service, error) {
@@ -65,6 +69,9 @@ func New(ctx context.Context, db *store.Store, cfg Config) (*Service, error) {
 	}
 	serviceCtx, cancel := context.WithCancel(ctx)
 	s := &Service{db: db, cfg: cfg, ctx: serviceCtx, cancel: cancel, dial: dialSSH}
+	s.linkFetch = func(ctx context.Context, url string, page SourceLinkPage) (SourceLinksSnapshot, error) {
+		return fetchOfficialLinksPage(ctx, url, net.DefaultResolver, pinnedSourceClient, page)
+	}
 	s.bridge = s.newBridge()
 	return s, nil
 }

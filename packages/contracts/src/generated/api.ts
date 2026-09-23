@@ -113,6 +113,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rounds/{id}/cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Read source linked opportunity cards saved by a round */
+        get: operations["getRoundCards"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rounds/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Read the round's linked audited record history */
+        get: operations["getRoundHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/owner-instructions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read active contextual owner instructions */
+        get: operations["listOwnerInstructions"];
+        put?: never;
+        /** Save explicit owner context for one target */
+        post: operations["addOwnerInstruction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/owner-instructions/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke an owner instruction before further use */
+        post: operations["revokeOwnerInstruction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Read the owner's latest direct decision */
+        get: operations["getOwnerOpportunityDecision"];
+        put?: never;
+        /** Save select, dismiss, or acknowledge without a model turn */
+        post: operations["setOwnerOpportunityDecision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rounds/{id}/stop": {
         parameters: {
             query?: never;
@@ -980,20 +1075,140 @@ export interface components {
         RoundResults: {
             items: unknown[];
         };
+        RoundCards: {
+            items: components["schemas"]["RoundCard"][];
+        };
+        RoundCard: {
+            opportunityId: string;
+            /** Format: int64 */
+            opportunityRevision: number;
+            companyId: string;
+            companyName: string;
+            title: string;
+            kind: string;
+            sourceUrl: string;
+            sourceText: string;
+            sourceAuditId: string;
+            /** Format: int64 */
+            sourceRevision: number;
+            sourceStale: boolean;
+            decision: string;
+            /** Format: int64 */
+            decisionRevision: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        RoundHistory: {
+            items: components["schemas"]["RoundHistoryEvent"][];
+        };
+        RoundHistoryEvent: {
+            auditId: string;
+            attemptId: string;
+            operation: string;
+            entityKind: string;
+            entityId: string;
+            /** Format: int64 */
+            revisionBefore?: number;
+            /** Format: int64 */
+            revisionAfter?: number;
+            /** Format: date-time */
+            occurredAt: string;
+        };
+        OwnerInstructionInput: {
+            requestKey: string;
+            /** @enum {string} */
+            targetKind: "campaign" | "profile" | "opportunity" | "evidence";
+            targetId: string;
+            /** Format: int64 */
+            expectedRevision: number;
+            roundId?: string;
+            text: string;
+        };
+        OwnerInstruction: components["schemas"]["OwnerInstructionInput"] & {
+            id: string;
+            actorId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt?: string;
+        };
+        OwnerInstructions: {
+            items: components["schemas"]["OwnerInstruction"][];
+        };
+        OwnerDecisionInput: {
+            requestKey: string;
+            /** Format: int64 */
+            expectedOpportunityRevision: number;
+            /** Format: int64 */
+            expectedDecisionRevision: number;
+            /** @enum {string} */
+            decision: "selected" | "dismissed" | "acknowledged";
+        };
+        OwnerDecision: {
+            id: string;
+            opportunityId: string;
+            /** @enum {string} */
+            decision: "selected" | "dismissed" | "acknowledged";
+            /** Format: int64 */
+            revision: number;
+            /** Format: int64 */
+            opportunityRevision: number;
+            auditId: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
         RoundMutationRequest: {
             requestKey: string;
             /** @enum {string} */
-            operation: "company.create" | "opportunity.create";
+            operation: "company.create" | "opportunity.create" | "opportunity.source_save" | "opportunity.owner_correction" | "preferences.correct";
             resourceId: string;
             /** Format: int64 */
             expectedRevision: number;
             company?: components["schemas"]["CreateCompanyRequest"];
             opportunity?: components["schemas"]["CreateOpportunityRequest"];
+            sourceOpportunity?: components["schemas"]["RoundSourceOpportunity"];
+            ownerInstructionId?: string;
+            opportunityPatch?: components["schemas"]["RoundOpportunityCorrection"];
+            preferences?: components["schemas"]["RoundPreferences"];
+        };
+        RoundSourceOpportunity: {
+            sourceOpeningId: string;
+            /** Format: int64 */
+            expectedRevision: number;
+            companyId: string;
+            opportunity: components["schemas"]["CreateOpportunityRequest"];
+        };
+        RoundOpportunityCorrection: {
+            /** Format: int64 */
+            expectedRevision: number;
+            title?: string;
+            /** @enum {string} */
+            kind?: "employment" | "project";
+            notes?: string;
+            stage?: string;
+            /** @enum {string} */
+            workPattern?: "unknown" | "onsite" | "hybrid" | "remote";
+            locationText?: string;
+            postedOn?: string;
+            deadlineOn?: string;
+            compensation?: components["schemas"]["AdvertisedCompensation"];
+        };
+        RoundPreferences: {
+            preferredLocation: string;
+            allowRemote: boolean;
+            allowHybrid: boolean;
+            /** Format: int64 */
+            targetHoursHundredths: number;
+            /** Format: int64 */
+            minMonthlyBaseCents: number;
+            salaryCurrency: string;
+            roleCriteria: components["schemas"]["RoleCriterion"][];
+            timezone: string;
         };
         RoundMutationResult: {
             attemptId: string;
             /** @enum {string} */
-            entityKind: "company" | "opportunity";
+            entityKind: "company" | "opportunity" | "preferences" | "evidence";
             entityId: string;
             /** Format: int64 */
             revision: number;
@@ -2071,6 +2286,183 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoundResults"];
+                };
+            };
+        };
+    };
+    getRoundCards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cards from linked audited records */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundCards"];
+                };
+            };
+        };
+    };
+    getRoundHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Typed history events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundHistory"];
+                };
+            };
+        };
+    };
+    listOwnerInstructions: {
+        parameters: {
+            query?: {
+                roundId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner instructions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerInstructions"];
+                };
+            };
+        };
+    };
+    addOwnerInstruction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnerInstructionInput"];
+            };
+        };
+        responses: {
+            /** @description Exact replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerInstruction"];
+                };
+            };
+            /** @description Instruction saved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerInstruction"];
+                };
+            };
+        };
+    };
+    revokeOwnerInstruction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Instruction revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getOwnerOpportunityDecision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Latest decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerDecision"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setOwnerOpportunityDecision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnerDecisionInput"];
+            };
+        };
+        responses: {
+            /** @description Exact replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerDecision"];
+                };
+            };
+            /** @description Decision saved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerDecision"];
                 };
             };
         };

@@ -137,3 +137,65 @@ func TestAgentSubmissionPreservesAuthenticatedActor(t *testing.T) {
 		t.Fatalf("agent impersonated owner origin: %v", err)
 	}
 }
+
+func TestCollectorSourceIdentitySurvivesRestartAndOlderSighting(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	s, err := Open(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := Actor{Kind: "system", ID: "collector:board-one"}
+	first := IngestionInput{Origin: "collector", ConnectorID: "lever:board-one", ExternalID: "job-7",
+		SourceURL: "https://jobs.lever.co/example/job-7", OriginalText: `{"id":"job-7","text":"First"}`,
+		DiscoveredAt: "2026-09-23T10:00:00Z", IdempotencyKey: "batch-1:0"}
+	a, created, err := s.SubmitIngestion(ctx, actor, first)
+	if err != nil || !created || a.SourceOpeningID == "" {
+		t.Fatalf("first sighting: %+v %v %v", a, created, err)
+	}
+	changed := first
+	changed.OriginalText = `{"id":"job-7","text":"Changed"}`
+	changed.DiscoveredAt, changed.IdempotencyKey = "2026-09-23T10:05:00Z", "batch-2:0"
+	b, created, err := s.SubmitIngestion(ctx, actor, changed)
+	if err != nil || !created || b.ID == a.ID || b.SourceOpeningID != a.SourceOpeningID {
+		t.Fatalf("changed revision: %+v %v %v", b, created, err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Open(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	older := first
+	older.DiscoveredAt, older.IdempotencyKey = "2026-09-23T10:02:00Z", "batch-older:0"
+	current, created, err := s.SubmitIngestion(ctx, actor, older)
+	if err != nil || created || current.ID != b.ID {
+		t.Fatalf("out-of-order response displaced current source: %+v %v %v", current, created, err)
+	}
+	var currentID, digest, latest, decision string
+	var openingCount, sightingCount, requestCount int
+	if err := s.db.QueryRowContext(ctx, `SELECT current_ingestion_id,current_sha256,latest_observed_at FROM source_openings WHERE id=?`, a.SourceOpeningID).
+		Scan(&currentID, &digest, &latest); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT decision FROM source_sightings WHERE observed_at=?`, "2026-09-23T10:02:00.000000000Z").Scan(&decision); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM source_openings`).Scan(&openingCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM source_sightings`).Scan(&sightingCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM ingestion_requests WHERE origin='collector'`).Scan(&requestCount); err != nil {
+		t.Fatal(err)
+	}
+	if currentID != b.ID || digest != sourceDigest(changed.OriginalText) ||
+		latest != "2026-09-23T10:05:00.000000000Z" || decision != "older" ||
+		openingCount != 1 || sightingCount != 3 || requestCount != 2 {
+		t.Fatalf("source history changed: current=%s digest=%s latest=%s decision=%s openings=%d sightings=%d requests=%d",
+			currentID, digest, latest, decision, openingCount, sightingCount, requestCount)
+	}
+}

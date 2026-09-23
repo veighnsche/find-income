@@ -94,6 +94,89 @@ paths:
             content:
               { application/json: { schema: { $ref: '#/components/schemas/RoundResults' } } },
           }
+  /rounds/{id}/cards:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getRoundCards
+      summary: Read source linked opportunity cards saved by a round
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Cards from linked audited records
+          content: { application/json: { schema: { $ref: '#/components/schemas/RoundCards' } } }
+  /rounds/{id}/history:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getRoundHistory
+      summary: Read the round's linked audited record history
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Typed history events
+          content: { application/json: { schema: { $ref: '#/components/schemas/RoundHistory' } } }
+  /owner-instructions:
+    get:
+      operationId: listOwnerInstructions
+      summary: Read active contextual owner instructions
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: roundId, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Owner instructions
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/OwnerInstructions' } } }
+    post:
+      operationId: addOwnerInstruction
+      summary: Save explicit owner context for one target
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/OwnerInstructionInput' } } }
+      responses:
+        '200':
+          description: Exact replay
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/OwnerInstruction' } } }
+        '201':
+          description: Instruction saved
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/OwnerInstruction' } } }
+  /owner-instructions/{id}/revoke:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: revokeOwnerInstruction
+      summary: Revoke an owner instruction before further use
+      security: [{ cookieAuth: [] }]
+      responses:
+        '204': { description: Instruction revoked }
+  /opportunities/{id}/decision:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getOwnerOpportunityDecision
+      summary: Read the owner's latest direct decision
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Latest decision
+          content: { application/json: { schema: { $ref: '#/components/schemas/OwnerDecision' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: setOwnerOpportunityDecision
+      summary: Save select, dismiss, or acknowledge without a model turn
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/OwnerDecisionInput' } } }
+      responses:
+        '200':
+          description: Exact replay
+          content: { application/json: { schema: { $ref: '#/components/schemas/OwnerDecision' } } }
+        '201':
+          description: Decision saved
+          content: { application/json: { schema: { $ref: '#/components/schemas/OwnerDecision' } } }
   /rounds/{id}/stop:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     post:
@@ -1064,23 +1147,185 @@ components:
       required: [items]
       properties:
         items: { type: array, items: {} }
+    RoundCards:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/RoundCard' } }
+    RoundCard:
+      type: object
+      required:
+        [
+          opportunityId,
+          opportunityRevision,
+          companyId,
+          companyName,
+          title,
+          kind,
+          sourceUrl,
+          sourceText,
+          sourceAuditId,
+          sourceRevision,
+          sourceStale,
+          decision,
+          decisionRevision,
+          createdAt,
+        ]
+      properties:
+        opportunityId: { type: string }
+        opportunityRevision: { type: integer, format: int64 }
+        companyId: { type: string }
+        companyName: { type: string }
+        title: { type: string }
+        kind: { type: string }
+        sourceUrl: { type: string }
+        sourceText: { type: string }
+        sourceAuditId: { type: string }
+        sourceRevision: { type: integer, format: int64 }
+        sourceStale: { type: boolean }
+        decision: { type: string }
+        decisionRevision: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+    RoundHistory:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/RoundHistoryEvent' } }
+    RoundHistoryEvent:
+      type: object
+      required: [auditId, attemptId, operation, entityKind, entityId, occurredAt]
+      properties:
+        auditId: { type: string }
+        attemptId: { type: string }
+        operation: { type: string }
+        entityKind: { type: string }
+        entityId: { type: string }
+        revisionBefore: { type: integer, format: int64 }
+        revisionAfter: { type: integer, format: int64 }
+        occurredAt: { type: string, format: date-time }
+    OwnerInstructionInput:
+      type: object
+      additionalProperties: false
+      required: [requestKey, targetKind, targetId, expectedRevision, text]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        targetKind: { type: string, enum: [campaign, profile, opportunity, evidence] }
+        targetId: { type: string }
+        expectedRevision: { type: integer, format: int64, minimum: 1 }
+        roundId: { type: string }
+        text: { type: string, minLength: 1, maxLength: 20000 }
+    OwnerInstruction:
+      allOf:
+        - { $ref: '#/components/schemas/OwnerInstructionInput' }
+        - type: object
+          required: [id, actorId, createdAt]
+          properties:
+            id: { type: string }
+            actorId: { type: string }
+            createdAt: { type: string, format: date-time }
+            revokedAt: { type: string, format: date-time }
+    OwnerInstructions:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/OwnerInstruction' } }
+    OwnerDecisionInput:
+      type: object
+      additionalProperties: false
+      required: [requestKey, expectedOpportunityRevision, expectedDecisionRevision, decision]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        expectedOpportunityRevision: { type: integer, format: int64, minimum: 1 }
+        expectedDecisionRevision: { type: integer, format: int64, minimum: 0 }
+        decision: { type: string, enum: [selected, dismissed, acknowledged] }
+    OwnerDecision:
+      type: object
+      required: [id, opportunityId, decision, revision, opportunityRevision, auditId, createdAt]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        decision: { type: string, enum: [selected, dismissed, acknowledged] }
+        revision: { type: integer, format: int64 }
+        opportunityRevision: { type: integer, format: int64 }
+        auditId: { type: string }
+        createdAt: { type: string, format: date-time }
     RoundMutationRequest:
       type: object
       additionalProperties: false
       required: [requestKey, operation, resourceId, expectedRevision]
       properties:
         requestKey: { type: string, minLength: 1, maxLength: 200 }
-        operation: { type: string, enum: [company.create, opportunity.create] }
+        operation:
+          {
+            type: string,
+            enum:
+              [
+                company.create,
+                opportunity.create,
+                opportunity.source_save,
+                opportunity.owner_correction,
+                preferences.correct,
+              ],
+          }
         resourceId: { type: string }
         expectedRevision: { type: integer, format: int64, minimum: 1 }
         company: { $ref: '#/components/schemas/CreateCompanyRequest' }
         opportunity: { $ref: '#/components/schemas/CreateOpportunityRequest' }
+        sourceOpportunity: { $ref: '#/components/schemas/RoundSourceOpportunity' }
+        ownerInstructionId: { type: string }
+        opportunityPatch: { $ref: '#/components/schemas/RoundOpportunityCorrection' }
+        preferences: { $ref: '#/components/schemas/RoundPreferences' }
+    RoundSourceOpportunity:
+      type: object
+      required: [sourceOpeningId, expectedRevision, companyId, opportunity]
+      properties:
+        sourceOpeningId: { type: string }
+        expectedRevision: { type: integer, format: int64, minimum: 1 }
+        companyId: { type: string }
+        opportunity: { $ref: '#/components/schemas/CreateOpportunityRequest' }
+    RoundOpportunityCorrection:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision]
+      properties:
+        expectedRevision: { type: integer, format: int64, minimum: 1 }
+        title: { type: string }
+        kind: { type: string, enum: [employment, project] }
+        notes: { type: string }
+        stage: { type: string }
+        workPattern: { type: string, enum: [unknown, onsite, hybrid, remote] }
+        locationText: { type: string }
+        postedOn: { type: string }
+        deadlineOn: { type: string }
+        compensation: { $ref: '#/components/schemas/AdvertisedCompensation' }
+    RoundPreferences:
+      type: object
+      required:
+        [
+          preferredLocation,
+          allowRemote,
+          allowHybrid,
+          targetHoursHundredths,
+          minMonthlyBaseCents,
+          salaryCurrency,
+          roleCriteria,
+          timezone,
+        ]
+      properties:
+        preferredLocation: { type: string }
+        allowRemote: { type: boolean }
+        allowHybrid: { type: boolean }
+        targetHoursHundredths: { type: integer, format: int64 }
+        minMonthlyBaseCents: { type: integer, format: int64 }
+        salaryCurrency: { type: string }
+        roleCriteria: { type: array, items: { $ref: '#/components/schemas/RoleCriterion' } }
+        timezone: { type: string }
     RoundMutationResult:
       type: object
       required: [attemptId, entityKind, entityId, revision, auditId]
       properties:
         attemptId: { type: string }
-        entityKind: { type: string, enum: [company, opportunity] }
+        entityKind: { type: string, enum: [company, opportunity, preferences, evidence] }
         entityId: { type: string }
         revision: { type: integer, format: int64 }
         auditId: { type: string }

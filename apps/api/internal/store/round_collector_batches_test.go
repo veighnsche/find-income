@@ -45,7 +45,7 @@ func TestRoundCollectorPartialPageAndBufferedContinuation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload := json.RawMessage(`{"postings":[{"boardId":"lever-one","originalText":" eCBleGFjdA== "}],"pagesFetched":1,"itemsExamined":3,"next":{"boardId":"lever-one","nextOffset":25,"pending":[{"raw":"IHJhdw==","observedAt":"now"},{"raw":"eCBieXRlcw==","observedAt":"now"}]}}`)
+	payload := json.RawMessage(`{"postings":[],"pagesFetched":1,"itemsExamined":3,"next":{"boardId":"lever-one","nextOffset":25,"pending":[{"raw":"IHJhdw==","observedAt":"now"},{"raw":"eCBieXRlcw==","observedAt":"now"}]}}`)
 	if _, err := s.SaveRoundCollectorBatch(ctx, agent, r.ID, first.ID, r.Revision, payload); err != nil {
 		t.Fatal(err)
 	}

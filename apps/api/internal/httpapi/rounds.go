@@ -24,7 +24,19 @@ func (h *Handler) defaultRoundInput(ctx context.Context, requestKey string) (sto
 	if err != nil {
 		return store.StartRoundInput{}, err
 	}
-	resources := []string{"campaign:active"}
+	resources := []string{"campaign:active", "profile:current", "discovery:himalayas"}
+	inputRefs := []string{"profile:current", "campaign:active"}
+	instructions, err := h.database.OwnerInstructions(ctx, "")
+	if err != nil {
+		return store.StartRoundInput{}, err
+	}
+	for _, instruction := range instructions {
+		if instruction.RoundID == "" && (instruction.TargetKind == "profile" &&
+			instruction.TargetID == "current" && instruction.ExpectedRevision == profile.Version ||
+			instruction.TargetKind == "evidence" || instruction.TargetKind == "opportunity") {
+			inputRefs = append(inputRefs, "instruction:"+instruction.ID)
+		}
+	}
 	for _, board := range boards {
 		if board.Enabled && board.VerifiedAt != "" {
 			resources = append(resources, "board:"+board.ID)
@@ -50,8 +62,8 @@ func (h *Handler) defaultRoundInput(ctx context.Context, requestKey string) (sto
 	return store.StartRoundInput{RequestKey: requestKey,
 		Intent:  "Discover source-linked work opportunities for the current owner profile.",
 		Outcome: "discover", ProfileVersion: profile.Version,
-		Scope: store.RoundScope{InputRefs: []string{"profile:current", "campaign:active"},
-			Resources: resources, Operations: []string{store.RoundCreateCompany, store.RoundCreateOpportunity, store.RoundCollectorPage, store.RoundCodexTurn, store.RoundContextTool},
+		Scope: store.RoundScope{InputRefs: inputRefs,
+			Resources: resources, Operations: []string{store.RoundCreateCompany, store.RoundCreateOpportunity, store.RoundSaveSourceOpportunity, store.RoundCorrectPreferences, store.RoundCorrectEvidence, store.RoundCorrectOpportunity, store.RoundCollectorPage, store.RoundSearchSource, store.RoundCodexTurn, store.RoundContextTool},
 			Delegates: []string{"codex-runner"}},
 		Limits:   store.RoundAllowance{Requests: 10, Items: 10, Tools: 12, Turns: 4},
 		Deadline: time.Now().Add(30 * time.Minute).UTC()}, nil
