@@ -205,6 +205,15 @@ def check_packs(db, assets):
     return count
 
 
+def check_delivery_material(db):
+    for mime, mime_sha, attachment_sha, pack_sha, pdf, saved_pack_sha in db.execute(
+        "SELECT d.mime_bytes,d.mime_sha256,d.attachment_sha256,d.pack_content_sha256,p.pdf,p.content_sha256 "
+        "FROM delivery_items d JOIN application_packs p ON p.id=d.pack_id"
+    ):
+        if digest(mime) != mime_sha or digest(pdf) != attachment_sha or pack_sha != saved_pack_sha:
+            fail("saved delivery MIME or referenced pack differs from its digest")
+
+
 def sanitize(db):
     now = datetime.now(timezone.utc).isoformat()
     db.execute("PRAGMA foreign_keys=ON")
@@ -274,6 +283,7 @@ def verify_archive(archive, expected_manifest_sha, approved=ASSETS):
     with closing(open_ro(db_path)) as db:
         schema = check_db(db)
         packs = check_packs(db, assets)
+        check_delivery_material(db)
         if schema != manifest["schemaSha256"] or packs != manifest.get("packCount"):
             fail("backup schema or pack count differs from manifest")
         if db.execute("SELECT 1 FROM administrator UNION SELECT 1 FROM auth_sessions UNION SELECT 1 FROM agent_credentials UNION SELECT 1 FROM round_tool_capabilities").fetchone():
@@ -304,6 +314,7 @@ def create(data_dir, assets_root, output, approved=ASSETS, known_secrets=()):
             with closing(sqlite3.connect(raw)) as db:
                 schema = check_db(db)
                 check_packs(db, assets)
+                check_delivery_material(db)
                 sanitize(db)
                 final = output / DB_NAME
                 db.execute("VACUUM INTO ?", (str(final),))
@@ -317,6 +328,7 @@ def create(data_dir, assets_root, output, approved=ASSETS, known_secrets=()):
         with closing(open_ro(final)) as db:
             check_db(db)
             count = check_packs(db, assets)
+            check_delivery_material(db)
         files = {DB_NAME: file_digest(final)} | {"assets/" + name: digest(body) for name, body in assets.items()}
         manifest = {"format": FORMAT, "createdAt": datetime.now(timezone.utc).isoformat(), "schemaSha256": schema, "packCount": count, "files": files}
         manifest_path = output / "manifest.json"

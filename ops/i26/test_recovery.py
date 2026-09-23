@@ -173,6 +173,23 @@ class RecoveryTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "runnable recruitment"):
             recovery.verify_archive(archive, recovery.file_digest(manifest_path), self.digests)
 
+    def test_rehashed_delivery_material_mismatch_is_rejected(self):
+        for column, value in (("mime_bytes", b"changed saved message"),
+                              ("attachment_sha256", "0" * 64),
+                              ("pack_content_sha256", "0" * 64)):
+            with self.subTest(column=column):
+                archive = self.backups / column
+                recovery.create(self.data, self.assets, archive, self.digests)
+                db_path = archive / recovery.DB_NAME
+                with closing(sqlite3.connect(db_path)) as db, db:
+                    db.execute(f"UPDATE delivery_items SET {column}=? WHERE id='delivery-1'", (value,))
+                manifest_path = archive / "manifest.json"
+                manifest = json.loads(manifest_path.read_bytes())
+                manifest["files"][recovery.DB_NAME] = recovery.file_digest(db_path)
+                manifest_path.write_bytes(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode() + b"\n")
+                with self.assertRaisesRegex(ValueError, "saved delivery MIME or referenced pack"):
+                    recovery.verify_archive(archive, recovery.file_digest(manifest_path), self.digests)
+
     def test_packaged_script_works_without_source_checkout(self):
         bundle = self.root / "bundle"
         subprocess.run([str(recovery.ROOT / "ops/i26/build-recovery.sh"), str(bundle)], check=True, capture_output=True)
