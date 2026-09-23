@@ -8,7 +8,6 @@
   "dispatched": [
     "I13-C",
     "I13-N",
-    "I20-B correction",
     "I14-UI"
   ],
   "implementation_acceptance": [
@@ -32,7 +31,7 @@
     "Committed 2fdfe7d: sourced relationships and scope-guarded reassociation; no fabricated referral advantage."
   ],
   "documentation_validated_at": "2026-09-23",
-  "code_checkpoint": "3bcbd42",
+  "code_checkpoint": "5c3306b",
   "root_validation": {
     "check": "passed at 8c8b66d after OpenAPI formatting",
     "test": "passed full Go API suite; web runner has no test files; controlled I11 browser fixture reviewed",
@@ -40,7 +39,8 @@
     "e2e": "script remains placeholder; I11 controlled browser fixture interaction evidence reviewed, not live backend acceptance",
     "latest_slices": "Full API go test ./... and generated TypeScript contract check pass at 2fdfe7d; I12 allowlist/shell syntax pass at 717ef93.",
     "active_integration": "I13 four findings remain open; three core corrections dispatched. Isolated delivery and recovery work in disjoint new files.",
-    "recovery": "Five current-format synthetic tests and shell syntax pass at3bcbd42; no real data or host touched."
+    "recovery": "Five current-format synthetic tests and shell syntax pass at3bcbd42; no real data or host touched.",
+    "delivery": "Root synthetic SMTP protocol suite passes after non-ASCII/bounds and uncertain-positive-reply corrections; no real send."
   },
   "protected_artifacts_unchanged_prior_check": 44,
   "proposed_next_slices": [
