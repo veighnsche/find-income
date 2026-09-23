@@ -45,11 +45,13 @@ Stop both services with Ctrl+C. To use a different terminal later, repeat the `J
 
 The initial setup creates the single local administrator. Sign-in uses a private session cookie; sign out from the dashboard to end the session. In **Settings → Agent access**, create a distinct named token for each agent, select only the scopes it needs, and choose a 7-, 30-, or 90-day expiry. The raw token appears once: copy it directly into the agent's approved secret store. It cannot be shown again. Use **Revoke** in Settings to invalidate it immediately; create a replacement deliberately if needed. Agent credentials cannot administer the dashboard.
 
-The company/opportunity HTTP handlers are being built and reviewed in the shared working tree, but there is no browser workflow yet and the full agent collect/evidence/action/draft/assessment integration is not ready. Creating a token does not mean an end-to-end agent integration is ready. There is no outbound messaging capability.
+Company/opportunity CRUD API routes and the browser capture/list/edit slice are available. The complete agent collect/evidence/action/draft/assessment/MCP journey is still being integrated; creating a token does not by itself mean that end-to-end agent workflow is ready. There is no outbound messaging capability.
 
 ## Current scope and checks
 
-The current browser workflow is limited to sign-in, stored Today preferences, service status, and agent credential controls. Company/opportunity API work is in progress but not yet available through the browser; People workflows, Jev assessments, embedded Codex, and Typst/PDF generation are not integrated. Personal asset import is not implemented.
+The current browser workflow includes sign-in, Today preferences/service status, agent credential controls, and the accepted opportunity CRUD slice for capturing and editing openings. Today displays the owner's current preference profile (Amsterdam/workable remote or hybrid, 32 hours/week, EUR 4,500 gross monthly employee base at actual hours, `Europe/Amsterdam`, backend/platform direction, and current frontend/PHP-focused exclusions). These are profile values, not universal product rules. Preference editing and alternate-profile assessment are in progress, not yet accepted. Evidence/qualification browser integration, People and action workflows, source collection, Jev assessments, embedded Codex, and Typst/PDF generation are not complete. Personal asset import is not implemented.
+
+When profile editing is added, location, hours/week, minimum gross base amount, currency and compensation basis, timezone, role/responsibility preferences, and technology preferences/exclusions need to be named, editable, versioned values. Assessments should use the active profile while preserving prior profile versions and results.
 
 Useful repository checks after changes:
 
