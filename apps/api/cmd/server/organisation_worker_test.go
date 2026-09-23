@@ -108,7 +108,10 @@ func TestOrganisationWorkerStartsProcessesAndJoinsOnShutdown(t *testing.T) {
 	serviceCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	finished := make(chan error, 1)
-	go func() { finished <- serveWithWorker(serviceCtx, server, listener, worker) }()
+	go func() {
+		finished <- serveWithBackground(serviceCtx, server, listener,
+			backgroundRunner{name: "organisation worker", run: worker.Run})
+	}()
 	select {
 	case <-providerCalls:
 	case <-time.After(3 * time.Second):

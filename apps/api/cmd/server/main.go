@@ -109,15 +109,6 @@ func newOrganisationWorker(database *store.Store, cfg jev.Config, httpClient *ht
 	}, nil
 }
 
-// The worker and HTTP server share cancellation, and both must finish before
-// run closes the store. An unexpected worker error shuts down HTTP too.
-func serveWithWorker(ctx context.Context, server *http.Server, listener net.Listener, worker *jobs.Worker) error {
-	if worker == nil {
-		return serveUntil(ctx, server, listener)
-	}
-	return serveWithBackground(ctx, server, listener, backgroundRunner{name: "organisation worker", run: worker.Run})
-}
-
 type backgroundRunner struct {
 	name string
 	run  func(context.Context) error
