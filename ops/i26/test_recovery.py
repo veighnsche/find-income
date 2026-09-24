@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
+from unittest import mock
 
 import recovery
 
@@ -40,6 +41,31 @@ class RecoveryTest(unittest.TestCase):
         self.digests = {name: recovery.digest(body) for name, body in self.approved.items()}
         for name, body in self.approved.items():
             path = self.assets / name
+            path.write_bytes(body)
+            path.chmod(0o600)
+        self.artifacts = private_dir(self.root, "artifacts")
+        self.blob_fetch = b"synthetic fetched vacancy page\n"
+        self.blob_search = b"synthetic search snippet\n"
+        self.sha_fetch = recovery.digest(self.blob_fetch)
+        self.sha_search = recovery.digest(self.blob_search)
+        self.ref_fetch = "blobs/" + self.sha_fetch[:2] + "/" + self.sha_fetch
+        self.ref_search = "blobs/" + self.sha_search[:2] + "/" + self.sha_search
+        for ref, body in ((self.ref_fetch, self.blob_fetch), (self.ref_search, self.blob_search)):
+            path = self.artifacts / ref
+            path.parent.mkdir(parents=True, mode=0o700)
+            path.write_bytes(body)
+            path.chmod(0o600)
+        (self.artifacts / "receipts").mkdir(mode=0o700)
+        self.fp_claimed = recovery.digest(b"fixture-request-claimed")
+        self.fp_fresh = recovery.digest(b"fixture-request-fresh")
+        self.fp_uncertain = recovery.digest(b"fixture-request-uncertain")
+        self.exec_fetch = {"backend": "fixture-backend", "version": "fixture-1", "digest": "sha256:fixture"}
+        self.exec_browse = {"backend": "fixture-browser", "version": "fixture-2", "digest": "sha256:browser"}
+        for rid, fp, status, cid in (("rcpt-1", self.fp_fresh, "ok", self.sha_fetch),
+                                     ("rcpt-2", self.fp_uncertain, "uncertain", self.sha_search)):
+            body = json.dumps({"id": rid, "operation": "fetch", "fingerprint": fp, "status": status,
+                               "captureId": cid, "attempts": 1}, separators=(",", ":")).encode()
+            path = self.artifacts / "receipts" / (rid + ".json")
             path.write_bytes(body)
             path.chmod(0o600)
         db_path = self.data / recovery.DB_NAME
@@ -91,6 +117,56 @@ class RecoveryTest(unittest.TestCase):
             db.execute("INSERT INTO offer_tradeoff_assessments(id,comparison_id,round_id,jev_attempt_id,result_json,created_at) VALUES ('tradeoff-1','comparison-1','round-offer','jev-offer',?,?)", ('{"selection":"Offer A"}', NOW))
             db.execute("INSERT INTO relationship_counterparties(id,display_name,kind,organization_text,source_kind,source_excerpt,observed_at,created_at,updated_at) VALUES ('person-1','Synthetic contact','contact','Synthetic org','owner','Synthetic source',?,?,?)", (NOW, NOW, NOW))
             db.execute("INSERT INTO relationship_events(id,counterparty_id,opportunity_id,kind,summary,source_kind,source_excerpt,observed_at,created_at,updated_at) VALUES ('event-1','person-1','role-1','conversation','Synthetic conversation','owner','Synthetic excerpt',?,?,?)", (NOW, NOW, NOW))
+            fetch_exec = json.dumps(self.exec_fetch, separators=(",", ":"))
+            browse_exec = json.dumps(self.exec_browse, separators=(",", ":"))
+            db.execute("INSERT INTO source_captures VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       ("cap-1", self.sha_fetch, self.ref_fetch, len(self.blob_fetch), "text/html", 200,
+                        "https://example.invalid/jobs/42", "https://example.invalid/jobs/42", "[]", NOW,
+                        "fetched_response", "complete", "{}", fetch_exec, None, 0, NOW))
+            db.execute("INSERT INTO source_captures VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       ("cap-2", self.sha_search, self.ref_search, len(self.blob_search), "application/json", None,
+                        "https://example.invalid/search?q=synthetic", None, "[]", NOW,
+                        "search_result", "complete", "{}", browse_exec, None, 1, NOW))
+            db.execute("INSERT INTO source_captures VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       ("cap-3", self.sha_fetch, self.ref_fetch, len(self.blob_fetch), "text/html", 200,
+                        "https://example.invalid/jobs/42", "https://example.invalid/jobs/42", "[]", NOW,
+                        "fetched_response", "complete", "{}", fetch_exec, None, 0, NOW))
+            db.execute("INSERT INTO research_requests VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       ("req-claimed", "administrator", "owner", self.fp_claimed, '{"operation":"fetch"}',
+                        "stateless_reusable", "claimed", "attempt-1", 1, "2026-01-02T00:00:00Z",
+                        None, None, None, None, None, NOW, NOW))
+            db.execute("INSERT INTO research_requests VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       ("req-fresh", "administrator", "owner", self.fp_fresh, '{"operation":"fetch"}',
+                        "stateless_reusable", "fresh", None, None, None,
+                        None, None, "2026-01-02T00:00:00Z", None, None, NOW, NOW))
+            db.execute("INSERT INTO research_requests VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       ("req-uncertain", "administrator", "owner", self.fp_uncertain, '{"operation":"fetch"}',
+                        "stateless_reusable", "uncertain", None, None, None,
+                        None, None, None, None, None, NOW, NOW))
+            db.execute("INSERT INTO research_observations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       ("obs-1", "req-fresh", 1, "administrator", "owner", "round-1", "attempt-1",
+                        "fetch", "https://example.invalid/jobs/42", None, NOW, NOW, "success",
+                        "fetched_response", "rcpt-1", fetch_exec, "cap-1", "", "", 0, NOW))
+            db.execute("INSERT INTO research_observations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       ("obs-2", "req-uncertain", 1, "administrator", "owner", "round-1", "attempt-1",
+                        "fetch", "https://example.invalid/search?q=synthetic", None, NOW, NOW, "uncertain",
+                        "search_result", "rcpt-2", browse_exec, "cap-2", "", "", 0, NOW))
+            db.execute("INSERT INTO research_observations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       ("obs-3", "req-fresh", 2, "administrator", "owner", "round-1", None,
+                        "fetch", "https://example.invalid/jobs/42", None, NOW, NOW, "late",
+                        "fetched_response", None, None, "cap-1", "", "", 1, NOW))
+            db.execute("UPDATE research_requests SET latest_observation_id='obs-1',latest_capture_id='cap-1' WHERE id='req-fresh'")
+            db.execute("UPDATE research_requests SET latest_observation_id='obs-2',latest_capture_id='cap-2' WHERE id='req-uncertain'")
+            db.execute("INSERT INTO run_events VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                       ("ev-claim", "round-1", "attempt-1", "claim", self.fp_fresh, None, None, "ok", None, NOW, NOW))
+            db.execute("INSERT INTO run_events VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                       ("ev-obs", "round-1", "attempt-1", "observation", self.fp_fresh, "obs-1", "cap-1", "ok", None, NOW, NOW))
+            db.execute("INSERT INTO run_events VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                       ("ev-uncertain", "round-1", "attempt-1", "observation", self.fp_uncertain, "obs-2", "cap-2", "outcome_uncertain", None, NOW, NOW))
+            self.active_claims = json.dumps([{"fingerprint": self.fp_claimed, "leaseUntil": "2026-01-02T00:00:00Z"}])
+            db.execute("INSERT INTO run_checkpoints VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                       ("round-1", 1, "current", self.active_claims, '["cap-1","cap-2"]', '[]',
+                        '[{"attempt":"attempt-1","reason":"uncertain"}]', None, '[{"op":"fetch"}]', 1, NOW))
             db.execute("PRAGMA secure_delete=OFF")
             db.execute("UPDATE opportunities SET notes=? WHERE id='role-1'", (CANARY.decode() * 200,))
             db.execute("UPDATE opportunities SET notes='' WHERE id='role-1'")
@@ -98,13 +174,14 @@ class RecoveryTest(unittest.TestCase):
 
     def test_round_trip_sanitizes_credentials_and_preserves_pack_history(self):
         archive = self.backups / "archive"
-        pin = recovery.create(self.data, self.assets, archive, self.digests)
+        pin = recovery.create(self.data, self.assets, self.artifacts, archive, self.digests)
         self.assertEqual(recovery.verify_archive(archive, pin, self.digests)["packCount"], 1)
         self.assertNotIn(CANARY, (archive / recovery.DB_NAME).read_bytes())
-        self.assertEqual({p.name for p in archive.iterdir()}, {"jobseek.sqlite", "assets", "manifest.json"})
+        self.assertEqual({p.name for p in archive.iterdir()}, {"jobseek.sqlite", "assets", "manifest.json", "captures", "executor-identity.json"})
         restored_data = private_dir(self.root, "restored-data")
         restored_assets = private_dir(self.root, "restored-assets")
-        recovery.restore(archive, pin, restored_data, restored_assets, self.digests)
+        restored_artifacts = private_dir(self.root, "restored-artifacts")
+        recovery.restore(archive, pin, restored_data, restored_assets, restored_artifacts, self.digests)
         self.assertEqual((restored_assets / "cv-vince-liem.typ").read_bytes(), self.approved["cv-vince-liem.typ"])
         with closing(sqlite3.connect(restored_data / recovery.DB_NAME)) as db:
             self.assertEqual(db.execute("SELECT pdf FROM application_packs WHERE id='pack-1'").fetchone()[0], self.pdf)
@@ -135,16 +212,16 @@ class RecoveryTest(unittest.TestCase):
 
     def test_corruption_and_unexpected_assets_are_rejected(self):
         archive = self.backups / "archive"
-        pin = recovery.create(self.data, self.assets, archive, self.digests)
+        pin = recovery.create(self.data, self.assets, self.artifacts, archive, self.digests)
         with (archive / recovery.DB_NAME).open("r+b") as f:
             f.seek(100)
             f.write(b"BROKEN")
         with self.assertRaises(ValueError):
             recovery.verify_archive(archive, pin, self.digests)
         with self.assertRaises(ValueError):
-            recovery.restore(archive, pin, private_dir(self.root, "target-data"), private_dir(self.root, "target-assets"), self.digests)
+            recovery.restore(archive, pin, private_dir(self.root, "target-data"), private_dir(self.root, "target-assets"), private_dir(self.root, "target-artifacts"), self.digests)
         second = self.backups / "second"
-        pin2 = recovery.create(self.data, self.assets, second, self.digests)
+        pin2 = recovery.create(self.data, self.assets, self.artifacts, second, self.digests)
         (second / "assets" / "cv-vince-liem.typ").write_bytes(b"changed")
         with self.assertRaises(ValueError):
             recovery.verify_archive(second, pin2, self.digests)
@@ -154,12 +231,12 @@ class RecoveryTest(unittest.TestCase):
             db.execute("UPDATE opportunities SET notes=? WHERE id='role-1'", (CANARY.decode(),))
         archive = self.backups / "leaky"
         with self.assertRaisesRegex(ValueError, "known deployment secret"):
-            recovery.create(self.data, self.assets, archive, self.digests, [CANARY])
+            recovery.create(self.data, self.assets, self.artifacts, archive, self.digests, [CANARY])
         self.assertFalse(archive.exists())
 
     def test_rehashed_archive_with_in_flight_delivery_is_not_restorable(self):
         archive = self.backups / "in-flight"
-        recovery.create(self.data, self.assets, archive, self.digests)
+        recovery.create(self.data, self.assets, self.artifacts, archive, self.digests)
         db_path = archive / recovery.DB_NAME
         with closing(sqlite3.connect(db_path)) as db, db:
             db.execute("UPDATE delivery_items SET state='sending' WHERE id='delivery-1'")
@@ -176,7 +253,7 @@ class RecoveryTest(unittest.TestCase):
                               ("pack_content_sha256", "0" * 64)):
             with self.subTest(column=column):
                 archive = self.backups / column
-                recovery.create(self.data, self.assets, archive, self.digests)
+                recovery.create(self.data, self.assets, self.artifacts, archive, self.digests)
                 db_path = archive / recovery.DB_NAME
                 with closing(sqlite3.connect(db_path)) as db, db:
                     db.execute(f"UPDATE delivery_items SET {column}=? WHERE id='delivery-1'", (value,))
@@ -195,10 +272,178 @@ class RecoveryTest(unittest.TestCase):
         spec.loader.exec_module(packaged)
         self.assertEqual(packaged.schema_spec()["schemaSha256"], recovery.schema_spec()["schemaSha256"])
         archive = self.backups / "packaged"
-        pin = packaged.create(self.data, self.assets, archive, self.digests, [CANARY])
+        pin = packaged.create(self.data, self.assets, self.artifacts, archive, self.digests, [CANARY])
         self.assertEqual(len(pin), 64)
         packaged.verify_archive(archive, pin, self.digests)
         subprocess.run([sys.executable, str(bundle / "recovery.py"), "--help"], check=True, capture_output=True)
+
+    def test_capture_manifest_round_trip_keeps_evidence_retrievable(self):
+        archive = self.backups / "captures"
+        pin = recovery.create(self.data, self.assets, self.artifacts, archive, self.digests)
+        manifest = recovery.verify_archive(archive, pin, self.digests)
+        self.assertEqual(manifest["captureCount"], 3)
+        self.assertEqual(manifest["receiptCount"], 2)
+        self.assertEqual(manifest["runEventCount"], 3)
+        self.assertEqual(manifest["runCheckpointCount"], 1)
+        self.assertEqual(manifest["captures"]["cap-1"],
+                         {"sha256": self.sha_fetch, "ref": self.ref_fetch, "size": len(self.blob_fetch)})
+        self.assertEqual(manifest["captures"]["cap-3"]["sha256"], self.sha_fetch)
+        self.assertEqual(manifest["captures"]["cap-3"]["ref"], self.ref_fetch)
+        self.assertEqual(manifest["receipts"], ["rcpt-1", "rcpt-2"])
+        record = json.loads((archive / "executor-identity.json").read_bytes())
+        self.assertEqual({entry["backend"] for entry in record["executors"]}, {"fixture-backend", "fixture-browser"})
+        restored_data = private_dir(self.root, "cap-data")
+        restored_assets = private_dir(self.root, "cap-assets")
+        restored_artifacts = private_dir(self.root, "cap-artifacts")
+        recovery.restore(archive, pin, restored_data, restored_assets, restored_artifacts, self.digests)
+        self.assertEqual((restored_artifacts / self.ref_fetch).read_bytes(), self.blob_fetch)
+        self.assertEqual((restored_artifacts / self.ref_search).read_bytes(), self.blob_search)
+        with closing(sqlite3.connect(restored_data / recovery.DB_NAME)) as db:
+            sha, ref, size = db.execute(
+                "SELECT content_sha256,artifact_ref,byte_length FROM source_captures WHERE id='cap-1'").fetchone()
+            body = (restored_artifacts / ref).read_bytes()
+            self.assertEqual(recovery.digest(body), sha)
+            self.assertEqual(len(body), size)
+            receipt_ref, capture_id = db.execute(
+                "SELECT receipt_ref,capture_id FROM research_observations WHERE id='obs-1'").fetchone()
+            rec = json.loads((restored_artifacts / "receipts" / (receipt_ref + ".json")).read_bytes())
+            self.assertEqual(rec["captureId"], self.sha_fetch)
+            self.assertEqual(capture_id, "cap-1")
+            fingerprint = db.execute("SELECT fingerprint FROM research_requests WHERE id='req-fresh'").fetchone()[0]
+            self.assertEqual(rec["fingerprint"], fingerprint)
+
+    def test_tampered_blob_detected_on_backup_and_verify(self):
+        (self.artifacts / self.ref_fetch).write_bytes(b"tampered bytes")
+        with self.assertRaisesRegex(ValueError, "capture bytes disagree"):
+            recovery.create(self.data, self.assets, self.artifacts, self.backups / "tampered-live", self.digests)
+        (self.artifacts / self.ref_fetch).write_bytes(self.blob_fetch)
+        archive = self.backups / "tampered-archive"
+        pin = recovery.create(self.data, self.assets, self.artifacts, archive, self.digests)
+        (archive / "captures" / self.ref_fetch).write_bytes(b"tampered bytes")
+        with self.assertRaises(ValueError):
+            recovery.verify_archive(archive, pin, self.digests)
+        manifest_path = archive / "manifest.json"
+        manifest = json.loads(manifest_path.read_bytes())
+        manifest["files"]["captures/" + self.ref_fetch] = recovery.file_digest(archive / "captures" / self.ref_fetch)
+        manifest_path.write_bytes(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode() + b"\n")
+        with self.assertRaisesRegex(ValueError, "capture bytes disagree"):
+            recovery.verify_archive(archive, recovery.file_digest(manifest_path), self.digests)
+
+    def test_forged_receipt_binding_and_missing_blob_rejected(self):
+        path = self.artifacts / "receipts" / "rcpt-1.json"
+        rec = json.loads(path.read_bytes())
+        rec["fingerprint"] = "0" * 64
+        path.write_bytes(json.dumps(rec).encode())
+        with self.assertRaisesRegex(ValueError, "receipt fingerprint disagrees"):
+            recovery.create(self.data, self.assets, self.artifacts, self.backups / "forged", self.digests)
+        path.write_bytes(json.dumps({"id": "rcpt-1", "operation": "fetch", "fingerprint": self.fp_fresh,
+                                     "status": "ok", "captureId": self.sha_fetch, "attempts": 1},
+                                    separators=(",", ":")).encode())
+        (self.artifacts / self.ref_search).unlink()
+        with self.assertRaisesRegex(ValueError, "private artifact"):
+            recovery.create(self.data, self.assets, self.artifacts, self.backups / "missing", self.digests)
+
+    def test_restore_invalidates_claims_and_retains_uncertain_without_dispatch(self):
+        archive = self.backups / "scrub"
+        pin = recovery.create(self.data, self.assets, self.artifacts, archive, self.digests)
+        restored_data = private_dir(self.root, "scrub-data")
+        restored_assets = private_dir(self.root, "scrub-assets")
+        restored_artifacts = private_dir(self.root, "scrub-artifacts")
+        recovery.restore(archive, pin, restored_data, restored_assets, restored_artifacts, self.digests)
+        with closing(sqlite3.connect(restored_data / recovery.DB_NAME)) as db:
+            self.assertEqual(db.execute("SELECT state,lease_owner,lease_generation,lease_until FROM research_requests WHERE id='req-claimed'").fetchone(),
+                             ("uncertain", None, None, None))
+            self.assertEqual(db.execute("SELECT state FROM research_requests WHERE id='req-fresh'").fetchone()[0], "fresh")
+            self.assertEqual(db.execute("SELECT state FROM research_requests WHERE id='req-uncertain'").fetchone()[0], "uncertain")
+            active, evidence, unresolved, next_work, generation = db.execute(
+                "SELECT active_claims_json,evidence_ids_json,unresolved_attempts_json,next_work_json,generation FROM run_checkpoints WHERE round_id='round-1'").fetchone()
+            self.assertEqual(active, "[]")
+            self.assertEqual(evidence, '["cap-1","cap-2"]')
+            self.assertEqual(unresolved, '[{"attempt":"attempt-1","reason":"uncertain"}]')
+            self.assertEqual(next_work, '[{"op":"fetch"}]')
+            self.assertEqual(generation, 1)
+            self.assertEqual(db.execute("SELECT generation FROM rounds WHERE id='round-1'").fetchone()[0], 2)
+            self.assertEqual(db.execute("SELECT outcome FROM research_observations WHERE id='obs-2'").fetchone()[0], "uncertain")
+            self.assertEqual(db.execute("SELECT outcome,is_late,capture_id FROM research_observations WHERE id='obs-3'").fetchone(),
+                             ("late", 1, "cap-1"))
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM run_events").fetchone()[0], 3)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM research_requests WHERE state='claimed'").fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM run_checkpoints WHERE active_claims_json<>'[]'").fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM jobs WHERE state IN ('queued','running')").fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM rounds WHERE state IN ('queued','running','awaiting_input','stopping','paused')").fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM delivery_items WHERE state='sending'").fetchone()[0], 0)
+
+    def test_orphan_blobs_and_transient_files_are_skipped(self):
+        orphan = self.artifacts / "blobs" / "ff" / ("ff" * 32)
+        orphan.parent.mkdir(parents=True, mode=0o700)
+        orphan.write_bytes(b"orphaned bytes")
+        orphan.chmod(0o600)
+        stray = self.artifacts / "receipts" / "stray.json"
+        stray.write_bytes(b"{}")
+        stray.chmod(0o600)
+        cache = self.artifacts / "cache"
+        cache.mkdir(mode=0o700)
+        (cache / "scratch.tmp").write_bytes(b"transient")
+        archive = self.backups / "orphans"
+        pin = recovery.create(self.data, self.assets, self.artifacts, archive, self.digests)
+        manifest = recovery.verify_archive(archive, pin, self.digests)
+        self.assertEqual(manifest["skippedOrphanBlobs"], 1)
+        self.assertEqual(manifest["skippedOrphanReceipts"], 1)
+        self.assertEqual(manifest["ignoredArtifactEntries"], 1)
+        self.assertEqual(manifest["captureCount"], 3)
+        restored_artifacts = private_dir(self.root, "orphan-artifacts")
+        recovery.restore(archive, pin, private_dir(self.root, "orphan-data"), private_dir(self.root, "orphan-assets"),
+                         restored_artifacts, self.digests)
+        self.assertFalse((restored_artifacts / "blobs" / "ff").exists())
+        self.assertFalse((restored_artifacts / "receipts" / "stray.json").exists())
+        self.assertFalse((restored_artifacts / "cache").exists())
+        self.assertEqual((restored_artifacts / self.ref_fetch).read_bytes(), self.blob_fetch)
+
+    def test_restore_refuses_nonempty_artifact_dir(self):
+        archive = self.backups / "refuse"
+        pin = recovery.create(self.data, self.assets, self.artifacts, archive, self.digests)
+        target = private_dir(self.root, "dirty-artifacts")
+        (target / "junk").write_bytes(b"existing")
+        with self.assertRaisesRegex(ValueError, "artifact directory must be empty"):
+            recovery.restore(archive, pin, private_dir(self.root, "refuse-data"), private_dir(self.root, "refuse-assets"),
+                             target, self.digests)
+
+    def test_storage_exhaustion_and_blob_bound_surface_explicitly(self):
+        archive = self.backups / "room"
+        pin = recovery.create(self.data, self.assets, self.artifacts, archive, self.digests)
+        with mock.patch.object(recovery.shutil, "disk_usage", return_value=mock.Mock(free=1)):
+            with self.assertRaisesRegex(ValueError, "storage exhausted"):
+                recovery.create(self.data, self.assets, self.artifacts, self.backups / "noroom", self.digests)
+            with self.assertRaisesRegex(ValueError, "storage exhausted"):
+                recovery.restore(archive, pin, private_dir(self.root, "x-data"), private_dir(self.root, "x-assets"),
+                                 private_dir(self.root, "x-artifacts"), self.digests)
+        with mock.patch.object(recovery, "MAX_BLOB_BYTES", 8):
+            with self.assertRaisesRegex(ValueError, "exceeds the backup size bound"):
+                recovery.create(self.data, self.assets, self.artifacts, self.backups / "oversize", self.digests)
+
+    def test_backup_without_research_captures_round_trips(self):
+        bare = private_dir(self.root, "bare-data")
+        db_path = bare / recovery.DB_NAME
+        with closing(sqlite3.connect(db_path)) as db, db:
+            db.execute(recovery.MIGRATION_TABLE_SQL)
+            for version, name, sha, sql in recovery.source_migrations():
+                db.executescript(sql)
+                db.execute("INSERT INTO schema_migrations VALUES (?,?,?,?)", (version, name, sha, NOW))
+        db_path.chmod(0o600)
+        empty_artifacts = private_dir(self.root, "bare-artifacts")
+        archive = self.backups / "bare"
+        pin = recovery.create(bare, self.assets, empty_artifacts, archive, self.digests)
+        manifest = recovery.verify_archive(archive, pin, self.digests)
+        self.assertEqual(manifest["captureCount"], 0)
+        self.assertEqual(manifest["receiptCount"], 0)
+        self.assertEqual(manifest["captures"], {})
+        self.assertEqual(manifest["receipts"], [])
+        restored_artifacts = private_dir(self.root, "bare-restored-artifacts")
+        recovery.restore(archive, pin, private_dir(self.root, "bare-restored-data"),
+                         private_dir(self.root, "bare-restored-assets"), restored_artifacts, self.digests)
+        self.assertTrue((restored_artifacts / "blobs").is_dir())
+        self.assertTrue((restored_artifacts / "receipts").is_dir())
+        self.assertEqual(json.loads((restored_artifacts / "executor-identity.json").read_bytes()), {"executors": []})
 
 
 if __name__ == "__main__":
