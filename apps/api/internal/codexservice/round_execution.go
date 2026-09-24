@@ -187,7 +187,11 @@ func (s *Service) RecoverLocalDispatch(ctx context.Context, roundID, attemptID s
 	if handled || err != nil {
 		return handled, resolved, err
 	}
-	return s.recoverInterviewDispatch(ctx, roundID, attemptID, generation)
+	handled, resolved, err = s.recoverInterviewDispatch(ctx, roundID, attemptID, generation)
+	if handled || err != nil {
+		return handled, resolved, err
+	}
+	return s.recoverReplyDispatch(ctx, roundID, attemptID, generation)
 }
 
 func (s *Service) ObserveDispatch(ctx context.Context, attemptID string) (rounds.Observation, error) {

@@ -2075,6 +2075,7 @@ const (
 	InterviewPrepare GetLatestCompletedRoundParamsOutcome = "interview_prepare"
 	Prepare          GetLatestCompletedRoundParamsOutcome = "prepare"
 	ProcessInput     GetLatestCompletedRoundParamsOutcome = "process_input"
+	ProcessReplies   GetLatestCompletedRoundParamsOutcome = "process_replies"
 )
 
 // Valid indicates whether the value is a known member of the GetLatestCompletedRoundParamsOutcome enum.
@@ -2095,6 +2096,8 @@ func (e GetLatestCompletedRoundParamsOutcome) Valid() bool {
 	case Prepare:
 		return true
 	case ProcessInput:
+		return true
+	case ProcessReplies:
 		return true
 	default:
 		return false
@@ -2421,6 +2424,39 @@ type CompareOffersRoundRequest struct {
 type CompareOffersRoundResponse struct {
 	IntakeId string `json:"intakeId"`
 	Round    Round  `json:"round"`
+}
+
+// CorrespondenceMessage defines model for CorrespondenceMessage.
+type CorrespondenceMessage struct {
+	Body       string    `json:"body"`
+	BodySha256 string    `json:"bodySha256"`
+	Id         string    `json:"id"`
+	Recipients *[]string `json:"recipients,omitempty"`
+	Sender     string    `json:"sender"`
+	SentAt     string    `json:"sentAt"`
+}
+
+// CorrespondenceThread defines model for CorrespondenceThread.
+type CorrespondenceThread struct {
+	AccountId     string  `json:"accountId"`
+	CreatedAt     string  `json:"createdAt"`
+	Id            string  `json:"id"`
+	LastMessageAt *string `json:"lastMessageAt,omitempty"`
+	MessageCount  int     `json:"messageCount"`
+	OpportunityId *string `json:"opportunityId,omitempty"`
+	Subject       string  `json:"subject"`
+	UpdatedAt     string  `json:"updatedAt"`
+}
+
+// CorrespondenceThreadDetail defines model for CorrespondenceThreadDetail.
+type CorrespondenceThreadDetail struct {
+	Messages []CorrespondenceMessage `json:"messages"`
+	Thread   CorrespondenceThread    `json:"thread"`
+}
+
+// CorrespondenceThreadList defines model for CorrespondenceThreadList.
+type CorrespondenceThreadList struct {
+	Items []CorrespondenceThread `json:"items"`
 }
 
 // CreateActionRequest defines model for CreateActionRequest.
@@ -3526,6 +3562,11 @@ type ProcessInputResponse struct {
 	Round           Round   `json:"round"`
 }
 
+// ProcessRepliesRequest defines model for ProcessRepliesRequest.
+type ProcessRepliesRequest struct {
+	RequestKey string `json:"requestKey"`
+}
+
 // QualificationCriterion defines model for QualificationCriterion.
 type QualificationCriterion struct {
 	Blocking    *bool                       `json:"blocking,omitempty"`
@@ -3800,6 +3841,39 @@ type RelationshipSource struct {
 type ReplacePausedRound struct {
 	ExpectedRevision int64  `json:"expectedRevision"`
 	RoundId          string `json:"roundId"`
+}
+
+// ReplyCommissionResponse defines model for ReplyCommissionResponse.
+type ReplyCommissionResponse struct {
+	ProcessingId string `json:"processingId"`
+	Round        Round  `json:"round"`
+	ThreadId     string `json:"threadId"`
+}
+
+// ReplyDraft defines model for ReplyDraft.
+type ReplyDraft struct {
+	Draft       map[string]interface{} `json:"draft"`
+	DraftSha256 *string                `json:"draftSha256,omitempty"`
+	Id          string                 `json:"id"`
+	Revision    int                    `json:"revision"`
+}
+
+// ReplyProcessing defines model for ReplyProcessing.
+type ReplyProcessing struct {
+	CreatedAt     string  `json:"createdAt"`
+	Id            string  `json:"id"`
+	Intent        *string `json:"intent,omitempty"`
+	OpportunityId *string `json:"opportunityId,omitempty"`
+	ProcessedAt   *string `json:"processedAt,omitempty"`
+	RoundId       *string `json:"roundId,omitempty"`
+	ThreadId      string  `json:"threadId"`
+	UpdatedAt     string  `json:"updatedAt"`
+}
+
+// ReplyProcessingDetail defines model for ReplyProcessingDetail.
+type ReplyProcessingDetail struct {
+	Draft      *ReplyDraft     `json:"draft,omitempty"`
+	Processing ReplyProcessing `json:"processing"`
 }
 
 // RescheduleActionRequest defines model for RescheduleActionRequest.
@@ -4407,6 +4481,9 @@ type CreateAgentCredentialJSONRequestBody = CreateAgentCredentialRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
+
+// ProcessCorrespondenceThreadJSONRequestBody defines body for ProcessCorrespondenceThread for application/json ContentType.
+type ProcessCorrespondenceThreadJSONRequestBody = ProcessRepliesRequest
 
 // PrepareDeliveryReviewJSONRequestBody defines body for PrepareDeliveryReview for application/json ContentType.
 type PrepareDeliveryReviewJSONRequestBody = PrepareDeliveryReviewRequest

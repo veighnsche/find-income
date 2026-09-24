@@ -82,7 +82,7 @@ func (s *Store) ResolveCapturedHomeRecommendationAttempt(ctx context.Context, ro
 
 func homeRecommendationOutcome(outcome string) bool {
 	switch outcome {
-	case "process_input", "prepare", "compare_offers", "deliver", "interview_prepare", "interview_debrief":
+	case "process_input", "prepare", "compare_offers", "deliver", "interview_prepare", "interview_debrief", "process_replies":
 		return true
 	default:
 		return false

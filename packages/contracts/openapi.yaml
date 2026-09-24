@@ -220,6 +220,80 @@ paths:
             content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
           }
         '404': { $ref: '#/components/responses/NotFound' }
+  /correspondence/threads:
+    get:
+      operationId: listCorrespondenceThreads
+      summary: List private mirrored correspondence threads
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Thread list,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/CorrespondenceThreadList' } } },
+          }
+  /correspondence/threads/{id}:
+    get:
+      operationId: getCorrespondenceThread
+      summary: Read one mirrored thread with its complete saved messages
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          {
+            description: Thread and messages,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/CorrespondenceThreadDetail' } } },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /correspondence/threads/{id}/process:
+    post:
+      operationId: processCorrespondenceThread
+      summary: Commission reply interpretation and a cited follow-up draft for one thread
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/ProcessRepliesRequest' } } }
+      responses:
+        '200':
+          {
+            description: Existing commission,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/ReplyCommissionResponse' } },
+              },
+          }
+        '201':
+          {
+            description: Commission created,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/ReplyCommissionResponse' } },
+              },
+          }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /replies/{id}:
+    get:
+      operationId: getReplyProcessing
+      summary: Read one reply processing with its saved intent and draft
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          {
+            description: Processing and draft,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/ReplyProcessingDetail' } } },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
   /rounds/latest-completed:
     get:
       operationId: getLatestCompletedRound
@@ -229,7 +303,7 @@ paths:
         - in: query
           name: outcome
           required: true
-          schema: { type: string, enum: [all, discover, process_input, prepare, compare_offers, deliver, interview_prepare, interview_debrief] }
+          schema: { type: string, enum: [all, discover, process_input, prepare, compare_offers, deliver, interview_prepare, interview_debrief, process_replies] }
       responses:
         '200':
           description: Latest matching saved result with transient next-action currentness, or null when none exists
@@ -1485,6 +1559,82 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
+    ProcessRepliesRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+    ReplyCommissionResponse:
+      type: object
+      required: [processingId, threadId, round]
+      properties:
+        processingId: { type: string }
+        threadId: { type: string }
+        round: { $ref: '#/components/schemas/Round' }
+    CorrespondenceThreadList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CorrespondenceThread' }
+    CorrespondenceThread:
+      type: object
+      required: [id, accountId, subject, messageCount, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        subject: { type: string }
+        opportunityId: { type: string }
+        lastMessageAt: { type: string }
+        messageCount: { type: integer }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    CorrespondenceThreadDetail:
+      type: object
+      required: [thread, messages]
+      properties:
+        thread: { $ref: '#/components/schemas/CorrespondenceThread' }
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/CorrespondenceMessage' }
+    CorrespondenceMessage:
+      type: object
+      required: [id, sender, sentAt, bodySha256, body]
+      properties:
+        id: { type: string }
+        sender: { type: string }
+        recipients: { type: array, items: { type: string } }
+        sentAt: { type: string }
+        bodySha256: { type: string }
+        body: { type: string }
+    ReplyProcessingDetail:
+      type: object
+      required: [processing]
+      properties:
+        processing: { $ref: '#/components/schemas/ReplyProcessing' }
+        draft: { $ref: '#/components/schemas/ReplyDraft' }
+    ReplyProcessing:
+      type: object
+      required: [id, threadId, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        threadId: { type: string }
+        roundId: { type: string }
+        intent: { type: string }
+        opportunityId: { type: string }
+        processedAt: { type: string }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    ReplyDraft:
+      type: object
+      required: [id, revision, draft]
+      properties:
+        id: { type: string }
+        revision: { type: integer }
+        draftSha256: { type: string }
+        draft: { type: object }
     PrepareInterviewRequest:
       type: object
       additionalProperties: false

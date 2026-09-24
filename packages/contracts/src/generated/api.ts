@@ -235,6 +235,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/correspondence/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List private mirrored correspondence threads */
+        get: operations["listCorrespondenceThreads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/correspondence/threads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one mirrored thread with its complete saved messages */
+        get: operations["getCorrespondenceThread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/correspondence/threads/{id}/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commission reply interpretation and a cited follow-up draft for one thread */
+        post: operations["processCorrespondenceThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/replies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one reply processing with its saved intent and draft */
+        get: operations["getReplyProcessing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rounds/latest-completed": {
         parameters: {
             query?: never;
@@ -1459,6 +1527,59 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ProcessRepliesRequest: {
+            requestKey: string;
+        };
+        ReplyCommissionResponse: {
+            processingId: string;
+            threadId: string;
+            round: components["schemas"]["Round"];
+        };
+        CorrespondenceThreadList: {
+            items: components["schemas"]["CorrespondenceThread"][];
+        };
+        CorrespondenceThread: {
+            id: string;
+            accountId: string;
+            subject: string;
+            opportunityId?: string;
+            lastMessageAt?: string;
+            messageCount: number;
+            createdAt: string;
+            updatedAt: string;
+        };
+        CorrespondenceThreadDetail: {
+            thread: components["schemas"]["CorrespondenceThread"];
+            messages: components["schemas"]["CorrespondenceMessage"][];
+        };
+        CorrespondenceMessage: {
+            id: string;
+            sender: string;
+            recipients?: string[];
+            sentAt: string;
+            bodySha256: string;
+            body: string;
+        };
+        ReplyProcessingDetail: {
+            processing: components["schemas"]["ReplyProcessing"];
+            draft?: components["schemas"]["ReplyDraft"];
+        };
+        ReplyProcessing: {
+            id: string;
+            threadId: string;
+            roundId?: string;
+            intent?: string;
+            opportunityId?: string;
+            processedAt?: string;
+            createdAt: string;
+            updatedAt: string;
+        };
+        ReplyDraft: {
+            id: string;
+            revision: number;
+            draftSha256?: string;
+            draft: Record<string, never>;
+        };
         PrepareInterviewRequest: {
             requestKey: string;
             opportunityId: string;
@@ -3542,10 +3663,113 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    listCorrespondenceThreads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thread list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CorrespondenceThreadList"];
+                };
+            };
+        };
+    };
+    getCorrespondenceThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thread and messages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CorrespondenceThreadDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    processCorrespondenceThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessRepliesRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing commission */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyCommissionResponse"];
+                };
+            };
+            /** @description Commission created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyCommissionResponse"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getReplyProcessing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Processing and draft */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyProcessingDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
     getLatestCompletedRound: {
         parameters: {
             query: {
-                outcome: "all" | "discover" | "process_input" | "prepare" | "compare_offers" | "deliver" | "interview_prepare" | "interview_debrief";
+                outcome: "all" | "discover" | "process_input" | "prepare" | "compare_offers" | "deliver" | "interview_prepare" | "interview_debrief" | "process_replies";
             };
             header?: never;
             path?: never;

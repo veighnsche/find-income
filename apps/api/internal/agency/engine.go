@@ -38,6 +38,10 @@ type InterviewFocusEvaluator interface {
 	RunInterviewFocus(context.Context, jevservice.Binding, jev.InterviewFocusInput) (jev.InterviewFocusResult, error)
 }
 
+type ReplyIntentEvaluator interface {
+	RunReplyIntent(context.Context, jevservice.Binding, jev.ReplyIntentInput) (jev.ReplyIntentResult, error)
+}
+
 type SourceCollector interface {
 	AcquireLever(context.Context, collector.Request) (collector.Batch, error)
 }
@@ -49,6 +53,7 @@ type Engine struct {
 	Tradeoffs        OfferTradeoffs
 	InterviewSources PackSourceLoader
 	InterviewFocus   InterviewFocusEvaluator
+	ReplyIntent      ReplyIntentEvaluator
 	Collector        SourceCollector
 	InputReader      OwnerSourceReader
 	PackSources      PackSourceLoader
@@ -95,6 +100,9 @@ func (e *Engine) CheckRound(ctx context.Context, outcome string) error {
 	if outcome == "compare_offers" {
 		return e.checkOfferComparison(ctx)
 	}
+	if outcome == "process_replies" {
+		return e.checkReply(ctx, outcome)
+	}
 	if outcome == "prepare" {
 		return e.checkPrepare(ctx)
 	}
@@ -119,6 +127,9 @@ func (e *Engine) LaunchRound(_ context.Context, r store.Round) error {
 	}
 	if r.Outcome == "process_input" {
 		return e.launchInput(r)
+	}
+	if r.Outcome == "process_replies" {
+		return e.launchReply(r)
 	}
 	if e == nil || e.Store == nil || e.Runtime == nil || e.Decisions == nil || e.Collector == nil || r.State != store.RoundRunning || r.Outcome != "discover" {
 		return store.ErrInvalid

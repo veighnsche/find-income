@@ -16,7 +16,7 @@ import (
 // model/effort, quota and required MCP tools, but starts no work. The caller
 // must still explicitly commission ExecuteRoundTurn through the work loop.
 func (s *Service) CheckRound(ctx context.Context, outcome string) error {
-	if s == nil || ctx == nil || outcome != "discover" && outcome != "prepare" && outcome != "process_input" && outcome != "compare_offers" && outcome != "interview_prepare" && outcome != "interview_debrief" {
+	if s == nil || ctx == nil || outcome != "discover" && outcome != "prepare" && outcome != "process_input" && outcome != "compare_offers" && outcome != "interview_prepare" && outcome != "interview_debrief" && outcome != "process_replies" {
 		return ErrUnavailable
 	}
 	if outcome == "prepare" {

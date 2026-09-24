@@ -32,7 +32,7 @@ func (s *Store) LatestCompletedRound(ctx context.Context, actor Actor, outcome s
 
 func supportedLatestOutcome(outcome string) bool {
 	switch outcome {
-	case "all", "discover", "process_input", "prepare", "compare_offers", "deliver", "interview_prepare", "interview_debrief":
+	case "all", "discover", "process_input", "prepare", "compare_offers", "deliver", "interview_prepare", "interview_debrief", "process_replies":
 		return true
 	default:
 		return false

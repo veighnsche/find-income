@@ -104,6 +104,9 @@ func runWithContext(ctx context.Context, args []string) error {
 	if tradeoffs, ok := decisions.(jevservice.Service); ok {
 		worker.Tradeoffs = tradeoffs
 	}
+	if replyIntent, ok := decisions.(jevservice.Service); ok {
+		worker.ReplyIntent = replyIntent
+	}
 	options.Codex = runtime
 	options.Rounds = &rounds.Service{Store: database, Readiness: worker, Canceller: runtime, Reconciler: runtime, Worker: worker}
 	options.Delivery = &deliveryservice.Service{Store: database, Advisor: worker, From: os.Getenv("JOBSEEK_SMTP_FROM")}

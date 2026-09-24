@@ -1200,3 +1200,95 @@ BEGIN
   WHERE archived_at IS NULL
   ON CONFLICT(opportunity_id) DO UPDATE SET requested_at=excluded.requested_at,reason=excluded.reason;
 END;
+
+-- Bounded read-only correspondence mirror (I19). Rows are written only by an
+-- owner-commissioned sync from an authorised account. Nothing here sends, and
+-- notifications are inert records: no trigger starts a round.
+CREATE TABLE correspondence_accounts (
+  id TEXT PRIMARY KEY,
+  actor_id TEXT NOT NULL,
+  provider TEXT NOT NULL CHECK(length(provider)>0 AND length(provider)<=80),
+  external_account_id TEXT NOT NULL CHECK(length(external_account_id)>0 AND length(external_account_id)<=320),
+  display_name TEXT NOT NULL CHECK(length(display_name)<=200),
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','auth_lost','disabled')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(actor_id,provider,external_account_id)
+);
+
+CREATE TABLE correspondence_threads (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES correspondence_accounts(id),
+  actor_id TEXT NOT NULL,
+  provider_thread_id TEXT NOT NULL CHECK(length(provider_thread_id)>0 AND length(provider_thread_id)<=320),
+  subject TEXT NOT NULL DEFAULT '' CHECK(length(subject)<=500),
+  opportunity_id TEXT REFERENCES opportunities(id),
+  last_message_at TEXT NOT NULL DEFAULT '',
+  message_count INTEGER NOT NULL DEFAULT 0 CHECK(message_count>=0),
+  provenance_json TEXT NOT NULL CHECK(json_valid(provenance_json)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(account_id,provider_thread_id)
+);
+CREATE INDEX correspondence_threads_actor ON correspondence_threads(actor_id,updated_at);
+
+CREATE TABLE correspondence_messages (
+  id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL REFERENCES correspondence_threads(id),
+  actor_id TEXT NOT NULL,
+  provider_message_id TEXT NOT NULL CHECK(length(provider_message_id)>0 AND length(provider_message_id)<=320),
+  sender TEXT NOT NULL CHECK(length(sender)<=320),
+  recipients_json TEXT NOT NULL CHECK(json_valid(recipients_json)),
+  sent_at TEXT NOT NULL,
+  body_sha256 TEXT NOT NULL,
+  body TEXT NOT NULL CHECK(length(body)<=100000),
+  provenance_json TEXT NOT NULL CHECK(json_valid(provenance_json)),
+  created_at TEXT NOT NULL,
+  UNIQUE(thread_id,provider_message_id)
+);
+CREATE INDEX correspondence_messages_thread ON correspondence_messages(thread_id,sent_at);
+
+CREATE TABLE correspondence_notifications (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES correspondence_accounts(id),
+  actor_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('incoming','due')),
+  thread_id TEXT REFERENCES correspondence_threads(id),
+  due_at TEXT NOT NULL DEFAULT '',
+  payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),
+  created_at TEXT NOT NULL
+);
+
+-- Reply processing commissions and Codex-owned follow-up drafts (I23).
+-- Drafts are immutable once saved; sending a draft reuses the exact reviewed
+-- delivery approval path and is never implied here.
+CREATE TABLE reply_processings (
+  id TEXT PRIMARY KEY,
+  actor_id TEXT NOT NULL,
+  thread_id TEXT NOT NULL REFERENCES correspondence_threads(id),
+  request_key TEXT NOT NULL,
+  request_sha256 TEXT NOT NULL,
+  profile_version INTEGER NOT NULL REFERENCES preferences_versions(version),
+  round_id TEXT REFERENCES rounds(id),
+  intent TEXT NOT NULL DEFAULT '' CHECK(length(intent)<=80),
+  intent_jev_attempt_id TEXT REFERENCES jev_attempts(id),
+  opportunity_id TEXT REFERENCES opportunities(id),
+  processed_at TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(actor_id,request_key)
+);
+
+CREATE TABLE reply_drafts (
+  id TEXT PRIMARY KEY,
+  processing_id TEXT NOT NULL REFERENCES reply_processings(id),
+  actor_id TEXT NOT NULL,
+  thread_id TEXT NOT NULL REFERENCES correspondence_threads(id),
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  revision INTEGER NOT NULL DEFAULT 1 CHECK(revision=1),
+  draft_json TEXT NOT NULL CHECK(json_valid(draft_json)),
+  draft_sha256 TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(processing_id)
+);

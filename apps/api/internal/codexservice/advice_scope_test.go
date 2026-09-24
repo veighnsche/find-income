@@ -11,7 +11,7 @@ import (
 )
 
 func TestCommissionedAdviceScopeReachesActualRoundTools(t *testing.T) {
-	for _, outcome := range []string{"prepare", "compare_offers", "interview_prepare", "interview_debrief"} {
+	for _, outcome := range []string{"prepare", "compare_offers", "interview_prepare", "interview_debrief", "process_replies"} {
 		t.Run(outcome, func(t *testing.T) {
 			ctx := context.Background()
 			svc, db := testService(t, testConfig())
@@ -31,6 +31,8 @@ func TestCommissionedAdviceScopeReachesActualRoundTools(t *testing.T) {
 				resource = "offer_intake:" + intake.ID
 			} else if outcome == "interview_debrief" {
 				resource = "interview:fixture"
+			} else if outcome == "process_replies" {
+				resource = "thread:fixture"
 			}
 			round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "tool-scope-" + outcome, Intent: "Use the commissioned tool scope", Outcome: outcome, ProfileVersion: profile.Version,
 				Scope:  store.RoundScope{InputRefs: []string{resource}, Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool, store.RoundPrepareOfferComparison, store.RoundJevRequest}, Delegates: []string{agent.ID}},

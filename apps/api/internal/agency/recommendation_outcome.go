@@ -41,6 +41,7 @@ type outcomeRecommendationFacts struct {
 	RecordedDelivery  int    `json:"recordedDelivery"`
 	FailedDelivery    int    `json:"failedDelivery"`
 	UncertainDelivery int    `json:"uncertainDelivery"`
+	Intent            string `json:"intent,omitempty"`
 }
 
 func (f outcomeRecommendationFacts) useful() bool {
@@ -55,6 +56,8 @@ func (f outcomeRecommendationFacts) useful() bool {
 		return f.RecordedDelivery > 0
 	case "interview_prepare", "interview_debrief":
 		return f.ResultID != "" && f.ResultUpdatedAt != ""
+	case "process_replies":
+		return f.ResultID != "" && f.Intent != ""
 	default:
 		return false
 	}
@@ -195,8 +198,16 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 	baseRefs := append(append([]string{}, profileIDs...), resultID)
 	add("discover", "home_discover", "Start a new bounded source discovery round if more roles would be useful.", "Owner click commissions a new round; no work starts from this advice.", baseRefs,
 		recommendationChoice{Action: "discover", Target: recommendationTarget{Kind: "campaign", ID: "active", Revision: profile.Version}, Reason: "The saved outcome is complete; a new owner-clicked discovery round can seek more sourced roles."})
+	reviewReason := fmt.Sprintf("The %s round saved %d applied changes and %d unresolved items.", facts.Outcome, facts.AppliedChanges, facts.UnresolvedCount)
+	if facts.Outcome == "process_replies" {
+		processing, err := e.Store.ReplyProcessing(ctx, facts.ResultID)
+		if err != nil || processing.RoundID != round.ID || processing.Intent == "" || processing.Intent != facts.Intent {
+			return jev.DecisionInput{}, nil, refs, nil, store.ErrConflict
+		}
+		reviewReason = fmt.Sprintf("The thread reply was classified as %s; %d record updates and %d unresolved items are saved with a cited draft for review.", facts.Intent, facts.AppliedChanges, facts.UnresolvedCount)
+	}
 	add("review-result", "home_review_result", "Review this round's saved result and unresolved items.", "Open the completed round without creating work.", baseRefs,
-		recommendationChoice{Action: "review_result", Target: recommendationTarget{Kind: "round", ID: round.ID}, Reason: fmt.Sprintf("The %s round saved %d applied changes and %d unresolved items.", facts.Outcome, facts.AppliedChanges, facts.UnresolvedCount)})
+		recommendationChoice{Action: "review_result", Target: recommendationTarget{Kind: "round", ID: round.ID}, Reason: reviewReason})
 	if facts.Outcome == "compare_offers" {
 		comparison, err := e.Store.OfferComparisonForOwner(ctx, round.Actor, facts.ResultID)
 		pausedPending := round.State == store.RoundPaused && facts.TradeoffStatus == "pending" && comparison.TradeoffStatus == "uncertain"
@@ -385,6 +396,23 @@ func savedOutcomeRecommendationFacts(ctx context.Context, db *store.Store, round
 		}
 		facts.Code, facts.ResultID, facts.ResultUpdatedAt, facts.UnresolvedCount =
 			outcome.Code, outcome.DebriefID, debrief.UpdatedAt, len(outcome.Unknowns)
+	case "process_replies":
+		var outcome replyOutcome
+		if json.Unmarshal(round.Report, &outcome) != nil || outcome.ProcessingID == "" || !outcome.DraftSaved {
+			return facts, store.ErrInvalid
+		}
+		processing, err := db.ReplyProcessing(ctx, outcome.ProcessingID)
+		if err != nil || processing.RoundID != round.ID || processing.Intent == "" {
+			return facts, store.ErrConflict
+		}
+		facts.Code, facts.ResultID, facts.ResultUpdatedAt, facts.Intent, facts.UnresolvedCount =
+			outcome.Code, outcome.ProcessingID, processing.UpdatedAt, processing.Intent, len(outcome.Unknowns)
+		if outcome.UpdatesSaved {
+			facts.AppliedChanges++
+		}
+		if outcome.DraftSaved {
+			facts.AppliedChanges++
+		}
 	default:
 		return facts, store.ErrInvalid
 	}

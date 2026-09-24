@@ -52,7 +52,7 @@ func recommendationOpportunityRevision(revision int64, decision store.OwnerDecis
 // unknown read is unavailable, while a proven changed snapshot is stale.
 func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, round store.Round) HomeRecommendationCurrentness {
 	verdict := HomeRecommendationCurrentness{Status: "unavailable", Code: "no_saved_recommendation", CheckedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-	if db == nil || ctx == nil || round.ID == "" || round.Outcome != "discover" && round.Outcome != "process_input" && round.Outcome != "prepare" && round.Outcome != "compare_offers" && round.Outcome != "deliver" && round.Outcome != "interview_prepare" && round.Outcome != "interview_debrief" {
+	if db == nil || ctx == nil || round.ID == "" || round.Outcome != "discover" && round.Outcome != "process_input" && round.Outcome != "prepare" && round.Outcome != "compare_offers" && round.Outcome != "deliver" && round.Outcome != "interview_prepare" && round.Outcome != "interview_debrief" && round.Outcome != "process_replies" {
 		return verdict
 	}
 	var detail report
