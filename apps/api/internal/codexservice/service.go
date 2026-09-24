@@ -19,6 +19,9 @@ type Status struct {
 	State     string `json:"state"`
 	Code      string `json:"code"`
 	Connected bool   `json:"connected"`
+	// Local reports explicit localhost-runner mode, which never claims the
+	// SSH-isolated runner boundary.
+	Local bool `json:"local"`
 	// IngestionAvailable describes executable, round-authorized ingestion.
 	// Account/model/tool readiness alone cannot set it.
 	IngestionAvailable bool          `json:"ingestionAvailable"`
@@ -70,7 +73,11 @@ func New(ctx context.Context, db *store.Store, cfg Config) (*Service, error) {
 		cfg.BridgeName = "jobseek"
 	}
 	serviceCtx, cancel := context.WithCancel(ctx)
-	s := &Service{db: db, cfg: cfg, ctx: serviceCtx, cancel: cancel, dial: dialSSH}
+	dial := dialSSH
+	if cfg.Local() {
+		dial = dialLocal
+	}
+	s := &Service{db: db, cfg: cfg, ctx: serviceCtx, cancel: cancel, dial: dial}
 	s.linkFetch = func(ctx context.Context, url string, page SourceLinkPage) (SourceLinksSnapshot, error) {
 		return fetchOfficialLinksPage(ctx, url, net.DefaultResolver, pinnedSourceClient, page)
 	}

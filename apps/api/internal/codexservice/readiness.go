@@ -52,7 +52,7 @@ type UsageWindow struct {
 }
 
 func (s *Service) statusLocked(ctx context.Context) Status {
-	out := Status{State: "unavailable", Busy: s.busy, Model: s.cfg.Model, Effort: s.cfg.Effort, Usage: []UsageWindow{}}
+	out := Status{State: "unavailable", Busy: s.busy, Model: s.cfg.Model, Effort: s.cfg.Effort, Usage: []UsageWindow{}, Local: s.cfg.Local()}
 	if s.disconnecting || s.logoutRequired {
 		out.Code = "disconnect_pending"
 		return out

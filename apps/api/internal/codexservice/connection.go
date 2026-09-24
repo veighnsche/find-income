@@ -16,11 +16,12 @@ var ErrUnavailable = errors.New("Codex runtime unavailable")
 var ErrBusy = errors.New("Codex intake is active")
 
 type Config struct {
-	Host, User, IdentityFile, KnownHostsFile, Launcher string
-	IsolationVerified                                  bool
-	BridgeToken                                        string
-	BridgeName                                         string
-	Model, Effort                                      string
+	Host, User, IdentityFile, KnownHostsFile, Launcher                     string
+	IsolationVerified                                                      bool
+	BridgeToken                                                            string
+	BridgeName                                                             string
+	Model, Effort                                                          string
+	LocalRunner, LocalCodex, LocalCodexSHA256, LocalStateDir, LocalWorkDir string
 }
 
 func configFromEnvironment() Config {
@@ -28,7 +29,17 @@ func configFromEnvironment() Config {
 		IdentityFile: os.Getenv("JOBSEEK_CODEX_SSH_IDENTITY_FILE"), KnownHostsFile: os.Getenv("JOBSEEK_CODEX_SSH_KNOWN_HOSTS"),
 		Launcher: os.Getenv("JOBSEEK_CODEX_REMOTE_LAUNCHER"), IsolationVerified: os.Getenv("JOBSEEK_CODEX_ISOLATION_VERIFIED") == "true",
 		BridgeToken: os.Getenv("JOBSEEK_CODEX_BRIDGE_TOKEN"), BridgeName: "jobseek",
-		Model: os.Getenv("JOBSEEK_CODEX_MODEL"), Effort: os.Getenv("JOBSEEK_CODEX_EFFORT")}
+		Model: os.Getenv("JOBSEEK_CODEX_MODEL"), Effort: os.Getenv("JOBSEEK_CODEX_EFFORT"),
+		LocalRunner: os.Getenv("JOBSEEK_CODEX_LOCAL_RUNNER"), LocalCodex: os.Getenv("JOBSEEK_CODEX_LOCAL_CODEX_BINARY"),
+		LocalCodexSHA256: os.Getenv("JOBSEEK_CODEX_LOCAL_CODEX_SHA256"), LocalStateDir: os.Getenv("JOBSEEK_CODEX_LOCAL_STATE_DIR"),
+		LocalWorkDir: os.Getenv("JOBSEEK_CODEX_LOCAL_WORK_DIR")}
+}
+
+// Local reports an explicit local-runner selection. Local mode executes the
+// runner on the app machine without the SSH-isolated runner boundary; status
+// surfaces it and no isolation is claimed.
+func (c Config) Local() bool {
+	return c.LocalRunner != ""
 }
 
 var hostPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.-]*$`)
@@ -36,6 +47,18 @@ var userPattern = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9_-]*$`)
 var launcherPattern = regexp.MustCompile(`^/[a-zA-Z0-9_./-]+$`)
 
 func (c Config) unavailableCode() string {
+	if c.Local() {
+		if c.LocalCodex == "" || c.LocalStateDir == "" || c.LocalWorkDir == "" || len(c.LocalCodexSHA256) != 64 {
+			return "runner_not_configured"
+		}
+		if !filepath.IsAbs(c.LocalRunner) || !filepath.IsAbs(c.LocalCodex) || !filepath.IsAbs(c.LocalStateDir) || !filepath.IsAbs(c.LocalWorkDir) {
+			return "runner_configuration_invalid"
+		}
+		if len(c.BridgeToken) < 32 || strings.TrimSpace(c.BridgeToken) != c.BridgeToken {
+			return "bridge_not_configured"
+		}
+		return ""
+	}
 	if c.Host == "" || c.User == "" || c.Launcher == "" || c.IdentityFile == "" || c.KnownHostsFile == "" {
 		return "runner_not_configured"
 	}
@@ -54,7 +77,8 @@ func (c Config) unavailableCode() string {
 
 // SSH authenticates the configured control channel. IsolationVerified is an
 // operator assertion after actual host verification, not a fact proved by SSH.
-// There is deliberately no local Codex execution fallback.
+// Explicit local mode (dialLocal) exists for owner-accepted localhost runs;
+// it never claims the SSH-isolated runner boundary.
 func dialSSH(ctx context.Context, cfg Config) (io.ReadWriteCloser, error) {
 	if cfg.unavailableCode() != "" {
 		return nil, ErrUnavailable
