@@ -264,8 +264,12 @@ func scanOpportunity(row rowScanner) (Opportunity, error) {
 	return opportunity, nil
 }
 
+// opportunityByID selects one opportunity with its advertised compensation,
+// reused by the point read and the immediate write transaction below.
+const opportunityByID = `SELECT ` + opportunityColumns + opportunityFrom + ` WHERE o.id=?`
+
 func (s *Store) Opportunity(ctx context.Context, id string) (Opportunity, error) {
-	record, err := scanOpportunity(s.db.QueryRowContext(ctx, `SELECT `+opportunityColumns+opportunityFrom+` WHERE o.id=?`, id))
+	record, err := scanOpportunity(s.db.QueryRowContext(ctx, opportunityByID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Opportunity{}, ErrNotFound
 	}
@@ -279,7 +283,13 @@ func nullableInt(value *int64) any {
 	return *value
 }
 
-func writeAdvertisedCompensation(ctx context.Context, tx *sql.Tx, opportunityID string, value AdvertisedCompensation) error {
+// opportunityExecer covers the write handles compensation upserts run on:
+// *sql.Tx for audited writes and *sql.Conn for immediate transactions.
+type opportunityExecer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func writeAdvertisedCompensation(ctx context.Context, tx opportunityExecer, opportunityID string, value AdvertisedCompensation) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO compensation
   (opportunity_id,currency,min_amount_cents,max_amount_cents,period,reference_hours_hundredths,
    basis,benefits_text,annual_conversion,annual_conversion_span_start,annual_conversion_span_end,
@@ -407,35 +417,97 @@ func emptyOpportunityPatch(patch OpportunityPatch) bool {
 		patch.LocationText == nil && patch.PostedOn == nil && patch.DeadlineOn == nil && patch.Compensation == nil
 }
 
+// opportunityTxnWrite is one immediate-transaction mutation: the post-write
+// record plus the audit operation name.
+type opportunityTxnWrite struct {
+	updated   Opportunity
+	operation string
+}
+
+// writeOpportunityImmediate runs a read-modify-write cycle inside one
+// BEGIN IMMEDIATE transaction (T03 §4): the writer takes the write lock
+// before any snapshot read, so concurrent writers serialize and the loser
+// observes the winner's committed revision and reports ErrConflict instead
+// of failing with SQLITE_BUSY_SNAPSHOT. The audit insert matches WriteAudited
+// exactly (same columns, same trigger-fed record_changes row).
+func (s *Store) writeOpportunityImmediate(ctx context.Context, actor Actor, id string, apply func(*sql.Conn, Opportunity) (opportunityTxnWrite, error)) (Opportunity, string, error) {
+	if strings.TrimSpace(actor.Kind) == "" || strings.TrimSpace(actor.ID) == "" || id == "" || apply == nil {
+		return Opportunity{}, "", fmt.Errorf("%w: actor, opportunity and mutation required", ErrInvalid)
+	}
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return Opportunity{}, "", err
+	}
+	defer conn.Close()
+	if _, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return Opportunity{}, "", err
+	}
+	var updated Opportunity
+	var changeID string
+	err = func() error {
+		current, err := scanOpportunity(conn.QueryRowContext(ctx, opportunityByID, id))
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		write, err := apply(conn, current)
+		if err != nil {
+			return err
+		}
+		if write.operation == "" {
+			return fmt.Errorf("%w: audit operation required", ErrInvalid)
+		}
+		changeID, err = randomID()
+		if err != nil {
+			return err
+		}
+		_, err = conn.ExecContext(ctx, `INSERT INTO audit_changes
+  (id, actor_kind, actor_id, operation, entity_kind, entity_id, revision_before, revision_after, occurred_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, changeID, actor.Kind, actor.ID, write.operation,
+			"opportunity", id, current.Revision, write.updated.Revision, utcNow())
+		if err != nil {
+			return fmt.Errorf("write audit change: %w", err)
+		}
+		updated = write.updated
+		return nil
+	}()
+	if err != nil {
+		_, _ = conn.ExecContext(ctx, "ROLLBACK")
+		return Opportunity{}, "", err
+	}
+	if _, err = conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return Opportunity{}, "", err
+	}
+	return updated, changeID, nil
+}
+
 func (s *Store) PatchOpportunity(ctx context.Context, actor Actor, id string, patch OpportunityPatch) (Opportunity, string, error) {
 	if id == "" || patch.ExpectedRevision < 1 || emptyOpportunityPatch(patch) {
 		return Opportunity{}, "", fmt.Errorf("%w: opportunity patch and expected revision required", ErrInvalid)
 	}
-	current, err := s.Opportunity(ctx, id)
-	if err != nil {
-		return Opportunity{}, "", err
-	}
-	if current.Revision != patch.ExpectedRevision || current.ArchivedAt != "" {
-		return Opportunity{}, "", ErrConflict
-	}
-	if patch.OriginalText != nil && *patch.OriginalText != current.OriginalText &&
-		patch.Compensation == nil && current.Compensation.AnnualConversion != "" {
-		return Opportunity{}, "", fmt.Errorf("%w: changed source text requires annual conversion reattestation", ErrInvalid)
-	}
-	input := opportunityInputFromRecord(current)
-	applyOpportunityPatch(&input, patch)
-	input, err = validateOpportunity(input)
-	if err != nil {
-		return Opportunity{}, "", err
-	}
-	updated := Opportunity{ID: id, CompanyID: input.CompanyID, Title: input.Title, Kind: input.Kind,
-		SourceURL: input.SourceURL, OriginalText: input.OriginalText, Notes: input.Notes, Stage: input.Stage,
-		WorkPattern: input.WorkPattern, LocationText: input.LocationText, PostedOn: input.PostedOn,
-		DeadlineOn: input.DeadlineOn, Revision: current.Revision + 1,
-		CreatedAt: current.CreatedAt, UpdatedAt: recordNow(), Compensation: input.Compensation}
-	companyChanged := input.CompanyID != current.CompanyID
-	changeID, err := s.WriteAudited(ctx, actor, func(tx *sql.Tx) (Change, error) {
-		result, err := tx.ExecContext(ctx, `UPDATE opportunities SET company_id=?,title=?,kind=?,
+	return s.writeOpportunityImmediate(ctx, actor, id, func(conn *sql.Conn, current Opportunity) (opportunityTxnWrite, error) {
+		if current.Revision != patch.ExpectedRevision || current.ArchivedAt != "" {
+			return opportunityTxnWrite{}, ErrConflict
+		}
+		if patch.OriginalText != nil && *patch.OriginalText != current.OriginalText &&
+			patch.Compensation == nil && current.Compensation.AnnualConversion != "" {
+			return opportunityTxnWrite{}, fmt.Errorf("%w: changed source text requires annual conversion reattestation", ErrInvalid)
+		}
+		input := opportunityInputFromRecord(current)
+		applyOpportunityPatch(&input, patch)
+		input, err := validateOpportunity(input)
+		if err != nil {
+			return opportunityTxnWrite{}, err
+		}
+		updated := Opportunity{ID: id, CompanyID: input.CompanyID, Title: input.Title, Kind: input.Kind,
+			SourceURL: input.SourceURL, OriginalText: input.OriginalText, Notes: input.Notes, Stage: input.Stage,
+			WorkPattern: input.WorkPattern, LocationText: input.LocationText, PostedOn: input.PostedOn,
+			DeadlineOn: input.DeadlineOn, Revision: current.Revision + 1,
+			CreatedAt: current.CreatedAt, UpdatedAt: recordNow(), Compensation: input.Compensation}
+		companyChanged := input.CompanyID != current.CompanyID
+		result, err := conn.ExecContext(ctx, `UPDATE opportunities SET company_id=?,title=?,kind=?,
   source_url=?,original_text=?,notes=?,stage=?,work_pattern=?,location_text=?,posted_on=?,deadline_on=?,
   revision=?,updated_at=? WHERE id=? AND revision=? AND archived_at IS NULL AND
   (?=0 OR EXISTS(SELECT 1 FROM companies WHERE id=? AND archived_at IS NULL))`,
@@ -444,63 +516,49 @@ func (s *Store) PatchOpportunity(ctx context.Context, actor Actor, id string, pa
 			optionalText(updated.PostedOn), optionalText(updated.DeadlineOn), updated.Revision,
 			updated.UpdatedAt, id, current.Revision, companyChanged, input.CompanyID)
 		if err != nil {
-			return Change{}, err
+			return opportunityTxnWrite{}, err
 		}
 		count, err := result.RowsAffected()
 		if err != nil {
-			return Change{}, err
+			return opportunityTxnWrite{}, err
 		}
 		if count != 1 {
-			return Change{}, ErrConflict
+			return opportunityTxnWrite{}, ErrConflict
 		}
-		if err := writeAdvertisedCompensation(ctx, tx, id, input.Compensation); err != nil {
-			return Change{}, err
+		if err := writeAdvertisedCompensation(ctx, conn, id, input.Compensation); err != nil {
+			return opportunityTxnWrite{}, err
 		}
-		return Change{Operation: "opportunity.patch", EntityKind: "opportunity", EntityID: id,
-			RevisionBefore: &current.Revision, RevisionAfter: &updated.Revision}, nil
+		return opportunityTxnWrite{updated: updated, operation: "opportunity.patch"}, nil
 	})
-	if err != nil {
-		return Opportunity{}, "", err
-	}
-	return updated, changeID, nil
 }
 
 func (s *Store) ArchiveOpportunity(ctx context.Context, actor Actor, id string, expectedRevision int64) (Opportunity, string, error) {
 	if id == "" || expectedRevision < 1 {
 		return Opportunity{}, "", fmt.Errorf("%w: opportunity and expected revision required", ErrInvalid)
 	}
-	current, err := s.Opportunity(ctx, id)
-	if err != nil {
-		return Opportunity{}, "", err
-	}
-	if current.Revision != expectedRevision || current.ArchivedAt != "" {
-		return Opportunity{}, "", ErrConflict
-	}
-	archived := current
-	archived.Revision++
-	archived.ArchivedAt = recordNow()
-	archived.UpdatedAt = archived.ArchivedAt
-	changeID, err := s.WriteAudited(ctx, actor, func(tx *sql.Tx) (Change, error) {
-		result, err := tx.ExecContext(ctx, `UPDATE opportunities SET archived_at=?,revision=?,updated_at=?
+	return s.writeOpportunityImmediate(ctx, actor, id, func(conn *sql.Conn, current Opportunity) (opportunityTxnWrite, error) {
+		if current.Revision != expectedRevision || current.ArchivedAt != "" {
+			return opportunityTxnWrite{}, ErrConflict
+		}
+		archived := current
+		archived.Revision++
+		archived.ArchivedAt = recordNow()
+		archived.UpdatedAt = archived.ArchivedAt
+		result, err := conn.ExecContext(ctx, `UPDATE opportunities SET archived_at=?,revision=?,updated_at=?
   WHERE id=? AND revision=? AND archived_at IS NULL`, archived.ArchivedAt, archived.Revision,
 			archived.UpdatedAt, id, current.Revision)
 		if err != nil {
-			return Change{}, err
+			return opportunityTxnWrite{}, err
 		}
 		count, err := result.RowsAffected()
 		if err != nil {
-			return Change{}, err
+			return opportunityTxnWrite{}, err
 		}
 		if count != 1 {
-			return Change{}, ErrConflict
+			return opportunityTxnWrite{}, ErrConflict
 		}
-		return Change{Operation: "opportunity.archive", EntityKind: "opportunity", EntityID: id,
-			RevisionBefore: &current.Revision, RevisionAfter: &archived.Revision}, nil
+		return opportunityTxnWrite{updated: archived, operation: "opportunity.archive"}, nil
 	})
-	if err != nil {
-		return Opportunity{}, "", err
-	}
-	return archived, changeID, nil
 }
 
 func (s *Store) ListOpportunities(ctx context.Context, options OpportunityListOptions) (OpportunityPage, error) {
