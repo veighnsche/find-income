@@ -197,7 +197,9 @@
       "worktree_base": "09bfc01",
       "active_selection_reason": "Cross-file outcome reports, explicit commission authority, immutable Jev replay and pure currentness integration; isolated checkout protects concurrent interview/backend and web work.",
       "owner_context_constraint": "Direct owner reply in task01a0cf13-2c03-73f2-b074-6c73d7120ebe authorises bounded offer/delivery result facts only for cross-outcome advice, excluding message bodies, recipients and raw offer text. No full semantic-quality claim from metadata alone.",
-      "review_thread_id": "01a0ce8e-4c6e-7c93-b63c-1084063ba7c0"
+      "review_thread_id": "01a0ce8e-4c6e-7c93-b63c-1084063ba7c0",
+      "ui_thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
+      "ui_active_slice": "Minimal cross-outcome saved advice navigation, Sol Medium"
     },
     {
       "id": "I11",
@@ -585,13 +587,13 @@
       "selection_reason": "Sol Medium performs the defined integrated review; Luna Low handles the final factual documentation pass. No extra full audit of unchanged components.",
       "status": "partial",
       "remaining_work": "Run the complete supported journey and final recovery checks, then update operating documentation from observed outcomes.",
-      "active_slice": "Root lint passed corrections; investigate full-browser timing failure before commit",
+      "active_slice": "Correction605e172 committed; full live walkthrough remains pending",
       "thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
       "host_id": "local",
       "active_model": "gpt-6-sol",
       "active_effort": "medium",
       "active_selection_reason": "Defined UI recovery corrections across current components and browser fixtures; no backend redesign or live calls.",
-      "review": "Read-only actual client/server audit found lost rejection disposition on reload, unsupported delivery Resume on Home, and blocked exact historical debrief retry. Root confirmed handler/UI mismatch; Sol Medium correction dispatched. Live owner walkthrough remains open."
+      "review": "Root lint and full browser suite pass after two test timing fixes. Known rejection survives reload, paused delivery exposes real controls, historical exact debrief request remains recoverable."
     }
   ],
   "execution_guide": "/Users/vince/Projects/find-income/dashboard/docs/implementation-tasks.md",
@@ -605,7 +607,7 @@
   ],
   "max_concurrent_live_workers": 4,
   "dispatch_status": "active_goal_two_live_workers",
-  "code_checkpoint": "ff8777c",
+  "code_checkpoint": "605e172",
   "goal_status": "active",
   "goal_objective": "Complete all I01–I27 task acceptance using concurrent live tasks, reviewed coherent commits and actual live acceptance where required."
 }
