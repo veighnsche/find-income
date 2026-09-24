@@ -60,6 +60,10 @@ type Service struct {
 	linkFetch       func(context.Context, string, SourceLinkPage) (SourceLinksSnapshot, error)
 	packConfig      ApplicationPackRuntimeConfig
 	interviewConfig InterviewRuntimeConfig
+	runEventsMu     sync.Mutex
+	runEvents       *RunEventSink
+	converse        conversationBounds
+	research        *ResearchToolchain
 }
 
 func NewFromEnvironment(ctx context.Context, db *store.Store) (*Service, error) {
@@ -77,7 +81,7 @@ func New(ctx context.Context, db *store.Store, cfg Config) (*Service, error) {
 	if cfg.Local() {
 		dial = dialLocal
 	}
-	s := &Service{db: db, cfg: cfg, ctx: serviceCtx, cancel: cancel, dial: dial}
+	s := &Service{db: db, cfg: cfg, ctx: serviceCtx, cancel: cancel, dial: dial, converse: defaultConversationBounds()}
 	s.linkFetch = func(ctx context.Context, url string, page SourceLinkPage) (SourceLinksSnapshot, error) {
 		return fetchOfficialLinksPage(ctx, url, net.DefaultResolver, pinnedSourceClient, page)
 	}
@@ -163,4 +167,8 @@ func (s *Service) checkTools(ctx context.Context, client *codex.Client) error {
 	return ErrUnavailable
 }
 
-func (s *Service) MCPHandler() http.Handler { return s.bridge }
+func (s *Service) MCPHandler() http.Handler {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.bridge
+}

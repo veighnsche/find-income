@@ -52,6 +52,9 @@ func (s *Service) newBridge() http.Handler {
 	registerTool(server, "interview_debrief", "Save a cited owner-reported debrief for one commissioned interview; no messages or booking.", s.interviewDebriefTool)
 	registerTool(server, "reply_update", "Link one processed correspondence thread to its exact current opportunity; no messages or sends.", s.replyUpdateTool)
 	registerTool(server, "reply_draft", "Save one cited follow-up draft for a processed thread; drafts never send from this tool.", s.replyDraftTool)
+	if s.research != nil {
+		registerResearchTools(server, s)
+	}
 	bridge := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Dedicated bridge authentication: browser cookies and Origin-bearing

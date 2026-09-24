@@ -35,6 +35,15 @@ type runtimeFixture struct {
 	completeStatus   string
 	badThreadReply   bool
 	turnText         string
+	// T08 conversation scripting. Zero values preserve the legacy behavior.
+	interruptFails   int
+	interruptSettles string
+	listFails        int
+	steerFails       bool
+	steerMismatch    bool
+	// T17 research-turn scripting. Zero values preserve prior behavior.
+	resumeFails  bool
+	instructions string
 }
 
 func installRuntime(t *testing.T, s *Service) *runtimeFixture {
@@ -63,6 +72,7 @@ func installRuntime(t *testing.T, s *Service) *runtimeFixture {
 				f.calls[req.Method]++
 				var result any
 				rpcFailure := false
+				rpcCode := -32600
 				switch req.Method {
 				case "initialized":
 					f.mu.Unlock()
@@ -101,6 +111,12 @@ func installRuntime(t *testing.T, s *Service) *runtimeFixture {
 					if f.badThreadReply {
 						threadID = ""
 					}
+					var threadInput struct {
+						Instructions string `json:"developerInstructions"`
+					}
+					if json.Unmarshal(req.Params, &threadInput) == nil {
+						f.instructions = threadInput.Instructions
+					}
 					result = map[string]any{"thread": map[string]string{"id": threadID}}
 				case "turn/start":
 					var turnInput struct {
@@ -113,15 +129,46 @@ func installRuntime(t *testing.T, s *Service) *runtimeFixture {
 					}
 					result = map[string]any{"turn": map[string]string{"id": f.turnID, "status": "inProgress"}}
 					if f.completeStatus != "" {
-						f.notices = append(f.notices, map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": f.threadID, "turn": map[string]string{"id": f.turnID, "status": f.completeStatus}}})
+						item := map[string]any{"id": "item-a", "type": "agentMessage"}
+						f.notices = append(f.notices,
+							map[string]any{"method": "item/started", "params": map[string]any{"threadId": f.threadID, "turnId": f.turnID, "item": item}},
+							map[string]any{"method": "item/completed", "params": map[string]any{"threadId": f.threadID, "turnId": f.turnID, "item": item}},
+							map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": f.threadID, "turn": map[string]string{"id": f.turnID, "status": f.completeStatus}}})
 					}
 					f.startOnce.Do(func() { close(f.started) })
 				case "turn/interrupt":
-					result = map[string]any{}
+					if f.interruptFails > 0 {
+						f.interruptFails--
+						rpcFailure = true
+					} else {
+						if f.interruptSettles != "" {
+							f.historyStatus = f.interruptSettles
+						}
+						result = map[string]any{}
+					}
+				case "turn/steer":
+					if f.steerFails {
+						rpcFailure = true
+					} else {
+						id := f.turnID
+						if f.steerMismatch {
+							id = "turn-other"
+						}
+						result = map[string]any{"turnId": id}
+					}
+				case "thread/resume":
+					rpcFailure = f.resumeFails
+					result = map[string]any{"thread": map[string]string{"id": f.threadID}}
 				case "thread/read":
 					result = map[string]any{"thread": map[string]any{"id": f.threadID, "turns": []any{map[string]string{"id": f.turnID, "status": f.historyStatus}}}}
 				case "thread/turns/list":
-					result = map[string]any{"data": []any{map[string]string{"id": f.turnID, "status": f.historyStatus}}}
+					if f.listFails > 0 {
+						f.listFails--
+						rpcFailure = true
+						rpcCode = -32601
+					} else {
+						result = map[string]any{"data": []any{map[string]string{"id": f.turnID, "status": f.historyStatus}}}
+					}
 				default:
 					rpcFailure = true
 				}
@@ -136,7 +183,7 @@ func installRuntime(t *testing.T, s *Service) *runtimeFixture {
 				response := map[string]any{"id": req.ID, "result": result}
 				if rpcFailure {
 					delete(response, "result")
-					response["error"] = map[string]any{"code": -32600, "message": "synthetic failure"}
+					response["error"] = map[string]any{"code": rpcCode, "message": "synthetic failure"}
 				}
 				if json.NewEncoder(right).Encode(response) != nil {
 					return
@@ -157,10 +204,20 @@ func (f *runtimeFixture) text() string {
 	defer f.mu.Unlock()
 	return f.turnText
 }
+func (f *runtimeFixture) startedInstructions() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.instructions
+}
 func (f *runtimeFixture) loginCompletion(id string, success bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.notices = append(f.notices, map[string]any{"method": "account/login/completed", "params": map[string]any{"loginId": id, "success": success, "error": "do not expose this raw diagnostic"}})
+}
+func (f *runtimeFixture) notify(method string, params map[string]any) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.notices = append(f.notices, map[string]any{"method": method, "params": params})
 }
 func boundedContext(t *testing.T) context.Context {
 	t.Helper()

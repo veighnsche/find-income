@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -163,5 +164,69 @@ func TestRoundTurnDeadlineFencesRemoteIntentAndReleasesSlot(t *testing.T) {
 	current, e := db.Round(ctx, r.ID)
 	if e != nil || current.State != store.RoundFailed || current.StopReason != "deadline_reached" || !current.ReconciliationRequired {
 		t.Fatalf("deadline did not fence: %+v %v", current, e)
+	}
+}
+
+// T24 F1: the production observer resolves every research.* attempt as an
+// observed failure with fenced evidence (mirroring the source.search
+// precedent), while genuinely unsupported operations stay uncertain.
+func TestObserveDispatchResolvesResearchAttempts(t *testing.T) {
+	s, db := testService(t, testConfig())
+	ctx := boundedContext(t)
+	owner := store.Actor{Kind: "administrator", ID: "owner"}
+	agent := store.Actor{Kind: "agent", ID: "codex-runner"}
+	p, err := db.CurrentPreferences(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, created, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "observe-research",
+		Intent: "Observe research attempts", Outcome: "process_input", ProfileVersion: p.Version,
+		Deadline: time.Now().Add(time.Hour),
+		Scope: store.RoundScope{Resources: []string{"research", "evidence:e1"}, Operations: []string{
+			store.RoundResearchSearch, store.RoundResearchFetch, store.RoundResearchBrowse,
+			store.RoundResearchAPI, store.RoundResearchExec, store.RoundCorrectEvidence,
+		}, Delegates: []string{agent.ID}},
+		Limits: store.RoundAllowance{Requests: 8, Items: 8, Tools: 8, Turns: 1}})
+	if err != nil || !created {
+		t.Fatalf("start: %v", err)
+	}
+	if r, err = db.ActivateRound(ctx, owner, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range store.ResearchOperations() {
+		cost, ok := store.RoundOperationCost(op)
+		if !ok {
+			t.Fatalf("no cost for %s", op)
+		}
+		attempt, _, err := db.ReserveRoundAttempt(ctx, agent, r.ID, store.RoundAttemptInput{
+			RequestKey: "observe-" + op, Operation: op,
+			ResourceID: store.ResearchAuthorityResource, Cost: cost})
+		if err != nil {
+			t.Fatal(err)
+		}
+		verdict, err := s.ObserveDispatch(ctx, attempt.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if verdict.State != store.AttemptObservedFailure ||
+			!strings.Contains(string(verdict.Evidence), "research_attempt_fenced") {
+			t.Fatalf("verdict on %s: %+v", op, verdict)
+		}
+	}
+	// The fallback is preserved for operations no observer understands.
+	cost, _ := store.RoundOperationCost(store.RoundCorrectEvidence)
+	other, _, err := db.ReserveRoundAttempt(ctx, agent, r.ID, store.RoundAttemptInput{
+		RequestKey: "observe-other", Operation: store.RoundCorrectEvidence,
+		ResourceID: "evidence:e1", Cost: cost})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verdict, err := s.ObserveDispatch(ctx, other.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verdict.State != store.AttemptUncertain ||
+		!strings.Contains(string(verdict.Evidence), "unsupported_attempt") {
+		t.Fatalf("fallback verdict: %+v", verdict)
 	}
 }

@@ -15,8 +15,13 @@ import (
 // preparation and process input. It checks the live connection, ChatGPT account, selected
 // model/effort, quota and required MCP tools, but starts no work. The caller
 // must still explicitly commission ExecuteRoundTurn through the work loop.
+// The research_run outcome additionally requires the concrete research
+// toolchain to be wired; until then it stays UNAVAILABLE.
 func (s *Service) CheckRound(ctx context.Context, outcome string) error {
-	if s == nil || ctx == nil || outcome != "prepare" && outcome != "process_input" && outcome != "compare_offers" && outcome != "interview_prepare" && outcome != "interview_debrief" && outcome != "process_replies" {
+	if s == nil || ctx == nil || outcome != "prepare" && outcome != "process_input" && outcome != "compare_offers" && outcome != "interview_prepare" && outcome != "interview_debrief" && outcome != "process_replies" && outcome != "research_run" {
+		return ErrUnavailable
+	}
+	if outcome == "research_run" && s.researchReady() != nil {
 		return ErrUnavailable
 	}
 	if outcome == "prepare" {
