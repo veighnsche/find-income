@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Briefing, BriefingLeads } from './briefing';
 import { ProcessInputReport } from './process-input-report';
 import { OfferComparisonPanel } from './offer-comparison-panel';
 import {
   checkRecommendationTarget,
   readHomeRecommendation,
   readRecommendationCurrentness,
-  recommendationExplanation,
 } from './home-recommendation';
 import {
   getActiveRound,
   getDeliveryReview,
   getLatestCompletedSavedRound,
   listInterviews,
+  getRoundCandidates,
   getRoundCards,
   getRoundCapability,
   getRoundHistory,
@@ -24,6 +25,8 @@ import {
   stopRound,
   type Preferences,
   type Round,
+  type RoundCandidateLead,
+  type RoundCandidateSearch,
   type RoundCard,
   type RoundCapability,
   type RoundHistoryEvent,
@@ -52,20 +55,8 @@ function readRejectedStart(): boolean {
 const activeStates = new Set<Round['state']>(['queued', 'running', 'awaiting_input', 'stopping']);
 const pollIntervalMs = 5000;
 
-function roundTitle(outcome: string): string {
-  if (outcome === 'discover') return 'Find my next opportunities';
-  if (outcome === 'prepare') return 'Prepare an application';
-  if (outcome === 'process_input') return 'Handle your input';
-  if (outcome === 'compare_offers') return 'Compare whole offers';
-  return outcome.replaceAll('_', ' ');
-}
-
 function message(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'The request could not be completed.';
-}
-
-function remaining(limit: number, used: number): number {
-  return Math.max(0, limit - used);
 }
 
 function SafeSource({ value }: { value: string }) {
@@ -167,6 +158,8 @@ export function AgencyHome({
   const [round, setRound] = useState<Round | null>(null);
   const [capability, setCapability] = useState<RoundCapability | null>(null);
   const [cards, setCards] = useState<RoundCard[]>([]);
+  const [leads, setLeads] = useState<RoundCandidateLead[]>([]);
+  const [searches, setSearches] = useState<RoundCandidateSearch[]>([]);
   const [history, setHistory] = useState<RoundHistoryEvent[]>([]);
   const [cardsAvailable, setCardsAvailable] = useState(false);
   const [historyAvailable, setHistoryAvailable] = useState(false);
@@ -176,6 +169,7 @@ export function AgencyHome({
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingStart, setPendingStart] = useState<StartRoundRequest | null>(readPendingStart);
   const [staleStart, setStaleStart] = useState(readRejectedStart);
+  const [pollSeq, setPollSeq] = useState(0);
   const [adviceCheck, setAdviceCheck] = useState<{ key: string; reason: string | null } | null>(
     null,
   );
@@ -250,14 +244,19 @@ export function AgencyHome({
             if (resultsRoundId.current !== current.id) {
               resultsRoundId.current = current.id;
               setCards([]);
+              setLeads([]);
+              setSearches([]);
               setHistory([]);
               setCardsAvailable(false);
               setHistoryAvailable(false);
             }
-            const [cardRead, historyRead] = await Promise.allSettled([
+            const [cardRead, leadRead, historyRead] = await Promise.allSettled([
               current.outcome === 'discover'
                 ? getRoundCards(current.id, controller.signal)
                 : Promise.resolve([] as RoundCard[]),
+              current.outcome === 'discover'
+                ? getRoundCandidates(current.id, controller.signal)
+                : Promise.resolve({ leads: [], searches: [] }),
               getRoundHistory(current.id, controller.signal),
             ]);
             if (currentRead()) {
@@ -265,17 +264,27 @@ export function AgencyHome({
                 setCards(cardRead.value);
                 setCardsAvailable(true);
               }
+              if (leadRead.status === 'fulfilled') {
+                setLeads(leadRead.value.leads);
+                setSearches(leadRead.value.searches);
+              }
               if (historyRead.status === 'fulfilled') {
                 setHistory(historyRead.value);
                 setHistoryAvailable(true);
               }
-              if (cardRead.status === 'rejected' || historyRead.status === 'rejected') {
+              if (
+                cardRead.status === 'rejected' ||
+                leadRead.status === 'rejected' ||
+                historyRead.status === 'rejected'
+              ) {
                 const cause =
                   cardRead.status === 'rejected'
                     ? cardRead.reason
-                    : historyRead.status === 'rejected'
-                      ? historyRead.reason
-                      : undefined;
+                    : leadRead.status === 'rejected'
+                      ? leadRead.reason
+                      : historyRead.status === 'rejected'
+                        ? historyRead.reason
+                        : undefined;
                 setError(
                   `${message(cause)} The affected round view will retry on the next status read.`,
                 );
@@ -284,6 +293,8 @@ export function AgencyHome({
           } else {
             resultsRoundId.current = null;
             setCards([]);
+            setLeads([]);
+            setSearches([]);
             setHistory([]);
             setCardsAvailable(false);
             setHistoryAvailable(false);
@@ -298,7 +309,10 @@ export function AgencyHome({
             );
           return undefined;
         } finally {
-          if (currentRead()) setLoading(false);
+          if (currentRead()) {
+            setLoading(false);
+            setPollSeq((value) => value + 1);
+          }
         }
       })();
       readPromise.current = task;
@@ -616,324 +630,91 @@ export function AgencyHome({
     review_debrief: 'Open exact saved interview debrief',
   }[recommendation?.action || 'review_result'];
 
-  const active = round && ['queued', 'running', 'awaiting_input', 'stopping'].includes(round.state);
-  const paused = round?.state === 'paused';
   const reportSummary =
     round && typeof round.report.summary === 'string' ? round.report.summary : '';
   return (
     <>
-      <section className="op-card agency-lead" aria-label="Agency work">
-        <div className="op-heading-row">
-          <div>
-            <p className="eyebrow">Your recruitment agency</p>
-            <h2>{roundTitle(round?.outcome || capability?.outcome || 'discover')}</h2>
-          </div>
-          <button
-            className="secondary"
-            type="button"
-            disabled={loading || busy}
-            onClick={() => void refresh()}
-          >
-            Refresh work
-          </button>
-        </div>
-        {loading && <p role="status">Loading your campaign and saved work…</p>}
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
-        {round ? (
-          <>
-            <p>
-              <strong>{round.state.replaceAll('_', ' ')}</strong> ·{' '}
-              {round.step || 'Current step has not been reported.'}
-            </p>
-            <p>{round.intent}</p>
-            {round.outcome === 'process_input' ? (
-              <ProcessInputReport round={round} />
-            ) : (
-              reportSummary && <p>{reportSummary}</p>
-            )}
-            {round.stopReason && <p>Stopped because: {round.stopReason.replaceAll('_', ' ')}</p>}
-            {round.deliverableStatus && (
-              <p>Deliverable: {round.deliverableStatus.replaceAll('_', ' ')}</p>
-            )}
-            {round.reconciliationRequired && (
-              <p role="status">
-                An earlier action needs reconciliation before more work can resume.
-              </p>
-            )}
-            {round.unresolved.length > 0 && (
-              <p>
-                {round.outcome === 'process_input'
-                  ? `Execution reconciliation has ${round.unresolved.length} unresolved attempt${round.unresolved.length === 1 ? '' : 's'}.`
-                  : `${round.unresolved.length} unresolved item${round.unresolved.length === 1 ? '' : 's'} remain in the saved report.`}
-              </p>
-            )}
-            <details>
-              <summary>Work details</summary>
-              <p>
-                Round <code>{round.id}</code> · outcome: {round.outcome}. Deadline:{' '}
-                {new Date(round.deadline).toLocaleString()}.
-              </p>
-              <p>
-                Remaining: {remaining(round.limits.requests, round.used.requests)} requests,{' '}
-                {remaining(round.limits.items, round.used.items)} items,{' '}
-                {remaining(round.limits.tools, round.used.tools)} tools,{' '}
-                {remaining(round.limits.turns, round.used.turns)} turns.
-              </p>
-              <p>Allowed operations: {round.scope.operations.join(', ') || 'none recorded'}.</p>
-            </details>
-            <div className="button-row">
-              {active && (
-                <button
-                  type="button"
-                  disabled={busy || round.state === 'stopping'}
-                  onClick={() => void act('stop')}
-                >
-                  Stop this round
-                </button>
-              )}
-              {paused && round.outcome !== 'deliver' && (
-                <button type="button" disabled={busy} onClick={() => void act('resume')}>
-                  {round.reconciliationRequired
-                    ? 'Resume and check uncertain work'
-                    : 'Resume this round'}
-                </button>
-              )}
-            </div>
-            {paused && round.outcome === 'deliver' && (
-              <DeliveryPausedRecovery
-                key={round.id}
-                round={round}
-                onOpenOpportunity={onOpenOpportunity}
-                onSessionLost={onSessionLost}
-              />
-            )}
-            {paused && round.outcome !== 'deliver' && round.reconciliationRequired && (
-              <p className="hint">
-                Resume asks the server to reconcile uncertain work before any new step. Page refresh
-                does not restart the round.
-              </p>
-            )}
-            {paused && round.outcome !== 'deliver' && !capability?.canStart && (
-              <p className="hint">
-                {round.outcome === 'prepare' ? 'Application preparation' : 'Discovery'} execution is
-                currently unavailable. Resume may leave this round paused; saved results and
-                remaining allowance remain readable.
-              </p>
-            )}
-            {!active &&
-              (round.state === 'completed' ||
-                (round.outcome === 'deliver' && round.state === 'failed')) && (
-                <div className="agency-next" aria-label="Saved next-action advice">
-                  <h3>Saved next-action advice</h3>
-                  {recommendation ? (
-                    <>
-                      <p>
-                        <strong>
-                          {recommendation.status === 'selected'
-                            ? 'Suggested action'
-                            : recommendation.status === 'unresolved'
-                              ? 'No action selected'
-                              : 'Advice unavailable'}
-                          .
-                        </strong>{' '}
-                        {recommendation.status === 'selected'
-                          ? recommendation.reason ||
-                            'A supported action was saved for this completed work.'
-                          : recommendationExplanation(recommendation.code)}
-                      </p>
-                      {recommendation.code && recommendation.status !== 'selected' && (
-                        <p className="hint">Saved reason code: {recommendation.code}.</p>
-                      )}
-                      {['compare_offers', 'interview_prepare', 'interview_debrief'].includes(
-                        round.outcome,
-                      ) && (
-                        <p className="hint">
-                          This advice used bounded result facts such as saved status and unknown
-                          counts. Open the exact record to inspect its full sources; the advice
-                          alone does not assess every term or conversation detail.
-                        </p>
-                      )}
-                      {recommendation.status === 'selected' && (
-                        <>
-                          <p
-                            className={
-                              currentness?.status === 'current' &&
-                              adviceCheck?.key === adviceKey &&
-                              !adviceCheck.reason
-                                ? 'hint'
-                                : 'error'
-                            }
-                          >
-                            {currentness?.status !== 'current'
-                              ? `Historical advice: ${currentness?.code || 'currentness could not be checked'}.`
-                              : adviceCheck?.key !== adviceKey
-                                ? 'Checking the current brief, target and saved source revisions…'
-                                : adviceCheck.reason
-                                  ? `Historical advice: ${adviceCheck.reason}`
-                                  : 'Current saved advice. The action still checks server state when you click.'}
-                          </p>
-                          <button
-                            type="button"
-                            disabled={
-                              busy ||
-                              adviceBusy ||
-                              currentness?.status !== 'current' ||
-                              adviceCheck?.key !== adviceKey ||
-                              Boolean(adviceCheck.reason) ||
-                              (recommendation.action === 'discover' && !capability?.canStart)
-                            }
-                            onClick={() => void followRecommendation()}
-                          >
-                            {recommendedActionLabel}
-                          </button>
-                        </>
-                      )}
-                      {recommendation.unavailableActions?.length ? (
-                        <p className="hint">
-                          Some actions were unavailable when this advice was saved:{' '}
-                          {recommendation.unavailableActions
-                            .map((value) => value.replaceAll('_', ' '))
-                            .join(', ')}
-                          .
-                        </p>
-                      ) : null}
-                      <details>
-                        <summary>Recommendation evidence</summary>
-                        <p>
-                          Saved with this commissioned work{' '}
-                          {round.completedAt
-                            ? new Date(round.completedAt).toLocaleString()
-                            : new Date(round.updatedAt).toLocaleString()}
-                          .
-                        </p>
-                        {recommendation.sourceRefs?.length ? (
-                          <ul>
-                            {recommendation.sourceRefs.map((ref) => (
-                              <li key={ref.id}>
-                                {ref.kind.replaceAll('_', ' ')} · <code>{ref.id}</code> · revision{' '}
-                                <code>{ref.revision}</code>
-                                {ref.omittedBytes
-                                  ? ` · ${ref.omittedBytes} source bytes omitted`
-                                  : ''}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No source references were included in this saved advice.</p>
-                        )}
-                      </details>
-                    </>
-                  ) : (
-                    <p>
-                      No saved next-action advice is available for this completed round. Its
-                      opportunity cards remain below.
-                    </p>
-                  )}
-                  {adviceError && (
-                    <p role="alert" className="error">
-                      {adviceError}
-                    </p>
-                  )}
-                </div>
-              )}
-            {!active && !pendingStart && capability && (
-              <div className="agency-next">
-                <h3>Another search</h3>
-                <p>
-                  Choose another bounded search if you want more sourced opportunities. A new round
-                  receives its own server-selected scope and may save in-round Jev next-action
-                  advice. Advice opens saved records or points to an existing owner control; it does
-                  not start another round or send anything by itself.
-                </p>
-                <button
-                  type="button"
-                  disabled={
-                    busy ||
-                    !(capability.canStart || (paused && capability.reason === 'round_active'))
-                  }
-                  onClick={() => void start()}
-                >
-                  {paused && capability.reason === 'round_active'
-                    ? `End paused ${round.outcome.replaceAll('_', ' ')} round and find my next opportunities`
-                    : capability.canStart
-                      ? 'Find my next opportunities'
-                      : 'Find my next opportunities — unavailable'}
-                </button>
-              </div>
-            )}
-          </>
-        ) : !loading && !error ? (
-          <>
-            <p>
-              {capability?.intent ||
-                'A bounded search would return sourced roles and a coverage report.'}
-            </p>
-            <p className="hint">
-              A completed round may save Jev next-action advice. Each later commission or delivery
-              still requires its own explicit owner action.
-            </p>
-            {capability && (
-              <details>
-                <summary>Work details</summary>
-                <p>
-                  Scope: the current campaign and {capability.sourceCount} board source
-                  {capability.sourceCount === 1 ? '' : 's'} currently in server scope; allowance up
-                  to {capability.limits.requests} requests, {capability.limits.items} item
-                  operations and {capability.limits.turns} Codex turns. The server checks the actual
-                  scope when you start.
-                </p>
-              </details>
-            )}
-            {!capability?.canStart && (
-              <p role="status">
-                Round execution is unavailable. Your brief and saved sources remain readable.
-              </p>
-            )}
-            <button
-              type="button"
-              disabled={busy || !capability?.canStart || Boolean(pendingStart)}
-              onClick={() => void start()}
-            >
-              {capability?.canStart
-                ? 'Find my next opportunities'
-                : 'Find my next opportunities — unavailable'}
-            </button>
-          </>
-        ) : null}
-        {pendingStart && (
-          <div className="agency-next">
-            <p>
-              {staleStart
-                ? 'The server rejected this saved discovery Start request. Review current work before starting a new request.'
-                : 'The earlier discovery Start response was not confirmed. Retry its saved request to check the same commission.'}
-            </p>
-            {!staleStart && (
-              <button type="button" disabled={busy} onClick={() => void start()}>
-                Retry same discovery request
-              </button>
-            )}
-            {staleStart && (
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy || loading}
-                onClick={() => void reviewRejectedStart()}
-              >
-                Review work and start a new request
-              </button>
-            )}
-          </div>
-        )}
-        {actionError && (
-          <p role="alert" className="error">
-            {actionError} Saved work remains visible; refresh its status before another action.
-          </p>
-        )}
-      </section>
+      <Briefing
+        round={round}
+        capability={capability}
+        hasOutput={cards.length > 0 || recommendation?.status === 'selected'}
+        cardCount={cards.length}
+        leads={round?.outcome === 'discover' ? leads : []}
+        searches={round?.outcome === 'discover' ? searches : []}
+        reportSummary={reportSummary}
+        advice={
+          recommendation
+            ? {
+                label: recommendedActionLabel,
+                available:
+                  recommendation.status === 'selected' &&
+                  currentness?.status === 'current' &&
+                  adviceCheck?.key === adviceKey &&
+                  !adviceCheck.reason &&
+                  !(recommendation.action === 'discover' && !capability?.canStart),
+                busy: adviceBusy || busy,
+              }
+            : null
+        }
+        adviceCode={recommendation?.code}
+        loading={loading}
+        busy={busy}
+        error={error}
+        actionError={actionError}
+        adviceError={adviceError}
+        startUnconfirmed={Boolean(pendingStart) && !staleStart}
+        staleStart={staleStart}
+        pollSeq={pollSeq}
+        pollingActive={Boolean(round && activeStates.has(round.state))}
+        pollIntervalMs={pollIntervalMs}
+        onRefresh={() => void refresh()}
+        onStart={() => void start()}
+        onStop={() => void act('stop')}
+        onResume={() => void act('resume')}
+        onReviewRejected={() => void reviewRejectedStart()}
+        onFollowAdvice={() => void followRecommendation()}
+        onEditBrief={() => preferences && onEditBrief(preferences.version)}
+        onShowResult={() => {
+          if (!round) return;
+          setReviewedResultId(round.id);
+          window.requestAnimationFrame(() =>
+            document.getElementById('saved-round-result')?.scrollIntoView(),
+          );
+        }}
+        onShowCards={() =>
+          window.requestAnimationFrame(() =>
+            document.getElementById('saved-round-cards')?.scrollIntoView(),
+          )
+        }
+        onShowComparison={() =>
+          window.requestAnimationFrame(() =>
+            document.getElementById('saved-offer-comparison')?.scrollIntoView(),
+          )
+        }
+        onShowLeads={() =>
+          window.requestAnimationFrame(() =>
+            document.getElementById('saved-round-leads')?.scrollIntoView(),
+          )
+        }
+        onShowPreparation={() =>
+          window.requestAnimationFrame(() =>
+            document.getElementById('saved-preparation')?.scrollIntoView(),
+          )
+        }
+        deliveryRecovery={
+          round ? (
+            <DeliveryPausedRecovery
+              key={round.id}
+              round={round}
+              onOpenOpportunity={onOpenOpportunity}
+              onSessionLost={onSessionLost}
+            />
+          ) : null
+        }
+      />
+      {round?.outcome === 'discover' && (leads.length > 0 || searches.length > 0) && (
+        <BriefingLeads leads={leads} searches={searches} />
+      )}
       <section className="op-card" aria-label="Campaign brief">
         <div className="op-heading-row">
           <h2>What we know about your search</h2>
@@ -953,8 +734,12 @@ export function AgencyHome({
               <p>
                 {preferences.roleCriteria
                   .filter((item) => item.mode !== 'avoid')
-                  .map((item) => item.label)
-                  .join(', ') || 'No role direction saved.'}
+                  .map((item) =>
+                    item.searchTerms && item.searchTerms.length > 0
+                      ? `${item.label} (searches: ${item.searchTerms.join(', ')})`
+                      : item.label,
+                  )
+                  .join('; ') || 'No role direction saved.'}
               </p>
               <p>
                 Work to avoid:{' '}
@@ -1072,7 +857,7 @@ export function AgencyHome({
         />
       </div>
       {round?.outcome === 'prepare' && (
-        <section className="op-card" aria-label="Application preparation">
+        <section className="op-card" id="saved-preparation" aria-label="Application preparation">
           <h2>Application preparation</h2>
           <p>
             Review the private pack from its opportunity when preparation finishes. This round does

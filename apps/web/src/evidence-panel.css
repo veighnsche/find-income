@@ -1,14 +1,14 @@
 .evidence-evaluation,
 .evidence-option {
   padding: 0.75rem 1rem;
-  border-left: 3px solid #175b43;
-  background: #f2f7f3;
+  border-left: 3px solid var(--accent);
+  background: var(--surface-raised);
 }
 
 .evidence-option {
   margin-top: 0.75rem;
-  border-left-color: #b77925;
-  background: #fffaf0;
+  border-left-color: var(--warning);
+  background: var(--warning-soft);
 }
 
 .evidence-evaluation li,
@@ -19,6 +19,6 @@
 .op-card blockquote {
   margin: 0.5rem 0;
   padding: 0.5rem 0.75rem;
-  border-left: 3px solid #a7b9ad;
+  border-left: 3px solid var(--border-strong);
   white-space: pre-wrap;
 }

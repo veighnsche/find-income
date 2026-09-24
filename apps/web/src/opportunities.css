@@ -3,8 +3,8 @@
   width: 100%;
 }
 .agency-lead {
-  border-color: #8aa997;
-  background: #f7fbf7;
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
 }
 .agency-lead .eyebrow {
   margin: 0 0 0.35rem;
@@ -29,9 +29,9 @@
 .op-card {
   margin-top: 1.25rem;
   padding: 1.25rem;
-  border: 1px solid #d8e2da;
+  border: 1px solid var(--border);
   border-radius: 0.7rem;
-  background: #fff;
+  background: var(--surface);
 }
 .op-card h2,
 .op-card h3 {
@@ -56,13 +56,13 @@
 .op-main textarea {
   width: 100%;
   padding: 0.65rem;
-  border: 1px solid #9eb5a9;
+  border: 1px solid var(--border-strong);
   border-radius: 0.4rem;
   font: inherit;
   resize: vertical;
 }
 .op-main textarea:focus-visible {
-  outline: 3px solid #dc9d30;
+  outline: 3px solid var(--warning);
   outline-offset: 2px;
 }
 .op-source {
@@ -83,14 +83,14 @@
 .op-text-button {
   padding: 0;
   background: transparent;
-  color: #175b43;
+  color: var(--accent);
   text-align: left;
   text-decoration: underline;
   font-weight: 700;
   font-size: 1.1rem;
 }
 .op-revision {
-  color: #61716b;
+  color: var(--muted);
   font-size: 0.85rem;
   white-space: nowrap;
 }
@@ -99,7 +99,7 @@
 }
 .op-history li {
   padding: 0.8rem 0;
-  border-bottom: 1px solid #d8e2da;
+  border-bottom: 1px solid var(--border);
 }
 .op-history li:last-child {
   border-bottom: 0;
@@ -117,27 +117,27 @@
   margin: 1rem 0;
 }
 .pack-version {
-  background: #e5eee8;
-  color: #235d49;
+  background: var(--surface-raised);
+  color: var(--accent);
 }
 .pack-version.active {
-  background: #235d49;
-  color: #fff;
+  background: var(--accent-strong);
+  color: #f4fff7;
 }
 .button-link {
   display: inline-block;
   border-radius: 0.4rem;
   padding: 0.55rem 0.85rem;
-  color: #fff;
-  background: #235d49;
+  color: #f4fff7;
+  background: var(--accent-strong);
   text-decoration: none;
 }
 .button-link.secondary {
-  background: #e5eee8;
-  color: #235d49;
+  background: var(--surface-raised);
+  color: var(--accent);
 }
 .button-link:focus-visible {
-  outline: 3px solid #dc9d30;
+  outline: 3px solid var(--warning);
   outline-offset: 2px;
 }
 .pack-pdf-preview {
@@ -145,7 +145,7 @@
   width: 100%;
   min-height: 35rem;
   margin-top: 1rem;
-  border: 1px solid #d8e2da;
+  border: 1px solid var(--border);
   border-radius: 0.4rem;
 }
 .pack-lines {
@@ -158,11 +158,11 @@
   margin: 0.25rem 0;
 }
 .pack-answer {
-  border-top: 1px solid #d8e2da;
+  border-top: 1px solid var(--border);
   margin-top: 1rem;
 }
 .delivery-item {
-  border-top: 1px solid #d8e2da;
+  border-top: 1px solid var(--border);
   margin-top: 1.2rem;
   padding-top: 1.2rem;
   min-width: 0;
@@ -207,7 +207,7 @@
 .interview-brief,
 .interview-debrief,
 .interview-round {
-  border-top: 1px solid #d8e2da;
+  border-top: 1px solid var(--border);
   margin-top: 1.2rem;
   padding-top: 1.2rem;
   min-width: 0;
@@ -235,7 +235,7 @@
 }
 .offer-result-item,
 .offer-round {
-  border-top: 1px solid #d8e2da;
+  border-top: 1px solid var(--border);
   padding-top: 1rem;
   min-width: 0;
 }

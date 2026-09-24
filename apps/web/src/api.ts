@@ -8,6 +8,8 @@ export type LatestCompletedRound =
 export type RoundResults = components['schemas']['RoundResults'];
 export type RoundCapability = components['schemas']['RoundCapability'];
 export type RoundCard = components['schemas']['RoundCard'];
+export type RoundCandidateLead = components['schemas']['RoundCandidateLead'];
+export type RoundCandidateSearch = components['schemas']['RoundCandidateSearch'];
 export type RoundHistoryEvent = components['schemas']['RoundHistoryEvent'];
 export type PrepareRoundRequest = components['schemas']['PrepareRoundRequest'];
 export type StartRoundRequest = components['schemas']['StartRoundRequest'];
@@ -410,6 +412,16 @@ export function getRoundCards(id: string, signal?: AbortSignal): Promise<RoundCa
   return request<components['schemas']['RoundCards']>(`/rounds/${encodeURIComponent(id)}/cards`, {
     signal,
   }).then((page) => page.items);
+}
+
+export function getRoundCandidates(
+  id: string,
+  signal?: AbortSignal,
+): Promise<components['schemas']['RoundCandidates']> {
+  return request<components['schemas']['RoundCandidates']>(
+    `/rounds/${encodeURIComponent(id)}/candidates`,
+    { signal },
+  );
 }
 
 export function getRoundHistory(id: string, signal?: AbortSignal): Promise<RoundHistoryEvent[]> {
