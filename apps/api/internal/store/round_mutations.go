@@ -14,53 +14,8 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/offercomparison"
 )
 
-const (
-	RoundCreateCompany                  = "company.create"
-	RoundCreateOpportunity              = "opportunity.create"
-	RoundSaveSourceOpportunity          = "opportunity.source_save"
-	RoundCorrectPreferences             = "preferences.correct"
-	RoundCorrectEvidence                = "evidence.correct"
-	RoundCorrectOpportunity             = "opportunity.owner_correction"
-	RoundPrepareApplicationPack         = "application_pack.prepare"
-	RoundPrepareOfferComparison         = "offer_comparison.prepare"
-	RoundRelationshipCounterpartyCreate = "relationship.counterparty_create"
-	RoundRelationshipEventCreate        = "relationship.event_create"
-	RoundRelationshipRouteCreate        = "relationship.route_create"
-	RoundRelationshipCorrect            = "relationship.correct"
-	RoundFetchSource                    = "source.fetch"
-	RoundSearchSource                   = "source.search"
-	RoundCodexTurn                      = "codex.turn"
-	RoundContextTool                    = "round.context"
-	RoundJevRequest                     = "jev.request"
-	RoundDeliverApplication             = "application.delivery"
-	RoundInterviewBriefSave             = "interview.brief_save"
-	RoundInterviewDebriefSave           = "interview.debrief_save"
-	RoundReplyUpdateSave                = "reply.update_save"
-	RoundReplyDraftSave                 = "reply.draft_save"
-)
-
-// The caller chooses an operation, never its charge. Later connectors can add
-// reviewed operations here without changing the reservation ledger.
-func RoundOperationCost(operation string) (RoundAllowance, bool) {
-	switch operation {
-	case RoundCreateCompany, RoundCreateOpportunity, RoundSaveSourceOpportunity, RoundCorrectPreferences, RoundCorrectEvidence, RoundCorrectOpportunity, RoundRelationshipCounterpartyCreate, RoundRelationshipEventCreate, RoundRelationshipRouteCreate, RoundRelationshipCorrect, RoundInterviewBriefSave, RoundInterviewDebriefSave, RoundReplyUpdateSave, RoundReplyDraftSave:
-		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
-	case RoundFetchSource, RoundSearchSource:
-		return RoundAllowance{Requests: 1, Tools: 1}, true
-	case RoundCodexTurn:
-		return RoundAllowance{Tools: 1, Turns: 1}, true
-	case RoundContextTool:
-		return RoundAllowance{Tools: 1}, true
-	case RoundJevRequest:
-		return RoundAllowance{Requests: 1}, true
-	case RoundDeliverApplication:
-		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
-	case RoundPrepareApplicationPack, RoundPrepareOfferComparison:
-		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
-	default:
-		return RoundAllowance{}, false
-	}
-}
+// Operation names and charges live in B-owned round_cost.go; this file keeps
+// the mutation dispatch and transaction body.
 
 type RoundMutationInput struct {
 	RequestKey         string                          `json:"requestKey"`
