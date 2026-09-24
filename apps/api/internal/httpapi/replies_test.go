@@ -21,6 +21,44 @@ func (replyNoopWorker) LaunchRound(_ context.Context, r store.Round) error {
 }
 func (replyNoopWorker) CancelRound(string) {}
 
+func TestCorrespondenceImportPersistsSuppliedThread(t *testing.T) {
+	h := newHarness(t)
+	h.handler = NewHandler(h.db, h.service, Options{AllowedOrigins: []string{origin}})
+	cookie, csrf := h.login()
+	paste, _ := json.Marshal(map[string]any{"provider": "manual", "externalAccountId": "owner@example.test", "displayName": "Owner",
+		"threads": []any{map[string]any{"providerThreadId": "pasted-1", "subject": "Pasted invite",
+			"messages": []any{map[string]any{"providerMessageId": "pm-1", "sender": "recruiter@example.test", "recipients": []string{"owner@example.test"}, "sentAt": "2026-09-24T10:00:00Z", "body": "Pasted invitation body."}}}}})
+	first := h.request(http.MethodPost, "/api/v1/correspondence/import", string(paste), cookie, "", csrf, origin)
+	if first.Code != http.StatusOK {
+		t.Fatalf("import: %d %s", first.Code, first.Body.String())
+	}
+	var result struct {
+		AccountID string `json:"accountId"`
+		Threads   int64  `json:"threads"`
+		Messages  int64  `json:"messages"`
+	}
+	if err := json.Unmarshal(first.Body.Bytes(), &result); err != nil || result.Threads != 1 || result.Messages != 1 {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	second := h.request(http.MethodPost, "/api/v1/correspondence/import", string(paste), cookie, "", csrf, origin)
+	var replay struct {
+		Threads  int64 `json:"threads"`
+		Messages int64 `json:"messages"`
+	}
+	if err := json.Unmarshal(second.Body.Bytes(), &replay); err != nil || replay.Threads != 0 || replay.Messages != 0 {
+		t.Fatalf("replay must deduplicate: %+v %v", replay, err)
+	}
+	list := h.request(http.MethodGet, "/api/v1/correspondence/threads", "", cookie, "", "", "")
+	var listed struct {
+		Items []struct {
+			Subject string `json:"subject"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &listed); err != nil || len(listed.Items) != 1 || listed.Items[0].Subject != "Pasted invite" {
+		t.Fatalf("listed=%+v err=%v", listed, err)
+	}
+}
+
 func TestReplyCommissionReadsAndReplay(t *testing.T) {
 	h := newHarness(t)
 	h.handler = NewHandler(h.db, h.service, Options{AllowedOrigins: []string{origin}, Rounds: &rounds.Service{Store: h.db, Readiness: replyNoopWorker{}, Worker: replyNoopWorker{}}})

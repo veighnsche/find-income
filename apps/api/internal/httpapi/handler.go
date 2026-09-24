@@ -73,6 +73,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/interviews", h.listInterviews)
 	mux.HandleFunc("GET /api/v1/interviews/{id}", h.getInterview)
 	mux.HandleFunc("POST /api/v1/interviews/{id}/debrief", h.debriefInterview)
+	mux.HandleFunc("POST /api/v1/correspondence/import", h.importCorrespondenceThreads)
 	mux.HandleFunc("GET /api/v1/correspondence/threads", h.listCorrespondenceThreads)
 	mux.HandleFunc("GET /api/v1/correspondence/threads/{id}", h.getCorrespondenceThread)
 	mux.HandleFunc("POST /api/v1/correspondence/threads/{id}/process", h.processCorrespondenceThread)

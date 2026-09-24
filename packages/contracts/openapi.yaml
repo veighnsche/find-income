@@ -247,6 +247,25 @@ paths:
               { application/json: { schema: { $ref: '#/components/schemas/CorrespondenceThreadDetail' } } },
           }
         '404': { $ref: '#/components/responses/NotFound' }
+  /correspondence/import:
+    post:
+      operationId: importCorrespondenceThreads
+      summary: Import owner-supplied pasted threads into the read-only mirror
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/ImportCorrespondenceRequest' } } }
+      responses:
+        '200':
+          {
+            description: Import result,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/ImportCorrespondenceResponse' } },
+              },
+          }
   /correspondence/threads/{id}/process:
     post:
       operationId: processCorrespondenceThread
@@ -1559,6 +1578,47 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
+    ImportCorrespondenceRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, externalAccountId, threads]
+      properties:
+        provider: { type: string, minLength: 1, maxLength: 80 }
+        externalAccountId: { type: string, minLength: 1, maxLength: 320 }
+        displayName: { type: string, maxLength: 200 }
+        threads:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: object
+            additionalProperties: false
+            required: [providerThreadId, messages]
+            properties:
+              providerThreadId: { type: string, minLength: 1, maxLength: 320 }
+              subject: { type: string, maxLength: 500 }
+              lastMessageAt: { type: string }
+              messages:
+                type: array
+                minItems: 1
+                maxItems: 50
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [providerMessageId, sender, sentAt, body]
+                  properties:
+                    providerMessageId: { type: string, minLength: 1, maxLength: 320 }
+                    sender: { type: string, maxLength: 320 }
+                    recipients: { type: array, items: { type: string } }
+                    sentAt: { type: string, minLength: 1 }
+                    body: { type: string, minLength: 1, maxLength: 100000 }
+    ImportCorrespondenceResponse:
+      type: object
+      required: [accountId, threads, messages]
+      properties:
+        accountId: { type: string }
+        threads: { type: integer }
+        messages: { type: integer }
     ProcessRepliesRequest:
       type: object
       additionalProperties: false

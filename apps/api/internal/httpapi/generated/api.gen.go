@@ -2781,6 +2781,32 @@ type HealthResponseService string
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
+// ImportCorrespondenceRequest defines model for ImportCorrespondenceRequest.
+type ImportCorrespondenceRequest struct {
+	DisplayName       *string `json:"displayName,omitempty"`
+	ExternalAccountId string  `json:"externalAccountId"`
+	Provider          string  `json:"provider"`
+	Threads           []struct {
+		LastMessageAt *string `json:"lastMessageAt,omitempty"`
+		Messages      []struct {
+			Body              string    `json:"body"`
+			ProviderMessageId string    `json:"providerMessageId"`
+			Recipients        *[]string `json:"recipients,omitempty"`
+			Sender            string    `json:"sender"`
+			SentAt            string    `json:"sentAt"`
+		} `json:"messages"`
+		ProviderThreadId string  `json:"providerThreadId"`
+		Subject          *string `json:"subject,omitempty"`
+	} `json:"threads"`
+}
+
+// ImportCorrespondenceResponse defines model for ImportCorrespondenceResponse.
+type ImportCorrespondenceResponse struct {
+	AccountId string `json:"accountId"`
+	Messages  int    `json:"messages"`
+	Threads   int    `json:"threads"`
+}
+
 // IngestionPage defines model for IngestionPage.
 type IngestionPage struct {
 	Items      []IngestionRequest `json:"items"`
@@ -4481,6 +4507,9 @@ type CreateAgentCredentialJSONRequestBody = CreateAgentCredentialRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
+
+// ImportCorrespondenceThreadsJSONRequestBody defines body for ImportCorrespondenceThreads for application/json ContentType.
+type ImportCorrespondenceThreadsJSONRequestBody = ImportCorrespondenceRequest
 
 // ProcessCorrespondenceThreadJSONRequestBody defines body for ProcessCorrespondenceThread for application/json ContentType.
 type ProcessCorrespondenceThreadJSONRequestBody = ProcessRepliesRequest

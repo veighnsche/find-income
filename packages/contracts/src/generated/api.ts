@@ -269,6 +269,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/correspondence/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import owner-supplied pasted threads into the read-only mirror */
+        post: operations["importCorrespondenceThreads"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/correspondence/threads/{id}/process": {
         parameters: {
             query?: never;
@@ -1527,6 +1544,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ImportCorrespondenceRequest: {
+            provider: string;
+            externalAccountId: string;
+            displayName?: string;
+            threads: {
+                providerThreadId: string;
+                subject?: string;
+                lastMessageAt?: string;
+                messages: {
+                    providerMessageId: string;
+                    sender: string;
+                    recipients?: string[];
+                    sentAt: string;
+                    body: string;
+                }[];
+            }[];
+        };
+        ImportCorrespondenceResponse: {
+            accountId: string;
+            threads: number;
+            messages: number;
+        };
         ProcessRepliesRequest: {
             requestKey: string;
         };
@@ -3704,6 +3743,30 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    importCorrespondenceThreads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCorrespondenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Import result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCorrespondenceResponse"];
+                };
+            };
         };
     };
     processCorrespondenceThread: {

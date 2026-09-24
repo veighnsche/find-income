@@ -9,6 +9,52 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
+func (h *Handler) importCorrespondenceThreads(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.owner(w, r)
+	if !ok || !h.mutationAllowed(w, r, p) {
+		return
+	}
+	var body generated.ImportCorrespondenceRequest
+	if !decodeRecordJSON(w, r, &body) {
+		return
+	}
+	display := ""
+	if body.DisplayName != nil {
+		display = *body.DisplayName
+	}
+	actor := store.Actor{Kind: p.Kind, ID: p.ID}
+	account, _, err := h.database.ConnectCorrespondenceAccount(r.Context(), actor, store.CorrespondenceAccountInput{Provider: body.Provider, ExternalAccountID: body.ExternalAccountId, DisplayName: display})
+	if err != nil {
+		failRound(w, err)
+		return
+	}
+	snapshots := make([]store.CorrespondenceThreadSnapshot, 0, len(body.Threads))
+	for _, thread := range body.Threads {
+		subject, last := "", ""
+		if thread.Subject != nil {
+			subject = *thread.Subject
+		}
+		if thread.LastMessageAt != nil {
+			last = *thread.LastMessageAt
+		}
+		snapshot := store.CorrespondenceThreadSnapshot{ProviderThreadID: thread.ProviderThreadId, Subject: subject, LastMessageAt: last, Provenance: map[string]any{"source": "owner_paste"}}
+		for _, message := range thread.Messages {
+			recipients := []string{}
+			if message.Recipients != nil {
+				recipients = *message.Recipients
+			}
+			snapshot.Messages = append(snapshot.Messages, store.CorrespondenceMessageSnapshot{ProviderMessageID: message.ProviderMessageId, Sender: message.Sender, Recipients: recipients, SentAt: message.SentAt, Body: message.Body, Provenance: map[string]any{"source": "owner_paste"}})
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+	threads, messages, err := h.database.SyncCorrespondenceThreads(r.Context(), actor, account.ID, snapshots)
+	if err != nil {
+		failRound(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"accountId": account.ID, "threads": threads, "messages": messages})
+}
+
 func (h *Handler) processCorrespondenceThread(w http.ResponseWriter, r *http.Request) {
 	p, ok := h.owner(w, r)
 	if !ok || !h.mutationAllowed(w, r, p) {
