@@ -21,6 +21,7 @@ export interface BriefingProps {
   adviceError: string;
   pollingActive: boolean;
   pollIntervalMs: number;
+  briefReady: boolean;
   onRefresh: () => void;
   onStop: () => void;
   onResume: () => void;
@@ -145,7 +146,12 @@ export function Briefing(props: BriefingProps) {
                   </button>
                 )}
                 {!round && (
-                  <button type="button" className="secondary brief-row" onClick={props.onEditBrief}>
+                  <button
+                    type="button"
+                    className="secondary brief-row"
+                    disabled={loading || !props.briefReady}
+                    onClick={props.onEditBrief}
+                  >
                     Review campaign brief
                   </button>
                 )}

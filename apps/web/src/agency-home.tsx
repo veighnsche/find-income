@@ -455,6 +455,7 @@ export function AgencyHome({
         }
         pollingActive={Boolean(round && activeStates.has(round.state))}
         pollIntervalMs={pollIntervalMs}
+        briefReady={Boolean(preferences)}
         onRefresh={() => void refresh()}
         onStop={() => void act('stop')}
         onResume={() => void act('resume')}

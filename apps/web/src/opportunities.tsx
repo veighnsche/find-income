@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { EvidencePanel } from './evidence-panel';
 import { AgencyHome } from './agency-home';
 import { OwnerDecisionControls } from './owner-decision';
@@ -649,6 +649,7 @@ export function Opportunities({
   const [briefVersion, setBriefVersion] = useState<number | null>(null);
   const [currentProfileVersion, setCurrentProfileVersion] = useState<number | null>(null);
   const [briefInstruction, setBriefInstruction] = useState(false);
+  const briefInstructionRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (
       briefInstruction &&
@@ -657,6 +658,17 @@ export function Opportunities({
     )
       setBriefVersion(currentProfileVersion);
   }, [briefInstruction, briefVersion, currentProfileVersion]);
+  // The brief-correction form swaps in below the fold: bring it to the
+  // user instead of leaving the click with no visible effect.
+  useEffect(() => {
+    if (!briefInstruction) return;
+    const node = briefInstructionRef.current;
+    if (!node) return;
+    node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.requestAnimationFrame(() => {
+      node.querySelector('textarea')?.focus({ preventScroll: true });
+    });
+  }, [briefInstruction]);
   const [items, setItems] = useState<OpportunityView[]>([]);
   const [organisationSummaries, setOrganisationSummaries] = useState<
     Record<string, OrganisationSummary>
@@ -824,15 +836,17 @@ export function Opportunities({
         }}
       />
       {briefInstruction && briefVersion !== null ? (
-        <OwnerInstructionPanel
-          target={{ targetKind: 'profile', targetId: 'current', expectedRevision: briefVersion }}
-          title="Instruction for your campaign brief"
-          session={session}
-          onSessionLost={onSessionLost}
-          onClose={() => {
-            setBriefInstruction(false);
-          }}
-        />
+        <div ref={briefInstructionRef}>
+          <OwnerInstructionPanel
+            target={{ targetKind: 'profile', targetId: 'current', expectedRevision: briefVersion }}
+            title="Instruction for your campaign brief"
+            session={session}
+            onSessionLost={onSessionLost}
+            onClose={() => {
+              setBriefInstruction(false);
+            }}
+          />
+        </div>
       ) : currentProfileVersion !== null ? (
         <OwnerInstructionPanel
           target={{
