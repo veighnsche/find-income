@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Briefing } from './briefing';
 import { ProcessInputReport } from './process-input-report';
+import { ResearchRunPanel } from './research-run';
 import { OfferComparisonPanel } from './offer-comparison-panel';
 import {
   checkRecommendationTarget,
@@ -614,6 +615,7 @@ export function AgencyHome({
           focusResultId={focusedComparisonId}
         />
       </div>
+      <ResearchRunPanel session={session} onSessionLost={onSessionLost} />
       {round?.outcome === 'prepare' && (
         <section className="op-card" id="saved-preparation" aria-label="Application preparation">
           <h2>Application preparation</h2>

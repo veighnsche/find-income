@@ -652,3 +652,74 @@ export function listQualificationHistory(id: string, cursor = '', signal?: Abort
     { signal },
   );
 }
+
+export type ResearchRunView = components['schemas']['ResearchRunView'];
+export type ResearchActivityPage = components['schemas']['ResearchActivityPage'];
+export type ResearchActivityEvent = components['schemas']['ResearchActivityEvent'];
+export type ResearchCaptureView = components['schemas']['ResearchCaptureView'];
+export type ResearchIdentityView = components['schemas']['ResearchIdentityView'];
+export type ResearchReportView = components['schemas']['ResearchReportView'];
+export type CommissionResearchRequest = components['schemas']['CommissionResearchRequest'];
+export type SteerResearchRequest = components['schemas']['SteerResearchRequest'];
+export type SteeringMessage = components['schemas']['SteeringMessage'];
+export type ResearchAllowance = components['schemas']['ResearchAllowance'];
+
+export function commissionResearchRun(
+  input: CommissionResearchRequest,
+  csrfToken: string,
+): Promise<ResearchRunView> {
+  return request<ResearchRunView>('/research/runs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(input),
+  });
+}
+
+export function getResearchRun(id: string, signal?: AbortSignal): Promise<ResearchRunView> {
+  return request<ResearchRunView>(`/research/runs/${encodeURIComponent(id)}`, { signal });
+}
+
+export function steerResearchRun(
+  id: string,
+  input: SteerResearchRequest,
+  csrfToken: string,
+): Promise<SteeringMessage> {
+  return request<SteeringMessage>(`/research/runs/${encodeURIComponent(id)}/steer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(input),
+  });
+}
+
+export function listResearchActivity(
+  id: string,
+  cursor = '',
+  limit = 25,
+  signal?: AbortSignal,
+): Promise<ResearchActivityPage> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (cursor) query.set('cursor', cursor);
+  return request<ResearchActivityPage>(
+    `/research/runs/${encodeURIComponent(id)}/activity?${query.toString()}`,
+    { signal },
+  );
+}
+
+export function getResearchReport(id: string, signal?: AbortSignal): Promise<ResearchReportView> {
+  return request<ResearchReportView>(`/research/runs/${encodeURIComponent(id)}/report`, {
+    signal,
+  });
+}
+
+export function getResearchCapture(id: string, signal?: AbortSignal): Promise<ResearchCaptureView> {
+  return request<ResearchCaptureView>(`/research/captures/${encodeURIComponent(id)}`, { signal });
+}
+
+export function explainResearchIdentity(
+  subjectKind: 'employer' | 'vacancy',
+  subjectId: string,
+  signal?: AbortSignal,
+): Promise<ResearchIdentityView> {
+  const query = new URLSearchParams({ subjectKind, subjectId });
+  return request<ResearchIdentityView>(`/research/identity?${query.toString()}`, { signal });
+}
