@@ -21,7 +21,7 @@ func TestRoundRemoteDispatchRequiresCorrelatedTerminalObservation(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "remote", Intent: "Find work", Outcome: "discover",
+	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "remote", Intent: "Find work", Outcome: "process_input",
 		ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
 		Scope: RoundScope{Resources: []string{"campaign:active"}, Operations: []string{RoundCodexTurn},
 			Delegates: []string{agent.ID}}, Limits: RoundAllowance{Tools: 1, Turns: 1}})
@@ -82,7 +82,7 @@ func TestRoundRemoteIdentifiersSurviveStopAsEvidenceOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "late-remote", Intent: "Find work", Outcome: "discover",
+	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "late-remote", Intent: "Find work", Outcome: "process_input",
 		ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
 		Scope: RoundScope{Resources: []string{"campaign:active"}, Operations: []string{RoundCodexTurn},
 			Delegates: []string{agent.ID}}, Limits: RoundAllowance{Tools: 1, Turns: 1}})

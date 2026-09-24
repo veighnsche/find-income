@@ -7,14 +7,14 @@ import (
 	"testing"
 )
 
-func TestLatestCompletedRoundFindsOneOwnerDiscoveryInCompletedOrder(t *testing.T) {
+func TestLatestCompletedRoundFindsOwnerInputInCompletedOrder(t *testing.T) {
 	ctx := context.Background()
 	db, err := Open(ctx, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	if _, err := db.LatestCompletedRound(ctx, roundOwner(), "discover"); !errors.Is(err, ErrNotFound) {
+	if _, err := db.LatestCompletedRound(ctx, roundOwner(), "process_input"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("empty owner history: %v", err)
 	}
 	finish := func(key string) Round {
@@ -33,11 +33,11 @@ func TestLatestCompletedRoundFindsOneOwnerDiscoveryInCompletedOrder(t *testing.T
 	if _, err := db.db.ExecContext(ctx, `UPDATE rounds SET completed_at='2026-01-02T00:00:00Z' WHERE id=?`, second.ID); err != nil {
 		t.Fatal(err)
 	}
-	latest, err := db.LatestCompletedRound(ctx, roundOwner(), "discover")
+	latest, err := db.LatestCompletedRound(ctx, roundOwner(), "process_input")
 	if err != nil || latest.ID != second.ID || latest.Report == nil {
 		t.Fatalf("wrong completed round: %+v %v", latest, err)
 	}
-	if _, err := db.LatestCompletedRound(ctx, Actor{Kind: "administrator", ID: "another-owner"}, "discover"); !errors.Is(err, ErrNotFound) {
+	if _, err := db.LatestCompletedRound(ctx, Actor{Kind: "administrator", ID: "another-owner"}, "process_input"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cross-owner read: %v", err)
 	}
 	if latest, err := db.LatestCompletedRound(ctx, roundOwner(), "all"); err != nil || latest.ID != second.ID {

@@ -32,7 +32,7 @@ func serviceRoundUntil(t *testing.T, requestLimit int64, deadline time.Time) (*s
 	}
 	actor := store.Actor{Kind: "administrator", ID: "jev-fixture-owner"}
 	r, created, err := s.StartRound(ctx, actor, store.StartRoundInput{RequestKey: "jev-fixture-round", Intent: "Find bounded sourced opportunities.",
-		Outcome: "discover", ProfileVersion: p.Version, Scope: store.RoundScope{InputRefs: []string{"campaign:fixture"},
+		Outcome: "process_input", ProfileVersion: p.Version, Scope: store.RoundScope{InputRefs: []string{"campaign:fixture"},
 			Resources: []string{"source:fixture"}, Operations: []string{store.RoundJevRequest}},
 		Limits: store.RoundAllowance{Requests: requestLimit}, Deadline: deadline})
 	if err != nil || !created {
@@ -61,7 +61,7 @@ func serviceClient(t *testing.T, server *httptest.Server) *jev.Client {
 }
 
 func serviceDecision() jev.DecisionInput {
-	return jev.DecisionInput{Kind: jev.DecisionSourceResearch, CampaignIntent: "Find supported platform work.", MaxReportedTokens: 100,
+	return jev.DecisionInput{Kind: jev.DecisionNextOutcome, CampaignIntent: "Find supported platform work.", MaxReportedTokens: 100,
 		Capabilities:       []jev.DecisionCapability{{ID: "fetch", Description: "Fetch one public source."}},
 		Sources:            []jev.DecisionSource{{ID: "source-1", SourceRevision: "rev-2", SourceKind: "employer_page", Excerpt: "Exact relevant employer text."}},
 		RemainingAllowance: []jev.DecisionAllowance{{Operation: "fetch", Remaining: 1}},

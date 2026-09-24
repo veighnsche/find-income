@@ -230,7 +230,10 @@ paths:
           {
             description: Thread list,
             content:
-              { application/json: { schema: { $ref: '#/components/schemas/CorrespondenceThreadList' } } },
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/CorrespondenceThreadList' } },
+              },
           }
   /correspondence/threads/{id}:
     get:
@@ -244,7 +247,10 @@ paths:
           {
             description: Thread and messages,
             content:
-              { application/json: { schema: { $ref: '#/components/schemas/CorrespondenceThreadDetail' } } },
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/CorrespondenceThreadDetail' } },
+              },
           }
         '404': { $ref: '#/components/responses/NotFound' }
   /correspondence/import:
@@ -255,7 +261,10 @@ paths:
       requestBody:
         required: true
         content:
-          { application/json: { schema: { $ref: '#/components/schemas/ImportCorrespondenceRequest' } } }
+          {
+            application/json:
+              { schema: { $ref: '#/components/schemas/ImportCorrespondenceRequest' } },
+          }
       responses:
         '200':
           {
@@ -310,7 +319,10 @@ paths:
           {
             description: Processing and draft,
             content:
-              { application/json: { schema: { $ref: '#/components/schemas/ReplyProcessingDetail' } } },
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/ReplyProcessingDetail' } },
+              },
           }
         '404': { $ref: '#/components/responses/NotFound' }
   /rounds/latest-completed:
@@ -322,7 +334,21 @@ paths:
         - in: query
           name: outcome
           required: true
-          schema: { type: string, enum: [all, discover, process_input, prepare, compare_offers, deliver, interview_prepare, interview_debrief, process_replies] }
+          schema:
+            {
+              type: string,
+              enum:
+                [
+                  all,
+                  process_input,
+                  prepare,
+                  compare_offers,
+                  deliver,
+                  interview_prepare,
+                  interview_debrief,
+                  process_replies,
+                ],
+            }
       responses:
         '200':
           description: Latest matching saved result with transient next-action currentness, or null when none exists
@@ -332,43 +358,6 @@ paths:
                 allOf: [{ $ref: '#/components/schemas/Round' }]
                 nullable: true
         '400': { $ref: '#/components/responses/ValidationError' }
-  /rounds/capability:
-    get:
-      operationId: getRoundCapability
-      summary: Read server-selected outcome and current execution availability
-      security: [{ cookieAuth: [] }]
-      responses:
-        '200':
-          {
-            description: Capability and bounded plan summary,
-            content:
-              { application/json: { schema: { $ref: '#/components/schemas/RoundCapability' } } },
-          }
-  /rounds:
-    post:
-      operationId: startRound
-      summary: Owner starts one commissioned outcome
-      description: Requires owner session, same-origin CSRF token, and a ready execution capability. An exact requestKey replay returns the existing round.
-      security: [{ cookieAuth: [] }]
-      requestBody:
-        {
-          required: true,
-          content:
-            { application/json: { schema: { $ref: '#/components/schemas/StartRoundRequest' } } },
-        }
-      responses:
-        '200':
-          {
-            description: Existing round,
-            content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
-          }
-        '201':
-          {
-            description: Round created,
-            content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
-          }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '503': { $ref: '#/components/responses/Unavailable' }
   /rounds/prepare:
     post:
       operationId: prepareRound
@@ -495,26 +484,6 @@ paths:
             content:
               { application/json: { schema: { $ref: '#/components/schemas/RoundResults' } } },
           }
-  /rounds/{id}/cards:
-    parameters: [{ $ref: '#/components/parameters/RecordId' }]
-    get:
-      operationId: getRoundCards
-      summary: Read source linked opportunity cards saved by a round
-      security: [{ cookieAuth: [] }]
-      responses:
-        '200':
-          description: Cards from linked audited records
-          content: { application/json: { schema: { $ref: '#/components/schemas/RoundCards' } } }
-  /rounds/{id}/candidates:
-    parameters: [{ $ref: '#/components/parameters/RecordId' }]
-    get:
-      operationId: getRoundCandidates
-      summary: Read staged discovery leads and recorded source reads of a round
-      security: [{ cookieAuth: [] }]
-      responses:
-        '200':
-          description: Leads with verification status and source reads
-          content: { application/json: { schema: { $ref: '#/components/schemas/RoundCandidates' } } }
   /rounds/{id}/history:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     get:
@@ -907,19 +876,6 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/OrganisationSummaryList' }
         '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-  /collector-boards:
-    get:
-      operationId: listCollectorBoards
-      summary: List configured collection boards and their last observed run status
-      security: [{ cookieAuth: [] }]
-      responses:
-        '200':
-          description: Collection board settings and run status
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/CollectorBoardList' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /opportunities/{id}/organisation:
@@ -2023,14 +1979,6 @@ components:
         resources: { type: array, items: { type: string } }
         operations: { type: array, items: { type: string } }
         delegates: { type: array, items: { type: string } }
-    StartRoundRequest:
-      type: object
-      additionalProperties: false
-      description: Owner Start sends only a durable click idempotency key; the server chooses the current outcome, profile, scope, allowance and deadline.
-      required: [requestKey]
-      properties:
-        requestKey: { type: string, minLength: 1, maxLength: 200 }
-        replacePaused: { $ref: '#/components/schemas/ReplacePausedRound' }
     PrepareRoundRequest:
       type: object
       additionalProperties: false
@@ -2267,16 +2215,6 @@ components:
         instructionId: { type: string }
         ingestionId: { type: string }
         replacedRoundId: { type: string }
-    RoundCapability:
-      type: object
-      required: [canStart, reason, intent, outcome, limits, sourceCount]
-      properties:
-        canStart: { type: boolean }
-        reason: { type: string }
-        intent: { type: string }
-        outcome: { type: string }
-        limits: { $ref: '#/components/schemas/RoundAllowance' }
-        sourceCount: { type: integer, minimum: 0 }
     Round:
       type: object
       required:
@@ -2339,74 +2277,6 @@ components:
       required: [items]
       properties:
         items: { type: array, items: {} }
-    RoundCards:
-      type: object
-      required: [items]
-      properties:
-        items: { type: array, items: { $ref: '#/components/schemas/RoundCard' } }
-    RoundCandidates:
-      type: object
-      required: [leads, searches]
-      properties:
-        leads: { type: array, items: { $ref: '#/components/schemas/RoundCandidateLead' } }
-        searches: { type: array, items: { $ref: '#/components/schemas/RoundCandidateSearch' } }
-    RoundCandidateLead:
-      type: object
-      required:
-        [id, kind, title, url, companyUrl, evidenceQuote, observedAt, status, statusReason]
-      properties:
-        id: { type: string }
-        kind: { type: string }
-        title: { type: string }
-        url: { type: string }
-        companyUrl: { type: string }
-        evidenceQuote: { type: string }
-        observedAt: { type: string, format: date-time }
-        status: { type: string }
-        statusReason: { type: string }
-    RoundCandidateSearch:
-      type: object
-      required: [source, method, observedAt, candidates, succeeded]
-      properties:
-        source: { type: string }
-        method: { type: string }
-        observedAt: { type: string, format: date-time }
-        candidates: { type: integer, format: int64 }
-        succeeded: { type: boolean }
-    RoundCard:
-      type: object
-      required:
-        [
-          opportunityId,
-          opportunityRevision,
-          companyId,
-          companyName,
-          title,
-          kind,
-          sourceUrl,
-          sourceText,
-          sourceAuditId,
-          sourceRevision,
-          sourceStale,
-          decision,
-          decisionRevision,
-          createdAt,
-        ]
-      properties:
-        opportunityId: { type: string }
-        opportunityRevision: { type: integer, format: int64 }
-        companyId: { type: string }
-        companyName: { type: string }
-        title: { type: string }
-        kind: { type: string }
-        sourceUrl: { type: string }
-        sourceText: { type: string }
-        sourceAuditId: { type: string }
-        sourceRevision: { type: integer, format: int64 }
-        sourceStale: { type: boolean }
-        decision: { type: string }
-        decisionRevision: { type: integer, format: int64 }
-        createdAt: { type: string, format: date-time }
     RoundHistory:
       type: object
       required: [items]
@@ -2903,74 +2773,10 @@ components:
         userCode: { type: string }
     RuntimeStatus:
       type: object
-      required: [ingestionAvailable, organisationAvailable, collectionAvailable]
+      required: [ingestionAvailable, organisationAvailable]
       properties:
         ingestionAvailable: { type: boolean }
         organisationAvailable: { type: boolean }
-        collectionAvailable:
-          {
-            type: boolean,
-            description: Collector loop mounted; enabled board count and run outcomes are separate.,
-          }
-    CollectorBoard:
-      type: object
-      required:
-        [
-          id,
-          provider,
-          site,
-          region,
-          displayName,
-          enabled,
-          intervalMinutes,
-          nextScanAt,
-          revision,
-          createdAt,
-          updatedAt,
-        ]
-      properties:
-        id: { type: string }
-        provider: { type: string, enum: [lever] }
-        site: { type: string }
-        displayName: { type: string }
-        officialCareersUrl: { type: string, format: uri }
-        verifiedAt: { type: string, format: date-time }
-        region: { type: string, enum: [global, eu] }
-        enabled: { type: boolean }
-        intervalMinutes: { type: integer, minimum: 15, maximum: 10080 }
-        nextScanAt: { type: string, format: date-time }
-        lastRunAt: { type: string, format: date-time }
-        lastSuccessAt: { type: string, format: date-time }
-        lastErrorCode: { type: string }
-        revision: { type: integer, format: int64 }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-    CollectorBoardList:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items: { $ref: '#/components/schemas/CollectorBoard' }
-    CreateCollectorBoardRequest:
-      type: object
-      required: [provider, site, region, enabled, intervalMinutes]
-      additionalProperties: false
-      properties:
-        provider: { type: string, enum: [lever] }
-        site: { type: string, minLength: 1, maxLength: 100 }
-        displayName: { type: string, maxLength: 200 }
-        region: { type: string, enum: [global, eu] }
-        enabled: { type: boolean }
-        intervalMinutes: { type: integer, minimum: 15, maximum: 10080 }
-    UpdateCollectorBoardRequest:
-      type: object
-      required: [expectedRevision, enabled, intervalMinutes]
-      additionalProperties: false
-      properties:
-        expectedRevision: { type: integer, format: int64 }
-        enabled: { type: boolean }
-        intervalMinutes: { type: integer, minimum: 15, maximum: 10080 }
     OrganisationCategory:
       type: object
       required: [id, description]
@@ -3135,9 +2941,6 @@ components:
         jobId: { type: string }
         jobState: { type: string, enum: [queued, running, succeeded, failed, cancelled] }
         attemptsStarted: { type: integer, format: int64 }
-        connectorId: { type: string }
-        externalId: { type: string }
-        discoveredAt: { type: string, format: date-time }
         opportunityId: { type: string }
         recordChangeId: { type: string }
         safeErrorCode: { type: string }
@@ -3183,11 +2986,6 @@ components:
         description: { type: string, maxLength: 1000 }
         kind: { type: string, enum: [role, responsibility, technology] }
         mode: { type: string, enum: [require, avoid, prefer] }
-        searchTerms:
-          type: array
-          maxItems: 4
-          items: { type: string, minLength: 2, maxLength: 120 }
-          description: Exact job-board queries for a require/prefer criterion. Boards match these literally; the human label is never sent as a query when terms are present.
     RoleCriterionView:
       allOf:
         - $ref: '#/components/schemas/RoleCriterion'

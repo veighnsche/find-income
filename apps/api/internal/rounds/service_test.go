@@ -73,7 +73,7 @@ func TestServiceFakeWorkerStopThenResumeRetainsAllowance(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor := store.Actor{Kind: "administrator", ID: "owner"}
-	input := store.StartRoundInput{RequestKey: "owner-start", Intent: "Find sourced roles", Outcome: "discover",
+	input := store.StartRoundInput{RequestKey: "owner-start", Intent: "Find sourced roles", Outcome: "process_input",
 		ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
 		Scope:  store.RoundScope{Operations: []string{"source.fetch"}, Resources: []string{"source:a"}},
 		Limits: store.RoundAllowance{Requests: 3, Items: 1, Tools: 3, Turns: 1}}
@@ -147,7 +147,7 @@ func TestExpiredPausedRoundIsTerminalBeforeResumeOrNewStart(t *testing.T) {
 			owner := store.Actor{Kind: "administrator", ID: "owner"}
 			worker := &fakeWorker{}
 			svc := &Service{Store: db, Readiness: &fakeReady{}, Worker: worker}
-			input := store.StartRoundInput{RequestKey: "expiring", Intent: "Inspect a source", Outcome: "discover", ProfileVersion: profile.Version,
+			input := store.StartRoundInput{RequestKey: "expiring", Intent: "Inspect a source", Outcome: "process_input", ProfileVersion: profile.Version,
 				Scope:  store.RoundScope{Resources: []string{"source:a"}, Operations: []string{store.RoundFetchSource}},
 				Limits: store.RoundAllowance{Requests: 2, Tools: 2}, Deadline: time.Now().Add(100 * time.Millisecond)}
 			round, _, err := svc.Start(ctx, owner, input)

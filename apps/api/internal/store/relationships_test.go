@@ -37,7 +37,7 @@ func TestRelationshipRoundKeepsIntroductionUnqualifiedAndSharesOpportunity(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	round, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "relationships", Intent: "Record attributed introductions and routes", Outcome: "discover", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Hour),
+	round, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "relationships", Intent: "Record attributed introductions and routes", Outcome: "process_input", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Hour),
 		Scope:  RoundScope{Resources: []string{"campaign:active", "opportunity:" + opening.ID}, Operations: []string{RoundCodexTurn, RoundRelationshipCounterpartyCreate, RoundRelationshipEventCreate, RoundRelationshipRouteCreate}, Delegates: []string{agent.ID}},
 		Limits: RoundAllowance{Requests: 4, Items: 4, Tools: 5, Turns: 1}})
 	if err != nil {
@@ -96,7 +96,7 @@ func TestRelationshipRoundKeepsIntroductionUnqualifiedAndSharesOpportunity(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	correctionRound, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "relationship-correction", Intent: "Correct the sourced route", Outcome: "discover", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Hour), Scope: RoundScope{Resources: []string{"relationship:" + direct.EntityID}, InputRefs: []string{"instruction:" + instruction.ID}, Operations: []string{RoundCodexTurn, RoundRelationshipCorrect}, Delegates: []string{agent.ID}}, Limits: RoundAllowance{Requests: 2, Items: 2, Tools: 3, Turns: 1}})
+	correctionRound, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "relationship-correction", Intent: "Correct the sourced route", Outcome: "process_input", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Hour), Scope: RoundScope{Resources: []string{"relationship:" + direct.EntityID}, InputRefs: []string{"instruction:" + instruction.ID}, Operations: []string{RoundCodexTurn, RoundRelationshipCorrect}, Delegates: []string{agent.ID}}, Limits: RoundAllowance{Requests: 2, Items: 2, Tools: 3, Turns: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestRelationshipRoundKeepsIntroductionUnqualifiedAndSharesOpportunity(t *te
 	if _, err := s.FinishRound(ctx, owner, correctionRound.ID, RoundCompleted, "corrected", "partial", json.RawMessage(`{"corrected":true}`)); err != nil {
 		t.Fatal(err)
 	}
-	reassignRound, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "reassign-authorized", Intent: "Correct a source-backed mistaken association", Outcome: "discover", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Hour), Scope: RoundScope{Resources: []string{"relationship:" + direct.EntityID, "opportunity:" + opening.ID, "opportunity:" + other.ID}, InputRefs: []string{"instruction:" + reassignInstruction.ID}, Operations: []string{RoundCodexTurn, RoundRelationshipCorrect}, Delegates: []string{agent.ID}}, Limits: RoundAllowance{Requests: 2, Items: 2, Tools: 3, Turns: 1}})
+	reassignRound, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "reassign-authorized", Intent: "Correct a source-backed mistaken association", Outcome: "process_input", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Hour), Scope: RoundScope{Resources: []string{"relationship:" + direct.EntityID, "opportunity:" + opening.ID, "opportunity:" + other.ID}, InputRefs: []string{"instruction:" + reassignInstruction.ID}, Operations: []string{RoundCodexTurn, RoundRelationshipCorrect}, Delegates: []string{agent.ID}}, Limits: RoundAllowance{Requests: 2, Items: 2, Tools: 3, Turns: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}

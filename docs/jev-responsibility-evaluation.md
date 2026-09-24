@@ -1,5 +1,7 @@
 # Initial Jev responsibility evaluation
 
+Historical evidence and design notes. The fixed-board discovery implementation and its execution plan were removed on 24 September 2026; see [current remaining work](remaining-work.md). References below to discovery tasks are not current implementation instructions.
+
 On 23 September 2026, ten supplied-context cases completed: seven captured real job descriptions and three clearly labelled synthetic Dutch, conflicting-source and long-text cases. Both responsibility observations in each case matched the alternatives recorded before the calls. Root read every proposed support span; the cited passages supported the reviewed interpretations, including both sides of the conflict and the late frontend requirement. This small convenience set does not establish general accuracy or employment suitability.
 
 One additional real case (Stream AI model role) produced the expected factual scopes but its support call failed with HTTP529. It remains incomplete; no automatic retry occurred. Across both batches there were 22 provider calls and 60,960 reported tokens. The final response exceeded the 60,000 reported-token target by 960: the script checked prior reported usage before dispatch, so that target was not a hard provider-side cap. Unknown failed-call usage was not invented.

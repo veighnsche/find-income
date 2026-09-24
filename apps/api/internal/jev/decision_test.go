@@ -12,7 +12,7 @@ import (
 
 func decisionFixture() DecisionInput {
 	return DecisionInput{
-		Kind: DecisionSourceResearch, CampaignIntent: "Find substantive platform work within this commissioned search.", MaxReportedTokens: 1000,
+		Kind: DecisionNextOutcome, CampaignIntent: "Find substantive platform work within this commissioned search.", MaxReportedTokens: 1000,
 		Capabilities:       []DecisionCapability{{ID: "fetch", Description: "Fetch a supported public employer careers source."}, {ID: "inspect", Description: "Inspect a saved candidate within the round."}},
 		Sources:            []DecisionSource{{ID: "source-1", SourceRevision: "rev-2", SourceKind: "employer_page", URL: "https://example.test/jobs", ObservedAt: "2026-09-23", Excerpt: "Current public role list."}},
 		PreviousOutcomes:   []PreviousDecisionOutcome{{ID: "previous-1", Description: "One earlier source had no matching roles."}},

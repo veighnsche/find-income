@@ -302,9 +302,6 @@ func applyMigration(ctx context.Context, db *sql.DB, m migration) error {
 		if err == nil {
 			err = seedOrganisationCategories(ctx, tx)
 		}
-		if err == nil {
-			err = seedCollectorBoards(ctx, tx)
-		}
 	}
 	if err == nil {
 		_, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations (version, name, sha256, applied_at) VALUES (?, ?, ?, ?)", m.version, m.name, m.digest, utcNow())

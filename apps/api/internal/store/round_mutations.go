@@ -21,8 +21,6 @@ const (
 	RoundCorrectPreferences             = "preferences.correct"
 	RoundCorrectEvidence                = "evidence.correct"
 	RoundCorrectOpportunity             = "opportunity.owner_correction"
-	RoundStageDiscovery                 = "discovery.candidate_stage"
-	RoundRegisterDiscoveryBoard         = "discovery.board_register"
 	RoundPrepareApplicationPack         = "application_pack.prepare"
 	RoundPrepareOfferComparison         = "offer_comparison.prepare"
 	RoundRelationshipCounterpartyCreate = "relationship.counterparty_create"
@@ -30,7 +28,6 @@ const (
 	RoundRelationshipRouteCreate        = "relationship.route_create"
 	RoundRelationshipCorrect            = "relationship.correct"
 	RoundFetchSource                    = "source.fetch"
-	RoundCollectorPage                  = "source.page"
 	RoundSearchSource                   = "source.search"
 	RoundCodexTurn                      = "codex.turn"
 	RoundContextTool                    = "round.context"
@@ -58,8 +55,6 @@ func RoundOperationCost(operation string) (RoundAllowance, bool) {
 		return RoundAllowance{Requests: 1}, true
 	case RoundDeliverApplication:
 		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
-	case RoundStageDiscovery, RoundRegisterDiscoveryBoard:
-		return RoundAllowance{Items: 1, Tools: 1}, true
 	case RoundPrepareApplicationPack, RoundPrepareOfferComparison:
 		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
 	default:
@@ -336,16 +331,7 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 			if !roundHasCompanyTx(ctx, tx, round, input.SourceOpportunity.CompanyID) {
 				return RoundMutationResult{}, false, ErrFenced
 			}
-			var staged int
-			err := tx.QueryRowContext(ctx, `SELECT count(*) FROM source_sightings ss
-			  JOIN source_openings so ON so.id=ss.source_opening_id AND so.current_ingestion_id=ss.ingestion_id
-			  JOIN round_attempts a ON a.id=ss.collector_attempt_id
-			  WHERE ss.source_opening_id=? AND a.round_id=? AND a.state='succeeded'`,
-				input.SourceOpportunity.SourceOpeningID, roundID).Scan(&staged)
-			if err != nil {
-				return RoundMutationResult{}, false, err
-			}
-			if staged == 0 && !scopeHas(round.Scope.InputRefs, input.ResourceID) {
+			if !scopeHas(round.Scope.InputRefs, input.ResourceID) {
 				var ownerIngestionID string
 				ownerErr := tx.QueryRowContext(ctx, `SELECT i.id FROM source_openings so
 				  JOIN ingestion_requests i ON i.id=so.current_ingestion_id
@@ -358,23 +344,7 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 				if ownerErr == nil && scopeHas(round.Scope.InputRefs, "ingestion:"+ownerIngestionID) {
 					break
 				}
-				var priorBoardResource string
-				err := tx.QueryRowContext(ctx, `SELECT a.resource_id FROM source_sightings ss
-				  JOIN source_openings so ON so.id=ss.source_opening_id AND so.current_ingestion_id=ss.ingestion_id
-				  JOIN ingestion_requests i ON i.id=ss.ingestion_id
-				  JOIN round_attempts a ON a.id=ss.collector_attempt_id
-				  JOIN rounds prior ON prior.id=a.round_id
-				  WHERE ss.source_opening_id=? AND ss.decision IN ('new','changed')
-				    AND i.source_id IS NULL AND a.operation=? AND a.state='succeeded'
-				    AND prior.actor_kind=? AND prior.actor_id=? AND prior.state IN ('completed','failed')
-				  ORDER BY ss.recorded_at DESC,ss.id DESC LIMIT 1`,
-					input.SourceOpportunity.SourceOpeningID, RoundCollectorPage, round.Actor.Kind, round.Actor.ID).Scan(&priorBoardResource)
-				if errors.Is(err, sql.ErrNoRows) || err == nil && !scopeHas(round.Scope.Resources, priorBoardResource) {
-					return RoundMutationResult{}, false, ErrFenced
-				}
-				if err != nil {
-					return RoundMutationResult{}, false, err
-				}
+				return RoundMutationResult{}, false, ErrFenced
 			}
 		case RoundCorrectOpportunity:
 			var companyID string

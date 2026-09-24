@@ -38,15 +38,11 @@ func TestConfiguredServerStartupLeavesRecruitmentQueued(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	boards, err := database.ListCollectorBoards(ctx)
-	if err != nil || len(boards) == 0 || !boards[0].Enabled {
-		t.Fatalf("seeded collection board: %+v %v", boards, err)
-	}
 	if err := database.Close(); err != nil {
 		t.Fatal(err)
 	}
 
-	// Any accidental HTTP provider or board request stays inside this fake proxy.
+	// Any accidental HTTP provider request stays inside this fake proxy.
 	providerCalls := make(chan struct{}, 1)
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		select {
@@ -131,12 +127,11 @@ func TestConfiguredServerStartupLeavesRecruitmentQueued(t *testing.T) {
 	var capabilities struct {
 		IngestionAvailable    bool `json:"ingestionAvailable"`
 		OrganisationAvailable bool `json:"organisationAvailable"`
-		CollectionAvailable   bool `json:"collectionAvailable"`
 	}
 	decodeErr := json.NewDecoder(statusResponse.Body).Decode(&capabilities)
 	statusResponse.Body.Close()
 	if statusResponse.StatusCode != http.StatusOK || decodeErr != nil ||
-		capabilities.IngestionAvailable || capabilities.OrganisationAvailable || capabilities.CollectionAvailable {
+		capabilities.IngestionAvailable || capabilities.OrganisationAvailable {
 		t.Fatalf("startup advertised recruitment capabilities: status=%d value=%+v decode=%v",
 			statusResponse.StatusCode, capabilities, decodeErr)
 	}
@@ -154,7 +149,7 @@ func TestConfiguredServerStartupLeavesRecruitmentQueued(t *testing.T) {
 	}
 	select {
 	case <-providerCalls:
-		t.Fatal("startup made a provider or collection request")
+		t.Fatal("startup made a provider request")
 	default:
 	}
 	database, err = store.Open(ctx, dataDir)
@@ -169,14 +164,5 @@ func TestConfiguredServerStartupLeavesRecruitmentQueued(t *testing.T) {
 	readOrganisation, err := database.Job(ctx, organisation.ID)
 	if err != nil || readOrganisation.State != store.JobQueued || readOrganisation.AttemptCount != 0 {
 		t.Fatalf("organisation claimed on startup: %+v %v", readOrganisation, err)
-	}
-	currentBoards, err := database.ListCollectorBoards(ctx)
-	if err != nil || len(currentBoards) != len(boards) {
-		t.Fatalf("boards changed on startup: %+v %v", currentBoards, err)
-	}
-	for i := range boards {
-		if currentBoards[i].Revision != boards[i].Revision {
-			t.Fatalf("collector claimed board on startup: before=%+v after=%+v", boards[i], currentBoards[i])
-		}
 	}
 }

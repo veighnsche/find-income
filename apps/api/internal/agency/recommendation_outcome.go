@@ -72,7 +72,7 @@ func outcomeFactsRevision(roundID string, facts outcomeRecommendationFacts) stri
 	return hex.EncodeToString(sum[:])
 }
 
-// computeOutcomeRecommendation shares discovery's charged, fenced decision
+// computeOutcomeRecommendation uses the shared charged decision
 // phase. Its input is deliberately a typed summary, never a serialized report.
 func (e *Engine) computeOutcomeRecommendation(ctx context.Context, initial store.Round, facts outcomeRecommendationFacts) *homeRecommendation {
 	advice := &homeRecommendation{Status: "unavailable", ProfileVersion: initial.ProfileVersion, RoundID: initial.ID, RoundGeneration: initial.Generation}
@@ -145,7 +145,7 @@ func (e *Engine) computeOutcomeRecommendation(ctx context.Context, initial store
 		advice.Code = "recommendation_choice_invalid"
 		return advice
 	}
-	if err := e.checkRecommendationTarget(ctx, r, nil, choice); err != nil {
+	if err := e.checkRecommendationTarget(ctx, r, choice); err != nil {
 		advice.Code = "recommendation_target_changed"
 		return advice
 	}
@@ -163,9 +163,8 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 	if !complete {
 		return jev.DecisionInput{}, nil, nil, nil, errDecisionContextTooLarge
 	}
-	input := jev.DecisionInput{Kind: jev.DecisionNextOutcome, CampaignIntent: round.Intent, MaxReportedTokens: discoveryDecisionReportedTokenLimit,
+	input := jev.DecisionInput{Kind: jev.DecisionNextOutcome, CampaignIntent: round.Intent, MaxReportedTokens: decisionReportedTokenLimit,
 		Capabilities: []jev.DecisionCapability{
-			{ID: "home_discover", Description: "Suggest an owner-clicked bounded discovery commission."},
 			{ID: "home_review_result", Description: "Review the saved result of this commissioned work."},
 			{ID: "home_prepare", Description: "Suggest owner-clicked preparation for one exact current owner-selected role."},
 			{ID: "home_review_pack", Description: "Review one exact current saved application pack without sending it."},
@@ -196,8 +195,7 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 		choices[id] = choice
 	}
 	baseRefs := append(append([]string{}, profileIDs...), resultID)
-	add("discover", "home_discover", "Start a new bounded source discovery round if more roles would be useful.", "Owner click commissions a new round; no work starts from this advice.", baseRefs,
-		recommendationChoice{Action: "discover", Target: recommendationTarget{Kind: "campaign", ID: "active", Revision: profile.Version}, Reason: "The saved outcome is complete; a new owner-clicked discovery round can seek more sourced roles."})
+
 	reviewReason := fmt.Sprintf("The %s round saved %d applied changes and %d unresolved items.", facts.Outcome, facts.AppliedChanges, facts.UnresolvedCount)
 	if facts.Outcome == "process_replies" {
 		processing, err := e.Store.ReplyProcessing(ctx, facts.ResultID)
@@ -268,7 +266,7 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 		if currentPack {
 			packID, packHash = packs[0].ID, packs[0].ContentSHA256
 		}
-		assessed := assessedSource{}
+		assessed := recommendationAssessments{}
 		screen, screenPresent, screenErr := e.currentRecommendationAssessment(ctx, opportunity, profile.Version, "screening")
 		organisation, organisationPresent, organisationErr := e.currentRecommendationAssessment(ctx, opportunity, profile.Version, "organisation")
 		if screenErr != nil || organisationErr != nil {

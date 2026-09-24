@@ -166,12 +166,12 @@ export async function runOfferComparisonSmoke(browser) {
 
   const conflict = await startFixture();
   try {
-    conflict.state.round = { ...conflict.state.round, outcome: 'discover', state: 'paused' };
+    conflict.state.round = { ...conflict.state.round, outcome: 'prepare', state: 'paused' };
     const { context, page, panel } = await openComparison(browser, conflict);
     await panel
       .getByRole('textbox', { name: 'Complete offer 1' })
       .fill('Full offer draft survives conflict.');
-    await panel.getByText(/Another discover round is paused/).waitFor();
+    await panel.getByText(/Another prepare round is paused/).waitFor();
     assert.equal(
       await panel.getByRole('button', { name: 'Compare whole offers', exact: true }).isDisabled(),
       true,

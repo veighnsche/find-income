@@ -239,8 +239,8 @@ func TestInputOutcomeReplaysCapturedChoiceAfterStopWithoutAnotherRequest(t *test
 	db, round := outcomeAdviceRound(t, 1, true)
 	base, calls, closeServer := recommendationDecisions(t, db, "home_review_result")
 	defer closeServer()
-	interrupted := &interruptDiscoveryDecision{base: base, trigger: func(input jev.DecisionInput) bool {
-		return len(input.Candidates) > 0 && input.Candidates[0].CapabilityID == "home_discover"
+	interrupted := &interruptRecommendationDecision{base: base, trigger: func(input jev.DecisionInput) bool {
+		return len(input.Candidates) > 0 && input.Candidates[0].CapabilityID == "home_review_result"
 	}}
 	interrupted.stop = func(_ context.Context, roundID string) {
 		if _, _, err := db.StopRound(context.Background(), round.Actor, roundID); err != nil {

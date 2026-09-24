@@ -93,7 +93,7 @@ func saveSourcedOpportunityTx(ctx context.Context, tx *sql.Tx, actor Actor, inpu
 	var sourceURL, sourceID, mappedOpportunityID sql.NullString
 	err = tx.QueryRowContext(ctx, `SELECT i.id,i.source_url,i.original_text,i.source_id,s.opportunity_id
   FROM source_openings s JOIN ingestion_requests i ON i.id=s.current_ingestion_id
-  WHERE s.id=? AND i.origin IN ('collector','owner') AND i.source_opening_id=s.id`, input.SourceOpeningID).
+  WHERE s.id=? AND i.origin='owner' AND i.source_opening_id=s.id`, input.SourceOpeningID).
 		Scan(&ingestionID, &sourceURL, &sourceText, &sourceID, &mappedOpportunityID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", 0, "", ErrNotFound

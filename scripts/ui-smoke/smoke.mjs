@@ -180,10 +180,7 @@ async function run() {
       .getByRole('region', { name: 'Agency work' })
       .getByRole('button', { name: 'Refresh work' })
       .click();
-    await page
-      .getByRole('region', { name: 'Agency work' })
-      .getByText(/Prepared private application pack version 4/)
-      .waitFor();
+    await page.getByRole('region', { name: 'Agency work' }).getByText('Your input is ready to review.').waitFor();
     const campaignInput = page.getByRole('region', { name: 'Owner instruction' });
     await campaignInput.getByRole('textbox').fill('https://example.invalid/jobs/second-role');
     await campaignInput.getByRole('button', { name: 'Handle this material' }).click();
@@ -204,12 +201,10 @@ async function run() {
       .getByRole('region', { name: 'Agency work' })
       .getByRole('button', { name: 'Refresh work' })
       .click();
-    await page
-      .getByRole('region', { name: 'Agency work' })
-      .getByText(/saved vacancy URL could not be verified from a supported source/)
-      .waitFor();
+    await page.getByRole('region', { name: 'Agency work' }).getByRole('button', { name: 'View saved report' }).click();
+    await page.getByRole('region', { name: 'Saved round result' }).getByText(/saved vacancy URL could not be verified from a supported source/).first().waitFor();
 
-    await campaignInput.getByRole('textbox').fill('https://jobs.lever.co/example/role-2');
+    await campaignInput.getByRole('textbox').fill('https://example.invalid/jobs/role-2');
     await campaignInput.getByRole('button', { name: 'Handle this material' }).click();
     await campaignInput.getByText(/Request accepted. The agency is handling this input/).waitFor();
     fixture.state.organisationLimitNext = true;
@@ -223,10 +218,8 @@ async function run() {
       .getByRole('region', { name: 'Agency work' })
       .getByRole('button', { name: 'Refresh work' })
       .click();
-    await page
-      .getByRole('region', { name: 'Agency work' })
-      .getByText(/vacancy was saved, but semantic organisation could not be recorded/)
-      .waitFor();
+    await page.getByRole('region', { name: 'Agency work' }).getByRole('button', { name: 'View saved report' }).click();
+    await page.getByRole('region', { name: 'Saved round result' }).getByText(/vacancy was saved, but semantic organisation could not be recorded/).first().waitFor();
     await page.getByRole('button', { name: 'Correct this brief' }).click();
     const profileInput = page.getByRole('region', { name: 'Owner instruction' });
     await profileInput.getByRole('textbox').fill('My target hours are now 30 each week.');
@@ -260,7 +253,7 @@ async function run() {
     assert.equal(fixture.state.profileVersion, 8, 'replay must not apply the correction again');
 
     // A lost paused-replacement response remains replayable after the new round
-    // becomes active, for both Prepare and discovery Start.
+    // becomes active for Prepare.
     fixture.completeInput();
     await profileInput.getByRole('button', { name: 'Refresh work status' }).click();
     await profileInput.getByText('Updated your campaign brief').waitFor();
@@ -269,10 +262,8 @@ async function run() {
       .getByRole('region', { name: 'Agency work' })
       .getByRole('button', { name: 'Refresh work' })
       .click();
-    await page
-      .getByRole('region', { name: 'Agency work' })
-      .getByText('Updated your campaign brief')
-      .waitFor();
+    await page.getByRole('region', { name: 'Agency work' }).getByRole('button', { name: 'View saved report' }).click();
+    await page.getByRole('region', { name: 'Saved round result' }).getByText('Updated your campaign brief').waitFor();
     fixture.pauseRound();
     const pausedInput = { id: fixture.state.round.id, revision: fixture.state.round.revision };
     await page.getByRole('button', { name: 'Synthetic Research Role' }).click();
@@ -310,95 +301,10 @@ async function run() {
 
     fixture.completeInput();
     fixture.pauseRound();
-    const pausedPrepare = { id: fixture.state.round.id, revision: fixture.state.round.revision };
-    fixture.state.discoveryReady = true;
-    await page.getByRole('button', { name: '← Back to opportunities' }).click();
-    const agency = page.getByRole('region', { name: 'Agency work' });
-    await agency
-      .getByRole('button', { name: 'End paused prepare round and find my next opportunities' })
-      .waitFor();
-    fixture.state.failFirstDiscoveryResponse = true;
-    await agency
-      .getByRole('button', { name: 'End paused prepare round and find my next opportunities' })
-      .click();
-    await agency.getByRole('button', { name: 'Retry same discovery request' }).waitFor();
-    const discoverReplay = fixture.state.requests
-      .filter((item) => item.method === 'POST' && item.path === '/api/v1/rounds')
-      .at(-1).payload;
-    assert.deepEqual(discoverReplay.replacePaused, {
-      roundId: pausedPrepare.id,
-      expectedRevision: pausedPrepare.revision,
-    });
-    await page.reload({ waitUntil: 'networkidle' });
-    await agency.getByRole('button', { name: 'Retry same discovery request' }).click();
-    await agency
-      .getByRole('button', { name: 'Retry same discovery request' })
-      .waitFor({ state: 'detached' });
-    assert.deepEqual(
-      fixture.state.requests
-        .filter((item) => item.method === 'POST' && item.path === '/api/v1/rounds')
-        .at(-1).payload,
-      discoverReplay,
-    );
-    assert.equal(
-      await page.evaluate(() => localStorage.getItem('jobseek.pending-round-start')),
-      null,
-    );
-
-    // A definite stale-revision 409 permits review and a fresh request.
-    fixture.completeInput();
-    fixture.pauseRound();
-    await agency.getByRole('button', { name: 'Refresh work' }).click();
-    const replaceDiscovery = agency.getByRole('button', {
-      name: 'End paused discover round and find my next opportunities',
-    });
-    await replaceDiscovery.waitFor();
-    fixture.state.staleNextDiscovery = true;
-    await replaceDiscovery.click();
-    await agency.getByRole('button', { name: 'Review work and start a new request' }).waitFor();
-    const rejectedCount = fixture.state.requests.filter(
-      (item) => item.method === 'POST' && item.path === '/api/v1/rounds',
-    ).length;
-    await page.reload({ waitUntil: 'networkidle' });
-    await agency.getByRole('button', { name: 'Review work and start a new request' }).waitFor();
-    assert.equal(
-      await agency.getByRole('button', { name: 'Retry same discovery request' }).count(),
-      0,
-    );
-    assert.equal(
-      fixture.state.requests.filter(
-        (item) => item.method === 'POST' && item.path === '/api/v1/rounds',
-      ).length,
-      rejectedCount,
-      'known 409 reload does not retry discovery',
-    );
-    await agency.getByRole('button', { name: 'Review work and start a new request' }).click();
-    await page.waitForFunction(() => localStorage.getItem('jobseek.pending-round-start') === null);
-    const rejectedDiscovery = fixture.state.requests
-      .filter((item) => item.method === 'POST' && item.path === '/api/v1/rounds')
-      .at(-1).payload;
-    assert.equal(
-      await page.evaluate(() => localStorage.getItem('jobseek.pending-round-start')),
-      null,
-    );
-    await replaceDiscovery.click();
-    await agency.getByRole('button', { name: 'Stop this round' }).waitFor();
-    const freshDiscovery = fixture.state.requests
-      .filter((item) => item.method === 'POST' && item.path === '/api/v1/rounds')
-      .at(-1).payload;
-    assert.notEqual(freshDiscovery.requestKey, rejectedDiscovery.requestKey);
-    assert.equal(
-      freshDiscovery.replacePaused.expectedRevision,
-      rejectedDiscovery.replacePaused.expectedRevision + 1,
-    );
-
-    fixture.completeInput();
-    fixture.pauseRound();
-    await page.getByRole('button', { name: 'Synthetic Research Role' }).click();
     const preparationAgain = page.getByRole('region', { name: 'Application preparation' });
     await preparationAgain.getByRole('button', { name: 'Refresh preparation' }).click();
     const replacePrepare = preparationAgain.getByRole('button', {
-      name: 'End paused discover round and prepare this application',
+      name: 'End paused prepare round and prepare this application',
     });
     await replacePrepare.waitFor();
     fixture.state.staleNextPrepare = true;

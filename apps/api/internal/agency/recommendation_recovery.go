@@ -86,7 +86,7 @@ func (e *Engine) recoverOutcomeRecommendation(ctx context.Context, round store.R
 		choiceID = "__unresolved__"
 	} else {
 		choice, ok := choices[choiceID]
-		if !ok || e.checkRecommendationTarget(ctx, round, nil, choice) != nil {
+		if !ok || e.checkRecommendationTarget(ctx, round, choice) != nil {
 			return true, false, nil
 		}
 	}

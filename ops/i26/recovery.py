@@ -27,7 +27,7 @@ ASSETS = {
 SENSITIVE_COLUMNS = {
     ("administrator", "password_hash"), ("auth_sessions", "token_hash"), ("auth_sessions", "csrf_hash"),
     ("agent_credentials", "token_hash"), ("jobs", "lease_token"), ("job_attempts", "lease_token"),
-    ("collector_boards", "lease_token"), ("round_tool_capabilities", "token_sha256"),
+    ("round_tool_capabilities", "token_sha256"),
 }
 REVIEWED_NONSECRETS = {("administrator", "credential_version"), ("jev_attempts", "input_tokens"), ("jev_attempts", "output_tokens")}
 ROOT = Path(__file__).resolve().parents[2]
@@ -233,12 +233,11 @@ def sanitize(db):
         db.execute("UPDATE jev_attempts SET status='uncertain',finished_at=? WHERE status='dispatched'", (now,))
         db.execute("UPDATE delivery_items SET state='uncertain',smtp_stage='interrupted',smtp_code=0,outcome_detail='send intent existed at restore; submission outcome unknown',updated_at=? WHERE state='sending'", (now,))
         db.execute("UPDATE ingestion_requests SET status='failed',safe_error_code='restored_inactive',updated_at=? WHERE status IN ('pending','processing')", (now,))
-        db.execute("UPDATE collector_boards SET lease_token=NULL,lease_until=NULL")
         db.execute("DELETE FROM qualification_refresh_queue")
     check_db(db)
     if db.execute("SELECT 1 FROM administrator UNION SELECT 1 FROM auth_sessions UNION SELECT 1 FROM agent_credentials UNION SELECT 1 FROM round_tool_capabilities").fetchone():
         fail("credential rows survived sanitization")
-    if db.execute("SELECT 1 FROM jobs WHERE state IN ('queued','running') UNION SELECT 1 FROM rounds WHERE state IN ('queued','running','awaiting_input','stopping','paused') UNION SELECT 1 FROM collector_boards WHERE lease_token IS NOT NULL OR lease_until IS NOT NULL UNION SELECT 1 FROM delivery_items WHERE state='sending'").fetchone():
+    if db.execute("SELECT 1 FROM jobs WHERE state IN ('queued','running') UNION SELECT 1 FROM rounds WHERE state IN ('queued','running','awaiting_input','stopping','paused') UNION SELECT 1 FROM delivery_items WHERE state='sending'").fetchone():
         fail("restored database would resume recruitment")
 
 
@@ -288,7 +287,7 @@ def verify_archive(archive, expected_manifest_sha, approved=ASSETS):
             fail("backup schema or pack count differs from manifest")
         if db.execute("SELECT 1 FROM administrator UNION SELECT 1 FROM auth_sessions UNION SELECT 1 FROM agent_credentials UNION SELECT 1 FROM round_tool_capabilities").fetchone():
             fail("backup contains credential rows")
-        if db.execute("SELECT 1 FROM jobs WHERE state IN ('queued','running') UNION SELECT 1 FROM rounds WHERE state IN ('queued','running','awaiting_input','stopping','paused') UNION SELECT 1 FROM collector_boards WHERE lease_token IS NOT NULL OR lease_until IS NOT NULL UNION SELECT 1 FROM delivery_items WHERE state='sending'").fetchone():
+        if db.execute("SELECT 1 FROM jobs WHERE state IN ('queued','running') UNION SELECT 1 FROM rounds WHERE state IN ('queued','running','awaiting_input','stopping','paused') UNION SELECT 1 FROM delivery_items WHERE state='sending'").fetchone():
             fail("backup contains runnable recruitment state")
     return manifest
 

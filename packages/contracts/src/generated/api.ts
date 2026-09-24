@@ -337,43 +337,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/rounds/capability": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read server-selected outcome and current execution availability */
-        get: operations["getRoundCapability"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/rounds": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Owner starts one commissioned outcome
-         * @description Requires owner session, same-origin CSRF token, and a ready execution capability. An exact requestKey replay returns the existing round.
-         */
-        post: operations["startRound"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/rounds/prepare": {
         parameters: {
             query?: never;
@@ -492,44 +455,6 @@ export interface paths {
         };
         /** Read committed results for a round */
         get: operations["getRoundResults"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/rounds/{id}/cards": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        /** Read source linked opportunity cards saved by a round */
-        get: operations["getRoundCards"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/rounds/{id}/candidates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        /** Read staged discovery leads and recorded source reads of a round */
-        get: operations["getRoundCandidates"];
         put?: never;
         post?: never;
         delete?: never;
@@ -930,23 +855,6 @@ export interface paths {
          * @description Bearer credentials require opportunities:read. Comma-separated IDs are bounded to 100; missing IDs are omitted.
          */
         get: operations["getOrganisationSummaries"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/collector-boards": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List configured collection boards and their last observed run status */
-        get: operations["listCollectorBoards"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1858,11 +1766,6 @@ export interface components {
             operations: string[];
             delegates: string[];
         };
-        /** @description Owner Start sends only a durable click idempotency key; the server chooses the current outcome, profile, scope, allowance and deadline. */
-        StartRoundRequest: {
-            requestKey: string;
-            replacePaused?: components["schemas"]["ReplacePausedRound"];
-        };
         /** @description Owner selects an existing sourced opportunity; the server derives all pack details and authority. */
         PrepareRoundRequest: {
             requestKey: string;
@@ -2047,14 +1950,6 @@ export interface components {
             ingestionId?: string;
             replacedRoundId?: string;
         };
-        RoundCapability: {
-            canStart: boolean;
-            reason: string;
-            intent: string;
-            outcome: string;
-            limits: components["schemas"]["RoundAllowance"];
-            sourceCount: number;
-        };
         Round: {
             id: string;
             requestKey: string;
@@ -2097,54 +1992,6 @@ export interface components {
         };
         RoundResults: {
             items: unknown[];
-        };
-        RoundCards: {
-            items: components["schemas"]["RoundCard"][];
-        };
-        RoundCandidates: {
-            leads: components["schemas"]["RoundCandidateLead"][];
-            searches: components["schemas"]["RoundCandidateSearch"][];
-        };
-        RoundCandidateLead: {
-            id: string;
-            kind: string;
-            title: string;
-            url: string;
-            companyUrl: string;
-            evidenceQuote: string;
-            /** Format: date-time */
-            observedAt: string;
-            status: string;
-            statusReason: string;
-        };
-        RoundCandidateSearch: {
-            source: string;
-            method: string;
-            /** Format: date-time */
-            observedAt: string;
-            /** Format: int64 */
-            candidates: number;
-            succeeded: boolean;
-        };
-        RoundCard: {
-            opportunityId: string;
-            /** Format: int64 */
-            opportunityRevision: number;
-            companyId: string;
-            companyName: string;
-            title: string;
-            kind: string;
-            sourceUrl: string;
-            sourceText: string;
-            sourceAuditId: string;
-            /** Format: int64 */
-            sourceRevision: number;
-            sourceStale: boolean;
-            decision: string;
-            /** Format: int64 */
-            decisionRevision: number;
-            /** Format: date-time */
-            createdAt: string;
         };
         RoundHistory: {
             items: components["schemas"]["RoundHistoryEvent"][];
@@ -2507,55 +2354,6 @@ export interface components {
         RuntimeStatus: {
             ingestionAvailable: boolean;
             organisationAvailable: boolean;
-            /** @description Collector loop mounted; enabled board count and run outcomes are separate. */
-            collectionAvailable: boolean;
-        };
-        CollectorBoard: {
-            id: string;
-            /** @enum {string} */
-            provider: "lever";
-            site: string;
-            displayName: string;
-            /** Format: uri */
-            officialCareersUrl?: string;
-            /** Format: date-time */
-            verifiedAt?: string;
-            /** @enum {string} */
-            region: "global" | "eu";
-            enabled: boolean;
-            intervalMinutes: number;
-            /** Format: date-time */
-            nextScanAt: string;
-            /** Format: date-time */
-            lastRunAt?: string;
-            /** Format: date-time */
-            lastSuccessAt?: string;
-            lastErrorCode?: string;
-            /** Format: int64 */
-            revision: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        CollectorBoardList: {
-            items: components["schemas"]["CollectorBoard"][];
-        };
-        CreateCollectorBoardRequest: {
-            /** @enum {string} */
-            provider: "lever";
-            site: string;
-            displayName?: string;
-            /** @enum {string} */
-            region: "global" | "eu";
-            enabled: boolean;
-            intervalMinutes: number;
-        };
-        UpdateCollectorBoardRequest: {
-            /** Format: int64 */
-            expectedRevision: number;
-            enabled: boolean;
-            intervalMinutes: number;
         };
         OrganisationCategory: {
             id: string;
@@ -2639,10 +2437,6 @@ export interface components {
             jobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
             /** Format: int64 */
             attemptsStarted: number;
-            connectorId?: string;
-            externalId?: string;
-            /** Format: date-time */
-            discoveredAt?: string;
             opportunityId?: string;
             recordChangeId?: string;
             safeErrorCode?: string;
@@ -2674,8 +2468,6 @@ export interface components {
             kind: "role" | "responsibility" | "technology";
             /** @enum {string} */
             mode: "require" | "avoid" | "prefer";
-            /** @description Exact job-board queries for a require/prefer criterion. Boards match these literally; the human label is never sent as a query when terms are present. */
-            searchTerms?: string[];
         };
         RoleCriterionView: components["schemas"]["RoleCriterion"] & {
             /** @description Server-calculated SHA-256 of the complete criterion definition. */
@@ -3878,7 +3670,7 @@ export interface operations {
     getLatestCompletedRound: {
         parameters: {
             query: {
-                outcome: "all" | "discover" | "process_input" | "prepare" | "compare_offers" | "deliver" | "interview_prepare" | "interview_debrief" | "process_replies";
+                outcome: "all" | "process_input" | "prepare" | "compare_offers" | "deliver" | "interview_prepare" | "interview_debrief" | "process_replies";
             };
             header?: never;
             path?: never;
@@ -3896,61 +3688,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
-        };
-    };
-    getRoundCapability: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Capability and bounded plan summary */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundCapability"];
-                };
-            };
-        };
-    };
-    startRound: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StartRoundRequest"];
-            };
-        };
-        responses: {
-            /** @description Existing round */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Round"];
-                };
-            };
-            /** @description Round created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Round"];
-                };
-            };
-            409: components["responses"]["Conflict"];
-            503: components["responses"]["Unavailable"];
         };
     };
     prepareRound: {
@@ -4147,50 +3884,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoundResults"];
-                };
-            };
-        };
-    };
-    getRoundCards: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Cards from linked audited records */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundCards"];
-                };
-            };
-        };
-    };
-    getRoundCandidates: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Leads with verification status and source reads */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundCandidates"];
                 };
             };
         };
@@ -4782,28 +4475,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-        };
-    };
-    listCollectorBoards: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Collection board settings and run status */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CollectorBoardList"];
-                };
-            };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
         };

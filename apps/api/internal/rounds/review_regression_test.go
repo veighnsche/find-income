@@ -24,7 +24,7 @@ func reviewRound(t *testing.T) (*Service, store.Actor, store.Round, store.RoundA
 	}
 	actor := store.Actor{Kind: "administrator", ID: "owner"}
 	svc := &Service{Store: db, Readiness: &fakeReady{}, Worker: &fakeWorker{}}
-	r, _, err := svc.Start(ctx, actor, store.StartRoundInput{RequestKey: "review", Intent: "Find roles", Outcome: "discover", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour), Scope: store.RoundScope{Operations: []string{store.RoundFetchSource}, Resources: []string{"source"}}, Limits: store.RoundAllowance{Requests: 10, Tools: 10}})
+	r, _, err := svc.Start(ctx, actor, store.StartRoundInput{RequestKey: "review", Intent: "Find roles", Outcome: "process_input", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour), Scope: store.RoundScope{Operations: []string{store.RoundFetchSource}, Resources: []string{"source"}}, Limits: store.RoundAllowance{Requests: 10, Tools: 10}})
 	if err != nil {
 		t.Fatal(err)
 	}

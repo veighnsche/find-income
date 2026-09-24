@@ -18,7 +18,7 @@ func roundInput(t *testing.T, s *Store, key string, limits RoundAllowance) Start
 		t.Fatal(err)
 	}
 	return StartRoundInput{RequestKey: key, Intent: "Find source-linked backend opportunities within these limits.",
-		Outcome: "discover", ProfileVersion: p.Version,
+		Outcome: "process_input", ProfileVersion: p.Version,
 		Scope: RoundScope{InputRefs: []string{"campaign:active"}, Resources: []string{"source:example"},
 			Operations: []string{"source.fetch", "role.extract"}},
 		Limits: limits, Deadline: time.Now().Add(time.Hour).UTC().Round(0)}

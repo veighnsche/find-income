@@ -1,16 +1,14 @@
 # Jobseek recruitment agency
 
-An undeployed personal recruitment agency prototype using Go/SQLite, Vite+ and React, native Go workspaces in Turborepo, Typst and Codex App Server. Codex gathers evidence and operates records; Jev classifies supplied evidence and choices. The owner commissions bounded work through Start/Stop/Resume.
-
-See the [full implementation task list and concurrent execution guide](docs/implementation-tasks.md) for current acceptance, remaining work, model/effort assignments and live-task handoffs. The [task graph](docs/task-graph.json) records dependencies and status. Five tasks and several independent slices are reviewed; the complete agency journey is not implemented.
+An undeployed personal recruitment agency prototype using Go/SQLite, Vite+ and React, Turborepo, Typst and Codex App Server.
 
 ## Current behavior
 
-The web app has Agency and Account views, a read-only campaign brief, opportunity inspection, saved source intake, round controls and automatic progress reads. Manual preference/board/category forms have been removed. Contextual correction drafts and selection are currently browser-local; server-backed correction/history/selection remain unfinished.
+The fixed-board discovery pipeline has been removed at the owner's instruction. There is no job-search implementation, discovery commission, board adapter, collector, candidate-staging funnel or discovery UI. The [owner report](docs/discovery-rapport-2026-09-24.md) records why it was rejected.
 
-The API persists bounded rounds, charged attempts, scoped company/opportunity mutations, exact remote dispatch evidence and incremental collector batches. The runtime has fake-tested lifecycle and explicit turn execution, and Jev has factual/candidate-choice helpers. These components are not yet wired into a real discovery journey: production Start/Resume report unavailable until the commissioned executor is bound. Login, startup and progress reads launch no recruitment work.
+The remaining app handles supplied sources and saved records: account and campaign information, companies/opportunities, contextual corrections, application packs, relationships, interview preparation, replies and offer comparisons. Codex operates records; Jev classifies supplied evidence. These capabilities retain their own execution and evidence controls. Startup and progress reads launch no recruitment work.
 
-Private host/account setup, bounded non-seed research, durable Jev orchestration, application packs and delivery remain open. No live runtime, real discovery quality or deployment readiness follows from the fixture checks. The unsupported direct recruitment write routes return unavailable.
+A replacement search system has not been built. See [remaining work](docs/remaining-work.md) for the current boundary. The retired implementation schedule is no longer a plan for this app.
 
 ## Local setup
 
@@ -20,6 +18,8 @@ Use the pinned toolchain: Node `24.21.0`, pnpm `12.3.4`, and Go `1.27.1`. From t
 pnpm install --frozen-lockfile
 pnpm build
 ```
+
+The initial schema changes directly with this prototype. Databases created from the removed pipeline are not migrated; use a fresh data directory for this checkout. Existing private data is not reset automatically.
 
 The server stores SQLite data under `JOBSEEK_DATA_DIR`. Choose one private directory and use it for both administrator setup and every `pnpm dev` session. For a local macOS account, for example:
 
@@ -61,7 +61,7 @@ pnpm test
 pnpm build
 ```
 
-`pnpm e2e` currently fails intentionally as a placeholder; task I14 replaces it with actual journey coverage. Browser fixture checks are recorded in the task handoffs and do not establish live provider behavior. [Foundation notes](docs/foundation.md) describe the workspace/toolchain.
+`pnpm e2e` runs browser fixture checks; they do not establish live provider behavior. [Foundation notes](docs/foundation.md) describe the workspace/toolchain.
 
 ## Development handoffs
 

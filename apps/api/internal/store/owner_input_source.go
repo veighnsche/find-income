@@ -51,7 +51,7 @@ func (s *Store) SubmitOwnerInputSource(ctx context.Context, actor Actor, input O
 	if !errors.Is(err, sql.ErrNoRows) {
 		return IngestionRequest{}, err
 	}
-	item, _, err := submitIngestionTx(ctx, tx, actor, source, collectorSightingRef{})
+	item, _, err := submitIngestionTx(ctx, tx, actor, source)
 	if err != nil {
 		return IngestionRequest{}, err
 	}

@@ -172,8 +172,11 @@ func TestCheckRoundRequiresSupportedReadyConnectionWithoutDispatch(t *testing.T)
 	s, _ := testService(t, testConfig())
 	f := installRuntime(t, s)
 	ctx := boundedContext(t)
-	if err := s.CheckRound(ctx, "discover"); err != nil {
-		t.Fatalf("ready discovery unavailable: %v", err)
+	if err := s.CheckRound(ctx, "process_input"); err != nil {
+		t.Fatalf("ready process input unavailable: %v", err)
+	}
+	if err := s.CheckRound(ctx, "discover"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("removed discovery outcome remained available: %v", err)
 	}
 	if err := s.CheckRound(ctx, "deliver"); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("unsupported outcome: %v", err)
@@ -184,7 +187,7 @@ func TestCheckRoundRequiresSupportedReadyConnectionWithoutDispatch(t *testing.T)
 	f.mu.Lock()
 	f.limitFails = true
 	f.mu.Unlock()
-	if err := s.CheckRound(ctx, "discover"); !errors.Is(err, ErrUnavailable) {
+	if err := s.CheckRound(ctx, "process_input"); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("unreadable quota passed: %v", err)
 	}
 }

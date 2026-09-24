@@ -30,7 +30,7 @@ func scopedSourceCallWithDeadline(t *testing.T, s *Service, db *store.Store, dea
 		t.Fatal(err)
 	}
 	resource := "company:" + company.ID
-	r, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "source-round", Intent: "Find official employer sources", Outcome: "discover", ProfileVersion: p.Version, Deadline: deadline, Scope: store.RoundScope{Resources: []string{resource}, Operations: []string{store.RoundCodexTurn, store.RoundSearchSource}, Delegates: []string{agent.ID}}, Limits: store.RoundAllowance{Requests: 2, Tools: 3, Turns: 1}})
+	r, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "source-round", Intent: "Read saved employer source", Outcome: "process_input", ProfileVersion: p.Version, Deadline: deadline, Scope: store.RoundScope{Resources: []string{resource}, Operations: []string{store.RoundCodexTurn, store.RoundSearchSource}, Delegates: []string{agent.ID}}, Limits: store.RoundAllowance{Requests: 2, Tools: 3, Turns: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}

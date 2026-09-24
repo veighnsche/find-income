@@ -85,7 +85,7 @@ func TestAgentIngestionScopeIdentityAndIsolation(t *testing.T) {
 	requireStatus(t, status, http.StatusNotFound, body)
 	status, body = h.do(http.MethodPost, "/ingestions/"+id+"/retry", `{}`, firstToken, "", "", nil)
 	requireStatus(t, status, http.StatusConflict, body)
-	status, body = h.do(http.MethodPost, "/ingestions", `{"origin":"collector","sourceUrl":"https://jobs.example.test/x","idempotencyKey":"forged"}`, firstToken, "", "", nil)
+	status, body = h.do(http.MethodPost, "/ingestions", `{"origin":"forged","sourceUrl":"https://jobs.example.test/x","idempotencyKey":"forged"}`, firstToken, "", "", nil)
 	requireStatus(t, status, http.StatusBadRequest, body)
 }
 

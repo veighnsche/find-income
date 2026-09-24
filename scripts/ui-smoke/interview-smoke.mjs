@@ -255,12 +255,12 @@ export async function runInterviewSmoke(browser) {
   // to existing work controls. A definite rejection can be explicitly revised.
   const conflict = await startFixture();
   try {
-    conflict.state.round = { ...conflict.state.round, state: 'paused', outcome: 'discover' };
+    conflict.state.round = { ...conflict.state.round, state: 'paused', outcome: 'prepare' };
     const { context, page, panel } = await openInterview(browser, conflict);
     await panel
       .getByRole('textbox', { name: 'Invitation and context' })
       .fill('Complete interview invitation for the same role.');
-    await panel.getByText(/Another discover round is paused/).waitFor();
+    await panel.getByText(/Another prepare round is paused/).waitFor();
     assert.equal(
       await panel.getByRole('button', { name: 'Prepare interview brief' }).isDisabled(),
       true,

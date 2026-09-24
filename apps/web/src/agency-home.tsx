@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Briefing, BriefingLeads } from './briefing';
+import { Briefing } from './briefing';
 import { ProcessInputReport } from './process-input-report';
 import { OfferComparisonPanel } from './offer-comparison-panel';
 import {
@@ -12,66 +12,23 @@ import {
   getDeliveryReview,
   getLatestCompletedSavedRound,
   listInterviews,
-  getRoundCandidates,
-  getRoundCards,
-  getRoundCapability,
-  getRoundHistory,
   getPreferences,
   getRound,
   isUnauthenticated,
   RequestError,
   resumeRound,
-  startRound,
   stopRound,
   type Preferences,
   type Round,
-  type RoundCandidateLead,
-  type RoundCandidateSearch,
-  type RoundCard,
-  type RoundCapability,
-  type RoundHistoryEvent,
   type Session,
-  type StartRoundRequest,
 } from './api';
 
 const lastRoundKey = 'jobseek.last-round';
-const startKey = 'jobseek.pending-round-start';
-const startRejectionKey = 'jobseek.pending-round-start-rejected';
-function readPendingStart(): StartRoundRequest | null {
-  try {
-    return JSON.parse(localStorage.getItem(startKey) || 'null') as StartRoundRequest | null;
-  } catch {
-    return null;
-  }
-}
-function readRejectedStart(): boolean {
-  try {
-    const pending = readPendingStart();
-    return Boolean(pending && localStorage.getItem(startRejectionKey) === pending.requestKey);
-  } catch {
-    return false;
-  }
-}
 const activeStates = new Set<Round['state']>(['queued', 'running', 'awaiting_input', 'stopping']);
 const pollIntervalMs = 5000;
 
 function message(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'The request could not be completed.';
-}
-
-function SafeSource({ value }: { value: string }) {
-  try {
-    const url = new URL(value);
-    if ((url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password)
-      return (
-        <a href={url.href} target="_blank" rel="noopener noreferrer">
-          Original source
-        </a>
-      );
-  } catch {
-    /* Show no unsafe link. */
-  }
-  return <span>Source link unavailable</span>;
 }
 
 function DeliveryPausedRecovery({
@@ -156,20 +113,10 @@ export function AgencyHome({
 }) {
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [round, setRound] = useState<Round | null>(null);
-  const [capability, setCapability] = useState<RoundCapability | null>(null);
-  const [cards, setCards] = useState<RoundCard[]>([]);
-  const [leads, setLeads] = useState<RoundCandidateLead[]>([]);
-  const [searches, setSearches] = useState<RoundCandidateSearch[]>([]);
-  const [history, setHistory] = useState<RoundHistoryEvent[]>([]);
-  const [cardsAvailable, setCardsAvailable] = useState(false);
-  const [historyAvailable, setHistoryAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [pendingStart, setPendingStart] = useState<StartRoundRequest | null>(readPendingStart);
-  const [staleStart, setStaleStart] = useState(readRejectedStart);
-  const [pollSeq, setPollSeq] = useState(0);
   const [adviceCheck, setAdviceCheck] = useState<{ key: string; reason: string | null } | null>(
     null,
   );
@@ -183,7 +130,6 @@ export function AgencyHome({
   const readVersion = useRef(0);
   const mutationInFlight = useRef(false);
   const mounted = useRef(false);
-  const resultsRoundId = useRef<string | null>(null);
 
   const invalidateRead = useCallback(() => {
     readVersion.current += 1;
@@ -207,10 +153,9 @@ export function AgencyHome({
       }
       const task = (async () => {
         try {
-          const [brief, active, available] = await Promise.all([
+          const [brief, active] = await Promise.all([
             getPreferences(controller.signal),
             getActiveRound(controller.signal),
-            getRoundCapability(controller.signal),
           ]);
           let current = active;
           if (!current) {
@@ -232,72 +177,14 @@ export function AgencyHome({
           if (!currentRead()) return undefined;
           setPreferences(brief);
           onBriefLoaded?.(brief.version);
-          setCapability(available);
           setRound(current);
           setError(null);
           if (current) {
             try {
               localStorage.setItem(lastRoundKey, current.id);
             } catch {
-              /* Read remains available in this page. */
+              /* Server read remains available. */
             }
-            if (resultsRoundId.current !== current.id) {
-              resultsRoundId.current = current.id;
-              setCards([]);
-              setLeads([]);
-              setSearches([]);
-              setHistory([]);
-              setCardsAvailable(false);
-              setHistoryAvailable(false);
-            }
-            const [cardRead, leadRead, historyRead] = await Promise.allSettled([
-              current.outcome === 'discover'
-                ? getRoundCards(current.id, controller.signal)
-                : Promise.resolve([] as RoundCard[]),
-              current.outcome === 'discover'
-                ? getRoundCandidates(current.id, controller.signal)
-                : Promise.resolve({ leads: [], searches: [] }),
-              getRoundHistory(current.id, controller.signal),
-            ]);
-            if (currentRead()) {
-              if (cardRead.status === 'fulfilled') {
-                setCards(cardRead.value);
-                setCardsAvailable(true);
-              }
-              if (leadRead.status === 'fulfilled') {
-                setLeads(leadRead.value.leads);
-                setSearches(leadRead.value.searches);
-              }
-              if (historyRead.status === 'fulfilled') {
-                setHistory(historyRead.value);
-                setHistoryAvailable(true);
-              }
-              if (
-                cardRead.status === 'rejected' ||
-                leadRead.status === 'rejected' ||
-                historyRead.status === 'rejected'
-              ) {
-                const cause =
-                  cardRead.status === 'rejected'
-                    ? cardRead.reason
-                    : leadRead.status === 'rejected'
-                      ? leadRead.reason
-                      : historyRead.status === 'rejected'
-                        ? historyRead.reason
-                        : undefined;
-                setError(
-                  `${message(cause)} The affected round view will retry on the next status read.`,
-                );
-              }
-            }
-          } else {
-            resultsRoundId.current = null;
-            setCards([]);
-            setLeads([]);
-            setSearches([]);
-            setHistory([]);
-            setCardsAvailable(false);
-            setHistoryAvailable(false);
           }
           return current;
         } catch (cause) {
@@ -311,7 +198,6 @@ export function AgencyHome({
         } finally {
           if (currentRead()) {
             setLoading(false);
-            setPollSeq((value) => value + 1);
           }
         }
       })();
@@ -392,85 +278,6 @@ export function AgencyHome({
     }
   }
 
-  async function start() {
-    const replacePaused =
-      round?.state === 'paused'
-        ? { roundId: round.id, expectedRevision: round.revision }
-        : undefined;
-    if (
-      mutationInFlight.current ||
-      (pendingStart && staleStart) ||
-      (!pendingStart &&
-        (!(capability?.canStart || (replacePaused && capability?.reason === 'round_active')) ||
-          (round && activeStates.has(round.state))))
-    )
-      return;
-    mutationInFlight.current = true;
-    invalidateRead();
-    setBusy(true);
-    setActionError(null);
-    setStaleStart(false);
-    try {
-      localStorage.removeItem(startRejectionKey);
-    } catch {
-      /* In-page rejection state remains. */
-    }
-    try {
-      let input = pendingStart;
-      if (!input) {
-        input = { requestKey: crypto.randomUUID(), ...(replacePaused ? { replacePaused } : {}) };
-        localStorage.setItem(startKey, JSON.stringify(input));
-        setPendingStart(input);
-      }
-      const created = await startRound(input, session.csrfToken);
-      if (mounted.current) setRound(created);
-      localStorage.removeItem(startKey);
-      localStorage.removeItem(startRejectionKey);
-      setPendingStart(null);
-    } catch (cause) {
-      if (isUnauthenticated(cause)) onSessionLost();
-      else if (cause instanceof RequestError && [400, 403, 409, 422].includes(cause.status)) {
-        setStaleStart(true);
-        try {
-          const pending = readPendingStart();
-          if (pending) localStorage.setItem(startRejectionKey, pending.requestKey);
-        } catch {
-          /* In-page rejection state remains. */
-        }
-        setActionError(
-          cause.status === 409
-            ? 'This Start request was rejected because the paused work changed. Review current work before starting a new request.'
-            : `${message(cause)} The server rejected this Start request. Review current work before starting a new request.`,
-        );
-      } else if (mounted.current)
-        setActionError(
-          `${message(cause)} Refresh work before retrying; the same Start identity is retained.`,
-        );
-    } finally {
-      mutationInFlight.current = false;
-      if (mounted.current) {
-        setBusy(false);
-        void refresh(true);
-      }
-    }
-  }
-
-  async function reviewRejectedStart() {
-    if (!pendingStart || !staleStart || busy) return;
-    const current = await refresh();
-    if (current === undefined) {
-      setActionError('Current work could not be refreshed. The rejected request remains saved.');
-      return;
-    }
-    localStorage.removeItem(startKey);
-    localStorage.removeItem(startRejectionKey);
-    setPendingStart(null);
-    setStaleStart(false);
-    setActionError(
-      'Current work was refreshed. Review it before starting a new discovery request.',
-    );
-  }
-
   const recommendation = readHomeRecommendation(round);
   const currentness = readRecommendationCurrentness(round);
   const adviceKey =
@@ -524,11 +331,7 @@ export function AgencyHome({
     setAdviceBusy(true);
     setAdviceError('');
     try {
-      const [freshRound, freshProfile, activeRound] = await Promise.all([
-        getRound(round.id),
-        getPreferences(),
-        getActiveRound(),
-      ]);
+      const [freshRound, freshProfile] = await Promise.all([getRound(round.id), getPreferences()]);
       const freshAdvice = readHomeRecommendation(freshRound);
       const verdict = readRecommendationCurrentness(freshRound);
       if (
@@ -548,26 +351,13 @@ export function AgencyHome({
         return;
       }
       const stale = await checkRecommendationTarget(freshAdvice, freshRound, freshProfile.version);
-      if (stale || (activeRound && freshAdvice.action === 'discover')) {
+      if (stale) {
         setPreferences(freshProfile);
         setRound(freshRound);
-        setAdviceError(
-          stale || 'Another commission is active. Finish or stop it before following this advice.',
-        );
+        setAdviceError(stale);
         return;
       }
-      if (freshAdvice.action === 'discover') {
-        await start();
-      } else if (freshAdvice.action === 'review_opportunities') {
-        const savedCards = await getRoundCards(freshRound.id);
-        setCards(savedCards);
-        setCardsAvailable(true);
-        if (!savedCards.length) setAdviceError('No saved role cards are available for this round.');
-        else
-          window.requestAnimationFrame(() =>
-            document.getElementById('saved-round-cards')?.scrollIntoView(),
-          );
-      } else if (freshAdvice.action === 'prepare') {
+      if (freshAdvice.action === 'prepare') {
         onOpenPreparation(freshAdvice.target!.id);
       } else if (freshAdvice.action === 'review_pack') {
         onOpenPack(freshAdvice.target!.opportunityId!, freshAdvice.target!.id);
@@ -619,8 +409,6 @@ export function AgencyHome({
   }
 
   const recommendedActionLabel = {
-    discover: 'Find more sourced opportunities',
-    review_opportunities: 'Review saved opportunity cards',
     prepare: 'Open selected role to prepare its application',
     review_pack: 'Open exact saved application pack',
     review_result: 'Review this saved round result',
@@ -636,42 +424,39 @@ export function AgencyHome({
     <>
       <Briefing
         round={round}
-        capability={capability}
-        hasOutput={cards.length > 0 || recommendation?.status === 'selected'}
-        cardCount={cards.length}
-        leads={round?.outcome === 'discover' ? leads : []}
-        searches={round?.outcome === 'discover' ? searches : []}
         reportSummary={reportSummary}
         advice={
-          recommendation
+          recommendation?.status === 'selected'
             ? {
                 label: recommendedActionLabel,
                 available:
                   recommendation.status === 'selected' &&
                   currentness?.status === 'current' &&
                   adviceCheck?.key === adviceKey &&
-                  !adviceCheck.reason &&
-                  !(recommendation.action === 'discover' && !capability?.canStart),
+                  !adviceCheck.reason,
                 busy: adviceBusy || busy,
               }
             : null
         }
-        adviceCode={recommendation?.code}
+        adviceCode={currentness?.status === 'stale' ? currentness.code : recommendation?.code}
         loading={loading}
         busy={busy}
         error={error}
         actionError={actionError}
-        adviceError={adviceError}
-        startUnconfirmed={Boolean(pendingStart) && !staleStart}
-        staleStart={staleStart}
-        pollSeq={pollSeq}
+        adviceError={
+          adviceError ||
+          (adviceCheck?.key === adviceKey ? adviceCheck.reason || '' : '') ||
+          (recommendation?.status === 'unresolved'
+            ? 'The assessment did not choose a next action.'
+            : recommendation?.status === 'unavailable'
+              ? 'No recommended next action is available.'
+              : '')
+        }
         pollingActive={Boolean(round && activeStates.has(round.state))}
         pollIntervalMs={pollIntervalMs}
         onRefresh={() => void refresh()}
-        onStart={() => void start()}
         onStop={() => void act('stop')}
         onResume={() => void act('resume')}
-        onReviewRejected={() => void reviewRejectedStart()}
         onFollowAdvice={() => void followRecommendation()}
         onEditBrief={() => preferences && onEditBrief(preferences.version)}
         onShowResult={() => {
@@ -681,26 +466,6 @@ export function AgencyHome({
             document.getElementById('saved-round-result')?.scrollIntoView(),
           );
         }}
-        onShowCards={() =>
-          window.requestAnimationFrame(() =>
-            document.getElementById('saved-round-cards')?.scrollIntoView(),
-          )
-        }
-        onShowComparison={() =>
-          window.requestAnimationFrame(() =>
-            document.getElementById('saved-offer-comparison')?.scrollIntoView(),
-          )
-        }
-        onShowLeads={() =>
-          window.requestAnimationFrame(() =>
-            document.getElementById('saved-round-leads')?.scrollIntoView(),
-          )
-        }
-        onShowPreparation={() =>
-          window.requestAnimationFrame(() =>
-            document.getElementById('saved-preparation')?.scrollIntoView(),
-          )
-        }
         deliveryRecovery={
           round ? (
             <DeliveryPausedRecovery
@@ -712,9 +477,6 @@ export function AgencyHome({
           ) : null
         }
       />
-      {round?.outcome === 'discover' && (leads.length > 0 || searches.length > 0) && (
-        <BriefingLeads leads={leads} searches={searches} />
-      )}
       <section className="op-card" aria-label="Campaign brief">
         <div className="op-heading-row">
           <h2>What we know about your search</h2>
@@ -734,11 +496,7 @@ export function AgencyHome({
               <p>
                 {preferences.roleCriteria
                   .filter((item) => item.mode !== 'avoid')
-                  .map((item) =>
-                    item.searchTerms && item.searchTerms.length > 0
-                      ? `${item.label} (searches: ${item.searchTerms.join(', ')})`
-                      : item.label,
-                  )
+                  .map((item) => item.label)
                   .join('; ') || 'No role direction saved.'}
               </p>
               <p>
@@ -875,72 +633,6 @@ export function AgencyHome({
                 Open selected opportunity
               </button>
             ))}
-        </section>
-      )}
-      {round?.outcome === 'discover' && (
-        <section className="op-card" id="saved-round-cards" aria-label="Round results">
-          <h2>Saved opportunity cards {cards.length ? `(${cards.length})` : ''}</h2>
-          {cards.length === 0 && (
-            <p>
-              {cardsAvailable
-                ? 'No opportunity cards have been saved for this round yet.'
-                : 'Opportunity cards are unavailable. Refresh to try again.'}
-            </p>
-          )}
-          <ul className="op-list">
-            {cards.map((item) => (
-              <li className="op-card" key={item.opportunityId}>
-                <h3>{item.title}</h3>
-                <p>
-                  {item.companyName} · {item.kind} · {item.decision || 'No owner decision'}
-                </p>
-                <p>
-                  Pay, hours and fit: unknown in this card. Inspect the saved opportunity for
-                  recorded detail.
-                </p>
-                {item.sourceStale && (
-                  <p role="status">
-                    Source changed since this card was saved. Inspect the current opportunity.
-                  </p>
-                )}
-                {item.sourceUrl && (
-                  <p>
-                    <SafeSource value={item.sourceUrl} />
-                  </p>
-                )}
-                {item.sourceText && (
-                  <details>
-                    <summary>Saved source text</summary>
-                    <pre className="op-source">{item.sourceText}</pre>
-                  </details>
-                )}
-                <button
-                  type="button"
-                  className="op-text-button"
-                  onClick={() => onOpenOpportunity(item.opportunityId)}
-                >
-                  Inspect saved opportunity
-                </button>
-              </li>
-            ))}
-          </ul>
-          <details>
-            <summary>Round history ({history.length})</summary>
-            {!historyAvailable ? (
-              <p>Round history is unavailable. Refresh to try again.</p>
-            ) : history.length ? (
-              <ol>
-                {history.map((event) => (
-                  <li key={event.auditId}>
-                    {event.operation.replaceAll('_', ' ')} · {event.entityKind.replaceAll('_', ' ')}{' '}
-                    · {new Date(event.occurredAt).toLocaleString()}
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p>No recorded round events are available yet.</p>
-            )}
-          </details>
         </section>
       )}
     </>

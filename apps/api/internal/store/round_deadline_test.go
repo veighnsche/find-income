@@ -19,7 +19,7 @@ func TestExpireRoundFencesDispatchedWorkAndReleasesSlot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "expiring", Intent: "Bounded read", Outcome: "discover",
+	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "expiring", Intent: "Bounded read", Outcome: "process_input",
 		ProfileVersion: p.Version, Deadline: time.Now().Add(150 * time.Millisecond),
 		Scope:  RoundScope{Resources: []string{"campaign:active"}, Operations: []string{RoundCodexTurn}, Delegates: []string{agent.ID}},
 		Limits: RoundAllowance{Tools: 1, Turns: 1}})
@@ -50,7 +50,7 @@ func TestExpireRoundFencesDispatchedWorkAndReleasesSlot(t *testing.T) {
 	if _, err := s.ExpireRound(ctx, r.ID); err != nil {
 		t.Fatalf("deadline replay: %v", err)
 	}
-	if _, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "next", Intent: "New commission", Outcome: "discover",
+	if _, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "next", Intent: "New commission", Outcome: "process_input",
 		ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
 		Scope:  RoundScope{Resources: []string{"campaign:active"}, Operations: []string{RoundCodexTurn}, Delegates: []string{agent.ID}},
 		Limits: RoundAllowance{Tools: 1, Turns: 1}}); err != nil {

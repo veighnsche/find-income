@@ -23,7 +23,7 @@ func TestRoundRecommendationCurrentnessWrapperOnlyChangesResponseCopy(t *testing
 		t.Fatal(err)
 	}
 	owner := store.Actor{Kind: "administrator", ID: "owner"}
-	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "currentness-wrapper", Intent: "Review saved source work", Outcome: "discover", ProfileVersion: profile.Version,
+	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "currentness-wrapper", Intent: "Review saved source work", Outcome: "process_input", ProfileVersion: profile.Version,
 		Scope:  store.RoundScope{Resources: []string{"campaign:active"}, Operations: []string{store.RoundJevRequest}},
 		Limits: store.RoundAllowance{Requests: 1, Items: 1, Tools: 1, Turns: 1}, Deadline: time.Now().Add(time.Minute)})
 	if err != nil {
@@ -56,63 +56,6 @@ func TestRoundRecommendationCurrentnessWrapperOnlyChangesResponseCopy(t *testing
 	again, err := db.Round(ctx, round.ID)
 	if err != nil || !bytes.Equal(again.Report, saved) || !bytes.Equal(round.Report, saved) {
 		t.Fatalf("currentness read changed saved report: %s %v", again.Report, err)
-	}
-}
-
-func TestLatestCompletedDiscoveryRoundReadRoute(t *testing.T) {
-	ctx := context.Background()
-	h := newRecordHTTP(t)
-	status, body := h.do(http.MethodGet, "/rounds/latest-completed?outcome=discover", "", "", "", "", nil)
-	requireStatus(t, status, http.StatusUnauthorized, body)
-	owner := h.login()
-	status, body = h.owner(http.MethodGet, "/rounds/latest-completed?outcome=discover")
-	requireStatus(t, status, http.StatusOK, body)
-	if string(bytes.TrimSpace(body)) != "null" {
-		t.Fatalf("empty latest completed response = %s", body)
-	}
-	for _, path := range []string{"/rounds/latest-completed", "/rounds/latest-completed?outcome=unsupported", "/rounds/latest-completed?outcome=discover&outcome=discover"} {
-		status, body = h.owner(http.MethodGet, path)
-		requireStatus(t, status, http.StatusBadRequest, body)
-	}
-	profile, err := h.db.CurrentPreferences(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	round, _, err := h.db.StartRound(ctx, owner.Actor(), store.StartRoundInput{RequestKey: "latest-discovery", Intent: "Read saved work", Outcome: "discover", ProfileVersion: profile.Version,
-		Scope:  store.RoundScope{Resources: []string{"campaign:active"}, Operations: []string{store.RoundJevRequest}},
-		Limits: store.RoundAllowance{Requests: 1, Items: 1, Tools: 1, Turns: 1}, Deadline: time.Now().Add(time.Minute)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := h.db.ActivateRound(ctx, owner.Actor(), round.ID); err != nil {
-		t.Fatal(err)
-	}
-	status, body = h.owner(http.MethodGet, "/rounds/latest-completed?outcome=discover")
-	requireStatus(t, status, http.StatusOK, body)
-	if string(bytes.TrimSpace(body)) != "null" {
-		t.Fatalf("active round exposed as completed: %s", body)
-	}
-	saved := json.RawMessage(`{"code":"sourced_opportunity_assessed","recommendation":{"status":"unavailable","code":"no_assessed_source","profileVersion":1}}`)
-	if _, err := h.db.FinishRound(ctx, owner.Actor(), round.ID, store.RoundCompleted, "sourced_opportunity_assessed", "partial", saved); err != nil {
-		t.Fatal(err)
-	}
-	status, body = h.owner(http.MethodGet, "/rounds/latest-completed?outcome=discover")
-	requireStatus(t, status, http.StatusOK, body)
-	var view struct {
-		ID     string `json:"id"`
-		Report struct {
-			RecommendationCurrentness struct {
-				Status string `json:"status"`
-				Code   string `json:"code"`
-			} `json:"recommendationCurrentness"`
-		} `json:"report"`
-	}
-	if json.Unmarshal(body, &view) != nil || view.ID != round.ID || view.Report.RecommendationCurrentness.Status != "unavailable" || view.Report.RecommendationCurrentness.Code != "recommendation_not_selected" {
-		t.Fatalf("latest completed response lacked currentness: %s", body)
-	}
-	stored, err := h.db.Round(ctx, round.ID)
-	if err != nil || !bytes.Equal(stored.Report, saved) {
-		t.Fatalf("read route mutated saved round: %s %v", stored.Report, err)
 	}
 }
 
@@ -158,9 +101,9 @@ func TestLatestCompletedOfferReadIsOwnerAndOutcomeScoped(t *testing.T) {
 		return round
 	}
 	comparison := finish(owner.Actor(), "owner-offer", "compare_offers")
-	discovery := finish(owner.Actor(), "owner-discovery", "discover")
+	processed := finish(owner.Actor(), "owner-processed", "process_input")
 	finish(store.Actor{Kind: "administrator", ID: "different-owner"}, "foreign-offer", "compare_offers")
-	for _, expected := range []store.Round{comparison, discovery} {
+	for _, expected := range []store.Round{comparison, processed} {
 		status, body = h.owner(http.MethodGet, "/rounds/latest-completed?outcome="+expected.Outcome)
 		requireStatus(t, status, http.StatusOK, body)
 		var view roundResponse
@@ -186,9 +129,9 @@ func TestLatestCompletedOfferReadIsOwnerAndOutcomeScoped(t *testing.T) {
 	}
 	status, body = h.owner(http.MethodGet, "/rounds/latest-completed?outcome=all")
 	requireStatus(t, status, http.StatusOK, body)
-	if decodeObject(t, body)["id"] != discovery.ID {
+	if decodeObject(t, body)["id"] != processed.ID {
 		t.Fatalf("latest all-outcome owner result was not recovered: %s", body)
 	}
-	status, body = h.owner(http.MethodGet, path+"&outcome=discover")
+	status, body = h.owner(http.MethodGet, path+"&outcome=process_input")
 	requireStatus(t, status, http.StatusBadRequest, body)
 }

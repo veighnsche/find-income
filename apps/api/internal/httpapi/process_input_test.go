@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/agency"
 	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
-	"github.com/veighnsche/find-income-dashboard/api/internal/collector"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
@@ -121,20 +119,23 @@ func (inputFixtureDecisions) RunOrganisation(context.Context, jevservice.Binding
 	return jev.OrganisationResult{}, errors.New("unexpected organisation")
 }
 
-type inputFixtureCollector struct{}
-
-func (inputFixtureCollector) AcquireLever(context.Context, collector.Request) (collector.Batch, error) {
-	return collector.Batch{}, errors.New("unexpected collector call")
+type inputFixtureSource struct {
+	expectedURL, text string
+	reads             *int
 }
 
-type inputSourceTransport func(*http.Request) (*http.Response, error)
-
-func (f inputSourceTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func (f inputFixtureSource) ReadVacancy(_ context.Context, sourceURL string) (string, error) {
+	if sourceURL != f.expectedURL {
+		return "", fmt.Errorf("unexpected source URL: %s", sourceURL)
+	}
+	*f.reads += 1
+	return f.text, nil
+}
 
 func TestProcessInputHTTPAppliesProfileAndRebindsExactRound(t *testing.T) {
 	h := newRecordHTTP(t)
 	h.server.Close()
-	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db}, Decisions: inputFixtureDecisions{}, Collector: inputFixtureCollector{}, Context: context.Background()}
+	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db}, Decisions: inputFixtureDecisions{}, Context: context.Background()}
 	h.server = httptest.NewServer(NewHandler(h.db, h.service, Options{AllowedOrigins: []string{origin}, Rounds: &rounds.Service{Store: h.db, Readiness: engine, Worker: engine}}))
 	h.client = h.server.Client()
 	t.Cleanup(h.server.Close)
@@ -260,7 +261,7 @@ func TestProcessInputHTTPProcessesPastedVacancyAndRecordsOrganisation(t *testing
 		t.Fatal(err)
 	}
 	sourceSaved, continueAfterSave := make(chan struct{}), make(chan struct{})
-	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db, companyID: company.ID, sourceSaved: sourceSaved, continueAfterSave: continueAfterSave}, Decisions: jevservice.Service{Store: h.db, Client: client}, Collector: inputFixtureCollector{}, Context: ctx}
+	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db, companyID: company.ID, sourceSaved: sourceSaved, continueAfterSave: continueAfterSave}, Decisions: jevservice.Service{Store: h.db, Client: client}, Context: ctx}
 	worker := &inputWorkerBarrier{engine: engine, waitStarted: make(chan struct{})}
 	roundService := &rounds.Service{Store: h.db, Readiness: engine, Worker: worker}
 	h.server = httptest.NewServer(NewHandler(h.db, h.service, Options{AllowedOrigins: []string{origin}, Rounds: roundService}))
@@ -370,17 +371,11 @@ func TestProcessInputHTTPReadsSupportedURLAndSavesVerifiedSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const sourceURL = "https://jobs.lever.co/synthetic/post-1"
-	const posting = `{"id":"post-1","text":"Backend engineer","descriptionPlain":"Build Go services in Brussels.","hostedUrl":"https://jobs.lever.co/synthetic/post-1"}`
+	const sourceURL = "https://example.test/jobs/post-1"
+	const posting = "Backend engineer. Build Go services in Brussels."
 	var reads int
-	reader := agency.LeverOwnerSourceReader{HTTPClient: &http.Client{Transport: inputSourceTransport(func(r *http.Request) (*http.Response, error) {
-		reads++
-		if r.URL.String() != "https://api.lever.co/v0/postings/synthetic/post-1" {
-			t.Fatalf("unexpected provider URL: %s", r.URL)
-		}
-		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(posting))}, nil
-	})}}
-	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db, companyID: company.ID}, Decisions: jevservice.Service{Store: h.db, Client: client}, Collector: inputFixtureCollector{}, InputReader: reader, Context: ctx}
+	reader := inputFixtureSource{expectedURL: sourceURL, text: posting, reads: &reads}
+	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db, companyID: company.ID}, Decisions: jevservice.Service{Store: h.db, Client: client}, InputReader: reader, Context: ctx}
 	h.server = httptest.NewServer(NewHandler(h.db, h.service, Options{AllowedOrigins: []string{origin}, Rounds: &rounds.Service{Store: h.db, Readiness: engine, Worker: engine}}))
 	h.client = h.server.Client()
 	t.Cleanup(h.server.Close)
@@ -463,7 +458,7 @@ func TestProcessInputHTTPReplacesOnlyNamedPausedRound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	prior, _, err := h.db.StartRound(ctx, owner.Actor(), store.StartRoundInput{RequestKey: "older-round", Intent: "Earlier owner work", Outcome: "discover", ProfileVersion: profile.Version,
+	prior, _, err := h.db.StartRound(ctx, owner.Actor(), store.StartRoundInput{RequestKey: "older-round", Intent: "Earlier owner work", Outcome: "prepare", ProfileVersion: profile.Version,
 		Scope:  store.RoundScope{Resources: []string{"campaign:active"}, Operations: []string{store.RoundCodexTurn}},
 		Limits: store.RoundAllowance{Tools: 1, Turns: 1}, Deadline: time.Now().Add(time.Hour)})
 	if err != nil {
@@ -481,7 +476,7 @@ func TestProcessInputHTTPReplacesOnlyNamedPausedRound(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.server.Close()
-	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db}, Decisions: inputFixtureDecisions{}, Collector: inputFixtureCollector{}, Context: ctx}
+	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db}, Decisions: inputFixtureDecisions{}, Context: ctx}
 	h.server = httptest.NewServer(NewHandler(h.db, h.service, Options{AllowedOrigins: []string{origin}, Rounds: &rounds.Service{Store: h.db, Readiness: engine, Worker: engine}}))
 	h.client = h.server.Client()
 	t.Cleanup(h.server.Close)
@@ -521,7 +516,7 @@ func TestProcessInputHTTPRetainsUnsupportedURLAsUnresolved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db}, Decisions: inputFixtureDecisions{}, Collector: inputFixtureCollector{}, Context: ctx}
+	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db}, Decisions: inputFixtureDecisions{}, Context: ctx}
 	h.server = httptest.NewServer(NewHandler(h.db, h.service, Options{AllowedOrigins: []string{origin}, Rounds: &rounds.Service{Store: h.db, Readiness: engine, Worker: engine}}))
 	h.client = h.server.Client()
 	t.Cleanup(h.server.Close)
@@ -576,7 +571,7 @@ func TestProcessInputSourceDeadlineExpiresAndRetainsUncertainRead(t *testing.T) 
 		t.Fatal(err)
 	}
 	reader := blockedOwnerSource{entered: make(chan struct{})}
-	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db}, Decisions: inputFixtureDecisions{}, Collector: inputFixtureCollector{}, InputReader: reader, Context: ctx}
+	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db}, Decisions: inputFixtureDecisions{}, InputReader: reader, Context: ctx}
 	service := &rounds.Service{Store: h.db, Readiness: engine, Worker: engine}
 	round, created, err := service.Start(ctx, owner.Actor(), store.StartRoundInput{RequestKey: "blocked-input", Intent: "Process the saved owner URL", Outcome: "process_input", ProfileVersion: profile.Version,
 		Scope: store.RoundScope{InputRefs: []string{"ingestion:" + source.ID}, Resources: []string{"campaign:active", "ingestion:" + source.ID},

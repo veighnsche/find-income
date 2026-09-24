@@ -265,15 +265,9 @@ export async function startFixture() {
     failFirstProcessResponse: false,
     processResponses: new Map(),
     prepareResponses: new Map(),
-    discoveryResponses: new Map(),
     failFirstPrepareResponse: false,
-    failFirstDiscoveryResponse: false,
     staleNextPrepare: false,
-    staleNextDiscovery: false,
-    discoveryReady: false,
-    latestCompletedDiscover: null,
     latestCompletedAll: null,
-    recommendationCards: [],
     interviews: new Map(),
     interviewPrepareByKey: new Map(),
     interviewDebriefByKey: new Map(),
@@ -690,25 +684,6 @@ export async function startFixture() {
         )
           ? sendJson(res, 200, state.round)
           : error(res, 404);
-      if (path === '/api/v1/rounds/capability')
-        return sendJson(res, 200, {
-          canStart:
-            state.discoveryReady &&
-            !['queued', 'running', 'awaiting_input', 'stopping', 'paused'].includes(
-              state.round.state,
-            ),
-          reason: ['queued', 'running', 'awaiting_input', 'stopping', 'paused'].includes(
-            state.round.state,
-          )
-            ? 'round_active'
-            : state.discoveryReady
-              ? ''
-              : 'fixture',
-          intent: 'Synthetic discovery unavailable',
-          outcome: 'discover',
-          limits: allowance,
-          sourceCount: 0,
-        });
       if (path === '/api/v1/rounds/latest-completed')
         return sendJson(
           res,
@@ -716,8 +691,8 @@ export async function startFixture() {
           url.searchParams.get('outcome') === 'compare_offers'
             ? state.latestCompletedOffer
             : url.searchParams.get('outcome') === 'all'
-              ? state.latestCompletedAll || state.latestCompletedDiscover
-              : state.latestCompletedDiscover,
+              ? state.latestCompletedAll
+              : null,
         );
       if (path === `/api/v1/rounds/${state.round.id}`) return sendJson(res, 200, state.round);
       if (
@@ -726,13 +701,10 @@ export async function startFixture() {
         path.split('/').length === 5
       )
         return sendJson(res, 200, state.previousRounds.get(path.split('/')[4]));
-      if (path === `/api/v1/rounds/${state.round.id}/cards` && state.round.outcome === 'discover')
-        return sendJson(res, 200, { items: state.recommendationCards });
       if (
         path === `/api/v1/rounds/${state.round.id}/history` ||
-        path === `/api/v1/rounds/${state.round.id}/cards` ||
         (state.previousRounds.has(path.split('/')[4]) &&
-          ['/history', '/cards'].some((suffix) => path.endsWith(suffix)))
+          ['/history'].some((suffix) => path.endsWith(suffix)))
       )
         return sendJson(res, 200, { items: [] });
       if (path === '/api/v1/rounds/prepare' && req.method === 'POST') {
@@ -766,47 +738,6 @@ export async function startFixture() {
         state.prepareResponses.set(payload.requestKey, state.round);
         if (state.failFirstPrepareResponse) {
           state.failFirstPrepareResponse = false;
-          return error(res, 503);
-        }
-        return sendJson(res, 201, state.round);
-      }
-      if (path === '/api/v1/rounds' && req.method === 'POST') {
-        const previous = state.discoveryResponses.get(payload.requestKey);
-        if (previous) return sendJson(res, 200, previous);
-        if (state.staleNextDiscovery) {
-          state.staleNextDiscovery = false;
-          state.round = { ...state.round, revision: state.round.revision + 1 };
-          return error(res, 409);
-        }
-        if (!state.discoveryReady) return error(res, 503);
-        if (
-          state.round.state === 'paused' &&
-          (payload.replacePaused?.roundId !== state.round.id ||
-            payload.replacePaused?.expectedRevision !== state.round.revision)
-        )
-          return error(res, 409);
-        if (['queued', 'running', 'awaiting_input', 'stopping'].includes(state.round.state))
-          return error(res, 409);
-        state.previousRounds.set(state.round.id, state.round);
-        state.round = {
-          ...round,
-          id: `synthetic-discover-${state.discoveryResponses.size + 1}`,
-          outcome: 'discover',
-          intent: 'Find sourced opportunities',
-          state: 'running',
-          revision: 1,
-          scope: {
-            inputRefs: [],
-            resources: [],
-            operations: ['opportunity.discover'],
-            delegates: ['codex-runner'],
-          },
-          step: 'searching',
-          deliverableStatus: 'pending',
-        };
-        state.discoveryResponses.set(payload.requestKey, state.round);
-        if (state.failFirstDiscoveryResponse) {
-          state.failFirstDiscoveryResponse = false;
           return error(res, 503);
         }
         return sendJson(res, 201, state.round);
@@ -911,7 +842,6 @@ export async function startFixture() {
         return sendJson(res, 200, {
           ingestionAvailable: false,
           organisationAvailable: false,
-          collectionAvailable: false,
         });
       if (path === '/api/v1/organisation/categories') return sendJson(res, 200, { categories: [] });
       if (path === '/api/v1/organisation/summaries') return sendJson(res, 200, { items: [] });

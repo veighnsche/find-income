@@ -23,7 +23,7 @@ func roundTurnFixtureWithDeadline(t *testing.T, db *store.Store, deadline time.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, created, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "commission", Intent: "Find roles", Outcome: "discover", ProfileVersion: p.Version, Deadline: deadline, Scope: store.RoundScope{Resources: []string{"campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool}, Delegates: []string{agent.ID}}, Limits: store.RoundAllowance{Requests: 4, Tools: 8, Turns: 3}})
+	r, created, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "commission", Intent: "Process supplied input", Outcome: "process_input", ProfileVersion: p.Version, Deadline: deadline, Scope: store.RoundScope{Resources: []string{"campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool}, Delegates: []string{agent.ID}}, Limits: store.RoundAllowance{Requests: 4, Tools: 8, Turns: 3}})
 	if err != nil || !created {
 		t.Fatalf("start: %v", err)
 	}
@@ -34,7 +34,7 @@ func roundTurnFixtureWithDeadline(t *testing.T, db *store.Store, deadline time.T
 	return r, owner, agent
 }
 func turnInput() RoundTurnInput {
-	return RoundTurnInput{RequestKey: "turn-one", ResourceID: "campaign:active", Brief: "Find suitable source-backed roles", Evidence: "Synthetic listing evidence"}
+	return RoundTurnInput{RequestKey: "turn-one", ResourceID: "campaign:active", Brief: "Review supplied input", Evidence: "Synthetic owner input"}
 }
 
 func TestRoundTurnTerminalIsCorrelatedAndNeverRepeated(t *testing.T) {

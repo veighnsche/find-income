@@ -39,7 +39,7 @@ func TestRoundMutationBindsActorCostRevisionAuditAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "mutate", Intent: "Save a sourced employer",
-		Outcome: "discover", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
+		Outcome: "process_input", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
 		Scope: RoundScope{Operations: []string{RoundCreateCompany, RoundCodexTurn}, Resources: []string{"campaign:active"},
 			Delegates: []string{agent.ID}}, Limits: RoundAllowance{Requests: 1, Items: 1, Tools: 2, Turns: 1}})
 	if err != nil {
@@ -124,7 +124,7 @@ func TestRoundOpportunityMutationChecksCompanyRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "opening", Intent: "Save an exact opening",
-		Outcome: "discover", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
+		Outcome: "process_input", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
 		Scope: RoundScope{Operations: []string{RoundCreateOpportunity, RoundCodexTurn}, Resources: []string{"company:" + company.ID},
 			Delegates: []string{agent.ID}}, Limits: RoundAllowance{Requests: 1, Items: 1, Tools: 2, Turns: 1}})
 	if err != nil {
@@ -165,7 +165,7 @@ func TestRoundCreatedCompanyScopesItsOwnOpportunity(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "new-company-role", Intent: "Save sourced role",
-		Outcome: "discover", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
+		Outcome: "process_input", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
 		Scope: RoundScope{Resources: []string{"campaign:active"},
 			Operations: []string{RoundCodexTurn, RoundCreateCompany, RoundCreateOpportunity}, Delegates: []string{agent.ID}},
 		Limits: RoundAllowance{Requests: 2, Items: 2, Tools: 3, Turns: 1}})

@@ -1,5 +1,7 @@
 # First application pack — existing source readiness
 
+Historical evidence and design notes. The fixed-board discovery implementation and its execution plan were removed on 24 September 2026; see [current remaining work](remaining-work.md). References below to discovery tasks are not current implementation instructions.
+
 Coordinator check, 23 September 2026. This prepares I15 without claiming pack implementation or live acceptance. The current Typst source compiles with installed Typst 0.15.1; output was written only to /private/tmp/jobseek-i15-readiness.pdf. Existing CV/PDF and personal material were not changed or copied into the repository.
 
 | Existing local source | SHA-256 | Intended use |

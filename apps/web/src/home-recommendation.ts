@@ -12,8 +12,6 @@ import {
 } from './api';
 
 export type HomeAction =
-  | 'discover'
-  | 'review_opportunities'
   | 'prepare'
   | 'review_pack'
   | 'review_result'
@@ -27,7 +25,6 @@ export type HomeRecommendation = {
   action?: HomeAction;
   target?: {
     kind:
-      | 'campaign'
       | 'round'
       | 'opportunity'
       | 'application_pack'
@@ -85,8 +82,6 @@ export function readRecommendationCurrentness(
 }
 
 const targetKinds: Record<HomeAction, NonNullable<HomeRecommendation['target']>['kind']> = {
-  discover: 'campaign',
-  review_opportunities: 'round',
   prepare: 'opportunity',
   review_pack: 'application_pack',
   review_result: 'round',
@@ -154,14 +149,9 @@ export function readHomeRecommendation(round: Round | null): HomeRecommendation 
     )
       return null;
     if (
-      [
-        'discover',
-        'review_opportunities',
-        'prepare',
-        'review_pack',
-        'review_comparison',
-        'review_delivery',
-      ].includes(String(item.action)) &&
+      ['prepare', 'review_pack', 'review_comparison', 'review_delivery'].includes(
+        String(item.action),
+      ) &&
       !Number.isSafeInteger(target.revision)
     )
       return null;
@@ -178,12 +168,6 @@ export function readHomeRecommendation(round: Round | null): HomeRecommendation 
     if (
       ['review_interview', 'review_debrief'].includes(String(item.action)) &&
       typeof target.updatedAt !== 'string'
-    )
-      return null;
-    if (item.action === 'discover' && target.id !== 'active') return null;
-    if (
-      item.action === 'review_opportunities' &&
-      (round.outcome !== 'discover' || target.id !== round.id)
     )
       return null;
     if (item.action === 'prepare' && !Number.isSafeInteger(target.ownerDecisionRevision))
@@ -213,18 +197,6 @@ export async function checkRecommendationTarget(
     return 'The saved round changed.';
   if (advice.status !== 'selected' || !advice.action || !advice.target) return null;
   const target = advice.target;
-  if (
-    advice.action === 'discover' &&
-    (target.kind !== 'campaign' || target.id !== 'active' || target.revision !== profileVersion)
-  )
-    return 'The campaign brief no longer matches this advice.';
-  if (
-    advice.action === 'review_opportunities' &&
-    (target.kind !== 'round' ||
-      target.id !== round.id ||
-      target.revision !== advice.roundGeneration)
-  )
-    return 'The saved round cards no longer match this advice.';
   if (advice.action === 'review_result' && (target.kind !== 'round' || target.id !== round.id))
     return 'The saved result no longer matches this advice.';
   if (advice.action === 'review_comparison') {

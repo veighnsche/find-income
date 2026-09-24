@@ -17,12 +17,9 @@ import (
 const IngestionJobKind = "opportunity.ingest"
 
 type IngestionInput struct {
-	Origin         string // owner, agent or collector
+	Origin         string // owner or agent
 	SourceURL      string
 	OriginalText   string
-	ConnectorID    string
-	ExternalID     string
-	DiscoveredAt   string
 	IdempotencyKey string
 }
 
@@ -34,9 +31,6 @@ type IngestionRequest struct {
 	SubmissionSHA256  string
 	SourceURL         string
 	OriginalText      string
-	ConnectorID       string
-	ExternalID        string
-	DiscoveredAt      string
 	Status            string // pending, processing, completed, needs_text, failed
 	JobID             string
 	JobState          JobState
@@ -61,8 +55,6 @@ type IngestionPage struct {
 
 func validateIngestionInput(actor Actor, input *IngestionInput) error {
 	input.SourceURL = strings.TrimSpace(input.SourceURL)
-	input.ConnectorID = strings.TrimSpace(input.ConnectorID)
-	input.ExternalID = strings.TrimSpace(input.ExternalID)
 	input.IdempotencyKey = strings.TrimSpace(input.IdempotencyKey)
 	if !requiredActor(actor) || len(input.IdempotencyKey) < 1 || len(input.IdempotencyKey) > 200 ||
 		!utf8.ValidString(input.OriginalText) || len(input.OriginalText) > 200000 ||
@@ -76,18 +68,12 @@ func validateIngestionInput(actor Actor, input *IngestionInput) error {
 	}
 	switch input.Origin {
 	case "owner":
-		if actor.Kind != "administrator" || input.ConnectorID != "" || input.ExternalID != "" || input.DiscoveredAt != "" {
+		if actor.Kind != "administrator" {
 			return fmt.Errorf("%w: owner submission fields", ErrInvalid)
 		}
 	case "agent":
-		if actor.Kind != "agent" || input.ConnectorID != "" || input.ExternalID != "" || input.DiscoveredAt != "" {
+		if actor.Kind != "agent" {
 			return fmt.Errorf("%w: agent submission fields", ErrInvalid)
-		}
-	case "collector":
-		if actor.Kind != "system" || !boundedNonempty(input.ConnectorID, 80) ||
-			!boundedNonempty(input.ExternalID, 300) ||
-			(input.DiscoveredAt != "" && !validInstant(input.DiscoveredAt)) {
-			return fmt.Errorf("%w: collector identity and source required", ErrInvalid)
 		}
 	default:
 		return fmt.Errorf("%w: unknown ingestion origin", ErrInvalid)
@@ -97,8 +83,8 @@ func validateIngestionInput(actor Actor, input *IngestionInput) error {
 
 func ingestionDigest(input IngestionInput) string {
 	encoded, _ := json.Marshal(struct {
-		Origin, SourceURL, OriginalText, ConnectorID, ExternalID string
-	}{input.Origin, input.SourceURL, input.OriginalText, input.ConnectorID, input.ExternalID})
+		Origin, SourceURL, OriginalText string
+	}{input.Origin, input.SourceURL, input.OriginalText})
 	sum := sha256.Sum256(encoded)
 	return hex.EncodeToString(sum[:])
 }
@@ -119,48 +105,22 @@ func canonicalIngestionURL(raw string) string {
 
 func ingestionIdentity(input IngestionInput) (string, string) {
 	canonical := canonicalIngestionURL(input.SourceURL)
-	if input.Origin == "collector" && input.ExternalID != "" {
-		return "collector:" + input.ConnectorID + ":" + input.ExternalID, canonical
-	}
 	if canonical != "" {
 		return "url:" + canonical, canonical
 	}
 	return "", ""
 }
 
-func validCollectorExternalID(value string) bool {
-	if len(value) == 0 || len(value) > 100 {
-		return false
-	}
-	for _, char := range value {
-		if char != '-' && char != '_' && (char < '0' || char > '9') &&
-			(char < 'A' || char > 'Z') && (char < 'a' || char > 'z') {
-			return false
-		}
-	}
-	return true
-}
-
-type collectorSightingRef struct {
-	AttemptID string
-	Index     int
-}
-
-func insertSourceSighting(ctx context.Context, tx *sql.Tx, openingID, ingestionID string, input IngestionInput, digest, observedAt, recordedAt string, actor Actor, decision string, ref collectorSightingRef) error {
+func insertSourceSighting(ctx context.Context, tx *sql.Tx, openingID, ingestionID string, input IngestionInput, digest, observedAt, recordedAt string, actor Actor, decision string) error {
 	id, err := randomID()
 	if err != nil {
 		return err
 	}
-	var postingIndex any
-	if ref.AttemptID != "" {
-		postingIndex = ref.Index
-	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO source_sightings
   (id,source_opening_id,ingestion_id,source_url,original_text,content_sha256,
-   observed_at,recorded_at,actor_kind,actor_id,decision,collector_attempt_id,posting_index)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, openingID, ingestionID, optionalText(input.SourceURL),
-		input.OriginalText, digest, observedAt, recordedAt, actor.Kind, actor.ID, decision,
-		optionalText(ref.AttemptID), postingIndex)
+   observed_at,recorded_at,actor_kind,actor_id,decision)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?)`, id, openingID, ingestionID, optionalText(input.SourceURL),
+		input.OriginalText, digest, observedAt, recordedAt, actor.Kind, actor.ID, decision)
 	return err
 }
 
@@ -217,7 +177,7 @@ func (s *Store) SubmitIngestion(ctx context.Context, actor Actor, input Ingestio
 		return IngestionRequest{}, false, err
 	}
 	defer tx.Rollback()
-	item, created, err := submitIngestionTx(ctx, tx, actor, input, collectorSightingRef{})
+	item, created, err := submitIngestionTx(ctx, tx, actor, input)
 	if err != nil {
 		return IngestionRequest{}, false, err
 	}
@@ -227,9 +187,8 @@ func (s *Store) SubmitIngestion(ctx context.Context, actor Actor, input Ingestio
 	return item, created, nil
 }
 
-// submitIngestionTx also serves atomically staged collector pages. The caller
-// owns authorization and the encompassing transaction.
-func submitIngestionTx(ctx context.Context, tx *sql.Tx, actor Actor, input IngestionInput, ref collectorSightingRef) (IngestionRequest, bool, error) {
+// submitIngestionTx owns authorization within the caller's transaction.
+func submitIngestionTx(ctx context.Context, tx *sql.Tx, actor Actor, input IngestionInput) (IngestionRequest, bool, error) {
 	if err := validateIngestionInput(actor, &input); err != nil {
 		return IngestionRequest{}, false, err
 	}
@@ -264,13 +223,6 @@ func submitIngestionTx(ctx context.Context, tx *sql.Tx, actor Actor, input Inges
 	}
 	contentSHA := sourceDigest(input.OriginalText)
 	observedAt := jobTime(now)
-	if input.DiscoveredAt != "" {
-		observed, parseErr := time.Parse(time.RFC3339Nano, input.DiscoveredAt)
-		if parseErr != nil {
-			return IngestionRequest{}, false, ErrInvalid
-		}
-		observedAt = jobTime(observed)
-	}
 	var openingID, previousSHA, previousIngestionID, latestObserved string
 	if identity != "" {
 		err = tx.QueryRowContext(ctx, `SELECT id,current_sha256,current_ingestion_id,latest_observed_at
@@ -283,7 +235,7 @@ func submitIngestionTx(ctx context.Context, tx *sql.Tx, actor Actor, input Inges
 			if observedAt < latestObserved && previousSHA != contentSHA {
 				decision = "older"
 			}
-			if err = insertSourceSighting(ctx, tx, openingID, previousIngestionID, input, contentSHA, observedAt, jobTime(now), actor, decision, ref); err != nil {
+			if err = insertSourceSighting(ctx, tx, openingID, previousIngestionID, input, contentSHA, observedAt, jobTime(now), actor, decision); err != nil {
 				return IngestionRequest{}, false, err
 			}
 			if observedAt > latestObserved {
@@ -305,10 +257,9 @@ func submitIngestionTx(ctx context.Context, tx *sql.Tx, actor Actor, input Inges
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO ingestion_requests
   (id,origin,actor_kind,actor_id,idempotency_key,submission_sha256,source_url,original_text,
-   connector_id,external_id,discovered_at,status,job_id,created_at,updated_at)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, input.Origin, actor.Kind, actor.ID, input.IdempotencyKey, digest,
-		optionalText(input.SourceURL), input.OriginalText, optionalText(input.ConnectorID), optionalText(input.ExternalID),
-		optionalText(input.DiscoveredAt), "pending", jobID, jobTime(now), jobTime(now))
+   status,job_id,created_at,updated_at)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, id, input.Origin, actor.Kind, actor.ID, input.IdempotencyKey, digest,
+		optionalText(input.SourceURL), input.OriginalText, "pending", jobID, jobTime(now), jobTime(now))
 	if err != nil {
 		return IngestionRequest{}, false, err
 	}
@@ -333,7 +284,7 @@ func submitIngestionTx(ctx context.Context, tx *sql.Tx, actor Actor, input Inges
 		if _, err = tx.ExecContext(ctx, `UPDATE ingestion_requests SET source_opening_id=? WHERE id=?`, openingID, id); err != nil {
 			return IngestionRequest{}, false, err
 		}
-		if err = insertSourceSighting(ctx, tx, openingID, id, input, contentSHA, observedAt, jobTime(now), actor, decision, ref); err != nil {
+		if err = insertSourceSighting(ctx, tx, openingID, id, input, contentSHA, observedAt, jobTime(now), actor, decision); err != nil {
 			return IngestionRequest{}, false, err
 		}
 	}
@@ -348,119 +299,22 @@ func submitIngestionTx(ctx context.Context, tx *sql.Tx, actor Actor, input Inges
 	return item, true, nil
 }
 
-// publishCollectorBatchTx runs inside SaveRoundCollectorBatch's fenced writer
-// transaction. A batch cannot advance its durable cursor unless all accepted
-// postings have exact source identities and immutable sightings committed.
-func publishCollectorBatchTx(ctx context.Context, tx *sql.Tx, actor Actor, roundID, attemptID string, payload json.RawMessage) error {
-	var batch struct {
-		Postings []struct {
-			Provider      string `json:"provider"`
-			BoardID       string `json:"boardId"`
-			ExternalID    string `json:"externalId"`
-			SourceURL     string `json:"sourceUrl"`
-			OriginalText  []byte `json:"originalText"`
-			ContentSHA256 string `json:"contentSha256"`
-			ObservedAt    string `json:"observedAt"`
-		} `json:"postings"`
-	}
-	if err := json.Unmarshal(payload, &batch); err != nil {
-		return ErrInvalid
-	}
-	if len(batch.Postings) == 0 {
-		return nil
-	}
-	var boardID, site, region, provider string
-	err := tx.QueryRowContext(ctx, `SELECT a.resource_id,b.provider,b.site,b.region FROM round_attempts a
-  JOIN collector_boards b ON a.resource_id='board:'||b.id WHERE a.id=? AND a.round_id=?`,
-		attemptID, roundID).Scan(&boardID, &provider, &site, &region)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrInvalid
-	}
-	if err != nil {
-		return err
-	}
-	boardID = strings.TrimPrefix(boardID, "board:")
-	if provider != "lever" || (region != "global" && region != "eu") || !requiredActor(actor) {
-		return ErrInvalid
-	}
-	collectorActor := Actor{Kind: "system", ID: "collector:" + boardID}
-	for index, posting := range batch.Postings {
-		if posting.Provider != "lever" || posting.BoardID != boardID || !validCollectorExternalID(posting.ExternalID) ||
-			len(posting.OriginalText) == 0 || len(posting.OriginalText) > 200000 || !json.Valid(posting.OriginalText) ||
-			!validInstant(posting.ObservedAt) || sourceDigest(string(posting.OriginalText)) != posting.ContentSHA256 {
-			return ErrInvalid
-		}
-		var raw struct {
-			ID               string `json:"id"`
-			Text             string `json:"text"`
-			HostedURL        string `json:"hostedUrl"`
-			DescriptionPlain string `json:"descriptionPlain"`
-			OpeningPlain     string `json:"openingPlain"`
-		}
-		if err := json.Unmarshal(posting.OriginalText, &raw); err != nil ||
-			raw.ID != posting.ExternalID || raw.HostedURL != posting.SourceURL ||
-			strings.TrimSpace(raw.Text) == "" ||
-			(strings.TrimSpace(raw.DescriptionPlain) == "" && strings.TrimSpace(raw.OpeningPlain) == "") {
-			return ErrInvalid
-		}
-		u, err := url.Parse(posting.SourceURL)
-		expectedHost := "jobs.lever.co"
-		if region == "eu" {
-			expectedHost = "jobs.eu.lever.co"
-		}
-		if err != nil || u.Scheme != "https" || u.Host != expectedHost || u.User != nil ||
-			u.Path != "/"+site+"/"+raw.ID || u.RawQuery != "" || u.Fragment != "" {
-			return ErrInvalid
-		}
-		input := IngestionInput{Origin: "collector", SourceURL: posting.SourceURL,
-			OriginalText: string(posting.OriginalText), ConnectorID: "lever:" + boardID,
-			ExternalID: posting.ExternalID, DiscoveredAt: posting.ObservedAt,
-			IdempotencyKey: fmt.Sprintf("round:%s:%d", attemptID, index)}
-		item, created, err := submitIngestionTx(ctx, tx, collectorActor, input, collectorSightingRef{AttemptID: attemptID, Index: index})
-		if err != nil {
-			return err
-		}
-		if created {
-			var opportunityID sql.NullString
-			if err := tx.QueryRowContext(ctx, `SELECT opportunity_id FROM source_openings WHERE id=?`, item.SourceOpeningID).Scan(&opportunityID); err != nil {
-				return err
-			}
-			if opportunityID.Valid {
-				// The role still shows its last extracted source until a current
-				// round saves the revision. Its old assessments cannot stay current.
-				if _, err := tx.ExecContext(ctx, `DELETE FROM organisation_current WHERE opportunity_id=?`, opportunityID.String); err != nil {
-					return err
-				}
-				if _, err := tx.ExecContext(ctx, `DELETE FROM qualification_current WHERE opportunity_id=?`, opportunityID.String); err != nil {
-					return err
-				}
-				if _, err := tx.ExecContext(ctx, `INSERT INTO qualification_refresh_queue(opportunity_id,requested_at,reason)
-  VALUES (?,?, 'source.revision_observed') ON CONFLICT(opportunity_id) DO UPDATE SET
-  requested_at=excluded.requested_at,reason=excluded.reason`, opportunityID.String, utcNow()); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
-}
-
 const ingestionColumns = `i.id,i.origin,i.actor_kind,i.actor_id,i.idempotency_key,i.submission_sha256,
-  i.source_url,i.original_text,i.connector_id,i.external_id,i.discovered_at,i.status,i.job_id,
+  i.source_url,i.original_text,i.status,i.job_id,
   i.attempts_started,i.dispatch_started,i.codex_thread_id,i.codex_turn_id,i.opportunity_id,i.record_change_id,i.source_id,i.organisation_job_id,
   i.safe_error_code,i.created_at,i.updated_at,j.state,j.last_error_code,i.source_opening_id`
 
 func scanIngestion(row rowScanner) (IngestionRequest, error) {
 	var item IngestionRequest
-	var sourceURL, connectorID, externalID, discoveredAt, threadID, turnID, opportunityID, changeID, sourceID, organisationJobID, errorCode, jobError, sourceOpeningID sql.NullString
+	var sourceURL, threadID, turnID, opportunityID, changeID, sourceID, organisationJobID, errorCode, jobError, sourceOpeningID sql.NullString
 	err := row.Scan(&item.ID, &item.Origin, &item.Actor.Kind, &item.Actor.ID, &item.IdempotencyKey, &item.SubmissionSHA256,
-		&sourceURL, &item.OriginalText, &connectorID, &externalID, &discoveredAt, &item.Status, &item.JobID,
+		&sourceURL, &item.OriginalText, &item.Status, &item.JobID,
 		&item.AttemptsStarted, &item.DispatchStarted, &threadID, &turnID, &opportunityID, &changeID, &sourceID, &organisationJobID, &errorCode, &item.CreatedAt, &item.UpdatedAt,
 		&item.JobState, &jobError, &sourceOpeningID)
 	if err != nil {
 		return IngestionRequest{}, err
 	}
-	item.SourceURL, item.ConnectorID, item.ExternalID, item.DiscoveredAt = sourceURL.String, connectorID.String, externalID.String, discoveredAt.String
+	item.SourceURL = sourceURL.String
 	item.CodexThreadID, item.CodexTurnID, item.OpportunityID, item.RecordChangeID = threadID.String, turnID.String, opportunityID.String, changeID.String
 	item.SourceID = sourceID.String
 	item.SourceOpeningID = sourceOpeningID.String

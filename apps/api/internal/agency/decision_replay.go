@@ -11,14 +11,9 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-// The two measured decision shapes used 2,961 and 1,684 provider-reported
-// tokens. A local default-batch fixture with four full 1,900-byte excerpts
-// and complete profile needs 14,260 logical JSON bytes. The 24 KiB context
-// guard and 10,000 reported-token cap leave bounded room for that intended
-// input while retaining the provider-reported post-response check. Bytes are
-// only a context-size guard, never a token estimate.
-const discoveryDecisionReportedTokenLimit int64 = 10000
-const discoveryDecisionLogicalByteLimit = 24 << 10
+// Recommendation decisions bound supplied context and provider-reported usage.
+const decisionReportedTokenLimit int64 = 10000
+const decisionLogicalByteLimit = 24 << 10
 
 var errDecisionContextTooLarge = errors.New("decision context exceeds supported logical request bound")
 var errDecisionProviderUnavailable = errors.New("decision provider unavailable")
@@ -31,7 +26,7 @@ func (e *Engine) savedOrRunDecision(ctx context.Context, binding jevservice.Bind
 	if err != nil {
 		return "", err
 	}
-	if len(logical) > discoveryDecisionLogicalByteLimit {
+	if len(logical) > decisionLogicalByteLimit {
 		return "", errDecisionContextTooLarge
 	}
 	attempt, err := e.Store.RoundAttemptForRequest(ctx, binding.RoundID, binding.RequestKeyPrefix+"/0")

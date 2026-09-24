@@ -65,7 +65,6 @@ func (h *Handler) runtimeStatus(w http.ResponseWriter, r *http.Request) {
 	ingestionAvailable := h.ingestionAvailable
 	writeJSON(w, http.StatusOK, generated.RuntimeStatus{
 		IngestionAvailable: ingestionAvailable, OrganisationAvailable: h.organisationAvailable,
-		CollectionAvailable: h.collectionAvailable,
 	})
 }
 

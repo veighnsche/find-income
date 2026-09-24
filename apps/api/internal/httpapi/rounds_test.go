@@ -14,7 +14,7 @@ func TestRoundRoutesRequireOwnerControlAndDelegatedAtomicMutation(t *testing.T) 
 	h := newRecordHTTP(t)
 	owner := h.login()
 	status, body := h.owner(http.MethodPost, "/rounds", `{"requestKey":"start"}`)
-	requireStatus(t, status, http.StatusServiceUnavailable, body)
+	requireStatus(t, status, http.StatusNotFound, body)
 	status, body = h.owner(http.MethodPost, "/companies", `{"name":"Bypass"}`)
 	requireStatus(t, status, http.StatusServiceUnavailable, body)
 	credential, token, err := h.service.CreateAgent(context.Background(), owner, "round-agent",
@@ -27,7 +27,7 @@ func TestRoundRoutesRequireOwnerControlAndDelegatedAtomicMutation(t *testing.T) 
 		t.Fatal(err)
 	}
 	r, _, err := h.db.StartRound(context.Background(), owner.Actor(), store.StartRoundInput{
-		RequestKey: "delegated", Intent: "Find work", Outcome: "discover", ProfileVersion: p.Version,
+		RequestKey: "delegated", Intent: "Find work", Outcome: "process_input", ProfileVersion: p.Version,
 		Scope: store.RoundScope{Resources: []string{"campaign:active"}, Operations: []string{store.RoundCreateCompany, store.RoundCodexTurn},
 			Delegates: []string{credential.ID}}, Limits: store.RoundAllowance{Requests: 1, Items: 1, Tools: 2, Turns: 1},
 		Deadline: time.Now().Add(time.Hour)})
@@ -37,11 +37,6 @@ func TestRoundRoutesRequireOwnerControlAndDelegatedAtomicMutation(t *testing.T) 
 	r, err = h.db.ActivateRound(context.Background(), owner.Actor(), r.ID)
 	if err != nil {
 		t.Fatal(err)
-	}
-	status, body = h.owner(http.MethodPost, "/rounds", `{"requestKey":"delegated"}`)
-	requireStatus(t, status, http.StatusOK, body)
-	if decodeObject(t, body)["id"] != r.ID {
-		t.Fatalf("start replay changed round: %s", body)
 	}
 	turn, _, err := h.db.ReserveRoundAttempt(context.Background(), store.Actor{Kind: "agent", ID: credential.ID}, r.ID,
 		store.RoundAttemptInput{RequestKey: "turn", Operation: store.RoundCodexTurn, ResourceID: "campaign:active",

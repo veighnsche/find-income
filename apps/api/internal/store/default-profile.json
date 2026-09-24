@@ -12,8 +12,7 @@
       "label": "Backend and platform work",
       "description": "Backend or platform engineering is a substantive role responsibility.",
       "kind": "role",
-      "mode": "require",
-      "searchTerms": ["backend engineer", "platform engineer"]
+      "mode": "require"
     },
     {
       "id": "frontend-duties",

@@ -23,7 +23,6 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/agency"
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
 	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
-	"github.com/veighnsche/find-income-dashboard/api/internal/collector"
 	"github.com/veighnsche/find-income-dashboard/api/internal/delivery"
 	"github.com/veighnsche/find-income-dashboard/api/internal/deliveryservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
@@ -100,7 +99,7 @@ func runWithContext(ctx context.Context, args []string) error {
 			runtime.SetApplicationPackConfig(codexservice.ApplicationPackRuntimeConfig{ProjectRoot: root, TypstPath: typst, PrivateTempDir: filepath.Join(dataDir, "application-pack-tmp"), RenderTimeout: 20 * time.Second, Relevance: jevservice.Service{Store: database, Client: jevClient}})
 		}
 	}
-	worker := &agency.Engine{Store: database, Runtime: runtime, Decisions: decisions, Collector: &collector.Collector{}, PackSources: packSources, InterviewSources: interviewSources, InterviewFocus: interviewFocus, Context: ctx}
+	worker := &agency.Engine{Store: database, Runtime: runtime, Decisions: decisions, PackSources: packSources, InterviewSources: interviewSources, InterviewFocus: interviewFocus, Context: ctx}
 	if tradeoffs, ok := decisions.(jevservice.Service); ok {
 		worker.Tradeoffs = tradeoffs
 	}

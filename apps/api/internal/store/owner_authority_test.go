@@ -69,7 +69,7 @@ func TestEvidenceCorrectionRequiresSelectedOwnerEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "evidence-correction", Intent: "Correct one evidence claim",
-		Outcome: "discover", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
+		Outcome: "process_input", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
 		Scope:  RoundScope{Resources: []string{"company:" + company.ID}, Operations: []string{RoundCodexTurn, RoundCorrectEvidence}, Delegates: []string{agent.ID}},
 		Limits: RoundAllowance{Requests: 1, Items: 1, Tools: 2, Turns: 1}})
 	if err != nil {
@@ -136,7 +136,7 @@ func TestProfileCorrectionNeedsExplicitCurrentOwnerInstruction(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "correction-round", Intent: "Apply owner profile correction",
-		Outcome: "discover", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Hour),
+		Outcome: "process_input", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Hour),
 		Scope: RoundScope{InputRefs: []string{"profile:current"}, Resources: []string{"profile:current"},
 			Operations: []string{RoundCodexTurn, RoundCorrectPreferences}, Delegates: []string{agent.ID}},
 		Limits: RoundAllowance{Requests: 1, Items: 1, Tools: 2, Turns: 1}})
@@ -212,7 +212,7 @@ func TestOwnerDecisionDirectWriteAndTypedRoundCard(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "card-round", Intent: "Save role",
-		Outcome: "discover", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Hour),
+		Outcome: "process_input", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Hour),
 		Scope:  RoundScope{Resources: []string{"company:" + company.ID}, Operations: []string{RoundCodexTurn, RoundCreateOpportunity, RoundCorrectOpportunity}, Delegates: []string{agent.ID}},
 		Limits: RoundAllowance{Requests: 2, Items: 2, Tools: 3, Turns: 1}})
 	if err != nil {

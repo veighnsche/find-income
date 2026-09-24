@@ -33,14 +33,7 @@ func (e *Engine) ownerVacancyEvidence(ctx context.Context, r store.Round, ingest
 		}
 		reader := e.InputReader
 		if reader == nil {
-			reader = LeverOwnerSourceReader{}
-		}
-		// Reject unsupported hosts before charging a provider request; the
-		// original owner submission remains durable for pasted-text recovery.
-		if _, supported := reader.(LeverOwnerSourceReader); supported {
-			if !supportedLeverOwnerURL(item.SourceURL) {
-				return "", "", ErrUnsupportedOwnerSource
-			}
+			return "", "", ErrUnsupportedOwnerSource
 		}
 		cost, _ := store.RoundOperationCost(store.RoundFetchSource)
 		attempt, created, reserveErr := e.Store.ReserveRoundAttempt(ctx, r.Actor, r.ID, store.RoundAttemptInput{RequestKey: fmt.Sprintf("read:%s:g%d", ingestionID, r.Generation), Operation: store.RoundFetchSource, ResourceID: resource, Cost: cost})

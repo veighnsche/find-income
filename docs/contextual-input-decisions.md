@@ -1,5 +1,7 @@
 # Complete the owner's contextual input
 
+Historical evidence and design notes. The fixed-board discovery implementation and its execution plan were removed on 24 September 2026; see [current remaining work](remaining-work.md). References below to discovery tasks are not current implementation instructions.
+
 The current input handlers save material, but the agency does not reliably finish its requested record work. Add an owner-commissioned `process_input` outcome, with a contextual label such as “Update my brief” or “Handle this opportunity”. One action must produce changed records or explicit unresolved facts, using Codex row operations and Jev semantic organisation. External-agent intake remains inert; no chat, row-entry forms or unrelated discovery prerequisite.
 
 The context supplies target identity and revision. Preserve input/request identity across retry and interruption. Supported links use bounded verified reads; full pasted material needs no fetching first. Ask one focused question only when the intended scope or a necessary personal fact is genuinely missing. Profile, opportunity, evidence, relationship and immutable pack corrections belong to this flow.

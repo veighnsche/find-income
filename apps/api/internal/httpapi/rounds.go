@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,56 +11,6 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
-
-// The owner only selects Start. Scope, budget and deadline are derived from
-// current server records, so no browser form grants its own authority.
-func (h *Handler) defaultRoundInput(ctx context.Context, requestKey string) (store.StartRoundInput, error) {
-	profile, err := h.database.CurrentPreferences(ctx)
-	if err != nil {
-		return store.StartRoundInput{}, err
-	}
-	boards, err := h.database.ListCollectorBoards(ctx)
-	if err != nil {
-		return store.StartRoundInput{}, err
-	}
-	resources := []string{"campaign:active", "profile:current", "discovery:himalayas"}
-	inputRefs := []string{"profile:current", "campaign:active"}
-	for _, board := range boards {
-		if board.Enabled && board.VerifiedAt != "" {
-			resources = append(resources, "board:"+board.ID)
-		}
-	}
-	cursor := ""
-	for {
-		companies, err := h.database.ListCompanies(ctx, store.CompanyListOptions{Cursor: cursor, Limit: 100})
-		if err != nil {
-			return store.StartRoundInput{}, err
-		}
-		for _, company := range companies.Items {
-			resources = append(resources, "company:"+company.ID)
-		}
-		if companies.NextCursor == "" {
-			break
-		}
-		if len(resources) > 950 {
-			return store.StartRoundInput{}, store.ErrInvalid
-		}
-		cursor = companies.NextCursor
-	}
-	return store.StartRoundInput{RequestKey: requestKey,
-		Intent:  "Discover source-linked work opportunities for the current owner profile.",
-		Outcome: "discover", ProfileVersion: profile.Version,
-		Scope: store.RoundScope{InputRefs: inputRefs,
-			Resources: resources, Operations: []string{store.RoundCreateCompany, store.RoundCreateOpportunity, store.RoundSaveSourceOpportunity, store.RoundRelationshipCounterpartyCreate, store.RoundRelationshipEventCreate, store.RoundRelationshipRouteCreate, store.RoundStageDiscovery, store.RoundRegisterDiscoveryBoard, store.RoundCollectorPage, store.RoundSearchSource, store.RoundFetchSource, store.RoundJevRequest, store.RoundCodexTurn, store.RoundContextTool},
-			Delegates: []string{"codex-runner"}},
-		Limits:   store.RoundAllowance{Requests: 16, Items: 10, Tools: 18, Turns: 4},
-		Deadline: time.Now().Add(30 * time.Minute).UTC()}, nil
-}
-
-type roundStartRequest struct {
-	RequestKey    string                        `json:"requestKey"`
-	ReplacePaused *generated.ReplacePausedRound `json:"replacePaused,omitempty"`
-}
 
 type prepareRoundRequest struct {
 	RequestKey    string                        `json:"requestKey"`
@@ -179,44 +128,6 @@ func roundModel(r store.Round) roundResponse {
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CompletedAt: r.CompletedAt}
 }
 
-func (h *Handler) roundCapability(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.owner(w, r); !ok {
-		return
-	}
-	input, err := h.defaultRoundInput(r.Context(), "")
-	if err != nil {
-		failRound(w, err)
-		return
-	}
-	canStart := h.rounds != nil && h.rounds.Readiness != nil && h.rounds.Worker != nil &&
-		h.rounds.Readiness.CheckRound(r.Context(), input.Outcome) == nil
-	reason := ""
-	if !canStart {
-		reason = "round_executor_unavailable"
-	}
-	if _, err := h.database.ActiveRound(r.Context()); err == nil {
-		canStart = false
-		reason = "round_active"
-	} else if !errors.Is(err, store.ErrNotFound) {
-		failRound(w, err)
-		return
-	}
-	sources := 0
-	for _, resource := range input.Scope.Resources {
-		if strings.HasPrefix(resource, "board:") {
-			sources++
-		}
-	}
-	writeJSON(w, http.StatusOK, struct {
-		CanStart    bool                 `json:"canStart"`
-		Reason      string               `json:"reason"`
-		Intent      string               `json:"intent"`
-		Outcome     string               `json:"outcome"`
-		Limits      store.RoundAllowance `json:"limits"`
-		SourceCount int                  `json:"sourceCount"`
-	}{canStart, reason, input.Intent, input.Outcome, input.Limits, sources})
-}
-
 func failRound(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, rounds.ErrNotReady):
@@ -276,59 +187,6 @@ func (h *Handler) roundResults(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
 		Items []json.RawMessage `json:"items"`
 	}{results})
-}
-
-func (h *Handler) startRound(w http.ResponseWriter, r *http.Request) {
-	p, ok := h.owner(w, r)
-	if !ok || !h.mutationAllowed(w, r, p) {
-		return
-	}
-	var body roundStartRequest
-	if !decodeRecordJSON(w, r, &body) {
-		return
-	}
-	if body.RequestKey == "" || len(body.RequestKey) > 200 || strings.TrimSpace(body.RequestKey) != body.RequestKey || body.ReplacePaused != nil && (body.ReplacePaused.RoundId == "" || body.ReplacePaused.ExpectedRevision < 1) {
-		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "A bounded requestKey is required.")
-		return
-	}
-	actor := store.Actor{Kind: p.Kind, ID: p.ID}
-	previous, err := h.database.RoundByRequest(r.Context(), actor, body.RequestKey)
-	if err == nil {
-		if previous.Outcome != "discover" || !replacementMatches(previous.Scope.InputRefs, body.ReplacePaused) {
-			failRound(w, store.ErrRoundIdempotencyConflict)
-			return
-		}
-		writeJSON(w, http.StatusOK, roundModel(previous))
-		return
-	}
-	if !errors.Is(err, store.ErrNotFound) {
-		failRound(w, err)
-		return
-	}
-	input, err := h.defaultRoundInput(r.Context(), body.RequestKey)
-	if err != nil {
-		failRound(w, err)
-		return
-	}
-	if body.ReplacePaused != nil {
-		input.Scope.InputRefs = append(input.Scope.InputRefs, replacementRef(body.ReplacePaused.RoundId, body.ReplacePaused.ExpectedRevision))
-	}
-	var round store.Round
-	var created bool
-	if body.ReplacePaused == nil {
-		round, created, err = h.rounds.Start(r.Context(), actor, input)
-	} else {
-		round, created, err = h.rounds.ReplacePaused(r.Context(), actor, body.ReplacePaused.RoundId, body.ReplacePaused.ExpectedRevision, input)
-	}
-	if err != nil {
-		failRound(w, err)
-		return
-	}
-	status := http.StatusOK
-	if created {
-		status = http.StatusCreated
-	}
-	writeJSON(w, status, roundModel(round))
 }
 
 func (h *Handler) stopRound(w http.ResponseWriter, r *http.Request) {

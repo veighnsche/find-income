@@ -16,7 +16,7 @@ func (s *Store) ReplacePausedRound(ctx context.Context, actor Actor, pausedID st
 	now := time.Now().UTC()
 	if !ownerRoundActor(actor) || pausedID == "" || expectedRevision < 1 ||
 		!ownerRequestKey(input.RequestKey) || strings.TrimSpace(input.Intent) == "" || len(input.Intent) > 2000 ||
-		input.ProfileVersion < 1 || !validScope(input.Scope) || !input.Limits.valid() || !input.Limits.nonzero() ||
+		!validRoundOutcome(input.Outcome) || input.ProfileVersion < 1 || !validScope(input.Scope) || !input.Limits.valid() || !input.Limits.nonzero() ||
 		!input.Deadline.After(now) || input.Deadline.After(now.Add(24*time.Hour)) {
 		return Round{}, false, ErrInvalid
 	}

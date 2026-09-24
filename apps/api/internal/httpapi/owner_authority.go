@@ -87,35 +87,6 @@ func (h *Handler) setOwnerOpportunityDecision(w http.ResponseWriter, r *http.Req
 	writeJSON(w, status, value)
 }
 
-func (h *Handler) roundCards(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.owner(w, r); !ok {
-		return
-	}
-	items, err := h.database.RoundCards(r.Context(), r.PathValue("id"))
-	if err != nil {
-		failRound(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, struct {
-		Items []store.RoundCard `json:"items"`
-	}{items})
-}
-
-func (h *Handler) roundCandidates(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.owner(w, r); !ok {
-		return
-	}
-	leads, searches, err := h.database.RoundCandidateLeads(r.Context(), r.PathValue("id"))
-	if err != nil {
-		failRound(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, struct {
-		Leads    []store.RoundCandidateLead   `json:"leads"`
-		Searches []store.RoundCandidateSearch `json:"searches"`
-	}{leads, searches})
-}
-
 func (h *Handler) roundHistory(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.owner(w, r); !ok {
 		return

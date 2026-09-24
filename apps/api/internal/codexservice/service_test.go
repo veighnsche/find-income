@@ -87,15 +87,20 @@ func TestRuntimeDiscoversOnlyRoundTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Tools) != 14 {
+	if len(result.Tools) != 10 {
 		t.Fatalf("unexpected tool count: %d", len(result.Tools))
 	}
 	names := map[string]bool{}
 	for _, tool := range result.Tools {
 		names[tool.Name] = true
 	}
-	if !names["round_context"] || !names["round_mutation"] || !names["round_evidence_correction"] || !names["source_links"] || !names["source_discovery"] || !names["discovery_candidate_stage"] || !names["discovery_official_links"] || !names["discovery_board_register"] || !names["application_pack_prepare"] || !names["offer_comparison_prepare"] || !names["interview_prepare"] || !names["interview_debrief"] || !names["reply_update"] || !names["reply_draft"] {
+	if !names["round_context"] || !names["round_mutation"] || !names["round_evidence_correction"] || !names["source_links"] || !names["application_pack_prepare"] || !names["offer_comparison_prepare"] || !names["interview_prepare"] || !names["interview_debrief"] || !names["reply_update"] || !names["reply_draft"] {
 		t.Fatal("required round tools not discoverable")
+	}
+	for _, removed := range []string{"source_discovery", "discovery_candidate_stage", "discovery_official_links", "discovery_board_register"} {
+		if names[removed] {
+			t.Fatalf("removed discovery tool %q is still exposed", removed)
+		}
 	}
 }
 

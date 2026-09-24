@@ -4,7 +4,7 @@ import { startFixture } from './fixture.mjs';
 const time = '2026-09-23T12:00:00Z';
 const profileVersion = 7;
 const roleId = 'synthetic-role-1';
-const roundId = 'synthetic-discovery-advice';
+const roundId = 'synthetic-saved-advice';
 const currentness = { status: 'current', code: 'current', checkedAt: time };
 const roleRef = (options = {}) => ({
   id: `opportunity:${roleId}`,
@@ -24,8 +24,8 @@ function configure(fixture, recommendation) {
   fixture.state.round = {
     ...fixture.state.round,
     id: roundId,
-    outcome: 'discover',
-    intent: 'Find sourced opportunities for the current campaign',
+    outcome: 'process_input',
+    intent: 'Process saved owner input',
     state: 'completed',
     generation: 2,
     step: 'done',
@@ -36,25 +36,6 @@ function configure(fixture, recommendation) {
     },
     completedAt: time,
   };
-  fixture.state.discoveryReady = true;
-  fixture.state.recommendationCards = [
-    {
-      opportunityId: roleId,
-      opportunityRevision: 3,
-      companyId: 'synthetic-company-1',
-      companyName: 'Example Organisation',
-      title: 'Synthetic Research Role',
-      kind: 'employment',
-      sourceUrl: 'https://example.invalid/jobs/research',
-      sourceText: 'Synthetic vacancy: research role, remote; pay and hours unconfirmed.',
-      sourceAuditId: 'synthetic-source-audit',
-      sourceRevision: 3,
-      sourceStale: false,
-      decision: fixture.state.decision?.decision || '',
-      decisionRevision: fixture.state.decision?.revision || 0,
-      createdAt: time,
-    },
-  ];
 }
 
 function choice(action, target, refs = []) {
@@ -73,7 +54,7 @@ function choice(action, target, refs = []) {
       { id: 'profile:0', kind: 'owner_profile', revision: '7', omittedBytes: 0 },
       {
         id: `round:${roundId}`,
-        kind: 'commissioned_round_result',
+        kind: 'commissioned_outcome_facts',
         revision: '2'.repeat(64),
         omittedBytes: 0,
       },
@@ -131,7 +112,7 @@ async function openHome(browser, fixture) {
   page.setDefaultTimeout(20_000);
   await page.goto(fixture.url, { waitUntil: 'networkidle' });
   const agency = page.getByRole('region', { name: 'Agency work' });
-  await agency.getByRole('heading', { name: 'Saved next-action advice' }).waitFor();
+  await agency.getByRole('heading', { name: /Your .* ready to review/ }).waitFor();
   return { context, page, agency };
 }
 
@@ -144,100 +125,6 @@ function recommendationPosts(fixture) {
 }
 
 export async function runRecommendationSmoke(browser) {
-  // A new browser discovers the latest completed advice from the server,
-  // without any locally remembered round ID or automatic action.
-  const freshBrowser = await startFixture();
-  try {
-    configure(freshBrowser, choice('discover', { kind: 'campaign', id: 'active', revision: 7 }));
-    freshBrowser.state.latestCompletedDiscover = freshBrowser.state.round;
-    const context = await browser.newContext({ viewport: { width: 1180, height: 900 } });
-    const page = await context.newPage();
-    await page.goto(freshBrowser.url, { waitUntil: 'networkidle' });
-    await page
-      .getByRole('region', { name: 'Agency work' })
-      .getByRole('button', { name: 'Find more sourced opportunities' })
-      .waitFor();
-    assert.ok(
-      freshBrowser.state.requests.some(
-        (request) => request.path === '/api/v1/rounds/latest-completed',
-      ),
-    );
-    assert.equal(recommendationPosts(freshBrowser).length, 0);
-    assert.equal(
-      freshBrowser.state.requests.filter((request) => request.path.includes('/jev')).length,
-      0,
-    );
-    await page.reload({ waitUntil: 'networkidle' });
-    assert.equal(recommendationPosts(freshBrowser).length, 0);
-    await context.close();
-  } finally {
-    await freshBrowser.close();
-  }
-
-  // A current saved discover choice changes the CTA without mutating on read or reload.
-  const discover = await startFixture();
-  try {
-    configure(discover, choice('discover', { kind: 'campaign', id: 'active', revision: 7 }));
-    discover.state.latestCompletedDiscover = {
-      ...discover.state.round,
-      id: 'another-completed-discovery',
-    };
-    const { context, page, agency } = await openHome(browser, discover);
-    await agency.getByRole('button', { name: 'Find more sourced opportunities' }).waitFor();
-    assert.equal(
-      discover.state.requests.some(
-        (request) =>
-          request.path === '/api/v1/rounds/latest-completed' && request.query === '?outcome=all',
-      ),
-      false,
-      'remembered round takes precedence',
-    );
-    assert.equal(recommendationPosts(discover).length, 0);
-    assert.equal(
-      discover.state.requests.filter((request) => request.path.includes('/jev')).length,
-      0,
-    );
-    await page.reload({ waitUntil: 'networkidle' });
-    assert.equal(recommendationPosts(discover).length, 0, 'reload must not execute advice');
-    await page
-      .getByRole('region', { name: 'Agency work' })
-      .getByRole('button', { name: 'Find more sourced opportunities' })
-      .click();
-    await page
-      .getByRole('region', { name: 'Agency work' })
-      .getByRole('button', { name: 'Stop this round' })
-      .waitFor();
-    assert.equal(recommendationPosts(discover).length, 1);
-    assert.ok(recommendationPosts(discover)[0].payload.requestKey);
-    await context.close();
-  } finally {
-    await discover.close();
-  }
-
-  // Review opens only the saved round's cards, with no new commission.
-  const cards = await startFixture();
-  try {
-    configure(
-      cards,
-      choice('review_opportunities', { kind: 'round', id: roundId, revision: 1 }, [
-        roleRef({ pack: true }),
-      ]),
-    );
-    const { context, page, agency } = await openHome(browser, cards);
-    await agency.getByRole('button', { name: 'Review saved opportunity cards' }).click();
-    await page
-      .getByRole('region', { name: 'Round results' })
-      .getByText('Synthetic Research Role')
-      .waitFor();
-    assert.equal(recommendationPosts(cards).length, 0);
-    assert.ok(
-      cards.state.requests.some((request) => request.path === `/api/v1/rounds/${roundId}/cards`),
-    );
-    await context.close();
-  } finally {
-    await cards.close();
-  }
-
   // Prepare recommendation navigates to the exact selected role's existing
   // owner-controlled Prepare action; navigation itself performs no commission.
   const prepare = await startFixture();
@@ -303,16 +190,15 @@ export async function runRecommendationSmoke(browser) {
     await pack.close();
   }
 
-  // Stale currentness/profile suppresses the selected CTA while preserving
-  // the historical reason; unresolved advice preserves saved cards.
+  // Stale currentness/profile suppresses the selected CTA while preserving the historical reason.
   const stale = await startFixture();
   try {
-    configure(stale, choice('discover', { kind: 'campaign', id: 'active', revision: 7 }));
+    configure(stale, choice('prepare', { kind: 'opportunity', id: roleId, revision: 3, ownerDecisionRevision: 1 }));
     stale.state.profileVersion = 8;
     const { context, page, agency } = await openHome(browser, stale);
     await agency.getByText(/Historical advice:/).waitFor();
     assert.equal(
-      await agency.getByRole('button', { name: 'Find more sourced opportunities' }).isDisabled(),
+      await agency.getByRole('button', { name: 'Open selected role to prepare its application' }).isDisabled(),
       true,
     );
     assert.equal(recommendationPosts(stale).length, 0);
@@ -322,7 +208,7 @@ export async function runRecommendationSmoke(browser) {
   }
   const serverStale = await startFixture();
   try {
-    configure(serverStale, choice('discover', { kind: 'campaign', id: 'active', revision: 7 }));
+    configure(serverStale, choice('prepare', { kind: 'opportunity', id: roleId, revision: 3, ownerDecisionRevision: 1 }));
     serverStale.state.round.report.recommendationCurrentness = {
       status: 'stale',
       code: 'round_result_changed',
@@ -331,7 +217,7 @@ export async function runRecommendationSmoke(browser) {
     const { context, agency } = await openHome(browser, serverStale);
     await agency.getByText(/Historical advice: round_result_changed/).waitFor();
     assert.equal(
-      await agency.getByRole('button', { name: 'Find more sourced opportunities' }).isDisabled(),
+      await agency.getByRole('button', { name: 'Open selected role to prepare its application' }).isDisabled(),
       true,
     );
     await context.close();
@@ -386,10 +272,7 @@ export async function runRecommendationSmoke(browser) {
     };
     const { context, page, agency } = await openHome(browser, unresolved);
     await agency.getByText(/The assessment did not choose/).waitFor();
-    await page
-      .getByRole('region', { name: 'Round results' })
-      .getByText('Synthetic Research Role')
-      .waitFor();
+    assert.equal(await agency.getByRole('button', { name: 'Find more sourced opportunities' }).count(), 0);
     assert.equal(recommendationPosts(unresolved).length, 0);
     await context.close();
   } finally {
@@ -602,6 +485,6 @@ export async function runRecommendationSmoke(browser) {
     }
   }
   console.log(
-    'Recommendation UI smoke passed: latest all and remembered recovery, nine saved actions, exact record navigation, failed delivery, currentness refusal, unresolved results, and read-only reload.',
+    'Recommendation UI smoke passed: latest all and remembered recovery, saved actions, exact record navigation, failed delivery, currentness refusal, unresolved results, and read-only reload.',
   );
 }

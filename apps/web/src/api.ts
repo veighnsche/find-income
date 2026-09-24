@@ -6,13 +6,8 @@ export type Round = components['schemas']['Round'];
 export type LatestCompletedRound =
   paths['/rounds/latest-completed']['get']['responses'][200]['content']['application/json'];
 export type RoundResults = components['schemas']['RoundResults'];
-export type RoundCapability = components['schemas']['RoundCapability'];
-export type RoundCard = components['schemas']['RoundCard'];
-export type RoundCandidateLead = components['schemas']['RoundCandidateLead'];
-export type RoundCandidateSearch = components['schemas']['RoundCandidateSearch'];
 export type RoundHistoryEvent = components['schemas']['RoundHistoryEvent'];
 export type PrepareRoundRequest = components['schemas']['PrepareRoundRequest'];
-export type StartRoundRequest = components['schemas']['StartRoundRequest'];
 export type ProcessInputRequest = components['schemas']['ProcessInputRequest'];
 export type ProcessInputResponse = components['schemas']['ProcessInputResponse'];
 export type ApplicationPackSummary = components['schemas']['ApplicationPackSummary'];
@@ -273,10 +268,6 @@ export function getActiveRound(signal?: AbortSignal): Promise<Round | null> {
   });
 }
 
-export function getLatestCompletedDiscoveryRound(signal?: AbortSignal): Promise<Round | null> {
-  return request<LatestCompletedRound>('/rounds/latest-completed?outcome=discover', { signal });
-}
-
 export function getLatestCompletedSavedRound(signal?: AbortSignal): Promise<Round | null> {
   return request<Round | null>('/rounds/latest-completed?outcome=all', { signal });
 }
@@ -333,18 +324,6 @@ export function closeDeliveryReview(id: string, csrfToken: string): Promise<Roun
   return request<Round>(`/delivery/reviews/${encodeURIComponent(id)}/close`, {
     method: 'POST',
     headers: { 'X-CSRF-Token': csrfToken },
-  });
-}
-
-export function getRoundCapability(signal?: AbortSignal): Promise<RoundCapability> {
-  return request<RoundCapability>('/rounds/capability', { signal });
-}
-
-export function startRound(input: StartRoundRequest, csrfToken: string): Promise<Round> {
-  return request<Round>('/rounds', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-    body: JSON.stringify(input),
   });
 }
 
@@ -406,22 +385,6 @@ export function applicationPackSourceUrl(id: string): string {
 
 export function getRoundResults(id: string, signal?: AbortSignal): Promise<RoundResults> {
   return request<RoundResults>(`/rounds/${encodeURIComponent(id)}/results`, { signal });
-}
-
-export function getRoundCards(id: string, signal?: AbortSignal): Promise<RoundCard[]> {
-  return request<components['schemas']['RoundCards']>(`/rounds/${encodeURIComponent(id)}/cards`, {
-    signal,
-  }).then((page) => page.items);
-}
-
-export function getRoundCandidates(
-  id: string,
-  signal?: AbortSignal,
-): Promise<components['schemas']['RoundCandidates']> {
-  return request<components['schemas']['RoundCandidates']>(
-    `/rounds/${encodeURIComponent(id)}/candidates`,
-    { signal },
-  );
 }
 
 export function getRoundHistory(id: string, signal?: AbortSignal): Promise<RoundHistoryEvent[]> {

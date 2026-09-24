@@ -175,39 +175,6 @@ func (e CodexStatusState) Valid() bool {
 	}
 }
 
-// Defines values for CollectorBoardProvider.
-const (
-	CollectorBoardProviderLever CollectorBoardProvider = "lever"
-)
-
-// Valid indicates whether the value is a known member of the CollectorBoardProvider enum.
-func (e CollectorBoardProvider) Valid() bool {
-	switch e {
-	case CollectorBoardProviderLever:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CollectorBoardRegion.
-const (
-	CollectorBoardRegionEu     CollectorBoardRegion = "eu"
-	CollectorBoardRegionGlobal CollectorBoardRegion = "global"
-)
-
-// Valid indicates whether the value is a known member of the CollectorBoardRegion enum.
-func (e CollectorBoardRegion) Valid() bool {
-	switch e {
-	case CollectorBoardRegionEu:
-		return true
-	case CollectorBoardRegionGlobal:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for CompanyDuplicateReason.
 const (
 	SameName    CompanyDuplicateReason = "same_name"
@@ -220,39 +187,6 @@ func (e CompanyDuplicateReason) Valid() bool {
 	case SameName:
 		return true
 	case SameWebsite:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CreateCollectorBoardRequestProvider.
-const (
-	CreateCollectorBoardRequestProviderLever CreateCollectorBoardRequestProvider = "lever"
-)
-
-// Valid indicates whether the value is a known member of the CreateCollectorBoardRequestProvider enum.
-func (e CreateCollectorBoardRequestProvider) Valid() bool {
-	switch e {
-	case CreateCollectorBoardRequestProviderLever:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CreateCollectorBoardRequestRegion.
-const (
-	CreateCollectorBoardRequestRegionEu     CreateCollectorBoardRequestRegion = "eu"
-	CreateCollectorBoardRequestRegionGlobal CreateCollectorBoardRequestRegion = "global"
-)
-
-// Valid indicates whether the value is a known member of the CreateCollectorBoardRequestRegion enum.
-func (e CreateCollectorBoardRequestRegion) Valid() bool {
-	switch e {
-	case CreateCollectorBoardRequestRegionEu:
-		return true
-	case CreateCollectorBoardRequestRegionGlobal:
 		return true
 	default:
 		return false
@@ -2070,7 +2004,6 @@ const (
 	All              GetLatestCompletedRoundParamsOutcome = "all"
 	CompareOffers    GetLatestCompletedRoundParamsOutcome = "compare_offers"
 	Deliver          GetLatestCompletedRoundParamsOutcome = "deliver"
-	Discover         GetLatestCompletedRoundParamsOutcome = "discover"
 	InterviewDebrief GetLatestCompletedRoundParamsOutcome = "interview_debrief"
 	InterviewPrepare GetLatestCompletedRoundParamsOutcome = "interview_prepare"
 	Prepare          GetLatestCompletedRoundParamsOutcome = "prepare"
@@ -2086,8 +2019,6 @@ func (e GetLatestCompletedRoundParamsOutcome) Valid() bool {
 	case CompareOffers:
 		return true
 	case Deliver:
-		return true
-	case Discover:
 		return true
 	case InterviewDebrief:
 		return true
@@ -2343,37 +2274,6 @@ type CodexStatus struct {
 // CodexStatusState defines model for CodexStatus.State.
 type CodexStatusState string
 
-// CollectorBoard defines model for CollectorBoard.
-type CollectorBoard struct {
-	CreatedAt          time.Time              `json:"createdAt"`
-	DisplayName        string                 `json:"displayName"`
-	Enabled            bool                   `json:"enabled"`
-	Id                 string                 `json:"id"`
-	IntervalMinutes    int                    `json:"intervalMinutes"`
-	LastErrorCode      *string                `json:"lastErrorCode,omitempty"`
-	LastRunAt          *time.Time             `json:"lastRunAt,omitempty"`
-	LastSuccessAt      *time.Time             `json:"lastSuccessAt,omitempty"`
-	NextScanAt         time.Time              `json:"nextScanAt"`
-	OfficialCareersUrl *string                `json:"officialCareersUrl,omitempty"`
-	Provider           CollectorBoardProvider `json:"provider"`
-	Region             CollectorBoardRegion   `json:"region"`
-	Revision           int64                  `json:"revision"`
-	Site               string                 `json:"site"`
-	UpdatedAt          time.Time              `json:"updatedAt"`
-	VerifiedAt         *time.Time             `json:"verifiedAt,omitempty"`
-}
-
-// CollectorBoardProvider defines model for CollectorBoard.Provider.
-type CollectorBoardProvider string
-
-// CollectorBoardRegion defines model for CollectorBoard.Region.
-type CollectorBoardRegion string
-
-// CollectorBoardList defines model for CollectorBoardList.
-type CollectorBoardList struct {
-	Items []CollectorBoard `json:"items"`
-}
-
 // Company defines model for Company.
 type Company struct {
 	ArchivedAt *time.Time `json:"archivedAt,omitempty"`
@@ -2474,22 +2374,6 @@ type CreateAgentCredentialRequest struct {
 	Name      string    `json:"name"`
 	Scopes    []string  `json:"scopes"`
 }
-
-// CreateCollectorBoardRequest defines model for CreateCollectorBoardRequest.
-type CreateCollectorBoardRequest struct {
-	DisplayName     *string                             `json:"displayName,omitempty"`
-	Enabled         bool                                `json:"enabled"`
-	IntervalMinutes int                                 `json:"intervalMinutes"`
-	Provider        CreateCollectorBoardRequestProvider `json:"provider"`
-	Region          CreateCollectorBoardRequestRegion   `json:"region"`
-	Site            string                              `json:"site"`
-}
-
-// CreateCollectorBoardRequestProvider defines model for CreateCollectorBoardRequest.Provider.
-type CreateCollectorBoardRequestProvider string
-
-// CreateCollectorBoardRequestRegion defines model for CreateCollectorBoardRequest.Region.
-type CreateCollectorBoardRequestRegion string
 
 // CreateCompanyRequest defines model for CreateCompanyRequest.
 type CreateCompanyRequest struct {
@@ -2816,10 +2700,7 @@ type IngestionPage struct {
 // IngestionRequest defines model for IngestionRequest.
 type IngestionRequest struct {
 	AttemptsStarted int64                    `json:"attemptsStarted"`
-	ConnectorId     *string                  `json:"connectorId,omitempty"`
 	CreatedAt       time.Time                `json:"createdAt"`
-	DiscoveredAt    *time.Time               `json:"discoveredAt,omitempty"`
-	ExternalId      *string                  `json:"externalId,omitempty"`
 	Id              string                   `json:"id"`
 	JobId           string                   `json:"jobId"`
 	JobState        IngestionRequestJobState `json:"jobState"`
@@ -3921,9 +3802,6 @@ type RoleCriterion struct {
 	Kind        RoleCriterionKind `json:"kind"`
 	Label       string            `json:"label"`
 	Mode        RoleCriterionMode `json:"mode"`
-
-	// SearchTerms Exact job-board queries for a require/prefer criterion. Boards match these literally; the human label is never sent as a query when terms are present.
-	SearchTerms *[]string `json:"searchTerms,omitempty"`
 }
 
 // RoleCriterionKind defines model for RoleCriterion.Kind.
@@ -3941,9 +3819,6 @@ type RoleCriterionView struct {
 	Kind           RoleCriterionViewKind `json:"kind"`
 	Label          string                `json:"label"`
 	Mode           RoleCriterionViewMode `json:"mode"`
-
-	// SearchTerms Exact job-board queries for a require/prefer criterion. Boards match these literally; the human label is never sent as a query when terms are present.
-	SearchTerms *[]string `json:"searchTerms,omitempty"`
 }
 
 // RoleCriterionViewKind defines model for RoleCriterionView.Kind.
@@ -3989,67 +3864,6 @@ type RoundAllowance struct {
 	Requests int64 `json:"requests"`
 	Tools    int64 `json:"tools"`
 	Turns    int64 `json:"turns"`
-}
-
-// RoundCandidateLead defines model for RoundCandidateLead.
-type RoundCandidateLead struct {
-	CompanyUrl    string    `json:"companyUrl"`
-	EvidenceQuote string    `json:"evidenceQuote"`
-	Id            string    `json:"id"`
-	Kind          string    `json:"kind"`
-	ObservedAt    time.Time `json:"observedAt"`
-	Status        string    `json:"status"`
-	StatusReason  string    `json:"statusReason"`
-	Title         string    `json:"title"`
-	Url           string    `json:"url"`
-}
-
-// RoundCandidateSearch defines model for RoundCandidateSearch.
-type RoundCandidateSearch struct {
-	Candidates int64     `json:"candidates"`
-	Method     string    `json:"method"`
-	ObservedAt time.Time `json:"observedAt"`
-	Source     string    `json:"source"`
-	Succeeded  bool      `json:"succeeded"`
-}
-
-// RoundCandidates defines model for RoundCandidates.
-type RoundCandidates struct {
-	Leads    []RoundCandidateLead   `json:"leads"`
-	Searches []RoundCandidateSearch `json:"searches"`
-}
-
-// RoundCapability defines model for RoundCapability.
-type RoundCapability struct {
-	CanStart    bool           `json:"canStart"`
-	Intent      string         `json:"intent"`
-	Limits      RoundAllowance `json:"limits"`
-	Outcome     string         `json:"outcome"`
-	Reason      string         `json:"reason"`
-	SourceCount int            `json:"sourceCount"`
-}
-
-// RoundCard defines model for RoundCard.
-type RoundCard struct {
-	CompanyId           string    `json:"companyId"`
-	CompanyName         string    `json:"companyName"`
-	CreatedAt           time.Time `json:"createdAt"`
-	Decision            string    `json:"decision"`
-	DecisionRevision    int64     `json:"decisionRevision"`
-	Kind                string    `json:"kind"`
-	OpportunityId       string    `json:"opportunityId"`
-	OpportunityRevision int64     `json:"opportunityRevision"`
-	SourceAuditId       string    `json:"sourceAuditId"`
-	SourceRevision      int64     `json:"sourceRevision"`
-	SourceStale         bool      `json:"sourceStale"`
-	SourceText          string    `json:"sourceText"`
-	SourceUrl           string    `json:"sourceUrl"`
-	Title               string    `json:"title"`
-}
-
-// RoundCards defines model for RoundCards.
-type RoundCards struct {
-	Items []RoundCard `json:"items"`
 }
 
 // RoundHistory defines model for RoundHistory.
@@ -4256,8 +4070,6 @@ type RoundSourceOpportunity struct {
 
 // RuntimeStatus defines model for RuntimeStatus.
 type RuntimeStatus struct {
-	// CollectionAvailable Collector loop mounted; enabled board count and run outcomes are separate.
-	CollectionAvailable   bool `json:"collectionAvailable"`
 	IngestionAvailable    bool `json:"ingestionAvailable"`
 	OrganisationAvailable bool `json:"organisationAvailable"`
 }
@@ -4272,12 +4084,6 @@ type SessionResponse struct {
 
 // SessionResponseActorKind defines model for SessionResponse.ActorKind.
 type SessionResponseActorKind string
-
-// StartRoundRequest Owner Start sends only a durable click idempotency key; the server chooses the current outcome, profile, scope, allowance and deadline.
-type StartRoundRequest struct {
-	ReplacePaused *ReplacePausedRound `json:"replacePaused,omitempty"`
-	RequestKey    string              `json:"requestKey"`
-}
 
 // StatementSourceInput defines model for StatementSourceInput.
 type StatementSourceInput struct {
@@ -4299,13 +4105,6 @@ type SubmitIngestionRequest struct {
 	IdempotencyKey string  `json:"idempotencyKey"`
 	OriginalText   *string `json:"originalText,omitempty"`
 	SourceUrl      *string `json:"sourceUrl,omitempty"`
-}
-
-// UpdateCollectorBoardRequest defines model for UpdateCollectorBoardRequest.
-type UpdateCollectorBoardRequest struct {
-	Enabled          bool  `json:"enabled"`
-	ExpectedRevision int64 `json:"expectedRevision"`
-	IntervalMinutes  int   `json:"intervalMinutes"`
 }
 
 // UpdateOrganisationCategoriesRequest defines model for UpdateOrganisationCategoriesRequest.
@@ -4571,9 +4370,6 @@ type SetOwnerOpportunityDecisionJSONRequestBody = OwnerDecisionInput
 
 // AddOwnerInstructionJSONRequestBody defines body for AddOwnerInstruction for application/json ContentType.
 type AddOwnerInstructionJSONRequestBody = OwnerInstructionInput
-
-// StartRoundJSONRequestBody defines body for StartRound for application/json ContentType.
-type StartRoundJSONRequestBody = StartRoundRequest
 
 // CompareOffersRoundJSONRequestBody defines body for CompareOffersRound for application/json ContentType.
 type CompareOffersRoundJSONRequestBody = CompareOffersRoundRequest

@@ -400,7 +400,7 @@ CREATE TABLE rounds (
   request_key TEXT NOT NULL,
   request_sha256 TEXT NOT NULL,
   intent TEXT NOT NULL CHECK (length(trim(intent)) BETWEEN 1 AND 2000),
-  outcome TEXT NOT NULL CHECK (length(trim(outcome)) BETWEEN 1 AND 100),
+  outcome TEXT NOT NULL CHECK (length(trim(outcome)) BETWEEN 1 AND 100 AND outcome <> 'discover'),
   initial_profile_version INTEGER NOT NULL REFERENCES preferences_versions(version),
   profile_version INTEGER NOT NULL REFERENCES preferences_versions(version),
   scope_json TEXT NOT NULL CHECK (json_valid(scope_json)),
@@ -558,16 +558,6 @@ CREATE TABLE round_record_changes (
   PRIMARY KEY (round_id,audit_id)
 );
 
--- Exact collector page evidence has its own bounded row; the round cursor
--- stores only this attempt reference and never truncates fetched postings.
-CREATE TABLE round_collector_batches (
-  attempt_id TEXT PRIMARY KEY REFERENCES round_attempts(id),
-  round_id TEXT NOT NULL REFERENCES rounds(id),
-  payload_json BLOB NOT NULL CHECK (json_valid(payload_json)),
-  bytes INTEGER NOT NULL CHECK (bytes > 0 AND bytes <= 16777216),
-  created_at TEXT NOT NULL
-);
-
 CREATE TABLE round_reconciliation_checks (
   id TEXT PRIMARY KEY,
   round_id TEXT NOT NULL REFERENCES rounds(id),
@@ -633,46 +623,6 @@ CREATE TABLE round_jev_current (
   PRIMARY KEY(opportunity_id,kind)
 );
 
-CREATE TABLE discovery_http (
-  attempt_id TEXT PRIMARY KEY REFERENCES round_attempts(id),
-  round_id TEXT NOT NULL REFERENCES rounds(id),
-  method TEXT NOT NULL,
-  request_json TEXT NOT NULL,
-  endpoint TEXT NOT NULL,
-  status_code INTEGER NOT NULL,
-  response_body BLOB NOT NULL,
-  response_sha256 TEXT NOT NULL,
-  observed_at TEXT NOT NULL,
-  error_code TEXT NOT NULL DEFAULT ''
-);
-CREATE INDEX discovery_http_round ON discovery_http(round_id,observed_at);
-
-CREATE TABLE discovery_official_reads (
-  attempt_id TEXT PRIMARY KEY REFERENCES round_attempts(id),
-  round_id TEXT NOT NULL REFERENCES rounds(id),
-  candidate_id TEXT NOT NULL REFERENCES discovery_candidates(id),
-  company_detail_attempt_id TEXT NOT NULL REFERENCES discovery_http(attempt_id),
-  parent_attempt_id TEXT REFERENCES discovery_official_reads(attempt_id),
-  source_url TEXT NOT NULL,
-  claim_url TEXT NOT NULL,
-  status TEXT NOT NULL,
-  snapshot_json TEXT,
-  observed_at TEXT NOT NULL
-);
-CREATE INDEX discovery_official_reads_round_candidate ON discovery_official_reads(round_id,candidate_id);
-
-CREATE TABLE discovery_candidates (
-  id TEXT PRIMARY KEY,
-  attempt_id TEXT NOT NULL REFERENCES discovery_http(attempt_id),
-  kind TEXT NOT NULL CHECK(kind IN ('job','company')),
-  title TEXT NOT NULL,
-  url TEXT NOT NULL,
-  company_url TEXT NOT NULL DEFAULT '',
-  evidence_quote TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  UNIQUE(attempt_id,kind,url)
-);
-
 CREATE TABLE application_packs (
   id TEXT PRIMARY KEY,
   opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
@@ -687,22 +637,19 @@ CREATE TABLE application_packs (
   UNIQUE(opportunity_id,version)
 );
 
--- Both scheduled discoveries and owner submissions enter this same durable
+-- Owner submissions enter this durable
 -- intake. Jobs provide leases/attempt history; this row preserves source and
 -- the exact verified record mapping across retries and process restarts.
 CREATE TABLE ingestion_requests (
   id TEXT PRIMARY KEY,
-  origin TEXT NOT NULL CHECK (origin IN ('collector','owner','agent')),
+  origin TEXT NOT NULL CHECK (origin IN ('owner','agent')),
   actor_kind TEXT NOT NULL,
   actor_id TEXT NOT NULL,
   idempotency_key TEXT NOT NULL CHECK (length(idempotency_key) BETWEEN 1 AND 200),
   submission_sha256 TEXT NOT NULL,
   source_url TEXT,
   original_text TEXT NOT NULL DEFAULT '',
-  connector_id TEXT,
-  external_id TEXT,
   source_opening_id TEXT REFERENCES source_openings(id),
-  discovered_at TEXT,
   status TEXT NOT NULL CHECK (status IN ('pending','processing','completed','needs_text','failed')),
   job_id TEXT NOT NULL REFERENCES jobs(id),
   attempts_started INTEGER NOT NULL DEFAULT 1 CHECK (attempts_started > 0),
@@ -775,44 +722,13 @@ CREATE TABLE source_sightings (
   recorded_at TEXT NOT NULL,
   actor_kind TEXT NOT NULL,
   actor_id TEXT NOT NULL,
-  decision TEXT NOT NULL CHECK (decision IN ('new','changed','unchanged','older')),
-  collector_attempt_id TEXT REFERENCES round_attempts(id),
-  posting_index INTEGER,
-  UNIQUE(collector_attempt_id,posting_index)
+  decision TEXT NOT NULL CHECK (decision IN ('new','changed','unchanged','older'))
 );
 CREATE INDEX source_sightings_opening_idx ON source_sightings(source_opening_id,observed_at,id);
 CREATE TRIGGER source_sightings_no_update BEFORE UPDATE ON source_sightings
 BEGIN SELECT RAISE(ABORT,'source sightings are immutable'); END;
 CREATE TRIGGER source_sightings_no_delete BEFORE DELETE ON source_sightings
 BEGIN SELECT RAISE(ABORT,'source sightings are immutable'); END;
-
--- Configured public ATS boards are scanned in bounded pages. A cursor and
--- lease make one scan resumable across service restarts and overlapping workers.
-CREATE TABLE collector_boards (
-  id TEXT PRIMARY KEY,
-  provider TEXT NOT NULL,
-  site TEXT NOT NULL,
-  region TEXT NOT NULL,
-  display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
-  official_careers_url TEXT,
-  verified_at TEXT,
-  enabled INTEGER NOT NULL CHECK (enabled IN (0,1)),
-  interval_minutes INTEGER NOT NULL CHECK (interval_minutes BETWEEN 15 AND 10080),
-  next_scan_at TEXT NOT NULL,
-  next_offset INTEGER NOT NULL DEFAULT 0 CHECK (next_offset >= 0),
-  lease_token TEXT,
-  lease_until TEXT,
-  last_run_at TEXT,
-  last_success_at TEXT,
-  last_error_code TEXT,
-  revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  UNIQUE(provider,site,region),
-  CHECK ((lease_token IS NULL AND lease_until IS NULL) OR
-    (lease_token IS NOT NULL AND lease_until IS NOT NULL))
-);
-CREATE INDEX collector_boards_due_idx ON collector_boards(enabled,next_scan_at,lease_until);
 
 CREATE TABLE organisation_category_versions (
   version INTEGER PRIMARY KEY CHECK (version > 0),

@@ -25,7 +25,6 @@ type Options struct {
 	SecureCookies         bool
 	IngestionAvailable    bool
 	OrganisationAvailable bool
-	CollectionAvailable   bool
 	Codex                 CodexControl
 	Rounds                *rounds.Service
 	Delivery              *deliveryservice.Service
@@ -45,7 +44,6 @@ type Handler struct {
 	secureCookies         bool
 	ingestionAvailable    bool
 	organisationAvailable bool
-	collectionAvailable   bool
 	codex                 CodexControl
 	rounds                *rounds.Service
 	delivery              *deliveryservice.Service
@@ -55,7 +53,6 @@ type Handler struct {
 func NewHandler(database *store.Store, service *auth.Service, options Options) http.Handler {
 	h := &Handler{auth: service, database: database, origins: map[string]bool{}, secureCookies: options.SecureCookies,
 		ingestionAvailable: options.IngestionAvailable, organisationAvailable: options.OrganisationAvailable,
-		collectionAvailable: options.CollectionAvailable,
 		codex:               options.Codex,
 		rounds:              options.Rounds,
 		delivery:            options.Delivery,
@@ -80,8 +77,6 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/replies/{id}", h.getReplyProcessing)
 	mux.HandleFunc("GET /api/v1/rounds/active", h.activeRound)
 	mux.HandleFunc("GET /api/v1/rounds/latest-completed", h.latestCompletedRound)
-	mux.HandleFunc("GET /api/v1/rounds/capability", h.roundCapability)
-	mux.HandleFunc("POST /api/v1/rounds", h.startRound)
 	mux.HandleFunc("POST /api/v1/rounds/prepare", h.prepareRound)
 	mux.HandleFunc("POST /api/v1/rounds/compare-offers", h.compareOffersRound)
 	mux.HandleFunc("GET /api/v1/offer-comparisons/by-round/{roundId}", h.offerComparisonByRound)
@@ -89,8 +84,6 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("POST /api/v1/rounds/process-input", h.processInput)
 	mux.HandleFunc("GET /api/v1/rounds/{id}", h.getRound)
 	mux.HandleFunc("GET /api/v1/rounds/{id}/results", h.roundResults)
-	mux.HandleFunc("GET /api/v1/rounds/{id}/cards", h.roundCards)
-	mux.HandleFunc("GET /api/v1/rounds/{id}/candidates", h.roundCandidates)
 	mux.HandleFunc("GET /api/v1/rounds/{id}/history", h.roundHistory)
 	mux.HandleFunc("POST /api/v1/rounds/{id}/stop", h.stopAnyRound)
 	mux.HandleFunc("POST /api/v1/rounds/{id}/resume", h.resumeAnyRound)
@@ -107,9 +100,6 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/organisation/categories", h.organisationCategories)
 	mux.HandleFunc("PUT /api/v1/organisation/categories", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/organisation/summaries", h.organisationSummaries)
-	mux.HandleFunc("GET /api/v1/collector-boards", h.listCollectorBoards)
-	mux.HandleFunc("POST /api/v1/collector-boards", h.unsupportedRecruitmentMutation)
-	mux.HandleFunc("PUT /api/v1/collector-boards/{id}", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("PUT /api/v1/preferences", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/agent-credentials", h.listAgents)
 	mux.HandleFunc("POST /api/v1/agent-credentials", h.createAgent)

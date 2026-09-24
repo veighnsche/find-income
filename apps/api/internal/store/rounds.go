@@ -221,6 +221,10 @@ func roundDigest(input StartRoundInput) (string, error) {
 
 func ownerRoundActor(actor Actor) bool { return actor.Kind == "administrator" && actor.ID != "" }
 
+func validRoundOutcome(outcome string) bool {
+	return strings.TrimSpace(outcome) != "" && len(outcome) <= 100 && outcome != "discover"
+}
+
 // StartRound binds the request identity, captured profile and allowance in one
 // SQLite writer transaction. An active paused round still owns the slot.
 func (s *Store) StartRound(ctx context.Context, actor Actor, input StartRoundInput) (Round, bool, error) {
@@ -228,7 +232,7 @@ func (s *Store) StartRound(ctx context.Context, actor Actor, input StartRoundInp
 	if !ownerRoundActor(actor) || strings.TrimSpace(input.RequestKey) != input.RequestKey ||
 		input.RequestKey == "" || len(input.RequestKey) > 200 ||
 		strings.TrimSpace(input.Intent) == "" || len(input.Intent) > 2000 ||
-		strings.TrimSpace(input.Outcome) == "" || len(input.Outcome) > 100 ||
+		!validRoundOutcome(input.Outcome) ||
 		input.ProfileVersion < 1 || !validScope(input.Scope) || !input.Limits.valid() || !input.Limits.nonzero() ||
 		input.Deadline.IsZero() {
 		return Round{}, false, ErrInvalid

@@ -47,7 +47,7 @@ func assessmentFixtureWithDeadline(t *testing.T, duration time.Duration) (*store
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, created, err := s.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "assessment-round", Intent: "Review sourced vacancies", Outcome: "discover", ProfileVersion: profile.Version,
+	r, created, err := s.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "assessment-round", Intent: "Review sourced vacancies", Outcome: "process_input", ProfileVersion: profile.Version,
 		Scope:  store.RoundScope{InputRefs: []string{"campaign:test"}, Resources: []string{"campaign:active"}, Operations: []string{store.RoundJevRequest}},
 		Limits: store.RoundAllowance{Requests: 5}, Deadline: time.Now().Add(duration).UTC().Round(0)})
 	if err != nil || !created {

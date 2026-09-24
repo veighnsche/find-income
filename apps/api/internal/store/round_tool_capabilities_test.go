@@ -21,7 +21,7 @@ func TestRoundToolCapabilityFencesOldTurnAfterStopResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "bound", Intent: "Find work", Outcome: "discover",
+	r, _, err := s.StartRound(ctx, owner, StartRoundInput{RequestKey: "bound", Intent: "Find work", Outcome: "process_input",
 		ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour),
 		Scope: RoundScope{Resources: []string{"campaign:active"}, Operations: []string{RoundCodexTurn, RoundCreateCompany},
 			Delegates: []string{agent.ID}}, Limits: RoundAllowance{Requests: 5, Items: 2, Tools: 5, Turns: 2}})

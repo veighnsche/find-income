@@ -21,20 +21,7 @@ type HomeRecommendationCurrentness struct {
 	CheckedAt string `json:"checkedAt"`
 }
 
-func recommendationProgressRevision(roundID string, detail report) string {
-	progress := struct {
-		RoundID              string
-		CollectorAttemptID   string
-		CollectorHasMore     bool
-		UnreviewedCandidates int
-		AssessedSources      []assessedSource
-	}{roundID, detail.CollectorAttemptID, detail.CollectorHasMore, detail.UnreviewedCandidates, detail.AssessedSources}
-	encoded, _ := json.Marshal(progress)
-	digest := sha256.Sum256(encoded)
-	return hex.EncodeToString(digest[:])
-}
-
-func recommendationOpportunityRevision(revision int64, decision store.OwnerDecision, assessed assessedSource, packID, packHash string) string {
+func recommendationOpportunityRevision(revision int64, decision store.OwnerDecision, assessed recommendationAssessments, packID, packHash string) string {
 	fingerprint, _ := json.Marshal(struct {
 		OpportunityRevision int64
 		DecisionID          string
@@ -52,18 +39,13 @@ func recommendationOpportunityRevision(revision int64, decision store.OwnerDecis
 // unknown read is unavailable, while a proven changed snapshot is stale.
 func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, round store.Round) HomeRecommendationCurrentness {
 	verdict := HomeRecommendationCurrentness{Status: "unavailable", Code: "no_saved_recommendation", CheckedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-	if db == nil || ctx == nil || round.ID == "" || round.Outcome != "discover" && round.Outcome != "process_input" && round.Outcome != "prepare" && round.Outcome != "compare_offers" && round.Outcome != "deliver" && round.Outcome != "interview_prepare" && round.Outcome != "interview_debrief" && round.Outcome != "process_replies" {
+	if db == nil || ctx == nil || round.ID == "" || round.Outcome != "process_input" && round.Outcome != "prepare" && round.Outcome != "compare_offers" && round.Outcome != "deliver" && round.Outcome != "interview_prepare" && round.Outcome != "interview_debrief" && round.Outcome != "process_replies" {
 		return verdict
 	}
-	var detail report
 	var saved struct {
 		Recommendation *homeRecommendation `json:"recommendation"`
 	}
 	if len(round.Report) == 0 || json.Unmarshal(round.Report, &saved) != nil {
-		verdict.Code = "invalid_saved_report"
-		return verdict
-	}
-	if round.Outcome == "discover" && json.Unmarshal(round.Report, &detail) != nil {
 		verdict.Code = "invalid_saved_report"
 		return verdict
 	}
@@ -129,10 +111,6 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 		verdict.Code = "decision_evidence_unavailable"
 		return verdict
 	}
-	assessedByID := map[string]assessedSource{}
-	for _, source := range detail.AssessedSources {
-		assessedByID[source.OpportunityID] = source
-	}
 	if len(advice.SourceRefs) == 0 {
 		verdict.Status, verdict.Code = "stale", "source_refs_missing"
 		return verdict
@@ -147,17 +125,14 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 		profileRefs[source.ID] = source.SourceRevision
 	}
 	knownOpportunities := map[string]bool{}
-	var outcomeFacts outcomeRecommendationFacts
-	if round.Outcome != "discover" {
-		outcomeFacts, err = savedOutcomeRecommendationFacts(ctx, db, round)
-		if err != nil {
-			verdict.Code = "outcome_facts_unavailable"
-			return verdict
-		}
-		if !outcomeFacts.useful() {
-			verdict.Status, verdict.Code = "stale", "outcome_result_changed"
-			return verdict
-		}
+	outcomeFacts, err := savedOutcomeRecommendationFacts(ctx, db, round)
+	if err != nil {
+		verdict.Code = "outcome_facts_unavailable"
+		return verdict
+	}
+	if !outcomeFacts.useful() {
+		verdict.Status, verdict.Code = "stale", "outcome_result_changed"
+		return verdict
 	}
 	for _, ref := range advice.SourceRefs {
 		switch ref.Kind {
@@ -166,13 +141,8 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 				verdict.Status, verdict.Code = "stale", "profile_source_changed"
 				return verdict
 			}
-		case "commissioned_round_result":
-			if ref.ID != "round:"+round.ID || ref.Revision != recommendationProgressRevision(round.ID, detail) {
-				verdict.Status, verdict.Code = "stale", "round_result_changed"
-				return verdict
-			}
 		case "commissioned_outcome_facts":
-			if round.Outcome == "discover" || ref.ID != "round:"+round.ID || ref.Revision != outcomeFactsRevision(round.ID, outcomeFacts) {
+			if ref.ID != "round:"+round.ID || ref.Revision != outcomeFactsRevision(round.ID, outcomeFacts) {
 				verdict.Status, verdict.Code = "stale", "outcome_result_changed"
 				return verdict
 			}
@@ -240,11 +210,6 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 				verdict.Status, verdict.Code = "stale", "pack_changed"
 				return verdict
 			}
-			roundAssessed := assessedByID[id]
-			if roundAssessed.OpportunityID != "" && (ref.ScreeningAssessmentID != roundAssessed.ScreeningAssessmentID || ref.OrganisationAssessmentID != roundAssessed.OrganisationAssessmentID) {
-				verdict.Status, verdict.Code = "stale", "round_assessment_changed"
-				return verdict
-			}
 			engine := &Engine{Store: db}
 			screen, screenPresent, screenErr := engine.currentRecommendationAssessment(ctx, opportunity, profile.Version, "screening")
 			organisation, organisationPresent, organisationErr := engine.currentRecommendationAssessment(ctx, opportunity, profile.Version, "organisation")
@@ -257,7 +222,7 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 				verdict.Status, verdict.Code = "stale", "assessment_changed"
 				return verdict
 			}
-			assessed := assessedSource{ScreeningAssessmentID: ref.ScreeningAssessmentID, OrganisationAssessmentID: ref.OrganisationAssessmentID}
+			assessed := recommendationAssessments{ScreeningAssessmentID: ref.ScreeningAssessmentID, OrganisationAssessmentID: ref.OrganisationAssessmentID}
 			if ref.Revision != recommendationOpportunityRevision(opportunity.Revision, decision, assessed, packID, packHash) {
 				verdict.Status, verdict.Code = "stale", "assessment_or_source_changed"
 				return verdict
@@ -288,7 +253,7 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 	}
 	engine := &Engine{Store: db}
 	choice := recommendationChoice{Action: advice.Action, Target: *advice.Target}
-	if err := engine.checkRecommendationTarget(ctx, round, detail.AssessedSources, choice); err != nil {
+	if err := engine.checkRecommendationTarget(ctx, round, choice); err != nil {
 		if errors.Is(err, store.ErrConflict) || errors.Is(err, store.ErrNotFound) || errors.Is(err, store.ErrInvalid) {
 			verdict.Status, verdict.Code = "stale", "target_changed"
 		} else {

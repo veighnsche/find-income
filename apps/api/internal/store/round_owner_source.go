@@ -60,7 +60,7 @@ func (s *Store) PublishOwnerInputSourceText(ctx context.Context, owner Actor, ro
 	if _, err := tx.ExecContext(ctx, `UPDATE source_openings SET current_sha256=?,updated_at=? WHERE id=? AND current_ingestion_id=?`, hash, now, item.SourceOpeningID, item.ID); err != nil {
 		return IngestionRequest{}, err
 	}
-	if err := insertSourceSighting(ctx, tx, item.SourceOpeningID, item.ID, IngestionInput{Origin: "owner", SourceURL: item.SourceURL, OriginalText: text}, hash, now, now, owner, "changed", collectorSightingRef{}); err != nil {
+	if err := insertSourceSighting(ctx, tx, item.SourceOpeningID, item.ID, IngestionInput{Origin: "owner", SourceURL: item.SourceURL, OriginalText: text}, hash, now, now, owner, "changed"); err != nil {
 		return IngestionRequest{}, err
 	}
 	result, _ := json.Marshal(map[string]string{"ingestionId": ingestionID, "contentSha256": hash})

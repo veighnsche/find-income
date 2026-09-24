@@ -197,7 +197,7 @@ func TestRecoverCapturedReplyIntentRejectsBadState(t *testing.T) {
 	if _, err := s.RecoverCapturedReplyIntentAttempt(ctx, "missing", "a", "j", 1); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("missing round: %v", err)
 	}
-	round, _, err := s.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "guard", Intent: "Guard.", Outcome: "discover", ProfileVersion: profile.Version,
+	round, _, err := s.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "guard", Intent: "Guard.", Outcome: "process_input", ProfileVersion: profile.Version,
 		Scope:  store.RoundScope{InputRefs: []string{"campaign:test"}, Resources: []string{"campaign:active"}, Operations: []string{store.RoundJevRequest}},
 		Limits: store.RoundAllowance{Requests: 1}, Deadline: time.Now().Add(time.Hour).UTC().Round(0)})
 	if err != nil {
