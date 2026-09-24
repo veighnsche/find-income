@@ -188,11 +188,11 @@
       "status": "partial",
       "thread_id": "01a0cf13-2c03-73f2-b074-6c73d7120ebe",
       "host_id": "local",
-      "active_slice": "Stopped: backend149c616/8cee343 unmerged; web edits uncommitted",
+      "active_slice": "Integrated 0602dcf/94c1cd0 backend and bf2f684 interface on main; no active worker",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
-      "review": "Original149c616 review found three defects; corrective8cee343 worker reports full Go and independent overlay passing. Final integration review pending.",
-      "remaining_work": "Integrate preserved corrected backend and UI, verify affected boundaries once, then real semantic usefulness; see remaining-work.md.",
+      "review": "All three 149c616 authority findings closed by 8cee343 correction, verified on main: full Go suite, all four TestReviewI10 reproductions via remapped overlay, whitespace and both generated-contract checks pass. Web bf2f684 root-reviewed: lint/TypeScript and focused Chromium recommendation smoke pass. No live provider calls.",
+      "remaining_work": "Verify real decision/usefulness on the private runtime (B4) and reply-classification advice (C4); see remaining-work.md.",
       "worktree": "/private/tmp/find-income-i10-advice",
       "worktree_base": "09bfc01",
       "active_selection_reason": "Cross-file outcome reports, explicit commission authority, immutable Jev replay and pure currentness integration; isolated checkout protects concurrent interview/backend and web work.",
@@ -219,11 +219,11 @@
       "status": "partial",
       "thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
       "host_id": "local",
-      "active_slice": "Recommendation and delivery UI committed235441d; worker idle pending next stable domain DTO",
+      "active_slice": "All-outcome saved-advice UI integrated bf2f684; no active worker",
       "active_model": "gpt-6-sol",
       "active_effort": "medium",
-      "review": "Core2279c3f independently reviewed with full Go/race checks. UI12b138d root-reviewed with passing lint/TypeScript and production-build Chromium fixture; actual input/pack reports, exact retry, draft persistence and automatic corrected-pack refresh covered.",
-      "remaining_work": "Integrate later outcome results and saved advice as those backend paths land, then verify the authenticated runtime journey. Contextual UI12b138d and recommendation/delivery UI235441d pass root synthetic checks; real runtime acceptance remains open."
+      "review": "Core2279c3f independently reviewed with full Go/race checks. UI12b138d root-reviewed with passing lint/TypeScript and production-build Chromium fixture; actual input/pack reports, exact retry, draft persistence and automatic corrected-pack refresh covered. UIbf2f684 root-reviewed with passing lint/TypeScript and focused production-build Chromium recommendation smoke (nine actions, exact destinations, failed delivery, currentness refusal, read-only reload).",
+      "remaining_work": "Verify the authenticated runtime journey and minimal-input path on a real pack (B5); real runtime acceptance remains open."
     },
     {
       "id": "I12",
@@ -602,7 +602,7 @@
   "next_proposed_slices": [],
   "max_concurrent_live_workers": 4,
   "dispatch_status": "paused_no_active_workers",
-  "code_checkpoint": "605e172",
+  "code_checkpoint": "bf2f684",
   "goal_status": "paused",
   "goal_objective": "Complete all I01–I27 task acceptance using concurrent live tasks, reviewed coherent commits and actual live acceptance where required.",
   "remaining_work_guide": "/Users/vince/Projects/find-income/dashboard/docs/remaining-work.md"

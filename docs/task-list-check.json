@@ -38,17 +38,19 @@
     "Committedc8ec6e6: whole-offer UI, fresh-browser retrieval, exact pending key, readable exact pay and valid fractional/scientific Jev metadata. Root full Chromium suite then targeted corrected offer run passed.",
     "Committedc85a617: corrected interview prep/debrief backend after independent recovery, HTTP replay and merge rechecks; all15 final hashes matched. Combined Go suite and generated checks passed, plus affected post-fix suites and tool-inventory consistency.",
     "Committedc1f3c83: root current-schema recovery review and six synthetic tests pass; interrupted deliveries remain uncertain, actual host acceptance pending.",
-    "Committedff8777c: saved delivery MIME, attachment and pack digest checks; seven root recovery tests pass."
+    "Committedff8777c: saved delivery MIME, attachment and pack digest checks; seven root recovery tests pass.",
+    "Integrated0602dcf/94c1cd0: I10 cross-outcome advice backend after three-finding correction; root full Go suite, all four TestReviewI10 reproductions via remapped overlay, whitespace and both generated-contract checks pass; no live provider calls.",
+    "Integratedbf2f684: all-outcome saved-advice UI with exact review navigation; root lint/TypeScript and focused production-build Chromium recommendation smoke pass (nine actions, failed delivery, currentness refusal, read-only reload)."
   ],
   "documentation_validated_at": "2026-09-24",
-  "code_checkpoint": "c85a617",
+  "code_checkpoint": "bf2f684",
   "root_validation": {
     "check": "passed at 8c8b66d after OpenAPI formatting",
     "test": "passed full Go API suite; web runner has no test files; controlled I11 browser fixture reviewed",
     "build": "passed at 8c8b66d",
     "e2e": "pnpm e2e now runs real headless browser fixture smoke; root passed after permitted macOS sandbox escalation. Synthetic HTTP only; no live API/runtime acceptance.",
     "latest_slices": "d9679af backend: root full Go suite and both generated-contract checks passed; all13 independently rechecked delivery hashes matched. 235441d web: root lint/TypeScript and pnpm e2e passed.",
-    "active_integration": "I10 cross-outcome advice active in /private/tmp/find-income-i10-advice, incorporating committedc85a617 interviews. Interview/offer writers and reviewer idle; main feature changes are committed. Concurrent I27 read-only client/server audit checks actual contract/control integration; no live acceptance.",
+    "active_integration": "I10 cross-outcome advice integrated on main as0602dcf/94c1cd0/bf2f684; isolated checkout and handoff branch retained as record. No active workers; live acceptance pending owner runtime inputs.",
     "recovery": "Five current-format synthetic tests and shell syntax pass at3bcbd42; no real data or host touched.",
     "delivery": "Root synthetic SMTP protocol suite passes after non-ASCII/bounds and uncertain-positive-reply corrections; no real send.",
     "native_probe": "Saved synthetic Linux 0.153.4 evidence verifier passed: read-only native writes and private-state diagnostics denied, trusted fake-transport lifecycle worked; no real account/MCP/wrapper acceptance.",
@@ -62,13 +64,14 @@
     "discovery_context_budget": "Committedcd2f9ab: saved real requests/responses verified byte-for-byte, old1200 rejection/new10000 unresolved acceptance offline;24KiB pre-call and full-excerpt default-batch regressions pass. Actual usage4645 across2 calls, both abstentions.",
     "delivery_ui": "Committed235441d after root synthetic delivery/recommendation Chromium checks, including Stop while Send is pending, stable retry identity, partial history, currentness and fresh-browser retrieval.",
     "delivery_authority": "All three historical findings closed by independent bounded recheck. Role/source/company and cosmetic matrices, complete/incomplete/invalid capture production Lazy/Resume recovery, and successful authenticated HTTP Send/replay passed with fake sender. No live acceptance.",
-    "client_server_audit": "Source trace confirmed three UI recovery/control defects; correction dispatched with reload, actual delivery refusal and historical debrief replay cases. No live acceptance."
+    "client_server_audit": "Source trace confirmed three UI recovery/control defects; correction dispatched with reload, actual delivery refusal and historical debrief replay cases. No live acceptance.",
+    "cross_outcome_advice": "Backend0602dcf/94c1cd0 and UIbf2f684 integrated. Root full Go suite, four TestReviewI10 reproductions, whitespace, both generated checks, lint/TypeScript and focused Chromium recommendation smoke pass. Real decision usefulness and authenticated operation remain open."
   },
   "protected_artifacts_unchanged_prior_check": 44,
   "proposed_next_slices": [
+    "Selected-host deployment, login and runtime acceptance (B1-B3) once concrete owner inputs arrive",
     "Review and integrate isolated I24 interview backend, then contextual UI",
     "Review and integrate isolated I25 offer backend, then contextual UI",
-    "Integrate saved next-action advice after each implemented outcome; current generation runs only after discovery",
     "Actual host/account discovery acceptance when missing owner input arrives",
     "Bounded correspondence/reply integration and exact controlled live delivery acceptance"
   ],

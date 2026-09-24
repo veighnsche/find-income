@@ -4,7 +4,7 @@ Updated 24 September 2026. The full I01–I27 list implements the [implementatio
 
 **Handoff:** Start with [remaining-work.md](remaining-work.md) for the complete ordered remaining checklist, preserved commits/files, missing inputs and economical concurrency. Implementation is paused; historical dispatch schedules below are not instructions to restart tasks.
 
-**Current position: 5 tasks accepted, 18 partial, 4 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20–I22, I24–I27. I10 corrected backend awaits integration and its interface edits remain uncommitted; I27 recovery controls and current-schema recovery are committed; interview and offer backend/UI slices are reviewed and committed. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 18 partial, 4 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20–I22, I24–I27. I10 corrected backend (`0602dcf`, `94c1cd0`) and interface (`bf2f684`) are integrated on main; I27 recovery controls and current-schema recovery are committed; interview and offer backend/UI slices are reviewed and committed. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -263,7 +263,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I05, I07, I08, I09.
 
-**Remaining work:** Integrate preserved backend149c616/8cee343 and the eight uncommitted web files using remaining-work.md, then verify actual decision usefulness. Do not reimplement the completed isolated slice.
+**Remaining work:** Verify actual decision usefulness on the private runtime (B4) and reply-classification advice (C4). Backend149c616/8cee343 integrated as0602dcf/94c1cd0 and the eight web files asbf2f684; see remaining-work.md stage A.
 
 **Task scope:** Integrate durable assessments and bounded candidate selection with the controller and acquisition services. Include organisation, factual scope, lead/research priority and next useful implemented outcome. Persist full request/response, versions, options, source support and usage; treat facts and require/avoid/prefer policy separately.
 
@@ -271,13 +271,13 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 **Why this model/effort:** Semantic contracts, persistence and orchestration cross packages; use Sol High on this integration rather than on evidence copying.
 
-**Reviewed evidence:** Committed 2fdfe7d: recorded choices, guarded current screening/organisation projection and pack relevance; responsibility evaluation has ten complete cases.
+**Reviewed evidence:** Committed 2fdfe7d: recorded choices, guarded current screening/organisation projection and pack relevance; responsibility evaluation has ten complete cases. Integrated0602dcf/94c1cd0: full Go suite, all four TestReviewI10 reproductions via remapped overlay, and both generated-contract checks pass; no live provider calls. Interfacebf2f684: lint/TypeScript and focused Chromium recommendation smoke pass.
 
 ### I11 — Deliver the brief, round home and contextual correction
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I05, I06.
 
-**Remaining work:** Integrate later outcome results and saved advice as those backend paths land, then verify the authenticated runtime journey. Contextual UI12b138d and recommendation/delivery UI235441d pass root synthetic checks; real runtime acceptance remains open.
+**Remaining work:** Verify the authenticated runtime journey and minimal-input path on a real pack (B5). All-outcome saved-advice UIbf2f684 integrated; contextual UI12b138d and recommendation/delivery UI235441d pass root synthetic checks; real runtime acceptance remains open.
 
 **Task scope:** Reuse contextual-recovery work. Build the known-answer brief, named Start/Stop/Resume, partial sourced cards, preserved selection and one context-bound instruction/URL/full-text input against stable DTOs. Remove manual source/preference/record forms and inactive navigation. Use stored recommendations supplied by I10 when integrated.
 

@@ -18,13 +18,13 @@ Owner context: Amsterdam; 32 hours/week; at least €4,500 gross/month for the a
 
 - Workspace: `/Users/vince/Projects/find-income` — **not a Git repository**.
 - Git repository: `/Users/vince/Projects/find-income/dashboard`, branch `main`.
-- Last implementation checkpoint on main: `605e172` (recovery controls); documentation checkpoint before this handoff: `2685b1a`.
+- Last implementation checkpoint on main: `605e172` (recovery controls); documentation checkpoint before this handoff: `2685b1a`. Stage A integrated 24 September 2026: `0602dcf` + `94c1cd0` (I10 backend) and `bf2f684` (I10/I11 interface).
 - Root implementation goal is paused. Both implementation workers reported stopped. Do not assume a task's old title/status means work should resume.
 - No deployment, live dashboard Codex login, real inbox connection or employer send has been accepted.
 
 ### Backend ready for integration review
 
-The clean isolated checkout `/private/tmp/find-income-i10-advice` ends at **`8cee343c047251f0e44d937d62215509139140ff`**. Branch **`handoff/i10-cross-outcome`** preserves that commit in the repository, independently of the temporary checkout.
+**Integrated 24 September 2026 as `0602dcf` + `94c1cd0`; the notes below are the preserved pre-integration record.** The clean isolated checkout `/private/tmp/find-income-i10-advice` ends at **`8cee343c047251f0e44d937d62215509139140ff`**. Branch **`handoff/i10-cross-outcome`** preserves that commit in the repository, independently of the temporary checkout.
 
 Apply only these two commits, in order, after checking the correction against the known findings:
 
@@ -42,7 +42,7 @@ Do **not** cherry-pick their ancestor `09bfc01`: it duplicates interview backend
 
 ### Uncommitted interface work to preserve and finish
 
-These eight files are modified on main, unstaged and uncommitted:
+**Integrated 24 September 2026 as `bf2f684`; the notes below are the preserved pre-integration record.** These eight files were modified on main, unstaged and uncommitted:
 
 ```text
 apps/web/src/agency-home.tsx
@@ -63,9 +63,9 @@ They add all-outcome saved-result recovery and five review actions: `review_resu
 
 ### A. Finish the paused integration — first
 
-- [ ] **A1 — Integrate I10 backend. Sol / High.** Review the three corrected findings using the existing reproductions; integrate only the two commits above. Confirm actual Codex tool scope checks accept the current commissioned shape, unavailable Jev preserves useful outcome reports, and local capture recovery settles only its matching Jev attempt without another provider call/charge or resolving an unknown Codex parent. Missing capture remains uncertain. Keep generated contracts consistent.
-- [ ] **A2 — Finish I10/I11 interface integration. Sol / Medium.** Review the eight preserved files against the integrated contract. Check all nine action destinations, fresh-browser non-discovery recovery, recorded failed delivery, currentness refusal, exact interview/debrief/comparison targets and read-only reload. `review_result` has an omitted zero revision; interview/debrief targets use `updatedAt`. Preserve exact offer arithmetic, pending-request identity and the committed rejection/recovery fixes. Use focused tests, then commit the verified paths.
-- [ ] **A3 — Reconcile tracking. Coordinator or Luna / Low.** Record the resulting commits and actual checks in this document, `implementation-tasks.md`, `task-graph.json` and `task-list-check.json`. Keep I10/I11 partial until real usefulness/authenticated operation is demonstrated. Do not mark everything accepted merely because local tests pass.
+- [x] **A1 — Integrate I10 backend. Sol / High.** Done 24 September 2026 as `0602dcf` (149c616) + `94c1cd0` (8cee343); ancestor `09bfc01` not cherry-picked. Verified: full `go test ./... -count=1` green; all four `TestReviewI10` reproductions (campaign-scope tools, nil provider, both captured-advice Resume paths) pass on main via remapped overlay; focused Outcome/Recommendation suites pass; `git diff --check`, Go `check-generated.sh` and contracts `check:generated` pass. No live provider calls.
+- [x] **A2 — Finish I10/I11 interface integration. Sol / Medium.** Done 24 September 2026 as `bf2f684` (the eight preserved paths, no rewrite). Verified: client target shapes match the integrated backend contract (`review_result` omitted zero revision, comparison revision 1 + input SHA, delivery recorded count, interview/debrief `updatedAt`); `pnpm --filter @jobseek/web lint` (vp check + tsc) passes; focused Chromium recommendation smoke passes (outcome=all recovery, nine actions, exact destinations, failed delivery, currentness refusal, unresolved advice, read-only reload with zero POSTs). Full browser suite deliberately not repeated. Offer arithmetic, pending-request identity and 605e172 rejection/recovery behavior preserved.
+- [x] **A3 — Reconcile tracking. Coordinator or Luna / Low.** Done 24 September 2026: commits and checks recorded here and in `implementation-tasks.md`, `task-graph.json`, `task-list-check.json`. I10/I11 stay partial until real usefulness/authenticated operation is demonstrated.
 
 ### B. Reach the first useful job-search result — critical path
 
@@ -102,8 +102,8 @@ This accounts for every original task. Detailed scope remains in [implementation
 | I07 | Partial | B4: real incremental collection, identity/reuse/refresh/continuation. |
 | I08 | Partial | B4: real official opening beyond seed employers. |
 | I09 | Accepted helper slice | Preserve factual/output checks; new semantic classes get their own evidence. |
-| I10 | Partial | A1–A2, B4, C4: integrate paused advice and verify real decisions/usefulness. |
-| I11 | Partial | A2, B5: integrated saved advice and authenticated minimal-input journey. |
+| I10 | Partial | A1–A2 integrated (`0602dcf`, `94c1cd0`, `bf2f684`); B4, C4: verify real decisions/usefulness. |
+| I11 | Partial | A2 integrated (`bf2f684`); B5: authenticated minimal-input journey. |
 | I12 | Partial | B1–B3: actual selected-host deployment, private transport and login. |
 | I13 | Partial | B3: actual host containment/authority evidence; offline discovery/native findings already rechecked. |
 | I14 | Partial | B4: real bounded discovery and worthwhile results, beyond isolated Jev reference calls. |
