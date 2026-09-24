@@ -1208,3 +1208,361 @@ CREATE TABLE reply_drafts (
   updated_at TEXT NOT NULL,
   UNIQUE(processing_id)
 );
+
+-- Research storage foundation (T07 lane C; frozen per T06 contract §§1-6,
+-- T03 §1 as corrected by D-input C1-C8). Actor-owned rows carry
+-- (actor_kind, actor_id) per T03 conventions. source_captures rows are
+-- content-addressed stateless-reusable artifacts shared across actors, so
+-- they carry no actor columns; run_events/run_checkpoints scope via rounds.
+CREATE TABLE source_captures (
+  id TEXT PRIMARY KEY,
+  content_sha256 TEXT NOT NULL CHECK (length(content_sha256) = 64),
+  artifact_ref TEXT NOT NULL CHECK (length(artifact_ref) > 0),
+  byte_length INTEGER NOT NULL CHECK (byte_length >= 0),
+  media_type TEXT NOT NULL DEFAULT '',
+  http_status INTEGER,
+  original_url TEXT,
+  final_url TEXT,
+  redirect_chain_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(redirect_chain_json)),
+  retrieved_at TEXT NOT NULL,
+  provenance_kind TEXT NOT NULL CHECK (provenance_kind IN
+    ('fetched_response','rendered_dom','search_result','owner_statement')),
+  completeness TEXT NOT NULL CHECK (completeness IN
+    ('complete','truncated','paginated','partial')),
+  extent_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extent_json)),
+  executor_identity_json TEXT NOT NULL CHECK (json_valid(executor_identity_json)),
+  role_id TEXT,
+  is_snippet INTEGER NOT NULL DEFAULT 0 CHECK (is_snippet IN (0,1)),
+  created_at TEXT NOT NULL
+);
+CREATE INDEX source_captures_content_idx ON source_captures(content_sha256);
+CREATE INDEX source_captures_url_history_idx ON source_captures(original_url, retrieved_at);
+CREATE TRIGGER source_captures_no_update BEFORE UPDATE ON source_captures
+BEGIN SELECT RAISE(ABORT,'source captures are immutable'); END;
+CREATE TRIGGER source_captures_no_delete BEFORE DELETE ON source_captures
+BEGIN SELECT RAISE(ABORT,'source captures are immutable'); END;
+
+CREATE TABLE research_requests (
+  id TEXT PRIMARY KEY,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  fingerprint TEXT NOT NULL CHECK (length(fingerprint) = 64),
+  request_json TEXT NOT NULL CHECK (json_valid(request_json)),
+  cache_scope TEXT NOT NULL CHECK (cache_scope IN
+    ('stateless_reusable','stateful_context_bound')),
+  state TEXT NOT NULL CHECK (state IN
+    ('free','claimed','fresh','stale','exhausted','uncertain')),
+  lease_owner TEXT,
+  lease_generation INTEGER CHECK (lease_generation IS NULL OR lease_generation > 0),
+  lease_until TEXT,
+  latest_observation_id TEXT REFERENCES research_observations(id),
+  latest_capture_id TEXT REFERENCES source_captures(id),
+  fresh_until TEXT,
+  negative_until TEXT,
+  refresh_reason TEXT CHECK (refresh_reason IS NULL OR refresh_reason IN
+    ('stale','changed_source','coverage_gap','owner_correction')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(actor_kind, actor_id, fingerprint),
+  CHECK ((state = 'claimed' AND lease_owner IS NOT NULL AND
+      lease_generation IS NOT NULL AND lease_until IS NOT NULL)
+    OR (state <> 'claimed' AND lease_owner IS NULL AND
+      lease_generation IS NULL AND lease_until IS NULL))
+);
+CREATE UNIQUE INDEX research_requests_live_claim_idx ON
+  research_requests(actor_kind, actor_id, fingerprint) WHERE state = 'claimed';
+CREATE INDEX research_requests_actor_updated_idx ON
+  research_requests(actor_kind, actor_id, updated_at);
+CREATE INDEX research_requests_expiry_idx ON research_requests(state, lease_until);
+CREATE INDEX research_requests_latest_capture_idx ON research_requests(latest_capture_id);
+
+CREATE TABLE research_observations (
+  id TEXT PRIMARY KEY,
+  request_id TEXT NOT NULL REFERENCES research_requests(id),
+  attempt_no INTEGER NOT NULL CHECK (attempt_no > 0),
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  round_attempt_id TEXT REFERENCES round_attempts(id),
+  operation TEXT NOT NULL CHECK (operation IN
+    ('search','fetch','browser_action','api_call','exec')),
+  actual_url_or_query TEXT NOT NULL,
+  actual_params_json TEXT CHECK (actual_params_json IS NULL OR json_valid(actual_params_json)),
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  outcome TEXT NOT NULL CHECK (outcome IN
+    ('success','empty','blocked','failed','rate_limited','uncertain','late')),
+  provenance_kind TEXT NOT NULL CHECK (provenance_kind IN
+    ('fetched_response','rendered_dom','search_result','owner_statement','model_note')),
+  receipt_ref TEXT,
+  executor_identity_json TEXT CHECK
+    (executor_identity_json IS NULL OR json_valid(executor_identity_json)),
+  capture_id TEXT REFERENCES source_captures(id),
+  error_code TEXT NOT NULL DEFAULT '',
+  truncation_note TEXT NOT NULL DEFAULT '',
+  is_late INTEGER NOT NULL DEFAULT 0 CHECK (is_late IN (0,1)),
+  created_at TEXT NOT NULL,
+  UNIQUE(request_id, attempt_no),
+  CHECK (capture_id IS NOT NULL OR outcome IN
+    ('empty','blocked','failed','rate_limited','uncertain'))
+);
+CREATE INDEX research_observations_capture_idx ON research_observations(capture_id);
+CREATE INDEX research_observations_round_idx ON research_observations(round_id, created_at);
+CREATE TRIGGER research_observations_no_update BEFORE UPDATE ON research_observations
+BEGIN SELECT RAISE(ABORT,'research observations are immutable'); END;
+CREATE TRIGGER research_observations_no_delete BEFORE DELETE ON research_observations
+BEGIN SELECT RAISE(ABORT,'research observations are immutable'); END;
+
+CREATE TABLE research_notes (
+  id TEXT PRIMARY KEY,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  brief_profile_version INTEGER NOT NULL CHECK (brief_profile_version > 0),
+  brief_rubric_version TEXT NOT NULL,
+  intent TEXT NOT NULL CHECK (length(trim(intent)) > 0),
+  usefulness_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(usefulness_json)),
+  coverage_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(coverage_json)),
+  overlap_refs_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(overlap_refs_json)),
+  conclusion TEXT NOT NULL DEFAULT '',
+  evidence_refs_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(evidence_refs_json)),
+  outstanding_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(outstanding_json)),
+  supersedes_id TEXT REFERENCES research_notes(id),
+  created_at TEXT NOT NULL
+);
+CREATE INDEX research_notes_round_idx ON research_notes(round_id, created_at);
+CREATE UNIQUE INDEX research_note_successor_idx ON research_notes(supersedes_id)
+  WHERE supersedes_id IS NOT NULL;
+CREATE VIRTUAL TABLE research_notes_fts USING
+  fts5(intent, coverage, conclusion, content='research_notes', content_rowid='rowid',
+  tokenize='unicode61');
+CREATE TRIGGER research_notes_fts_insert AFTER INSERT ON research_notes
+BEGIN
+  INSERT INTO research_notes_fts(rowid, intent, coverage, conclusion)
+  VALUES (NEW.rowid, NEW.intent, NEW.coverage_json, NEW.conclusion);
+END;
+CREATE TRIGGER research_notes_fts_delete AFTER DELETE ON research_notes
+BEGIN
+  INSERT INTO research_notes_fts(research_notes_fts, rowid, intent, coverage, conclusion)
+  VALUES ('delete', OLD.rowid, OLD.intent, OLD.coverage_json, OLD.conclusion);
+END;
+CREATE TRIGGER research_notes_fts_update AFTER UPDATE ON research_notes
+BEGIN
+  INSERT INTO research_notes_fts(research_notes_fts, rowid, intent, coverage, conclusion)
+  VALUES ('delete', OLD.rowid, OLD.intent, OLD.coverage_json, OLD.conclusion);
+  INSERT INTO research_notes_fts(rowid, intent, coverage, conclusion)
+  VALUES (NEW.rowid, NEW.intent, NEW.coverage_json, NEW.conclusion);
+END;
+
+-- D §1.1 with corrections C1-C4: candidate entries carry kind+revision, the
+-- set hash is canonical, decision=same names exactly one chosen target plus
+-- its revision, distinguishing refs feed explanation/audit, and identity is
+-- brief-independent by design (no brief_version column).
+CREATE TABLE identity_decisions (
+  id TEXT PRIMARY KEY,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  subject_kind TEXT NOT NULL CHECK (subject_kind IN ('employer','vacancy')),
+  observation_refs_json TEXT NOT NULL CHECK (json_valid(observation_refs_json)),
+  candidate_ids_json TEXT NOT NULL CHECK (json_valid(candidate_ids_json)),
+  candidate_set_hash TEXT NOT NULL CHECK (length(candidate_set_hash) = 64),
+  decision TEXT NOT NULL CHECK (decision IN ('same','new','unresolved')),
+  decision_basis TEXT NOT NULL DEFAULT '',
+  subject_company_id TEXT REFERENCES companies(id),
+  subject_opportunity_id TEXT REFERENCES opportunities(id),
+  subject_revision INTEGER CHECK (subject_revision IS NULL OR subject_revision > 0),
+  distinguishing_refs_json TEXT NOT NULL DEFAULT '[]'
+    CHECK (json_valid(distinguishing_refs_json)),
+  brief_independent INTEGER NOT NULL DEFAULT 1 CHECK (brief_independent IN (0,1)),
+  jev_assessment_id TEXT REFERENCES jev_assessments_dynamic(id),
+  supersedes_id TEXT REFERENCES identity_decisions(id),
+  created_at TEXT NOT NULL,
+  CHECK ((decision = 'same' AND
+      ((subject_company_id IS NOT NULL AND subject_opportunity_id IS NULL) OR
+       (subject_company_id IS NULL AND subject_opportunity_id IS NOT NULL)) AND
+      subject_revision IS NOT NULL)
+    OR (decision <> 'same' AND subject_company_id IS NULL AND
+      subject_opportunity_id IS NULL AND subject_revision IS NULL))
+);
+CREATE INDEX identity_decisions_subject_idx ON
+  identity_decisions(subject_kind, decision, created_at);
+CREATE INDEX identity_decisions_assessment_idx ON identity_decisions(jev_assessment_id);
+CREATE INDEX identity_decisions_candidate_set_idx ON identity_decisions(candidate_set_hash);
+CREATE INDEX identity_decisions_round_idx ON identity_decisions(round_id);
+
+-- D §1.2 with corrections C5-C8: strong-key uniqueness is a partial index
+-- over current rows only, namespaces are open (shape-validated, never
+-- membership-checked), reuse writes a superseding row (never overwrites),
+-- and the record link is a split company/opportunity FK pair.
+CREATE TABLE entity_identity_keys (
+  id TEXT PRIMARY KEY,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  entity_kind TEXT NOT NULL CHECK (entity_kind IN ('employer','vacancy')),
+  namespace TEXT NOT NULL CHECK (length(namespace) BETWEEN 1 AND 128 AND
+    namespace NOT GLOB '*[^_a-z0-9:.-]*'),
+  key_value TEXT NOT NULL CHECK (length(key_value) BETWEEN 1 AND 1024),
+  strength TEXT NOT NULL CHECK (strength IN ('strong','alias')),
+  company_id TEXT REFERENCES companies(id),
+  opportunity_id TEXT REFERENCES opportunities(id),
+  evidence_refs_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(evidence_refs_json)),
+  status TEXT NOT NULL DEFAULT 'current' CHECK (status IN ('current','superseded')),
+  supersedes_id TEXT REFERENCES entity_identity_keys(id),
+  created_at TEXT NOT NULL,
+  CHECK ((company_id IS NOT NULL AND opportunity_id IS NULL) OR
+    (company_id IS NULL AND opportunity_id IS NOT NULL))
+);
+CREATE UNIQUE INDEX entity_identity_strong_unique ON
+  entity_identity_keys(namespace, key_value)
+  WHERE strength = 'strong' AND status = 'current';
+CREATE INDEX entity_identity_company_idx ON entity_identity_keys(company_id);
+CREATE INDEX entity_identity_opportunity_idx ON entity_identity_keys(opportunity_id);
+CREATE INDEX entity_identity_lookup_idx ON entity_identity_keys(namespace, key_value);
+
+-- D §2.2: queryable binding over one jev_attempts row (reused verbatim).
+CREATE TABLE jev_assessments_dynamic (
+  id TEXT PRIMARY KEY,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  jev_attempt_id TEXT NOT NULL UNIQUE REFERENCES jev_attempts(id),
+  purpose TEXT NOT NULL CHECK (length(trim(purpose)) > 0),
+  questions_json TEXT NOT NULL CHECK (json_valid(questions_json)),
+  evidence_refs_json TEXT NOT NULL CHECK (json_valid(evidence_refs_json)),
+  profile_version INTEGER NOT NULL CHECK (profile_version > 0),
+  rubric_version TEXT NOT NULL,
+  candidates_json TEXT NOT NULL CHECK (json_valid(candidates_json)),
+  candidate_set_hash TEXT NOT NULL CHECK (length(candidate_set_hash) = 64),
+  requested_model TEXT,
+  reuse_key TEXT NOT NULL CHECK (length(reuse_key) = 64),
+  status TEXT NOT NULL CHECK (status IN
+    ('succeeded','partial_abstain','invalid_response','failed')),
+  answers_json TEXT NOT NULL CHECK (json_valid(answers_json)),
+  supersedes_id TEXT REFERENCES jev_assessments_dynamic(id),
+  created_at TEXT NOT NULL,
+  UNIQUE(actor_kind, actor_id, reuse_key)
+);
+CREATE INDEX jev_dynamic_round_idx ON jev_assessments_dynamic(round_id);
+CREATE INDEX jev_dynamic_brief_idx ON
+  jev_assessments_dynamic(actor_kind, actor_id, profile_version);
+CREATE INDEX jev_dynamic_candidate_set_idx ON jev_assessments_dynamic(candidate_set_hash);
+CREATE TRIGGER jev_assessments_dynamic_no_update BEFORE UPDATE ON jev_assessments_dynamic
+BEGIN SELECT RAISE(ABORT,'dynamic assessments are immutable'); END;
+CREATE TRIGGER jev_assessments_dynamic_no_delete BEFORE DELETE ON jev_assessments_dynamic
+BEGIN SELECT RAISE(ABORT,'dynamic assessments are immutable'); END;
+
+-- D §2.3: indexed assessment<->capture join (brief-change invalidation and
+-- evidence-integrity walks must not scan JSON).
+CREATE TABLE jev_assessment_captures (
+  assessment_id TEXT NOT NULL REFERENCES jev_assessments_dynamic(id),
+  capture_id TEXT NOT NULL, -- content sha256; resolved via content lookup, verified against bytes at write time
+  span_start INTEGER NOT NULL CHECK (span_start >= 0),
+  span_end INTEGER NOT NULL CHECK (span_end > span_start),
+  PRIMARY KEY (assessment_id, capture_id, span_start, span_end)
+);
+CREATE INDEX jev_assessment_captures_by_capture ON
+  jev_assessment_captures(capture_id, assessment_id);
+CREATE TRIGGER jev_assessment_captures_no_update BEFORE UPDATE ON jev_assessment_captures
+BEGIN SELECT RAISE(ABORT,'assessment capture links are immutable'); END;
+CREATE TRIGGER jev_assessment_captures_no_delete BEFORE DELETE ON jev_assessment_captures
+BEGIN SELECT RAISE(ABORT,'assessment capture links are immutable'); END;
+
+-- D §3.1: immutable sighting home for research-saved records. The ingestion
+-- path keeps its own source_sightings table; the two never share rows.
+CREATE TABLE record_sightings (
+  id TEXT PRIMARY KEY,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  company_id TEXT REFERENCES companies(id),
+  opportunity_id TEXT REFERENCES opportunities(id),
+  capture_id TEXT NOT NULL, -- content sha256; resolved via content lookup, verified against bytes at write time
+  observed_url TEXT,
+  final_url TEXT,
+  content_sha256 TEXT NOT NULL CHECK (length(content_sha256) = 64),
+  sighting_kind TEXT NOT NULL CHECK (sighting_kind IN
+    ('first','unchanged','changed','reused_identifier')),
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  CHECK ((company_id IS NOT NULL AND opportunity_id IS NULL) OR
+    (company_id IS NULL AND opportunity_id IS NOT NULL))
+);
+CREATE INDEX record_sightings_opportunity_idx ON
+  record_sightings(opportunity_id, observed_at);
+CREATE INDEX record_sightings_company_idx ON record_sightings(company_id, observed_at);
+CREATE INDEX record_sightings_capture_idx ON record_sightings(capture_id);
+CREATE INDEX record_sightings_content_idx ON record_sightings(content_sha256);
+CREATE TRIGGER record_sightings_no_update BEFORE UPDATE ON record_sightings
+BEGIN SELECT RAISE(ABORT,'record sightings are immutable'); END;
+CREATE TRIGGER record_sightings_no_delete BEFORE DELETE ON record_sightings
+BEGIN SELECT RAISE(ABORT,'record sightings are immutable'); END;
+
+-- T06 §5 event envelope. kind stays an open string: research kinds are
+-- frozen by the contract but B adds run/turn/steering kinds at T08/T13.
+-- outcome values are the frozen §8 shared codes.
+CREATE TABLE run_events (
+  event_id TEXT PRIMARY KEY,
+  round_id TEXT NOT NULL REFERENCES rounds(id),
+  attempt_id TEXT REFERENCES round_attempts(id),
+  kind TEXT NOT NULL CHECK (length(trim(kind)) BETWEEN 1 AND 64),
+  request_fingerprint TEXT,
+  observation_id TEXT REFERENCES research_observations(id),
+  capture_id TEXT REFERENCES source_captures(id),
+  outcome TEXT CHECK (outcome IS NULL OR outcome IN ('ok','reused','claimed_elsewhere',
+    'stale','revision_conflict','identity_ambiguous','capture_incomplete',
+    'budget_exhausted','stopped','rate_limited','outcome_uncertain','invalid',
+    'conflict','forbidden','not_found')),
+  payload_json TEXT CHECK (payload_json IS NULL OR json_valid(payload_json)),
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL
+);
+CREATE INDEX run_events_round_idx ON run_events(round_id, recorded_at, event_id);
+CREATE INDEX run_events_kind_idx ON run_events(round_id, kind, recorded_at);
+CREATE TRIGGER run_events_no_update BEFORE UPDATE ON run_events
+BEGIN SELECT RAISE(ABORT,'run events are immutable'); END;
+CREATE TRIGGER run_events_no_delete BEFORE DELETE ON run_events
+BEGIN SELECT RAISE(ABORT,'run events are immutable'); END;
+
+-- T06 §5 checkpoint: one mutable row per run, upserted by the supervisor.
+-- remaining_allowance_json stays the opaque B struct.
+CREATE TABLE run_checkpoints (
+  round_id TEXT PRIMARY KEY REFERENCES rounds(id),
+  profile_version INTEGER NOT NULL CHECK (profile_version > 0),
+  rubric_version TEXT NOT NULL,
+  active_claims_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(active_claims_json)),
+  evidence_ids_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(evidence_ids_json)),
+  saved_record_ids_json TEXT NOT NULL DEFAULT '[]'
+    CHECK (json_valid(saved_record_ids_json)),
+  unresolved_attempts_json TEXT NOT NULL DEFAULT '[]'
+    CHECK (json_valid(unresolved_attempts_json)),
+  remaining_allowance_json TEXT CHECK
+    (remaining_allowance_json IS NULL OR json_valid(remaining_allowance_json)),
+  next_work_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(next_work_json)),
+  generation INTEGER NOT NULL CHECK (generation > 0),
+  updated_at TEXT NOT NULL
+);
+
+-- D §3.3: broad candidate retrieval indexes on existing tables. Full text
+-- broadens, never decides.
+CREATE INDEX companies_name_idx ON companies(name);
+CREATE INDEX opportunities_title_idx ON opportunities(title);
+CREATE VIRTUAL TABLE opportunities_fts USING
+  fts5(title, location_text, content='opportunities', content_rowid='rowid',
+  tokenize='unicode61');
+CREATE TRIGGER opportunities_fts_insert AFTER INSERT ON opportunities
+BEGIN
+  INSERT INTO opportunities_fts(rowid, title, location_text)
+  VALUES (NEW.rowid, NEW.title, NEW.location_text);
+END;
+CREATE TRIGGER opportunities_fts_delete AFTER DELETE ON opportunities
+BEGIN
+  INSERT INTO opportunities_fts(opportunities_fts, rowid, title, location_text)
+  VALUES ('delete', OLD.rowid, OLD.title, OLD.location_text);
+END;
+CREATE TRIGGER opportunities_fts_update AFTER UPDATE ON opportunities
+BEGIN
+  INSERT INTO opportunities_fts(opportunities_fts, rowid, title, location_text)
+  VALUES ('delete', OLD.rowid, OLD.title, OLD.location_text);
+  INSERT INTO opportunities_fts(rowid, title, location_text)
+  VALUES (NEW.rowid, NEW.title, NEW.location_text);
+END;
