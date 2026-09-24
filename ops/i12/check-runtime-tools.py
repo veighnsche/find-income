@@ -53,9 +53,11 @@ def check_config(config, *, deployed):
     } or policy["network"] != {"enabled": False}:
         raise SystemExit("runner native filesystem/network boundary differs")
     servers = config["mcp_servers"]
-    if set(servers) != {"jobseek"} or set(servers["jobseek"]) != {"url", "required", "enabled_tools", "http_headers"}:
+    if set(servers) != {"jobseek"} or set(servers["jobseek"]) != {"url", "required", "default_tools_approval_mode", "enabled_tools", "http_headers"}:
         raise SystemExit("required jobseek MCP settings differ")
     bridge = servers["jobseek"]
+    if bridge["default_tools_approval_mode"] != "approve":
+        raise SystemExit("jobseek MCP tools must run without native approval prompts")
     url = urlparse(bridge["url"])
     if url.scheme != "https" or not url.hostname or url.username or url.password or url.path != "/api/v1/codex/mcp" or url.query or url.fragment or bridge["required"] is not True or set(bridge["enabled_tools"]) != required or len(bridge["enabled_tools"]) != len(required):
         raise SystemExit("required private jobseek MCP route/tool list differs")
