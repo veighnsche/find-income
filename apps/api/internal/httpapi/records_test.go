@@ -51,7 +51,9 @@ func (h *recordHTTP) do(method, path, body, bearer, csrf, requestOrigin string, 
 	if bearer != "" {
 		request.Header.Set("Authorization", "Bearer "+bearer)
 	}
-	if len(capability) > 0 { request.Header.Set("X-Round-Capability",capability[0]) }
+	if len(capability) > 0 {
+		request.Header.Set("X-Round-Capability", capability[0])
+	}
 	if csrf != "" {
 		request.Header.Set("X-CSRF-Token", csrf)
 	}

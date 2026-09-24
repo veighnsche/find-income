@@ -16,8 +16,8 @@ func ingestionModel(item store.IngestionRequest) generated.IngestionRequest {
 		Status: generated.IngestionRequestStatus(item.Status), JobId: item.JobID,
 		JobState:        generated.IngestionRequestJobState(item.JobState),
 		AttemptsStarted: item.AttemptsStarted,
-		OpportunityId: nonemptyString(item.OpportunityID),
-		RecordChangeId: nonemptyString(item.RecordChangeID), SafeErrorCode: nonemptyString(item.SafeErrorCode),
+		OpportunityId:   nonemptyString(item.OpportunityID),
+		RecordChangeId:  nonemptyString(item.RecordChangeID), SafeErrorCode: nonemptyString(item.SafeErrorCode),
 		CreatedAt: recordedTime(item.CreatedAt), UpdatedAt: recordedTime(item.UpdatedAt),
 	}
 }
