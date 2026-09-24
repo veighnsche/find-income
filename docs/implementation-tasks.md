@@ -1,8 +1,10 @@
 # Recruitment agency — full task list and concurrent execution guide
 
-Updated 24 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the active completion goal. Current ownership, reviewed checkpoints and remaining acceptance are recorded below; historical test passes do not establish completion of the evolving worktree.
+Updated 24 September 2026. The full I01–I27 list implements the [implementation plan](/Users/vince/Projects/find-income/dashboard-implementation-plan.md) under the currently paused completion goal. Current ownership, reviewed checkpoints and remaining acceptance are recorded below; historical test passes do not establish completion of the evolving worktree.
 
-**Current position: 5 tasks accepted, 18 partial, 4 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20–I22, I24–I27. I10 advice is being corrected after authority review, I27 UI corrections are committed605e172, and current-schema recovery is committed; interview and offer backend/UI slices are reviewed and committed. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Handoff:** Start with [remaining-work.md](remaining-work.md) for the complete ordered remaining checklist, preserved commits/files, missing inputs and economical concurrency. Implementation is paused; historical dispatch schedules below are not instructions to restart tasks.
+
+**Current position: 5 tasks accepted, 18 partial, 4 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20–I22, I24–I27. I10 corrected backend awaits integration and its interface edits remain uncommitted; I27 recovery controls and current-schema recovery are committed; interview and offer backend/UI slices are reviewed and committed. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -26,20 +28,14 @@ Use **one coordinator plus up to four independent live implementation tasks**. F
 
 Dependencies in the task index gate **full integration and acceptance**. They do not prohibit an explicitly named independent slice from coding against an agreed narrow interface. A worker must have useful owned code to change, not an instruction to wait and repeatedly check another task. When a worker finishes, review its result and immediately dispatch the next ready slice; do not wait for an entire batch to finish.
 
-### Current live assignments
+### Paused handoff state
 
-**Budget priority:** preserve remaining tokens for actual job search. Finish the two active I10 slices, reuse worker verification, and run additional checks or review only for a concrete unresolved risk. No speculative features or routine duplicate audits; prioritise the usable deployment path.
+The owner stopped implementation to preserve tokens for actual job search. No workers are active. [remaining-work.md](remaining-work.md) is the current execution handoff and supersedes historical dispatch instructions below.
 
-| Task | Model / reasoning | Owned work |
-| --- | --- | --- |
-| I10 cross-outcome advice | Sol High correction; Astra Medium recheck | Correct actual tool scope rejection, nil-provider finalization and captured-advice Resume in the isolated checkout; stable action/target contract supports the next web slice. |
-| I26 current-schema recovery | Sol Medium | Reviewed and committedc1f3c83/ff8777c; seven root recovery tests pass. Writer idle; actual host recovery remains pending. |
-| I10 saved-advice navigation | Sol Medium | Main web/smoke: connect the stable cross-outcome advice contract to existing exact-record views and latest-result recovery. |
-| Independent authority review | Astra Medium | Three I10 defects reproduced; reviewer idle until bounded correction recheck. |
-
-The main backend checkpoint is **c85a617**, and the web checkpoint is **c8ec6e6**. Interview preparation/debrief and whole-offer comparisons are integrated alongside discovery, contextual input, application packs and reviewed delivery controls. Root verified the combined Go suite and generated contracts, then the affected checks after narrow replay/identity corrections. Browser validation covers the full synthetic journey plus the corrected offer numeric parser and readable exact pay. Independent recovery/integration reviews closed the recorded findings; root matched all15 final interview review hashes before commit. These checks establish local implementation evidence, not live recruitment acceptance.
-
-I10 commit149c616 adds saved next-action advice beyond discovery in its isolated checkout. Review reproduced three defects in real tool scope validation, unavailable-provider finalization and captured-advice Resume; Sol High corrections precede integration. The owner explicitly limited offer/delivery next-action requests to bounded result facts, excluding message bodies, recipients and raw offer text; this restriction does not change the separately authorised detailed per-outcome assessments. Advice quality must be evaluated within that disclosed context limit. I27 corrections are committed605e172 after root lint and full browser checks passed; two observed test timing failures were corrected. The web task now connects cross-outcome advice to existing record views. Current-schema recovery is reviewed and committedc1f3c83/ff8777c, including interrupted delivery uncertainty and material digest checks; seven root tests pass. Other interview/offer writers are idle. One writer per physical checkout/path remains enforced; shared changes are integrated directly with no compatibility paths.
+- Backend advice commits `149c616` and corrective `8cee343` are unmerged, preserved on `handoff/i10-cross-outcome`; isolated checkout `/private/tmp/find-income-i10-advice` is clean. Do not cherry-pick ancestor `09bfc01`, which duplicates already-integrated interview work.
+- Eight web/smoke files remain uncommitted on main. Preserve them; finish only their required integration/review after the owner resumes work.
+- Main recovery controls `605e172` passed root lint and full synthetic browser checks. Current-schema recovery `c1f3c83`/`ff8777c` passed seven root tests. Actual live acceptance remains open.
+- The owner limits offer/delivery cross-outcome Jev context to bounded result facts; no raw offer text, recipients or message bodies. Interview content/derived hashes remain local in that path. Do not claim semantic usefulness from metadata-only fixtures.
 
 Live host/account, usable research capability, inbox and exact delivery inputs remain unresolved. Native boundary code/configuration is reviewed, including the twelve-tool runtime/template/probe consistency check, but selected-host sign-in and containment are unverified. Real discovery→selection→pack acceptance (I16), actual interview/offer usefulness and the owner walkthrough remain open.
 
@@ -267,7 +263,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Sol / High · Dependencies: I05, I07, I08, I09.
 
-**Remaining work:** Extend saved next-action generation beyond discovery to each implemented outcome, using explicit commissioned scope and only supported actions, then verify real usefulness. Discovery advice/currentness/latest retrieval are committed d9679af; four candidate actions do not establish cross-outcome integration.
+**Remaining work:** Integrate preserved backend149c616/8cee343 and the eight uncommitted web files using remaining-work.md, then verify actual decision usefulness. Do not reimplement the completed isolated slice.
 
 **Task scope:** Integrate durable assessments and bounded candidate selection with the controller and acquisition services. Include organisation, factual scope, lead/research priority and next useful implemented outcome. Persist full request/response, versions, options, source support and usage; treat facts and require/avoid/prefer policy separately.
 
@@ -307,7 +303,7 @@ A handoff states exact paths/signatures, current edits, expected behavior and th
 
 - [ ] **Partial** · GPT-6 Astra / High · Dependencies: I05, I06, I07, I10, I11, I12.
 
-**Remaining work:** Review new substantial-discovery authority/recovery changes, then actual selected-host/account isolation evidence. Earlier core findings were corrected at7310026 and native boundary reviewed at a22afa7; live acceptance remains open.
+**Remaining work:** Verify actual selected-host/account isolation evidence and only materially changed authority boundaries. Existing substantial-discovery, core and native-boundary findings have correction rechecks; do not repeat those audits by default.
 
 **Task scope:** Use a fresh bounded reviewer context: requirements, exact diff, interfaces and raw test evidence, without implementer conclusions. Review authority, limits, idle/restart behaviour, runner containment and uncertain dispatch. Read-only; report actionable failures with a reproduction or exact violated invariant.
 
@@ -338,7 +334,7 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 - [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I05, I06, I09, I11.
 
-**Remaining work:** Finish contextual correction for an existing pack, review integrated web flow and validate a real selected-role pack in I16.
+**Remaining work:** Validate the existing contextual pack correction and integrated web flow with a real selected-role pack in I16; correction implementation is already present.
 
 **Task scope:** Import only the existing approved source assets needed for one pack. Inspect the selected role’s actual route and required questions, use separately reviewed Jev requirement/asset relevance, generate answers and compile/render a Typst PDF. Store immutable sources, answers, destination, attachments and material versions; show review and contextual correction.
 

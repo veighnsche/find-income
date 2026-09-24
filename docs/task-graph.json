@@ -188,18 +188,20 @@
       "status": "partial",
       "thread_id": "01a0cf13-2c03-73f2-b074-6c73d7120ebe",
       "host_id": "local",
-      "active_slice": "Sol High corrects three actual authority/recovery defects from independent149c616 review before integration and UI",
+      "active_slice": "Stopped: backend149c616/8cee343 unmerged; web edits uncommitted",
       "active_model": "gpt-6-sol",
       "active_effort": "high",
-      "review": "Independent Astra Medium review reproduced actual Codex scope rejection, nil-provider panic, and complete next-outcome capture stuck at Service.Resume; correction required.",
-      "remaining_work": "Extend saved next-action generation beyond discovery to each implemented outcome, using explicit commissioned scope and only supported actions, then verify real usefulness. Discovery advice/currentness/latest retrieval are committed d9679af; four candidate actions do not establish cross-outcome integration.",
+      "review": "Original149c616 review found three defects; corrective8cee343 worker reports full Go and independent overlay passing. Final integration review pending.",
+      "remaining_work": "Integrate preserved corrected backend and UI, verify affected boundaries once, then real semantic usefulness; see remaining-work.md.",
       "worktree": "/private/tmp/find-income-i10-advice",
       "worktree_base": "09bfc01",
       "active_selection_reason": "Cross-file outcome reports, explicit commission authority, immutable Jev replay and pure currentness integration; isolated checkout protects concurrent interview/backend and web work.",
       "owner_context_constraint": "Direct owner reply in task01a0cf13-2c03-73f2-b074-6c73d7120ebe authorises bounded offer/delivery result facts only for cross-outcome advice, excluding message bodies, recipients and raw offer text. No full semantic-quality claim from metadata alone.",
       "review_thread_id": "01a0ce8e-4c6e-7c93-b63c-1084063ba7c0",
       "ui_thread_id": "01a0ce8f-6bf3-7320-8111-75ac34379aa8",
-      "ui_active_slice": "Minimal cross-outcome saved advice navigation, Sol Medium"
+      "ui_active_slice": "Stopped with eight preserved uncommitted web/smoke files",
+      "worktree_head": "8cee343c047251f0e44d937d62215509139140ff",
+      "handoff_branch": "handoff/i10-cross-outcome"
     },
     {
       "id": "I11",
@@ -264,7 +266,7 @@
       "acceptance": "Coordinator resolves findings and the reviewer verifies only changed/problematic boundaries. No live discovery acceptance until consequential boundary issues are resolved. Do not repeat an unlimited repository audit or broadly retest unchanged code.",
       "selection_reason": "This is the concentrated security-sensitive review; Astra High is justified here rather than for every implementation task.",
       "status": "partial",
-      "remaining_work": "Review new substantial-discovery authority/recovery changes, then actual selected-host/account isolation evidence. Earlier core findings were corrected at7310026 and native boundary reviewed at a22afa7; live acceptance remains open.",
+      "remaining_work": "Actual selected-host/account containment and only new materially changed boundaries; prior core/discovery/native code findings have correction rechecks.",
       "active_slice": "Discovery correction recheck complete; live host boundary remains",
       "review": "All3 substantial-discovery findings closed in bounded independent recheck; measured10000-token/24KiB envelope checks pass. Root full Go suite passes on the integrated frozen snapshot. Actual selected-host/account isolation remains open.",
       "thread_id": "01a0cfc1-3fa3-7371-ad63-26f41a796309",
@@ -314,7 +316,7 @@
       "acceptance": "With a sourced fixture, produce an inspectable PDF/answers with no false tenure or employment labels, no asset-entry form and no sent event. Source every claim; missing required personal facts are asked only after checking existing material. No general library, portfolio rebuild or multi-pack prerequisite. I16 supplies the real selected role.",
       "selection_reason": "Existing Typst/assets and established API make a one-pack vertical slice Sol Medium; implementation can overlap discovery validation instead of waiting for it.",
       "status": "partial",
-      "remaining_work": "Finish contextual correction for an existing pack, review integrated web flow and validate a real selected-role pack in I16.",
+      "remaining_work": "Validate existing pack generation/contextual correction on a real selected role in I16; do not rebuild the existing correction path.",
       "thread_id": "01a0cf93-fcaf-7422-9979-e8811994755b",
       "host_id": "local",
       "active_slice": "I15-C committed; worker idle",
@@ -597,17 +599,11 @@
     }
   ],
   "execution_guide": "/Users/vince/Projects/find-income/dashboard/docs/implementation-tasks.md",
-  "next_proposed_slices": [
-    {
-      "id": "I10-web",
-      "task": "I10",
-      "model": "gpt-6-sol",
-      "effort": "medium"
-    }
-  ],
+  "next_proposed_slices": [],
   "max_concurrent_live_workers": 4,
-  "dispatch_status": "active_goal_two_live_workers",
+  "dispatch_status": "paused_no_active_workers",
   "code_checkpoint": "605e172",
-  "goal_status": "active",
-  "goal_objective": "Complete all I01–I27 task acceptance using concurrent live tasks, reviewed coherent commits and actual live acceptance where required."
+  "goal_status": "paused",
+  "goal_objective": "Complete all I01–I27 task acceptance using concurrent live tasks, reviewed coherent commits and actual live acceptance where required.",
+  "remaining_work_guide": "/Users/vince/Projects/find-income/dashboard/docs/remaining-work.md"
 }
