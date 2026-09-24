@@ -213,6 +213,14 @@ func (s *Service) ObserveDispatch(ctx context.Context, attemptID string) (rounds
 		if attempt.Operation == store.RoundSearchSource {
 			return rounds.Observation{State: store.AttemptObservedFailure, Evidence: json.RawMessage(`{"code":"read_only_source_result_lost","remoteRequestMayHaveCompleted":true}`)}, nil
 		}
+		// T24 F1: research attempts reconcile as observed failures with
+		// fenced evidence. Local work was reaped by the fence and any late
+		// bytes are already preserved as late_result_json plus a
+		// late_observation event, so the verdict settles the attempt without
+		// claiming a remote outcome that was never verified.
+		if store.IsResearchOperation(attempt.Operation) {
+			return rounds.Observation{State: store.AttemptObservedFailure, Evidence: json.RawMessage(`{"code":"research_attempt_fenced","remoteRequestMayHaveCompleted":true}`)}, nil
+		}
 		return rounds.Observation{State: store.AttemptUncertain, Evidence: json.RawMessage(`{"code":"unsupported_attempt"}`)}, nil
 	}
 	remote, err := s.db.RoundRemoteDispatch(ctx, attempt.RoundID, attemptID)
