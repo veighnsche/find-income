@@ -22,3 +22,14 @@
   border-left: 3px solid var(--border-strong);
   white-space: pre-wrap;
 }
+
+.evidence-unknowns {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--warning);
+  background: var(--warning-soft);
+}
+
+.evidence-unknowns p {
+  margin: 0.25rem 0;
+}

@@ -8,6 +8,7 @@ import { ApplicationPackPanel } from './application-pack-panel';
 import { InterviewPanel } from './interview-panel';
 import { ScreeningPanel } from './screening-panel';
 import {
+  explainResearchIdentity,
   getOpportunity,
   getRuntimeStatus,
   getOpportunityOrganisation,
@@ -25,9 +26,17 @@ import {
   type Opportunity,
   type OpportunityView,
   type RecordChange,
+  type ResearchIdentityView,
   type RuntimeStatus,
   type Session,
 } from './api';
+import {
+  identityHeadline,
+  isMissingIdentity,
+  isServiceUnavailable,
+  isUnassessedStage,
+  sightingSummary,
+} from './record-judgment';
 import './opportunities.css';
 
 const selectedKey = 'jobseek.selected-opportunity';
@@ -288,6 +297,156 @@ function OpportunityHistory({ id, onSessionLost }: { id: string; onSessionLost: 
   );
 }
 
+function ResearchIdentityPanel({
+  opportunity,
+  session,
+  onSessionLost,
+  onOpen,
+}: {
+  opportunity: Opportunity;
+  session: Session;
+  onSessionLost: () => void;
+  onOpen: (id: string) => void;
+}) {
+  const [view, setView] = useState<ResearchIdentityView | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'unavailable' | 'missing' | 'error'>(
+    'loading',
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [refresh, setRefresh] = useState(0);
+  const [correcting, setCorrecting] = useState(false);
+  const id = opportunity.id;
+  useEffect(() => {
+    const controller = new AbortController();
+    setState('loading');
+    setError(null);
+    explainResearchIdentity('vacancy', id, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        setView(result);
+        setState('ready');
+      })
+      .catch((cause) => {
+        if (controller.signal.aborted) return;
+        if (isUnauthenticated(cause)) onSessionLost();
+        else if (isServiceUnavailable(cause)) setState('unavailable');
+        else if (isMissingIdentity(cause)) setState('missing');
+        else {
+          setError(errorText(cause));
+          setState('error');
+        }
+      });
+    return () => controller.abort();
+  }, [id, onSessionLost, refresh]);
+  return (
+    <section className="op-card" aria-label="Research identity and sightings">
+      <div className="op-heading-row">
+        <h2>Research identity and sightings</h2>
+        {state !== 'loading' && (
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => setRefresh((value) => value + 1)}
+          >
+            Refresh
+          </button>
+        )}
+      </div>
+      {state === 'loading' && <p role="status">Loading identity explanation…</p>}
+      {state === 'unavailable' && (
+        <p className="hint">
+          Research supervision is not connected yet. The identity explanation and source sightings
+          for this record will appear here once it is.
+        </p>
+      )}
+      {state === 'missing' && (
+        <p className="hint">
+          No research identity record exists for this opportunity. It was saved by hand or before
+          research saves began.
+        </p>
+      )}
+      {state === 'error' && (
+        <p role="alert" className="error">
+          {error}{' '}
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => setRefresh((value) => value + 1)}
+          >
+            Try again
+          </button>
+        </p>
+      )}
+      {state === 'ready' && view && (
+        <>
+          <p>
+            <strong>{identityHeadline(view.decision)}</strong>
+          </p>
+          <p>{view.basis}</p>
+          <h3>Compared candidates</h3>
+          {view.candidates.length === 0 ? (
+            <p className="hint">No other saved roles were compared.</p>
+          ) : (
+            <ul>
+              {view.candidates.map((candidate) => (
+                <li key={candidate.recordId}>
+                  <button
+                    className="op-text-button"
+                    type="button"
+                    onClick={() => onOpen(candidate.recordId)}
+                  >
+                    {candidate.recordId}
+                  </button>{' '}
+                  · revision {candidate.revision}
+                </li>
+              ))}
+            </ul>
+          )}
+          {view.assessmentId ? (
+            <p>
+              Supporting assessment: <code>{view.assessmentId}</code>
+            </p>
+          ) : (
+            <p className="hint">No supporting assessment was recorded.</p>
+          )}
+          <h3>Source sightings</h3>
+          <p className="hint">{sightingSummary(view)}</p>
+          {(view.sightings?.length ?? 0) > 0 && (
+            <ol className="op-history">
+              {(view.sightings ?? []).map((sighting) => (
+                <li key={`${sighting.captureId}-${sighting.observedAt}`}>
+                  <SourceLink value={sighting.observedUrl} />
+                  <p className="hint">
+                    Observed {new Date(sighting.observedAt).toLocaleString()} · capture{' '}
+                    <code>{sighting.captureId}</code>
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+          {correcting ? (
+            <OwnerInstructionPanel
+              target={{
+                targetKind: 'opportunity',
+                targetId: id,
+                expectedRevision: opportunity.revision,
+              }}
+              title="Correct this identity decision"
+              session={session}
+              onSessionLost={onSessionLost}
+              onClose={() => setCorrecting(false)}
+            />
+          ) : (
+            <button className="secondary" type="button" onClick={() => setCorrecting(true)}>
+              Question this identity decision
+            </button>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 function OpportunityDetail({
   id,
   initialPackId,
@@ -363,8 +522,11 @@ function OpportunityDetail({
               <p>
                 {companies.find((item) => item.id === opportunity.companyId)?.name ||
                   `Company ${opportunity.companyId}`}{' '}
-                · {opportunity.stage.replaceAll('_', ' ')} · {opportunity.workPattern} ·{' '}
-                {opportunity.locationText || 'Location unknown'}
+                · {opportunity.stage.replaceAll('_', ' ')}{' '}
+                {isUnassessedStage(opportunity) && (
+                  <span className="op-fit-badge">Unassessed — fit not yet judged</span>
+                )}{' '}
+                · {opportunity.workPattern} · {opportunity.locationText || 'Location unknown'}
               </p>
             </div>
           </div>
@@ -455,6 +617,12 @@ function OpportunityDetail({
               </ul>
             )}
           </section>
+          <ResearchIdentityPanel
+            opportunity={opportunity}
+            session={session}
+            onSessionLost={onSessionLost}
+            onOpen={onOpen}
+          />
           <OpportunityHistory id={id} onSessionLost={onSessionLost} />
         </>
       )}
@@ -842,7 +1010,10 @@ export function Opportunities({
                 </button>
                 <p>
                   {names.get(opportunity.companyId) || `Company ${opportunity.companyId}`} ·{' '}
-                  {opportunity.kind} · {opportunity.stage.replaceAll('_', ' ')}
+                  {opportunity.kind} · {opportunity.stage.replaceAll('_', ' ')}{' '}
+                  {isUnassessedStage(opportunity) && (
+                    <span className="op-fit-badge">Unassessed — fit not yet judged</span>
+                  )}
                   {opportunity.archivedAt ? ' · archived' : ''}
                 </p>
               </div>

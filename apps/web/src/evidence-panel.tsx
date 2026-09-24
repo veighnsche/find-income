@@ -15,6 +15,7 @@ import {
   type QualificationView,
   type Session,
 } from './api';
+import { conflictingDimensions, fitStatus, fitStatusLabel, openUnknowns } from './record-judgment';
 import './evidence-panel.css';
 
 function message(cause: unknown): string {
@@ -79,6 +80,32 @@ function Evaluation({ value }: { value: QualificationEvaluation }) {
           </p>
         </div>
       ))}
+    </div>
+  );
+}
+
+function FitUnknowns({ evaluation }: { evaluation: QualificationEvaluation | null }) {
+  const unknowns = openUnknowns(evaluation);
+  const conflicts = conflictingDimensions(evaluation);
+  return (
+    <div className="evidence-unknowns">
+      {evaluation === null ? (
+        <p>
+          <strong>Unassessed:</strong> everything is unknown until evidence is assessed —{' '}
+          {unknowns.join(', ')}.
+        </p>
+      ) : unknowns.length === 0 ? (
+        <p>No open unknowns — every checked dimension has evidence.</p>
+      ) : (
+        <p>
+          <strong>Open unknowns:</strong> {unknowns.join(', ')}.
+        </p>
+      )}
+      {conflicts.length > 0 && (
+        <p>
+          <strong>Conflicting evidence on:</strong> {conflicts.join(', ')}.
+        </p>
+      )}
     </div>
   );
 }
@@ -227,12 +254,16 @@ export function EvidencePanel({
           <section>
             <h3>Current assessment</h3>
             <p>Status: {words(qualification.status)}</p>
+            <p>
+              Fit judgment: <strong>{fitStatusLabel(fitStatus(qualification))}</strong>
+            </p>
             {qualification.refreshError && <p role="alert">{qualification.refreshError}</p>}
             {qualification.current ? (
               <Evaluation value={qualification.current} />
             ) : (
               <p>No current assessment is available.</p>
             )}
+            <FitUnknowns evaluation={qualification.current} />
             {qualification.status === 'outdated' && qualification.latestHistorical && (
               <details>
                 <summary>Latest saved assessment</summary>

@@ -94,6 +94,16 @@
   font-size: 0.85rem;
   white-space: nowrap;
 }
+.op-fit-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--warning-soft);
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
 .op-history {
   padding-left: 1.5rem;
 }
