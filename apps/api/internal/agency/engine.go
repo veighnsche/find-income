@@ -220,9 +220,17 @@ type selectedDiscoveryPin struct {
 
 type discoveryResearchPin struct {
 	Criterion store.RoleCriterion `json:"criterion"`
+	Keyword   string              `json:"keyword"`
 	SearchID  string              `json:"searchId"`
 	Page      int                 `json:"page"`
 	TurnKey   string              `json:"turnKey"`
+}
+
+// discoverySearchChoice pairs a require/prefer criterion with one exact
+// board query term. Labels are human-readable; terms are what boards match.
+type discoverySearchChoice struct {
+	criterion store.RoleCriterion
+	term      string
 }
 
 type agencyCursor struct {
@@ -416,6 +424,8 @@ func (e *Engine) boardCompanyKnown(ctx context.Context, officialURL string) (boo
 
 var errProfileChanged = errors.New("profile changed during commissioned round")
 
+var errDiscoveryNothingNew = errors.New("discovery search restaged only already-saved leads")
+
 func (e *Engine) run(ctx context.Context, initial store.Round) {
 	owner := initial.Actor
 	code, partial, detail := "no_supported_source", true, report{}
@@ -544,12 +554,21 @@ func (e *Engine) runDiscoveryPhase(ctx context.Context, initial store.Round) (co
 			r, cursor, staged, err = e.continueDiscoveryResearch(ctx, r, cursor)
 			detail.DiscoveryCandidates = staged
 			if err != nil {
+				if errors.Is(err, errDiscoveryNothingNew) {
+					code, partial = "discovery_search_no_new_leads", false
+					return
+				}
 				code = terminalCode(err)
 				return
 			}
 		}
 		board, verifyErr := e.verifySelectedDiscoveryLead(ctx, r, cursor.SelectedDiscovery)
 		if verifyErr != nil {
+			if resolved, ok := e.directSavedLeadReport(ctx, r.ID, cursor.SelectedDiscovery, detail); ok {
+				detail = resolved
+				code, partial = "sourced_opportunity_saved", false
+				return
+			}
 			code = "discovery_verification_unresolved"
 			if errors.Is(verifyErr, store.ErrUncertain) {
 				code = "discovery_verification_uncertain"
@@ -590,7 +609,7 @@ func (e *Engine) runDiscoveryPhase(ctx context.Context, initial store.Round) (co
 				allowed[resource] = true
 			}
 			choices := map[string]store.CollectorBoard{}
-			searchChoices := map[string]store.RoleCriterion{}
+			searchChoices := map[string]discoverySearchChoice{}
 			input := jev.DecisionInput{Kind: jev.DecisionSourceResearch, CampaignIntent: r.Intent, MaxReportedTokens: discoveryDecisionReportedTokenLimit,
 				Capabilities:       []jev.DecisionCapability{{ID: "lever_page", Description: "Read one public Lever board page and stage up to four exact postings."}, {ID: "himalayas_search", Description: "Read one bounded public discovery search and stage exact candidate links for later verification."}},
 				RemainingAllowance: []jev.DecisionAllowance{{Operation: store.RoundCollectorPage, Remaining: r.Limits.Requests - r.Used.Requests}}}
@@ -616,16 +635,26 @@ func (e *Engine) runDiscoveryPhase(ctx context.Context, initial store.Round) (co
 					break
 				}
 			}
-			for i, criterion := range profile.RoleCriteria {
-				if len(input.Candidates) == 16 {
-					break
-				}
+			var searches []discoverySearchChoice
+			for _, criterion := range profile.RoleCriteria {
 				if criterion.Mode != "require" && criterion.Mode != "prefer" {
 					continue
 				}
+				terms := criterion.SearchTerms
+				if len(terms) == 0 {
+					terms = []string{criterion.Label}
+				}
+				for _, term := range terms {
+					searches = append(searches, discoverySearchChoice{criterion: criterion, term: term})
+				}
+			}
+			for i, choice := range searches {
+				if len(input.Candidates) == 16 {
+					break
+				}
 				id := fmt.Sprintf("search-%d", i)
-				searchChoices[id] = criterion
-				input.Candidates = append(input.Candidates, jev.DecisionCandidate{ID: id, Description: "Search public vacancies for owner criterion " + criterion.Label + ": " + prefixUTF8(criterion.Description, 800), Scope: "One charged bounded Himalayas search; staged links are unverified leads.", CapabilityID: "himalayas_search", SourceIDs: profileIDs})
+				searchChoices[id] = choice
+				input.Candidates = append(input.Candidates, jev.DecisionCandidate{ID: id, Description: "Search public vacancies for " + choice.term + " (owner criterion " + choice.criterion.Label + "): " + prefixUTF8(choice.criterion.Description, 800), Scope: "One charged bounded Himalayas search; staged links are unverified leads.", CapabilityID: "himalayas_search", SourceIDs: profileIDs})
 			}
 			if len(input.Candidates) == 0 {
 				return
@@ -640,24 +669,17 @@ func (e *Engine) runDiscoveryPhase(ctx context.Context, initial store.Round) (co
 				return
 			}
 			var board store.CollectorBoard
-			if criterion, search := searchChoices[selectedID]; search {
+			if choice, search := searchChoices[selectedID]; search {
 				_, err = e.live(ctx, r.ID, initial.Generation, initial.ProfileVersion)
 				if err != nil {
 					code = terminalCode(err)
 					return
 				}
+				// Fresh rounds always re-check the first page: boards surface
+				// their newest or most relevant postings there, and
+				// already-saved leads are skipped at selection instead of
+				// saved twice.
 				pageNumber := 1
-				continuation, continuationErr := e.Store.DiscoverySearchContinuation(ctx, criterion.Label, "")
-				if continuationErr == nil {
-					if continuation.NextPage < 1 {
-						code = "discovery_search_exhausted"
-						return
-					}
-					pageNumber = continuation.NextPage
-				} else if !errors.Is(continuationErr, store.ErrNotFound) {
-					code = "discovery_continuation_unavailable"
-					return
-				}
 				r, err = e.live(ctx, r.ID, initial.Generation, initial.ProfileVersion)
 				if err != nil {
 					code = terminalCode(err)
@@ -667,7 +689,7 @@ func (e *Engine) runDiscoveryPhase(ctx context.Context, initial store.Round) (co
 					code = "round_cursor_conflict"
 					return
 				}
-				cursor.Research = &discoveryResearchPin{Criterion: criterion, SearchID: selectedID, Page: pageNumber,
+				cursor.Research = &discoveryResearchPin{Criterion: choice.criterion, Keyword: choice.term, SearchID: selectedID, Page: pageNumber,
 					TurnKey: fmt.Sprintf("discover:%s:g%d", selectedID, r.Generation)}
 				encodedCursor, _ := json.Marshal(cursor)
 				r, err = e.Store.SaveRoundProgress(ctx, owner, r.ID, r.Revision, store.RoundProgress{Step: "discovery_research_selected", Cursor: encodedCursor, Unresolved: r.Unresolved, Report: r.Report})
@@ -679,11 +701,20 @@ func (e *Engine) runDiscoveryPhase(ctx context.Context, initial store.Round) (co
 				r, cursor, staged, err = e.continueDiscoveryResearch(ctx, r, cursor)
 				detail.DiscoveryCandidates = staged
 				if err != nil {
+					if errors.Is(err, errDiscoveryNothingNew) {
+						code, partial = "discovery_search_no_new_leads", false
+						return
+					}
 					code = "discovery_choice_unresolved"
 					return
 				}
 				board, err = e.verifySelectedDiscoveryLead(ctx, r, cursor.SelectedDiscovery)
 				if err != nil {
+					if resolved, ok := e.directSavedLeadReport(ctx, r.ID, cursor.SelectedDiscovery, detail); ok {
+						detail = resolved
+						code, partial = "sourced_opportunity_saved", false
+						return
+					}
 					code = "discovery_verification_unresolved"
 					if errors.Is(err, store.ErrUncertain) {
 						code = "discovery_verification_uncertain"

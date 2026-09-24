@@ -90,6 +90,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/rounds/{id}", h.getRound)
 	mux.HandleFunc("GET /api/v1/rounds/{id}/results", h.roundResults)
 	mux.HandleFunc("GET /api/v1/rounds/{id}/cards", h.roundCards)
+	mux.HandleFunc("GET /api/v1/rounds/{id}/candidates", h.roundCandidates)
 	mux.HandleFunc("GET /api/v1/rounds/{id}/history", h.roundHistory)
 	mux.HandleFunc("POST /api/v1/rounds/{id}/stop", h.stopAnyRound)
 	mux.HandleFunc("POST /api/v1/rounds/{id}/resume", h.resumeAnyRound)

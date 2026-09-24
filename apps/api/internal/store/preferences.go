@@ -16,11 +16,15 @@ import (
 var defaultProfileFS embed.FS
 
 type RoleCriterion struct {
-	ID          string `json:"id"`
-	Label       string `json:"label"`
-	Description string `json:"description"`
-	Kind        string `json:"kind"` // role, responsibility, technology
-	Mode        string `json:"mode"` // require, avoid, prefer
+	ID          string   `json:"id"`
+	Label       string   `json:"label"`
+	Description string   `json:"description"`
+	Kind        string   `json:"kind"` // role, responsibility, technology
+	Mode        string   `json:"mode"` // require, avoid, prefer
+	// SearchTerms are the exact job-board queries for a require/prefer
+	// criterion. The human label is not a query: boards match terms
+	// literally, so a label-shaped phrase finds almost nothing.
+	SearchTerms []string `json:"searchTerms,omitempty"`
 }
 
 // DefinitionHash binds evidence to a criterion's complete meaning, including
@@ -91,6 +95,16 @@ func validRoleCriterion(c RoleCriterion) bool {
 			continue
 		}
 		return false
+	}
+	if len(c.SearchTerms) > 4 {
+		return false
+	}
+	seenTerms := make(map[string]bool, len(c.SearchTerms))
+	for _, term := range c.SearchTerms {
+		if len(term) < 2 || len(term) > 120 || strings.TrimSpace(term) != term || seenTerms[term] {
+			return false
+		}
+		seenTerms[term] = true
 	}
 	return true
 }

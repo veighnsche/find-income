@@ -157,7 +157,8 @@ func (s *Store) applyRoundJevAssessment(ctx context.Context, binding RoundAssess
 			byID[c.ID] = c
 		}
 		for _, c := range supplied {
-			if byID[c.ID] != (RoleCriterion{ID: c.ID, Label: c.Label, Description: c.Description, Kind: c.Kind, Mode: c.Mode}) {
+			have, ok := byID[c.ID]
+			if !ok || have.Label != c.Label || have.Description != c.Description || have.Kind != c.Kind || have.Mode != c.Mode {
 				return RoundJevAssessment{}, ErrConflict
 			}
 			delete(byID, c.ID)

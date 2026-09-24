@@ -90,6 +90,16 @@ func (s *Store) DiscoveryOfficialRead(ctx context.Context, id string) (Discovery
 	return v, nil
 }
 
+// HasDiscoveryOfficialRead reports whether a turn attempted the official-site
+// check for a candidate, regardless of the read outcome.
+func (s *Store) HasDiscoveryOfficialRead(ctx context.Context, roundID, candidateID string) (bool, error) {
+	var count int64
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM discovery_official_reads WHERE round_id=? AND candidate_id=?`, roundID, candidateID).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // DiscoveryCompanyClaim ties a staged lead to a matching company-detail read.
 // The returned website remains an aggregator claim until an official read.
 func (s *Store) DiscoveryCompanyClaim(ctx context.Context, candidateID, detailAttemptID, ownerID string) (DiscoveryCompanyClaim, error) {

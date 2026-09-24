@@ -14,7 +14,8 @@ type discoveryPhaseCursor struct {
 		Criterion struct {
 			Label string `json:"label"`
 		} `json:"criterion"`
-		Page int `json:"page"`
+		Keyword string `json:"keyword"`
+		Page    int    `json:"page"`
 	} `json:"research"`
 	SelectedDiscovery *struct {
 		CandidateID string `json:"candidateId"`
@@ -34,7 +35,7 @@ func (s *Service) checkDiscoveryToolPhase(ctx context.Context, roundID, method, 
 		return store.ErrFenced
 	}
 	if method == "search_jobs" {
-		if cursor.SelectedDiscovery != nil || keyword != cursor.Research.Criterion.Label || country != "" || page != cursor.Research.Page {
+		if cursor.SelectedDiscovery != nil || keyword != cursor.Research.Keyword || country != "" || page != cursor.Research.Page {
 			return store.ErrFenced
 		}
 		return nil

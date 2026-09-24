@@ -480,7 +480,7 @@ func runNeutralPublicCandidates(t *testing.T, observedSuccess bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	research := agencyCursor{Research: &discoveryResearchPin{Criterion: store.RoleCriterion{ID: "role-platform", Label: "platform"}, SearchID: "search-0", Page: 1, TurnKey: "neutral-stage"}}
+	research := agencyCursor{Research: &discoveryResearchPin{Criterion: store.RoleCriterion{ID: "role-platform", Label: "platform"}, Keyword: "platform", SearchID: "search-0", Page: 1, TurnKey: "neutral-stage"}}
 	encodedResearch, _ := json.Marshal(research)
 	round, err = db.SaveRoundProgress(ctx, owner, round.ID, round.Revision, store.RoundProgress{Step: "discovery_research_selected", Cursor: encodedResearch, Unresolved: round.Unresolved, Report: round.Report})
 	if err != nil {
@@ -639,7 +639,7 @@ func TestFourNeutralLeadsNewEmployerCompletesSourcedAssessmentWithinDefaultAllow
 	if err != nil {
 		t.Fatal(err)
 	}
-	cursor := agencyCursor{Research: &discoveryResearchPin{Criterion: store.RoleCriterion{ID: "role-platform", Label: "platform"}, SearchID: "research-platform", Page: 1, TurnKey: researchTurn.RequestKey}}
+	cursor := agencyCursor{Research: &discoveryResearchPin{Criterion: store.RoleCriterion{ID: "role-platform", Label: "platform"}, Keyword: "platform", SearchID: "research-platform", Page: 1, TurnKey: researchTurn.RequestKey}}
 	encoded, _ := json.Marshal(cursor)
 	round, err = db.SaveRoundProgress(ctx, owner, round.ID, round.Revision, store.RoundProgress{Step: "discovery_research_selected", Cursor: encoded, Unresolved: round.Unresolved, Report: round.Report})
 	if err != nil {

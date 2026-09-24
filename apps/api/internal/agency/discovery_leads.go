@@ -29,11 +29,28 @@ func (e *Engine) selectDiscoveryLead(ctx context.Context, r store.Round, cursor 
 	if !complete {
 		return r, cursor, len(candidates), store.ErrInvalid
 	}
-	input := jev.DecisionInput{Kind: jev.DecisionSourceResearch, CampaignIntent: r.Intent, MaxReportedTokens: discoveryDecisionReportedTokenLimit,
-		Capabilities: []jev.DecisionCapability{{ID: "official_verify", Description: "Verify one saved unverified public lead against its company detail and official careers site; register only an evidenced Lever board."}},
-		Sources:      profileSources, RemainingAllowance: []jev.DecisionAllowance{{Operation: store.RoundCodexTurn, Remaining: r.Limits.Turns - r.Used.Turns}}}
+	var jobs []store.RoundDiscoveryCandidate
+	stagedJobs := 0
 	for _, c := range candidates {
-		if c.Kind != "job" || len(input.Candidates) >= 8 {
+		if c.Kind != "job" {
+			continue
+		}
+		stagedJobs++
+		if _, err := e.Store.OpportunityBySourceURL(ctx, c.URL); err == nil {
+			continue
+		} else if !errors.Is(err, store.ErrNotFound) {
+			return r, cursor, len(candidates), err
+		}
+		jobs = append(jobs, c)
+	}
+	if stagedJobs > 0 && len(jobs) == 0 {
+		return r, cursor, len(candidates), errDiscoveryNothingNew
+	}
+	input := jev.DecisionInput{Kind: jev.DecisionSourceResearch, CampaignIntent: r.Intent, MaxReportedTokens: discoveryDecisionReportedTokenLimit,
+		Capabilities: []jev.DecisionCapability{{ID: "official_verify", Description: "Verify one saved unverified public lead against its company detail and official careers site; register an evidenced Lever board when one exists, otherwise save the verified lead directly."}},
+		Sources:      profileSources, RemainingAllowance: []jev.DecisionAllowance{{Operation: store.RoundCodexTurn, Remaining: r.Limits.Turns - r.Used.Turns}}}
+	for _, c := range jobs {
+		if len(input.Candidates) >= 8 {
 			continue
 		}
 		input.Sources = append(input.Sources, jev.DecisionSource{ID: c.ID, SourceRevision: c.SourceSHA256,
@@ -73,7 +90,7 @@ func (e *Engine) selectDiscoveryLead(ctx context.Context, r store.Round, cursor 
 
 func (e *Engine) continueDiscoveryResearch(ctx context.Context, r store.Round, cursor agencyCursor) (store.Round, agencyCursor, int, error) {
 	pin := cursor.Research
-	if pin == nil || pin.Criterion.ID == "" || pin.Criterion.Label == "" || pin.SearchID == "" || pin.Page < 1 || pin.TurnKey == "" || cursor.Selected != nil || cursor.SelectedDiscovery != nil {
+	if pin == nil || pin.Criterion.ID == "" || pin.Criterion.Label == "" || pin.Keyword == "" || pin.SearchID == "" || pin.Page < 1 || pin.TurnKey == "" || cursor.Selected != nil || cursor.SelectedDiscovery != nil {
 		return r, cursor, 0, store.ErrInvalid
 	}
 	prior, priorErr := e.Store.RoundAttemptForRequest(ctx, r.ID, pin.TurnKey)
@@ -116,7 +133,7 @@ func (e *Engine) continueDiscoveryResearch(ctx context.Context, r store.Round, c
 			Criterion store.RoleCriterion `json:"criterion"`
 			Keyword   string              `json:"keyword"`
 			Page      int                 `json:"page"`
-		}{pin.Criterion, pin.Criterion.Label, pin.Page})
+		}{pin.Criterion, pin.Keyword, pin.Page})
 		if _, err := e.Runtime.ExecuteRoundTurn(ctx, store.Actor{Kind: "agent", ID: "codex-runner"}, r.ID,
 			codexservice.RoundTurnInput{RequestKey: cursor.Research.TurnKey, ResourceID: "discovery:himalayas", Brief: brief, Evidence: string(evidence)}); err != nil {
 			return r, cursor, 0, err
@@ -156,7 +173,7 @@ func (e *Engine) checkReconciledDiscoveryResearch(ctx context.Context, roundID s
 				} `json:"arguments"`
 			} `json:"params"`
 		}
-		if json.Unmarshal([]byte(read.RequestJSON), &call) != nil || call.Params.Arguments.Keyword != pin.Criterion.Label || call.Params.Arguments.Country != "" || call.Params.Arguments.Page != pin.Page {
+		if json.Unmarshal([]byte(read.RequestJSON), &call) != nil || call.Params.Arguments.Keyword != pin.Keyword || call.Params.Arguments.Country != "" || call.Params.Arguments.Page != pin.Page {
 			return store.ErrUncertain
 		}
 	}
@@ -167,6 +184,13 @@ func attemptCreatedAtOrAfter(current, earlier string) bool {
 	currentTime, currentErr := time.Parse(time.RFC3339Nano, current)
 	earlierTime, earlierErr := time.Parse(time.RFC3339Nano, earlier)
 	return currentErr == nil && earlierErr == nil && !currentTime.Before(earlierTime)
+}
+
+// discoveryVerifyBrief pins the exact tool methods for the verify turn. A
+// guessed method name fails verification, so the brief never leaves one
+// unnamed.
+func discoveryVerifyBrief() string {
+	return "Verify only the owner-round selected unverified public lead in evidence. Read its matching company detail with source_discovery using method get_company_details and the company slug from the candidate URL, then use discovery_official_links on the claimed company website and at most one evidenced same-origin careers link. If an exact Lever link appears in the saved official read, register a board using discovery_board_register and stop. Otherwise read the round profile version with round_context, create the company with round_mutation company.create (resourceId campaign:active, expectedRevision set to the profile version, exact name and official website from the saved reads), then save the opening with round_mutation opportunity.create (resourceId company:<returned company id>, expectedRevision set to the returned company revision; title, kind employment, stage new, source URL exactly the candidate URL, and original text from the saved candidate evidence and official reads). Set only vacancy facts supported by the saved reads. Do not stage or select another candidate, infer missing employer facts, or browse unrelated sources."
 }
 
 func (e *Engine) verifySelectedDiscoveryLead(ctx context.Context, r store.Round, pin *selectedDiscoveryPin) (store.CollectorBoard, error) {
@@ -210,7 +234,7 @@ func (e *Engine) verifySelectedDiscoveryLead(ctx context.Context, r store.Round,
 		evidence, _ := json.Marshal(struct {
 			Candidate store.RoundDiscoveryCandidate `json:"candidate"`
 		}{selected})
-		brief := "Verify only the owner-round selected unverified public lead in evidence. Read its matching company detail with source_discovery, then use discovery_official_links on the claimed company website and at most one evidenced same-origin careers link. Register a board using discovery_board_register only if an exact Lever link appears in the saved official read. Do not stage or select another candidate, create an opportunity from search summary text, infer missing employer facts, or browse unrelated sources."
+		brief := discoveryVerifyBrief()
 		if _, err := e.Runtime.ExecuteRoundTurn(ctx, store.Actor{Kind: "agent", ID: "codex-runner"}, r.ID,
 			codexservice.RoundTurnInput{RequestKey: pin.VerificationRequestKey, ResourceID: "discovery:himalayas", Brief: brief, Evidence: string(evidence)}); err != nil {
 			return store.CollectorBoard{}, err
@@ -230,4 +254,41 @@ func (e *Engine) verifySelectedDiscoveryLead(ctx context.Context, r store.Round,
 		}
 	}
 	return store.CollectorBoard{}, store.ErrFenced
+}
+
+// directSavedLeadReport accepts a verify turn that saved the selected lead
+// directly instead of registering a board. It reports the round save counts
+// so the phase can finish without the collector path.
+func (e *Engine) directSavedLeadReport(ctx context.Context, roundID string, pin *selectedDiscoveryPin, detail report) (report, bool) {
+	if pin == nil || pin.CandidateID == "" {
+		return detail, false
+	}
+	candidate, err := e.Store.RoundDiscoveryCandidate(ctx, roundID, pin.CandidateID)
+	if err != nil {
+		return detail, false
+	}
+	if _, err := e.Store.RoundOpportunityBySourceURL(ctx, roundID, candidate.URL); err != nil {
+		return detail, false
+	}
+	if checked, err := e.Store.HasDiscoveryOfficialRead(ctx, roundID, pin.CandidateID); err != nil || !checked {
+		return detail, false
+	}
+	cards, err := e.Store.RoundCards(ctx, roundID)
+	if err != nil || len(cards) == 0 {
+		return detail, false
+	}
+	leads, _, err := e.Store.RoundCandidateLeads(ctx, roundID)
+	if err != nil {
+		return detail, false
+	}
+	unsaved := 0
+	for _, lead := range leads {
+		if lead.Status != "saved" {
+			unsaved++
+		}
+	}
+	detail.Opportunities = len(cards)
+	detail.DiscoveryCandidates = len(leads)
+	detail.UnreviewedCandidates = unsaved
+	return detail, true
 }

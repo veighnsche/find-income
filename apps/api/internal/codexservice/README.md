@@ -32,6 +32,7 @@ enabled = false
 [mcp_servers.jobseek]
 url = "https://PRIVATE-DASHBOARD/api/v1/codex/mcp"
 required = true
+default_tools_approval_mode = "approve"
 enabled_tools = ["round_context", "round_mutation", "round_evidence_correction", "source_links"]
 
 [mcp_servers.jobseek.http_headers]

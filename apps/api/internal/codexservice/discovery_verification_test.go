@@ -210,6 +210,39 @@ func TestDiscoveredOfficialLinkRegistersAndCollects(t *testing.T) {
 	}
 }
 
+func TestCheckDiscoveryToolPhaseSearchesPinnedKeyword(t *testing.T) {
+	ctx := context.Background()
+	svc, db := testService(t, testConfig())
+	owner := store.Actor{Kind: "administrator", ID: "owner"}
+	agent := store.Actor{Kind: "agent", ID: "codex-runner"}
+	profile, err := db.CurrentPreferences(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "pinned-keyword", Intent: "Find sourced work", Outcome: "discover", ProfileVersion: profile.Version,
+		Scope:  store.RoundScope{Resources: []string{"campaign:active", "discovery:himalayas"}, Operations: []string{store.RoundCodexTurn, store.RoundSearchSource}, Delegates: []string{agent.ID}},
+		Limits: store.RoundAllowance{Requests: 4, Items: 5, Tools: 8, Turns: 2}, Deadline: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, err = db.ActivateRound(ctx, owner, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	pin, _ := json.Marshal(map[string]any{"research": map[string]any{"criterion": map[string]any{"label": "Backend and platform work"}, "keyword": "backend engineer", "page": 1}})
+	if r, err = db.SaveRoundProgress(ctx, owner, r.ID, r.Revision, store.RoundProgress{Step: "discovery_research_selected", Cursor: pin, Unresolved: r.Unresolved, Report: r.Report}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.checkDiscoveryToolPhase(ctx, r.ID, "search_jobs", "backend engineer", "", 1, "", ""); err != nil {
+		t.Fatalf("pinned term fenced: %v", err)
+	}
+	if err := svc.checkDiscoveryToolPhase(ctx, r.ID, "search_jobs", "Backend and platform work", "", 1, "", ""); !errors.Is(err, store.ErrFenced) {
+		t.Fatalf("label query allowed: %v", err)
+	}
+	if err := svc.checkDiscoveryToolPhase(ctx, r.ID, "search_jobs", "backend engineer", "", 2, "", ""); !errors.Is(err, store.ErrFenced) {
+		t.Fatalf("wrong page allowed: %v", err)
+	}
+}
+
 func TestExpiredDiscoveryOfficialReadReleasesRound(t *testing.T) {
 	ctx := context.Background()
 	db, err := store.Open(ctx, t.TempDir())

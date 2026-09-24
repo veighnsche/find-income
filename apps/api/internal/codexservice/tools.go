@@ -15,6 +15,7 @@ import (
 
 var requiredTools = []string{"round_context", "round_mutation", "round_evidence_correction", "source_links", "source_discovery", "discovery_candidate_stage", "discovery_official_links", "discovery_board_register", "application_pack_prepare", "offer_comparison_prepare", "interview_prepare", "interview_debrief", "reply_update", "reply_draft"}
 var errTool = errors.New("Round tool input or authority is invalid; refresh round_context.")
+var errDiscoveryMethod = errors.New("Unknown source_discovery method; use search_jobs, get_company_details, or get_job_details with its matching arguments.")
 
 type roundContextArgs struct {
 	RoundID    string `json:"roundId"`
@@ -58,6 +59,9 @@ func registerTool[I any](server *mcp.Server, name, description string, handler f
 	mcp.AddTool(server, &mcp.Tool{Name: name, Description: description}, func(ctx context.Context, _ *mcp.CallToolRequest, input I) (*mcp.CallToolResult, map[string]any, error) {
 		out, err := handler(ctx, input)
 		if err != nil {
+			if errors.Is(err, errDiscoveryMethod) {
+				return nil, nil, err
+			}
 			return nil, nil, errTool
 		}
 		return nil, out, nil
@@ -69,7 +73,7 @@ func (s *Service) newBridge() http.Handler {
 	registerTool(server, "round_mutation", "Create a company or opportunity in a delegated running round with an exact resource, revision and idempotency key.", s.roundMutationTool)
 	registerTool(server, "round_evidence_correction", "Supersede one owner-selected evidence claim with an exact source quote and round authority.", s.roundEvidenceCorrectionTool)
 	registerTool(server, "source_links", "Inspect bounded public career links from a scoped company's saved website.", s.sourceLinksTool)
-	registerTool(server, "source_discovery", "Read a bounded public Himalayas search or detail page under the current round and capability; results are unverified candidates.", s.sourceDiscoveryTool)
+	registerTool(server, "source_discovery", "Read one bounded public Himalayas page under the current round and capability with method search_jobs, get_company_details, or get_job_details and its matching arguments; results are unverified candidates.", s.sourceDiscoveryTool)
 	registerTool(server, "discovery_candidate_stage", "Stage one exact public search candidate with a quote copied from its saved discovery response.", s.discoveryCandidateTool)
 	registerTool(server, "discovery_official_links", "Read the staged candidate's claimed company website from a matching saved company detail, or one exact same-origin careers link from that first read.", s.discoveryOfficialLinksTool)
 	registerTool(server, "discovery_board_register", "Register an exact Lever link from the saved official-site read as a verified board in this round's scope.", s.discoveryBoardRegisterTool)
@@ -95,6 +99,11 @@ func (s *Service) newBridge() http.Handler {
 }
 
 func (s *Service) sourceDiscoveryTool(ctx context.Context, args sourceDiscoveryArgs) (map[string]any, error) {
+	switch args.Method {
+	case "search_jobs", "get_company_details", "get_job_details":
+	default:
+		return nil, errDiscoveryMethod
+	}
 	if err := s.checkDiscoveryToolPhase(ctx, args.RoundID, args.Method, args.Keyword, args.Country, args.Page, args.CompanySlug, args.JobSlug); err != nil {
 		return nil, err
 	}

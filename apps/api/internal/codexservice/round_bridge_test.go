@@ -3,12 +3,36 @@ package codexservice
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
+
+func TestSourceDiscoveryUnknownMethodNamesValidMethods(t *testing.T) {
+	ctx := context.Background()
+	svc, _ := testService(t, testConfig())
+	session, _ := sdkSession(t, svc)
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "source_discovery", Arguments: map[string]any{"roundId": "missing", "capability": "missing", "requestKey": "method-probe", "method": "company_detail", "companySlug": "example"}})
+	text := ""
+	if err != nil {
+		text = err.Error()
+	}
+	if result != nil {
+		for _, item := range result.Content {
+			if content, ok := item.(*mcp.TextContent); ok {
+				text += content.Text
+			}
+		}
+	}
+	for _, token := range []string{"search_jobs", "get_company_details", "get_job_details"} {
+		if !strings.Contains(text, token) {
+			t.Fatalf("unknown method error misses %q: err=%v result=%+v", token, err, result)
+		}
+	}
+}
 
 func TestRoundContextUsesPrepareOpportunityAuthority(t *testing.T) {
 	ctx := context.Background()
