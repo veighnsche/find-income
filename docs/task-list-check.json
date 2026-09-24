@@ -40,10 +40,11 @@
     "Committedc1f3c83: root current-schema recovery review and six synthetic tests pass; interrupted deliveries remain uncertain, actual host acceptance pending.",
     "Committedff8777c: saved delivery MIME, attachment and pack digest checks; seven root recovery tests pass.",
     "Integrated0602dcf/94c1cd0: I10 cross-outcome advice backend after three-finding correction; root full Go suite, all four TestReviewI10 reproductions via remapped overlay, whitespace and both generated-contract checks pass; no live provider calls.",
-    "Integratedbf2f684: all-outcome saved-advice UI with exact review navigation; root lint/TypeScript and focused production-build Chromium recommendation smoke pass (nine actions, failed delivery, currentness refusal, read-only reload)."
+    "Integratedbf2f684: all-outcome saved-advice UI with exact review navigation; root lint/TypeScript and focused production-build Chromium recommendation smoke pass (nine actions, failed delivery, currentness refusal, read-only reload).",
+    "Integrated6a6213b: I19 correspondence mirror and I23 reply commission with reply_intent class, cited drafts, capture recovery and advice hook; root full Go suite, generated checks, I26 recovery, web lint and MCP tool-consistency pass."
   ],
   "documentation_validated_at": "2026-09-24",
-  "code_checkpoint": "bf2f684",
+  "code_checkpoint": "6a6213b",
   "root_validation": {
     "check": "passed at 8c8b66d after OpenAPI formatting",
     "test": "passed full Go API suite; web runner has no test files; controlled I11 browser fixture reviewed",
@@ -65,7 +66,8 @@
     "delivery_ui": "Committed235441d after root synthetic delivery/recommendation Chromium checks, including Stop while Send is pending, stable retry identity, partial history, currentness and fresh-browser retrieval.",
     "delivery_authority": "All three historical findings closed by independent bounded recheck. Role/source/company and cosmetic matrices, complete/incomplete/invalid capture production Lazy/Resume recovery, and successful authenticated HTTP Send/replay passed with fake sender. No live acceptance.",
     "client_server_audit": "Source trace confirmed three UI recovery/control defects; correction dispatched with reload, actual delivery refusal and historical debrief replay cases. No live acceptance.",
-    "cross_outcome_advice": "Backend0602dcf/94c1cd0 and UIbf2f684 integrated. Root full Go suite, four TestReviewI10 reproductions, whitespace, both generated checks, lint/TypeScript and focused Chromium recommendation smoke pass. Real decision usefulness and authenticated operation remain open."
+    "cross_outcome_advice": "Backend0602dcf/94c1cd0 and UIbf2f684 integrated. Root full Go suite, four TestReviewI10 reproductions, whitespace, both generated checks, lint/TypeScript and focused Chromium recommendation smoke pass. Real decision usefulness and authenticated operation remain open.",
+    "correspondence_replies": "Offline I19/I23 integrated 6a6213b. Full Go suite, both generated checks, seven I26 recovery tests, web lint and MCP allowlist consistency pass. Live adapter, intent eval, real-correspondence acceptance and reply UI remain open."
   },
   "protected_artifacts_unchanged_prior_check": 44,
   "proposed_next_slices": [

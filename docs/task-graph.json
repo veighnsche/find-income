@@ -389,8 +389,10 @@
       "scope": "Choose a real connectable owner account and implement authorised bounded inbox/thread reads, pagination, provenance and deduplication. No dependency on an app-originated send. Record inert incoming/due notifications without auto-processing.",
       "acceptance": "Fixtures and an authorised read-only connection check handle existing conversations, auth loss and repeated retrieval. A notification or restored account starts no round. An unavailable real account remains an external blocker, not an invented integration success.",
       "selection_reason": "One supported read adapter with defined boundaries is Sol Medium; do not build every provider.",
-      "status": "waiting",
-      "remaining_work": "Implement one real connectable read-only correspondence adapter and commissioned processing inputs, without requiring outbound messages."
+      "status": "partial",
+      "remaining_work": "One real connectable read-only adapter and authorised connection check (C2); see remaining-work.md.",
+      "active_slice": "Offline domain integrated 6a6213b; no active worker",
+      "review": "Root-reviewed: mirror schema, provider-ID dedup sync, provenance, auth-lost fencing, inert notifications, processing inputs. Maintained store/HTTP tests pass; full Go suite, generated checks, I26 recovery and web lint pass."
     },
     {
       "id": "I20",
@@ -473,8 +475,10 @@
       "scope": "Add a reply-processing commission using complete relevant thread context, Jev intent/next-action decisions and Codex record updates/drafts. Evaluate this Jev class separately; incorporate important replies into saved next-outcome advice.",
       "acceptance": "Existing inbound conversations work without prior app sends. Conflicts remain attributed; due dates never trigger work. Drafting is accepted independently of I21/I22, while sending any follow-up uses their reviewed approval path.",
       "selection_reason": "Bounded interpretation/drafting integration is Sol Medium; do not duplicate the sending engine.",
-      "status": "waiting",
-      "remaining_work": "Implement Jev-supported reply interpretation, next-action advice and Codex follow-up drafts from complete relevant conversation context."
+      "status": "partial",
+      "remaining_work": "Live reply_intent eval, real-correspondence acceptance and reply web UI (C4); see remaining-work.md.",
+      "active_slice": "Offline commission integrated 6a6213b; no active worker",
+      "review": "Root-reviewed: process_replies outcome, reply_intent class with eval harness, Codex-owned updates/cited drafts, capture recovery, advice hook. Maintained Jev/store/agency/codexservice/HTTP tests pass incl. stop/resume without recharge; full suites green."
     },
     {
       "id": "I24",
@@ -602,7 +606,7 @@
   "next_proposed_slices": [],
   "max_concurrent_live_workers": 4,
   "dispatch_status": "paused_no_active_workers",
-  "code_checkpoint": "bf2f684",
+  "code_checkpoint": "6a6213b",
   "goal_status": "paused",
   "goal_objective": "Complete all I01–I27 task acceptance using concurrent live tasks, reviewed coherent commits and actual live acceptance where required.",
   "remaining_work_guide": "/Users/vince/Projects/find-income/dashboard/docs/remaining-work.md"

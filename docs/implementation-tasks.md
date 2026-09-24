@@ -4,7 +4,7 @@ Updated 24 September 2026. The full I01–I27 list implements the [implementatio
 
 **Handoff:** Start with [remaining-work.md](remaining-work.md) for the complete ordered remaining checklist, preserved commits/files, missing inputs and economical concurrency. Implementation is paused; historical dispatch schedules below are not instructions to restart tasks.
 
-**Current position: 5 tasks accepted, 18 partial, 4 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I20–I22, I24–I27. I10 corrected backend (`0602dcf`, `94c1cd0`) and interface (`bf2f684`) are integrated on main; I27 recovery controls and current-schema recovery are committed; interview and offer backend/UI slices are reviewed and committed. I17 is conditional. Counts describe acceptance, not percentage of product completion.
+**Current position: 5 tasks accepted, 20 partial, 2 not started or conditional.** Accepted: I01–I04 and I09. Partial: I05–I08, I10–I15, I18, I19, I20–I23, I24–I27. I10 corrected backend (`0602dcf`, `94c1cd0`) and interface (`bf2f684`) are integrated on main; I27 recovery controls and current-schema recovery are committed; interview and offer backend/UI slices are reviewed and committed. I17 is conditional. Counts describe acceptance, not percentage of product completion.
 
 The first useful milestone is **real automatic discovery → one selected lead → one truthful application pack** (I16). Complete-source coverage, a general asset library, all email/ATS integrations and the entire agency lifecycle are not prerequisites for that milestone. Live runtime access and the actual search capability remain unverified.
 
@@ -384,9 +384,9 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 ### I19 — Connect bounded read-only correspondence
 
-- [ ] **Not started** · GPT-6 Sol / Medium · Dependencies: I12, I18.
+- [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I12, I18.
 
-**Remaining work:** Implement one real connectable read-only correspondence adapter and commissioned processing inputs, without requiring outbound messages.
+**Remaining work:** Implement one real connectable read-only correspondence adapter and its authorised connection check, without requiring outbound messages. Offline domain committed6a6213b: mirror schema, dedup sync, provenance, auth-loss fencing, inert notifications, processing inputs; maintained tests pass.
 
 **Task scope:** Choose a real connectable owner account and implement authorised bounded inbox/thread reads, pagination, provenance and deduplication. No dependency on an app-originated send. Record inert incoming/due notifications without auto-processing.
 
@@ -434,9 +434,9 @@ Native correction checkpoint: a22afa7. Root codex/codexrunner/codexservice tests
 
 ### I23 — Process replies and prepare follow-ups
 
-- [ ] **Not started** · GPT-6 Sol / Medium · Dependencies: I09, I19.
+- [ ] **Partial** · GPT-6 Sol / Medium · Dependencies: I09, I19.
 
-**Remaining work:** Implement Jev-supported reply interpretation, next-action advice and Codex follow-up drafts from complete relevant conversation context.
+**Remaining work:** Live reply_intent eval run, real-correspondence acceptance and reply web UI. Offline commission committed6a6213b: process_replies outcome, reply_intent class with eval harness, Codex-owned updates/cited drafts, capture recovery, advice hook; maintained tests pass.
 
 **Task scope:** Add a reply-processing commission using complete relevant thread context, Jev intent/next-action decisions and Codex record updates/drafts. Evaluate this Jev class separately; incorporate important replies into saved next-outcome advice.
 
