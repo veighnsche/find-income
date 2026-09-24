@@ -1,21 +1,11 @@
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright-core';
+import { launchSilentBrowser as launchBrowser } from './browser.mjs';
 import { startFixture } from './fixture.mjs';
 import { runDeliverySmoke } from './delivery-smoke.mjs';
 import { runRecommendationSmoke } from './recommendation-smoke.mjs';
 import { runInterviewSmoke } from './interview-smoke.mjs';
 import { runOfferComparisonSmoke } from './offer-comparison-smoke.mjs';
 import { runI27CorrectionsSmoke } from './i27-corrections-smoke.mjs';
-
-async function launchBrowser() {
-  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
-  if (executablePath) return chromium.launch({ executablePath, headless: true });
-  try {
-    return await chromium.launch({ channel: 'chrome', headless: true });
-  } catch {
-    return chromium.launch({ headless: true });
-  }
-}
 
 async function run() {
   let fixture;

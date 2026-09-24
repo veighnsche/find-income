@@ -9,7 +9,8 @@
     "build": "turbo run build",
     "generate": "turbo run generate",
     "format": "turbo run format",
-    "e2e": "pnpm --filter @jobseek/web build && node scripts/ui-smoke/smoke.mjs"
+    "e2e": "pnpm --filter @jobseek/web build && node scripts/ui-smoke/smoke.mjs",
+    "e2e:research": "pnpm --filter @jobseek/web build && node scripts/ui-smoke/research-smoke.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.63.0",

@@ -29,6 +29,7 @@ type Options struct {
 	Rounds                *rounds.Service
 	Delivery              *deliveryservice.Service
 	Research              ResearchService
+	ResearchControl       ResearchRunControl
 }
 
 type CodexControl interface {
@@ -49,17 +50,19 @@ type Handler struct {
 	rounds                *rounds.Service
 	delivery              *deliveryservice.Service
 	research              ResearchService
+	researchControl       ResearchRunControl
 	limiter               *loginLimiter
 }
 
 func NewHandler(database *store.Store, service *auth.Service, options Options) http.Handler {
 	h := &Handler{auth: service, database: database, origins: map[string]bool{}, secureCookies: options.SecureCookies,
 		ingestionAvailable: options.IngestionAvailable, organisationAvailable: options.OrganisationAvailable,
-		codex:               options.Codex,
-		rounds:              options.Rounds,
-		delivery:            options.Delivery,
-		research:            options.Research,
-		limiter:             newLoginLimiter()}
+		codex:           options.Codex,
+		rounds:          options.Rounds,
+		delivery:        options.Delivery,
+		research:        options.Research,
+		researchControl: options.ResearchControl,
+		limiter:         newLoginLimiter()}
 	for _, origin := range options.AllowedOrigins {
 		h.origins[origin] = true
 	}
