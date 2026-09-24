@@ -14,7 +14,7 @@ import time
 from urllib.parse import urlparse
 
 MAX_FRAME = 1 << 20
-REQUIRED_TOOLS = {"round_context", "round_mutation", "round_evidence_correction", "source_links", "application_pack_prepare", "offer_comparison_prepare", "interview_prepare", "interview_debrief", "reply_update", "reply_draft"}
+REQUIRED_TOOLS = {"round_context", "round_mutation", "round_evidence_correction", "source_links", "application_pack_prepare", "offer_comparison_prepare", "interview_prepare", "interview_debrief", "reply_update", "reply_draft", "context_read", "research_memory", "evidence_capture", "jev_assess", "opportunity_match", "records_save", "research_execute"}
 CANARY = "/var/lib/jobseek-runner/work/i12-accept/context.txt"
 STATE_SENTINEL = "/var/lib/jobseek-runner/state/i12-native-sentinel.txt"
 WORK_PATCH = (

@@ -20,6 +20,8 @@ type Lazy struct {
 	closed          bool
 	packConfig      *ApplicationPackRuntimeConfig
 	interviewConfig *InterviewRuntimeConfig
+	researchTC      *ResearchToolchain
+	researchSup     *rounds.Supervisor
 }
 
 func NewLazy(ctx context.Context, db *store.Store) *Lazy { return &Lazy{ctx: ctx, db: db} }
@@ -40,6 +42,47 @@ func (l *Lazy) SetInterviewConfig(cfg InterviewRuntimeConfig) {
 	}
 }
 
+// SetResearchWiring stages the T23 research toolchain plus the supervisor
+// that needs the service-bound turn deps. Like the config setters it is
+// ignored once closed; unlike them it also works after construction,
+// applying immediately under the same lock. While the service is still
+// unbuilt the last call wins. A nil toolchain skips the tool wiring and a
+// nil supervisor skips the turn-dep binding, so either side can be staged
+// independently.
+func (l *Lazy) SetResearchWiring(tc *ResearchToolchain, sup *rounds.Supervisor) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
+		return
+	}
+	if l.service != nil {
+		l.applyResearchWiringLocked(tc, sup)
+		return
+	}
+	l.researchTC, l.researchSup = tc, sup
+}
+
+// applyResearchWiringLocked wires the toolchain onto the service (replacing
+// any previous toolchain) and binds the supervisor's service-bound deps:
+// the turn runner plus conversation control and dispatch observation,
+// which *Service satisfies directly. The caller holds l.mu. Supervisor
+// conflicts resolve toward construction-time deps: a dep the supervisor
+// already has keeps its binding and the late one is dropped.
+func (l *Lazy) applyResearchWiringLocked(tc *ResearchToolchain, sup *rounds.Supervisor) {
+	if l.service == nil {
+		return
+	}
+	if tc != nil {
+		l.service.SetResearchTools(tc)
+	}
+	if sup == nil {
+		return
+	}
+	_ = sup.SetTurnRunner(l.service.ResearchTurnRunner())
+	_ = sup.SetConversation(l.service)
+	_ = sup.SetObserver(l.service)
+}
+
 func (l *Lazy) get() (*Service, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -53,6 +96,11 @@ func (l *Lazy) get() (*Service, error) {
 		}
 		if l.err == nil && l.interviewConfig != nil {
 			_ = l.service.ConfigureInterviews(*l.interviewConfig)
+		}
+		if l.err == nil && (l.researchTC != nil || l.researchSup != nil) {
+			tc, sup := l.researchTC, l.researchSup
+			l.researchTC, l.researchSup = nil, nil
+			l.applyResearchWiringLocked(tc, sup)
 		}
 	}
 	return l.service, l.err

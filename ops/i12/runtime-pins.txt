@@ -1,0 +1,31 @@
+# T22 selected runtime pins. Machine-checked by verify-runtime-pins.py and the
+# installers; digests are lowercase hex sha256 of the installed file bytes.
+# The macOS column re-verifies the T02 proof on the build machine; the linux
+# column is what T29 must find on the selected hosts. The Linux Codex digest
+# stays operator-supplied: only an approved Linux codex binary may be
+# installed, and its hash is recorded in the private deployment record, never
+# here. Never commit deployment-record hashes or secrets to this file.
+#
+# Format: <role> <key>=<value> ... (whitespace-separated, # comments).
+
+# App Server on the DEDICATED RUNNER VM (unchanged pin, T02/macOS digest as
+# the build-machine reference). Installed at /opt/jobseek/bin/codex.
+codex version=codex-cli-0.153.4 macos_sha256=b973d440acac501fd2594a43e7ca9ce41e0a65b9dfb28d0d7a7837c99e1261e3
+
+# Isolated headless shell on the APP HOST (T02 selection: subprocess
+# --dump-dom render through the per-op recording proxy under confinement).
+# Installed from the pinned playwright-core revision below; the executor
+# re-verifies the binary digest at first use (ExpectedChromeSHA256).
+# Binary path after install: /opt/jobseek/headless-shell/chrome-headless-shell
+headless_shell playwright_core=1.63.0 build=chromium_headless_shell-1243 browser_version=153.0.8010.12 macos_arm64_sha256=a0bfe7b4da4787b66058477d696cd1d09065d25f06a548947722b9af77ee8282 linux64_zip_sha256=a9da028861a0cf789ff25c2fed45f5f1aaf969ed9247835b6a7821a4f7af9d1d linux64_binary_sha256=ded93a9c9a53a1ae040f08124badcca95c938e9d5015ff340c3b5538c41bf39e linux64_url=https://cdn.playwright.dev/builds/cft/153.0.8010.12/linux64/chrome-headless-shell-linux64.zip
+
+# Executable-research runtime on the APP HOST. System python3, stdlib only;
+# no pip packages. The installer records the installed --version in the
+# deployment record; T02 fixtures ran 3.9.6.
+python binary=python3 min_version=3.9
+
+# Pack renderer on the APP HOST (unchanged pin). Installed at /opt/jobseek/bin/typst.
+typst version=0.15.1
+
+# Build toolchain pins (repository pins; checked by the build machine).
+toolchain go=1.27.1 node=24.21.0 pnpm=12.3.4

@@ -8,6 +8,7 @@ out=${1:?usage: build.sh ABSOLUTE_OUTPUT_DIRECTORY}
 case "$out" in /*) ;; *) echo 'output directory must be absolute' >&2; exit 2;; esac
 mkdir -p "$out/bin" "$out/web"
 python3 "$repo/ops/i12/check-runtime-tools.py"
+python3 "$repo/ops/i12/test-probes.py"
 (cd "$repo/apps/api" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -o "$out/bin/jobseek-api" ./cmd/server && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -o "$out/bin/codex-runner" ./cmd/codex-runner)
 (cd "$repo" && pnpm --filter @jobseek/web build)
 cp -R "$repo/apps/web/dist/." "$out/web/"

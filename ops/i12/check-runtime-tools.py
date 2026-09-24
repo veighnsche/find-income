@@ -14,16 +14,24 @@ match = re.search(r"var requiredTools = \[\]string\{([^}]+)\}", source)
 if not match:
     raise SystemExit("cannot find codexservice requiredTools")
 required = set(re.findall(r'"([a-z_]+)"', match.group(1)))
+research = (root / "apps/api/internal/codexservice/research_tools.go").read_text()
+manifest = set(re.findall(r'ResearchTool\w+\s+=\s+"([a-z_]+)"', research))
+if len(manifest) != 7:
+    raise SystemExit("cannot find the seven research tool names")
+required |= manifest
 template = tomllib.loads((Path(__file__).parent / "runner-config.toml.template").read_text())
 configured = set(template["mcp_servers"]["jobseek"]["enabled_tools"])
-tree = ast.parse((Path(__file__).parent / "accept-live-runner.py").read_text())
-probe = None
-for node in tree.body:
-    if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "REQUIRED_TOOLS" for target in node.targets):
-        probe = set(ast.literal_eval(node.value))
-        break
-if not required or required != configured or required != probe:
-    raise SystemExit("required MCP tools differ across runtime, config and acceptance probe")
+probes = []
+for name in ("accept-live-runner.py", "accept-research-readiness.py"):
+    tree = ast.parse((Path(__file__).parent / name).read_text())
+    found = None
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "REQUIRED_TOOLS" for target in node.targets):
+            found = set(ast.literal_eval(node.value))
+            break
+    probes.append(found)
+if not required or required != configured or any(required != probe for probe in probes):
+    raise SystemExit("required MCP tools differ across runtime, config and acceptance probes")
 live_patches = runpy.run_path(str(Path(__file__).parent / "accept-live-runner.py"))
 rollout_patches = runpy.run_path(str(Path(__file__).parent / "accept-native-rollout.py"))
 if any(live_patches[name] != rollout_patches[name] for name in ("WORK_PATCH", "STATE_PATCH")):
