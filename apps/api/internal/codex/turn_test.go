@@ -134,6 +134,76 @@ func TestTurnControllerCancellationInterruptsAndCloses(t *testing.T) {
 	}
 }
 
+func TestTurnControllerRunResumedSkipsThreadStart(t *testing.T) {
+	_, p, controller := turnSetup(t)
+	hooks := turnHooks()
+	var bound string
+	hooks.BindTurn = func(_ context.Context, thread, turn string) error { bound = thread + "/" + turn; return nil }
+	done := make(chan turnResult, 1)
+	go func() {
+		out, err := controller.RunResumed(context.Background(), "thread-saved", "Synthetic evidence", hooks)
+		done <- turnResult{out, err}
+	}()
+	r := p.read(t)
+	if string(r["method"]) != `"turn/start"` {
+		t.Fatalf("resumed run must start a turn directly: %s", r["method"])
+	}
+	var params map[string]json.RawMessage
+	if err := json.Unmarshal(r["params"], &params); err != nil || string(params["threadId"]) != `"thread-saved"` {
+		t.Fatalf("resumed run used the wrong thread: %s", r["params"])
+	}
+	p.result(t, r, `{"turn":{"id":"turn-b","status":"inProgress","items":[]}}`)
+	p.write(t, `{"method":"turn/completed","params":{"threadId":"thread-saved","turn":{"id":"turn-b","status":"completed"}}}`)
+	result := receiveTurn(t, done)
+	if result.err != nil || result.out.State != "completed" || result.out.ThreadID != "thread-saved" || result.out.TurnID != "turn-b" || bound != "thread-saved/turn-b" {
+		t.Fatalf("outcome %+v bound %q", result, bound)
+	}
+	if _, err := controller.RunResumed(context.Background(), "", "x", hooks); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatal("empty thread ID accepted")
+	}
+	hooks.BindTurn = nil
+	if _, err := controller.RunResumed(context.Background(), "thread-saved", "x", hooks); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatal("missing BindTurn accepted")
+	}
+}
+
+func TestTurnControllerObservesItemActivity(t *testing.T) {
+	_, p, controller := turnSetup(t)
+	hooks := turnHooks()
+	items := make(chan ItemEvent, 8)
+	hooks.OnItem = func(e ItemEvent) { items <- e }
+	done := launchTurn(controller, context.Background(), hooks)
+	replyThread(t, p)
+	replyTurn(t, p)
+	p.write(t, `{"method":"item/started","params":{"threadId":"thread-a","turnId":"turn-a","item":{"id":"item-a","type":"userMessage"}}}`)
+	p.write(t, `{"method":"item/agentMessage/delta","params":{"threadId":"thread-a","turnId":"turn-a","itemId":"item-a","delta":"dropped"}}`)
+	p.write(t, `{"method":"item/completed","params":{"threadId":"thread-a","turnId":"turn-a","item":{"id":"item-a","type":"userMessage"}}}`)
+	p.write(t, `{"method":"turn/completed","params":{"threadId":"thread-a","turn":{"id":"turn-a","status":"completed"}}}`)
+	result := receiveTurn(t, done)
+	if result.err != nil || result.out.State != "completed" {
+		t.Fatalf("outcome %+v", result)
+	}
+	var got []ItemEvent
+	for len(items) > 0 {
+		got = append(got, <-items)
+	}
+	if len(got) != 2 || got[0].State != "started" || got[1].State != "completed" || got[0].ItemID != "item-a" || got[0].ItemType != "userMessage" || got[0].ThreadID != "thread-a" || got[0].TurnID != "turn-a" {
+		t.Fatalf("item activity lost: %+v", got)
+	}
+}
+
+func TestTurnControllerMalformedItemFailsClosed(t *testing.T) {
+	c, p, controller := turnSetup(t)
+	done := launchTurn(controller, context.Background(), turnHooks())
+	replyThread(t, p)
+	replyTurn(t, p)
+	p.write(t, `{"method":"item/started","params":{"threadId":"thread-a"}}`)
+	result := receiveTurn(t, done)
+	if !errors.Is(result.err, ErrMalformedFrame) || result.out.State != "uncertain" || c.Err() == nil {
+		t.Fatalf("malformed item accepted: %+v", result)
+	}
+}
+
 func TestTurnControllerRejectsNativeInputWithoutOwnerChat(t *testing.T) {
 	c, p, controller := turnSetup(t)
 	done := launchTurn(controller, context.Background(), turnHooks())

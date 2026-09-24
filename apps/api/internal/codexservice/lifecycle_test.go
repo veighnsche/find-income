@@ -521,7 +521,11 @@ func TestRetryRequiresCorrelatedTerminalHistory(t *testing.T) {
 	if err != nil || retried.JobID == item.JobID || retried.DispatchStarted {
 		t.Fatal(retried, err)
 	}
-	if f.count("thread/read") != 2 || f.count("thread/turns/list") != 2 {
+	// T06 §5 observation contract: ObserveTurn is turn-list-authoritative.
+	// Both reconciliations observe through thread/turns/list only; no
+	// thread/read identity check is made. Gating semantics are unchanged:
+	// inProgress refuses, terminal allows.
+	if f.count("thread/read") != 0 || f.count("thread/turns/list") != 2 {
 		t.Fatal("unexpected history observations")
 	}
 }
@@ -545,7 +549,7 @@ func TestRetryWithoutRemoteIDsRemainsUncertain(t *testing.T) {
 	if _, err = s.RetryIngestion(ctx, actor, item.ID, nil); !errors.Is(err, store.ErrUncertain) {
 		t.Fatal("missing IDs retried", err)
 	}
-	if f.count("thread/read") != 0 {
+	if f.count("thread/read") != 0 || f.count("thread/turns/list") != 0 {
 		t.Fatal("guessed remote identity")
 	}
 }

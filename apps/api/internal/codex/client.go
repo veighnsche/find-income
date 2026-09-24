@@ -357,7 +357,7 @@ func (c *Client) handle(env envelope) error {
 
 func knownNotification(method string) bool {
 	switch method {
-	case "thread/started", "thread/status/changed", "turn/started", "turn/completed", "item/started", "item/completed", "item/agentMessage/delta", "item/mcpToolCall/progress", "account/login/completed", "account/updated", "account/rateLimits/updated", "serverRequest/resolved", "error", "mcpServer/startupStatus/updated":
+	case "thread/started", "thread/status/changed", "turn/started", "turn/completed", "item/started", "item/completed", "item/agentMessage/delta", "item/mcpToolCall/progress", "account/login/completed", "account/updated", "account/rateLimits/updated", "serverRequest/resolved", "error", "warning", "deprecationNotice", "thread/goal/cleared", "mcpServer/startupStatus/updated":
 		return true
 	default:
 		return false

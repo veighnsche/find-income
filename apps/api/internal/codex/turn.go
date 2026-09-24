@@ -13,9 +13,20 @@ var ErrTurnBusy = errors.New("codex turn already active")
 var ErrTurnPersistence = errors.New("codex turn identifier persistence failed")
 
 type TurnOutcome struct{ State, Code, ThreadID, TurnID string }
+
+// ItemEvent is one observed item lifecycle step for the running turn. Raw is
+// untrusted protocol data for bounded persistence, never dashboard output.
+type ItemEvent struct {
+	ThreadID, TurnID, ItemID, ItemType, State string
+	Raw                                       json.RawMessage
+}
+
 type TurnHooks struct {
 	BindThread func(context.Context, string) error
 	BindTurn   func(context.Context, string, string) error
+	// OnItem observes item/started and item/completed for the running turn.
+	// It runs on the event pump and must not block; deltas stay dropped.
+	OnItem func(ItemEvent)
 }
 
 // TurnController owns the event stream for one previously persisted dispatch.
@@ -49,7 +60,7 @@ func (c *TurnController) Run(ctx context.Context, text string, hooks TurnHooks) 
 	out.State, out.Code = "uncertain", "dispatch_uncertain"
 	signals, pumpErr := make(chan turnSignal, 16), make(chan error, 1)
 	stop, pumpDone := make(chan struct{}), make(chan struct{})
-	go c.pump(stop, pumpDone, signals, pumpErr)
+	go c.pump(stop, pumpDone, signals, pumpErr, hooks.OnItem)
 	defer func() { close(stop); <-pumpDone }()
 	settled := false
 	defer func() {
@@ -65,43 +76,73 @@ func (c *TurnController) Run(ctx context.Context, text string, hooks TurnHooks) 
 	if hooks.BindThread(ctx, out.ThreadID) != nil {
 		return out, ErrTurnPersistence
 	}
-	turn, err := c.client.StartTurn(ctx, out.ThreadID, text, c.effort)
+	return c.runTurn(ctx, out.ThreadID, text, hooks, signals, pumpErr, &out, &settled)
+}
+
+// RunResumed starts a turn on a previously persisted thread that is already
+// loaded on this connection (see ResumeThread for a new connection). BindTurn
+// persists the new turn ID; BindThread is unused. Item activity is observed
+// through hooks.OnItem exactly as in Run.
+func (c *TurnController) RunResumed(ctx context.Context, threadID, text string, hooks TurnHooks) (out TurnOutcome, err error) {
+	if ctx == nil || threadID == "" || strings.TrimSpace(text) == "" || hooks.BindTurn == nil {
+		return out, ErrInvalidArgument
+	}
+	if !c.mu.TryLock() {
+		return out, ErrTurnBusy
+	}
+	defer c.mu.Unlock()
+	out.State, out.Code, out.ThreadID = "uncertain", "dispatch_uncertain", threadID
+	signals, pumpErr := make(chan turnSignal, 16), make(chan error, 1)
+	stop, pumpDone := make(chan struct{}), make(chan struct{})
+	go c.pump(stop, pumpDone, signals, pumpErr, hooks.OnItem)
+	defer func() { close(stop); <-pumpDone }()
+	settled := false
+	defer func() {
+		if !settled {
+			c.stopTurn(out.ThreadID, out.TurnID)
+		}
+	}()
+	return c.runTurn(ctx, threadID, text, hooks, signals, pumpErr, &out, &settled)
+}
+
+func (c *TurnController) runTurn(ctx context.Context, threadID, text string, hooks TurnHooks, signals <-chan turnSignal, pumpErr <-chan error, out *TurnOutcome, settled *bool) (TurnOutcome, error) {
+	turn, err := c.client.StartTurn(ctx, threadID, text, c.effort)
 	if err != nil {
-		return out, err
+		return *out, err
 	}
 	out.TurnID = turn.ID
-	if hooks.BindTurn(ctx, out.ThreadID, out.TurnID) != nil {
-		return out, ErrTurnPersistence
+	if hooks.BindTurn(ctx, threadID, out.TurnID) != nil {
+		return *out, ErrTurnPersistence
 	}
 	if turn.Status != "inProgress" {
-		out.State, out.Code, settled = turn.Status, "turn_"+turn.Status, true
-		return out, nil
+		out.State, out.Code, *settled = turn.Status, "turn_"+turn.Status, true
+		return *out, nil
 	}
 	for {
 		select {
 		case <-ctx.Done():
 			out.Code = "interrupted_outcome_unconfirmed"
-			return out, ctx.Err()
+			return *out, ctx.Err()
 		case <-c.client.Done():
 			out.Code = "runtime_disconnected"
-			return out, c.client.Err()
+			return *out, c.client.Err()
 		case e := <-pumpErr:
 			out.Code = "invalid_runtime_event"
-			return out, e
+			return *out, e
 		case signal := <-signals:
 			if signal.threadID != out.ThreadID || signal.turnID != out.TurnID {
 				continue
 			}
 			if signal.attention {
 				out.State, out.Code = "uncertain", "native_request_rejected"
-				return out, ErrUnsupported
+				return *out, ErrUnsupported
 			}
-			out.State, out.Code, settled = signal.status, "turn_"+signal.status, true
-			return out, nil
+			out.State, out.Code, *settled = signal.status, "turn_"+signal.status, true
+			return *out, nil
 		}
 	}
 }
-func (c *TurnController) pump(stop <-chan struct{}, done chan<- struct{}, signals chan<- turnSignal, failures chan<- error) {
+func (c *TurnController) pump(stop <-chan struct{}, done chan<- struct{}, signals chan<- turnSignal, failures chan<- error, onItem func(ItemEvent)) {
 	defer close(done)
 	fail := func(err error) { failures <- err; c.client.fail(err) }
 	for {
@@ -142,6 +183,27 @@ func (c *TurnController) pump(stop <-chan struct{}, done chan<- struct{}, signal
 					return
 				}
 				signal = turnSignal{threadID: p.ThreadID, turnID: p.Turn.ID, status: p.Turn.Status}
+			} else if event.Method == "item/started" || event.Method == "item/completed" {
+				var p struct {
+					ThreadID string `json:"threadId"`
+					TurnID   string `json:"turnId"`
+					Item     struct {
+						ID   string `json:"id"`
+						Type string `json:"type"`
+					} `json:"item"`
+				}
+				if json.Unmarshal(event.Params, &p) != nil || p.ThreadID == "" || p.TurnID == "" || p.Item.ID == "" || p.Item.Type == "" {
+					fail(ErrMalformedFrame)
+					return
+				}
+				if onItem != nil {
+					state := "started"
+					if event.Method == "item/completed" {
+						state = "completed"
+					}
+					onItem(ItemEvent{ThreadID: p.ThreadID, TurnID: p.TurnID, ItemID: p.Item.ID, ItemType: p.Item.Type, State: state, Raw: event.Params})
+				}
+				continue
 			} else {
 				continue
 			}

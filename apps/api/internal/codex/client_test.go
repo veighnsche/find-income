@@ -202,11 +202,6 @@ func TestObserveTurnRequiresExactSupportedHistory(t *testing.T) {
 				observed, err = c.ObserveTurn(context.Background(), "thread-a", "turn-a")
 				return err
 			})
-			read := p.read(t)
-			if string(read["method"]) != `"thread/read"` {
-				t.Fatal("history identity read missing")
-			}
-			p.result(t, read, `{"thread":{"id":"thread-a"}}`)
 			list := p.read(t)
 			if string(list["method"]) != `"thread/turns/list"` {
 				t.Fatal("supported turn list missing")
@@ -224,6 +219,54 @@ func TestObserveTurnRequiresExactSupportedHistory(t *testing.T) {
 	}
 	if _, err := (&Client{}).ObserveTurn(context.Background(), "", "turn-a"); !errors.Is(err, ErrInvalidArgument) {
 		t.Fatal(err)
+	}
+}
+
+func TestObserveTurnResumesOnceWhenThreadUnavailable(t *testing.T) {
+	c, p := setup(t, Options{})
+	initialize(t, c, p)
+	var observed string
+	done := callAsync(func() error {
+		var err error
+		observed, err = c.ObserveTurn(context.Background(), "thread-a", "turn-a")
+		return err
+	})
+	list := p.read(t)
+	if string(list["method"]) != `"thread/turns/list"` {
+		t.Fatal("supported turn list missing")
+	}
+	p.write(t, `{"id":`+string(list["id"])+`,"error":{"code":-32600,"message":"thread not loaded: thread-a"}}`)
+	resume := p.read(t)
+	if string(resume["method"]) != `"thread/resume"` || string(resume["params"]) != `{"threadId":"thread-a","excludeTurns":true}` {
+		t.Fatalf("fresh-connection resume missing: %s", resume["params"])
+	}
+	p.result(t, resume, `{"thread":{"id":"thread-a","historyMode":"paginated"}}`)
+	retry := p.read(t)
+	if string(retry["method"]) != `"thread/turns/list"` {
+		t.Fatal("turn list retry missing after resume")
+	}
+	p.result(t, retry, `{"data":[{"id":"turn-a","status":"completed"}]}`)
+	if err := receive(t, done); err != nil || observed != "completed" {
+		t.Fatal(observed, err)
+	}
+}
+
+func TestObserveTurnStaysUncertainWhenResumeFails(t *testing.T) {
+	c, p := setup(t, Options{})
+	initialize(t, c, p)
+	done := callAsync(func() error {
+		_, err := c.ObserveTurn(context.Background(), "thread-a", "turn-a")
+		return err
+	})
+	list := p.read(t)
+	p.write(t, `{"id":`+string(list["id"])+`,"error":{"code":-32600,"message":"thread not loaded: thread-a"}}`)
+	resume := p.read(t)
+	if string(resume["method"]) != `"thread/resume"` {
+		t.Fatal("resume missing")
+	}
+	p.write(t, `{"id":`+string(resume["id"])+`,"error":{"code":-32600,"message":"no rollout found for thread id thread-a"}}`)
+	if err := receive(t, done); !errors.Is(err, ErrHistoryIncomplete) {
+		t.Fatalf("unknown thread must stay uncertain: %v", err)
 	}
 }
 
@@ -565,9 +608,24 @@ func TestTypedMethodsUsePinnedWireShapes(t *testing.T) {
 			}
 			return e
 		}, `{"limit":100,"detail":"toolsAndAuthOnly"}`, `{"data":[{"name":"jobseek","authStatus":"unsupported","tools":{}}],"nextCursor":null}`},
-		{"read thread", func() error { _, e := c.ReadThread(context.Background(), "t"); return e }, `{"threadId":"t","includeTurns":true}`, `{"thread":{"id":"t","historyMode":"legacy","turns":[]}}`},
+		{"read thread", func() error { _, e := c.ReadThread(context.Background(), "t"); return e }, `{"threadId":"t","includeTurns":false}`, `{"thread":{"id":"t","historyMode":"paginated"}}`},
+		{"resume thread", func() error { _, e := c.ResumeThread(context.Background(), "t", true); return e }, `{"threadId":"t","excludeTurns":true}`, `{"thread":{"id":"t","historyMode":"paginated"}}`},
 		{"turns", func() error { _, e := c.ListTurns(context.Background(), "t", nil); return e }, `{"threadId":"t","limit":20,"itemsView":"full"}`, `{"data":[],"nextCursor":null}`},
 		{"interrupt", func() error { return c.Interrupt(context.Background(), "t", "turn") }, `{"threadId":"t","turnId":"turn"}`, `{}`},
+		{"steer", func() error {
+			id, e := c.SteerTurn(context.Background(), "t", "turn", "Synthetic steer")
+			if e == nil && id != "turn" {
+				return errors.New("wrong steered turn")
+			}
+			return e
+		}, `{"threadId":"t","expectedTurnId":"turn","input":[{"type":"text","text":"Synthetic steer"}]}`, `{"turnId":"turn"}`},
+		{"tool call", func() error {
+			raw, e := c.CallMCPTool(context.Background(), "proof", "t", "proof_echo", json.RawMessage(`{"q":"x"}`))
+			if e == nil && !strings.Contains(string(raw), "proof_echo") {
+				return errors.New("wrong tool result")
+			}
+			return e
+		}, `{"server":"proof","threadId":"t","tool":"proof_echo","arguments":{"q":"x"}}`, `{"content":[{"type":"text","text":"proof_echo"}]}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

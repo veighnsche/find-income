@@ -3,6 +3,7 @@ package codex
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 )
 
@@ -236,6 +237,34 @@ type Thread struct {
 	Turns       []Turn `json:"turns"`
 }
 
+// ResumeThread loads a previously persisted thread on a new connection.
+// The thread must already be materialized (at least one started turn); a
+// same-connection resume of a loaded thread is unnecessary and unsupported.
+// Paginated history is never hydrated here; page thread/turns/list instead.
+func (c *Client) ResumeThread(ctx context.Context, threadID string, excludeTurns bool) (Thread, error) {
+	if threadID == "" {
+		return Thread{}, ErrInvalidArgument
+	}
+	var result struct {
+		Thread Thread `json:"thread"`
+	}
+	err := c.call(ctx, "thread/resume", struct {
+		ThreadID     string `json:"threadId"`
+		ExcludeTurns bool   `json:"excludeTurns"`
+	}{threadID, excludeTurns}, &result, false)
+	if err == nil && result.Thread.ID != threadID {
+		c.fail(ErrMalformedFrame)
+		err = ErrMalformedFrame
+	}
+	if err != nil {
+		return Thread{}, err
+	}
+	return result.Thread, nil
+}
+
+// ReadThread reads thread metadata only. Full-history hydration is deprecated
+// for paginated threads on this pin: includeTurns=true is rejected before the
+// first turn and hangs on materialized threads. Page ListTurns instead.
 func (c *Client) ReadThread(ctx context.Context, threadID string) (Thread, error) {
 	if threadID == "" {
 		return Thread{}, ErrInvalidArgument
@@ -246,7 +275,7 @@ func (c *Client) ReadThread(ctx context.Context, threadID string) (Thread, error
 	err := c.call(ctx, "thread/read", struct {
 		ThreadID     string `json:"threadId"`
 		IncludeTurns bool   `json:"includeTurns"`
-	}{threadID, true}, &result, false)
+	}{threadID, false}, &result, false)
 	if err == nil && result.Thread.ID != threadID {
 		c.fail(ErrMalformedFrame)
 		err = ErrMalformedFrame
@@ -283,18 +312,27 @@ func (c *Client) ListTurns(ctx context.Context, threadID string, cursor *string)
 // ObserveTurn reads one known dispatch by its persisted IDs. Incomplete or
 // unsupported history never authorizes a retry. The caller must still verify
 // ownership and persist a terminal observation before resetting a job.
+//
+// The turn list is authoritative; no separate identity read is needed. On a
+// fresh connection the persisted thread is not loaded yet, so one resume is
+// attempted exactly when the first page reports the thread unavailable.
 func (c *Client) ObserveTurn(ctx context.Context, threadID, turnID string) (string, error) {
 	if threadID == "" || turnID == "" {
 		return "", ErrInvalidArgument
 	}
-	if _, err := c.ReadThread(ctx, threadID); err != nil {
-		return "", err
-	}
 	var cursor *string
 	seen := make(map[string]struct{}, 10)
+	resumed := false
 	for page := 0; page < 10; page++ {
 		turns, err := c.ListTurns(ctx, threadID, cursor)
 		if err != nil {
+			if !resumed && isThreadUnavailable(err) {
+				resumed = true
+				if _, resumeErr := c.ResumeThread(ctx, threadID, true); resumeErr != nil {
+					return "", ErrHistoryIncomplete
+				}
+				continue
+			}
 			return "", err
 		}
 		for _, turn := range turns.Data {
@@ -317,6 +355,14 @@ func (c *Client) ObserveTurn(ctx context.Context, threadID, turnID string) (stri
 	return "", ErrHistoryIncomplete
 }
 
+// isThreadUnavailable reports a rejected turn list that a fresh-connection
+// resume may repair (unknown thread, unloaded thread, or a thread with no
+// started turn yet). Upstream detail is discarded by RPCError by design.
+func isThreadUnavailable(err error) bool {
+	var rpc *RPCError
+	return errors.As(err, &rpc) && rpc.Code == -32600
+}
+
 // Available in schema but explicitly unsupported by the pinned runtime probe.
 func (c *Client) ListThreadItems(context.Context, string) error { return ErrUnsupported }
 
@@ -328,6 +374,59 @@ func (c *Client) Interrupt(ctx context.Context, threadID, turnID string) error {
 		ThreadID string `json:"threadId"`
 		TurnID   string `json:"turnId"`
 	}{threadID, turnID}, nil, false)
+}
+
+// SteerTurn appends owner text to the active turn. The expected turn ID must
+// match the running turn; steering any other turn is rejected by the server.
+// The returned ID identifies the steered turn. Steering never starts a turn.
+func (c *Client) SteerTurn(ctx context.Context, threadID, expectedTurnID, text string) (string, error) {
+	if threadID == "" || expectedTurnID == "" || strings.TrimSpace(text) == "" {
+		return "", ErrInvalidArgument
+	}
+	type input struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	var result struct {
+		TurnID string `json:"turnId"`
+	}
+	err := c.call(ctx, "turn/steer", struct {
+		ThreadID       string  `json:"threadId"`
+		ExpectedTurnID string  `json:"expectedTurnId"`
+		Input          []input `json:"input"`
+	}{threadID, expectedTurnID, []input{{"text", text}}}, &result, false)
+	if err == nil && result.TurnID == "" {
+		c.fail(ErrMalformedFrame)
+		err = ErrMalformedFrame
+	}
+	if err != nil {
+		return "", err
+	}
+	return result.TurnID, nil
+}
+
+// CallMCPTool dispatches one registered MCP tool call through the App Server
+// on a loaded thread. Arguments are trusted application JSON, never model or
+// browser input. The raw tool result is returned for typed interpretation by
+// the caller; a failed call is an RPC error, never a synthesized result.
+func (c *Client) CallMCPTool(ctx context.Context, server, threadID, tool string, arguments json.RawMessage) (json.RawMessage, error) {
+	if server == "" || threadID == "" || tool == "" {
+		return nil, ErrInvalidArgument
+	}
+	if len(arguments) == 0 {
+		arguments = json.RawMessage(`{}`)
+	}
+	var result json.RawMessage
+	err := c.call(ctx, "mcpServer/tool/call", struct {
+		Server    string          `json:"server"`
+		ThreadID  string          `json:"threadId"`
+		Tool      string          `json:"tool"`
+		Arguments json.RawMessage `json:"arguments"`
+	}{server, threadID, tool, arguments}, &result, false)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 type ApprovalDecision string

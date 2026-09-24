@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/codex"
+	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
@@ -107,6 +108,8 @@ func (s *Service) ExecuteRoundTurn(ctx context.Context, agent store.Actor, round
 	if err != nil {
 		return uncertain(err)
 	}
+	corr := NewItemCorrelator(s.RunEventSink())
+	unknownEvents := client.Diagnostics().UnknownNotifications
 	persist := func(fn func(context.Context) error) error {
 		c, done := context.WithTimeout(context.WithoutCancel(runCtx), 5*time.Second)
 		defer done()
@@ -123,14 +126,21 @@ func (s *Service) ExecuteRoundTurn(ctx context.Context, agent store.Actor, round
 				return s.db.BindRoundTurn(c, roundID, attempt.ID, attempt.Generation, threadID, turnID)
 			})
 		},
+		OnItem: func(ev codex.ItemEvent) {
+			corr.ObserveItem(roundID, attempt.ID, ev, time.Now())
+		},
 	})
 	if outcome.ThreadID == "" || outcome.TurnID == "" {
+		corr.CloseTurn(roundID, attempt.ID, outcome.ThreadID, outcome.TurnID, "unknown", time.Now())
+		s.noteUnknownEvents(client, unknownEvents, roundID, attempt.ID)
 		return uncertain(runErr)
 	}
 	observed := outcome.State
 	if observed != "completed" && observed != "failed" && observed != "interrupted" {
 		observed = "unknown"
 	}
+	corr.CloseTurn(roundID, attempt.ID, outcome.ThreadID, outcome.TurnID, observed, time.Now())
+	s.noteUnknownEvents(client, unknownEvents, roundID, attempt.ID)
 	evidence, _ := json.Marshal(struct {
 		Code     string `json:"code"`
 		ThreadID string `json:"threadId"`
@@ -210,6 +220,7 @@ func (s *Service) ObserveDispatch(ctx context.Context, attemptID string) (rounds
 		return rounds.Observation{}, err
 	}
 	if errors.Is(err, store.ErrNotFound) || remote.Generation != attempt.Generation || remote.ThreadID == "" || remote.TurnID == "" {
+		s.noteRunUncertain(attempt.RoundID, attemptID, "missing_remote_ids", "observe")
 		return rounds.Observation{State: store.AttemptUncertain, Evidence: json.RawMessage(`{"code":"missing_remote_ids"}`)}, nil
 	}
 	s.mu.Lock()
@@ -217,14 +228,20 @@ func (s *Service) ObserveDispatch(ctx context.Context, attemptID string) (rounds
 		s.mu.Unlock()
 		return rounds.Observation{}, ErrBusy
 	}
+	var unknown uint64
+	if s.client != nil && s.client.Err() == nil {
+		unknown = s.client.Diagnostics().UnknownNotifications
+	}
 	status := s.statusLocked(ctx)
 	client := s.client
 	s.mu.Unlock()
 	if status.State != "ready" {
 		return rounds.Observation{}, ErrUnavailable
 	}
+	defer s.noteUnknownEvents(client, unknown, attempt.RoundID, attemptID)
 	observed, err := client.ObserveTurn(ctx, remote.ThreadID, remote.TurnID)
 	if err != nil {
+		s.noteRunUncertain(attempt.RoundID, attemptID, uncertainReason(err), "observe")
 		return rounds.Observation{}, err
 	}
 	state := store.AttemptUncertain
@@ -246,5 +263,12 @@ func (s *Service) ObserveDispatch(ctx context.Context, attemptID string) (rounds
 	if err := s.db.ObserveRoundTurn(ctx, attempt.RoundID, attemptID, attempt.Generation, remote.ThreadID, remote.TurnID, recorded, evidence); err != nil {
 		return rounds.Observation{}, err
 	}
+	ctl := s.newTurnControl(client, attempt, remote)
+	outcome := turnOutcome(observed)
+	if state == store.AttemptUncertain {
+		outcome = researchcontract.OutcomeUncertain
+	}
+	ctl.journal(RunEventTurnObserved, outcome,
+		runTurnRecord{ThreadID: remote.ThreadID, TurnID: remote.TurnID, Status: observed, Via: "observe", Persisted: true})
 	return rounds.Observation{State: state, Evidence: evidence}, nil
 }
