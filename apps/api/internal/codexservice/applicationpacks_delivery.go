@@ -197,7 +197,7 @@ func deliveryRouteRoundAllows(round store.Round, opportunityID string) bool {
 		return false
 	}
 	resource := "opportunity:" + opportunityID
-	if round.Outcome == "process_input" && (len(round.Scope.Resources) != 1 || round.Scope.Resources[0] != resource) {
+	if round.Outcome == "process_input" && (len(round.Scope.Resources) != 2 || round.Scope.Resources[0] != resource || round.Scope.Resources[1] != "campaign:active") {
 		return false
 	}
 	hasResource, hasJev, hasPack := false, false, false

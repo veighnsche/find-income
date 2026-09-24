@@ -80,7 +80,7 @@ func testCapturedRouteResume(t *testing.T, complete bool) {
 	}
 	resource := "opportunity:" + opportunity.ID
 	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "captured-route-round", Intent: "Prepare the selected pack",
-		Outcome: "prepare", ProfileVersion: profile.Version, Scope: store.RoundScope{Resources: []string{resource},
+		Outcome: "prepare", ProfileVersion: profile.Version, Scope: store.RoundScope{Resources: []string{resource, "campaign:active"},
 			Operations: []string{store.RoundCodexTurn, store.RoundPrepareApplicationPack, store.RoundJevRequest}, Delegates: []string{agent.ID}},
 		Limits: store.RoundAllowance{Requests: 3, Items: 1, Tools: 4, Turns: 1}, Deadline: time.Now().Add(time.Hour)})
 	if err != nil {

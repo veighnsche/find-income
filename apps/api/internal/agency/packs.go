@@ -97,7 +97,7 @@ func (e *Engine) launchPrepareWithCorrection(r store.Round, correction *packCorr
 }
 
 func packOpportunityScope(scope store.RoundScope) (string, error) {
-	if len(scope.Resources) < 1 || len(scope.Resources) > 2 || len(scope.Resources) == 2 && scope.Resources[1] != "campaign:active" ||
+	if len(scope.Resources) != 2 || scope.Resources[1] != "campaign:active" ||
 		!strings.HasPrefix(scope.Resources[0], "opportunity:") || len(scope.Resources[0]) <= len("opportunity:") {
 		return "", store.ErrInvalid
 	}

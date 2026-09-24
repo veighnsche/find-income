@@ -127,7 +127,7 @@ func agencyInterviewFixture(t *testing.T) (*store.Store, store.Actor, store.Inte
 }
 
 func agencyInterviewRound(interview store.Interview) store.StartRoundInput {
-	return store.StartRoundInput{RequestKey: "interview-work", Intent: "Prepare one actual interview", Outcome: "interview_prepare", ProfileVersion: interview.ProfileVersion, Deadline: time.Now().Add(time.Hour), Scope: store.RoundScope{InputRefs: []string{"interview:" + interview.ID}, Resources: []string{"opportunity:" + interview.OpportunityID}, Operations: []string{store.RoundCodexTurn, store.RoundInterviewBriefSave, store.RoundJevRequest}, Delegates: []string{"codex-runner"}}, Limits: store.RoundAllowance{Requests: 2, Items: 1, Tools: 2, Turns: 1}}
+	return store.StartRoundInput{RequestKey: "interview-work", Intent: "Prepare one actual interview", Outcome: "interview_prepare", ProfileVersion: interview.ProfileVersion, Deadline: time.Now().Add(time.Hour), Scope: store.RoundScope{InputRefs: []string{"interview:" + interview.ID}, Resources: []string{"opportunity:" + interview.OpportunityID, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundInterviewBriefSave, store.RoundJevRequest}, Delegates: []string{"codex-runner"}}, Limits: store.RoundAllowance{Requests: 2, Items: 1, Tools: 2, Turns: 1}}
 }
 
 func TestCommissionedInterviewWorkerRetainsBriefWhenFocusUnresolved(t *testing.T) {

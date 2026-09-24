@@ -43,7 +43,7 @@ func TestApplicationPackToolUsesRecordedJevAndGuardedMutation(t *testing.T) {
 	}
 	resource := "opportunity:" + opportunity.ID
 	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "pack-round", Intent: "Prepare a truthful application", Outcome: "prepare", ProfileVersion: profile.Version,
-		Scope:  store.RoundScope{Resources: []string{resource}, Operations: []string{store.RoundCodexTurn, store.RoundJevRequest, store.RoundPrepareApplicationPack}, Delegates: []string{agent.ID}},
+		Scope:  store.RoundScope{Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundJevRequest, store.RoundPrepareApplicationPack}, Delegates: []string{agent.ID}},
 		Limits: store.RoundAllowance{Requests: 3, Items: 1, Tools: 4, Turns: 1}, Deadline: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func TestApplicationPackExpiredBeforePreparation(t *testing.T) {
 	}
 	resource := "opportunity:" + opportunity.ID
 	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "expiring-pack", Intent: "Prepare", Outcome: "prepare", ProfileVersion: profile.Version,
-		Scope:  store.RoundScope{Resources: []string{resource}, Operations: []string{store.RoundCodexTurn, store.RoundJevRequest, store.RoundPrepareApplicationPack}, Delegates: []string{agent.ID}},
+		Scope:  store.RoundScope{Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundJevRequest, store.RoundPrepareApplicationPack}, Delegates: []string{agent.ID}},
 		Limits: store.RoundAllowance{Requests: 2, Items: 1, Tools: 2, Turns: 1}, Deadline: time.Now().Add(80 * time.Millisecond)})
 	if err != nil {
 		t.Fatal(err)

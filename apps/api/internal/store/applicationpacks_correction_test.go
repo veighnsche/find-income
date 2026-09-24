@@ -59,7 +59,7 @@ func TestPackCorrectionCommitsExactOwnerInstructionAndPreservesPriorVersion(t *t
 		t.Fatal(err)
 	}
 	round, _, err := db.StartRound(ctx, owner, StartRoundInput{RequestKey: "pack-correction-round", Intent: "Correct the selected pack", Outcome: "process_input", ProfileVersion: 1,
-		Scope:  RoundScope{InputRefs: []string{"instruction:" + instruction.ID}, Resources: []string{"opportunity:" + opportunity.ID}, Operations: []string{RoundCodexTurn, RoundPrepareApplicationPack}, Delegates: []string{agent.ID}},
+		Scope:  RoundScope{InputRefs: []string{"instruction:" + instruction.ID}, Resources: []string{"opportunity:" + opportunity.ID, "campaign:active"}, Operations: []string{RoundCodexTurn, RoundPrepareApplicationPack}, Delegates: []string{agent.ID}},
 		Limits: RoundAllowance{Requests: 2, Items: 1, Tools: 2, Turns: 1}, Deadline: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)

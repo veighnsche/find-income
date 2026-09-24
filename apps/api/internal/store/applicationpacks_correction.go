@@ -93,6 +93,5 @@ func checkRoundPackCorrectionTx(ctx context.Context, tx *sql.Tx, round Round, in
 }
 
 func correctionOpportunityScope(resources []string, opportunityID string) bool {
-	return len(resources) == 1 && resources[0] == "opportunity:"+opportunityID ||
-		len(resources) == 2 && resources[0] == "opportunity:"+opportunityID && resources[1] == "campaign:active"
+	return len(resources) == 2 && resources[0] == "opportunity:"+opportunityID && resources[1] == "campaign:active"
 }

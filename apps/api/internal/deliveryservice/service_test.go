@@ -132,13 +132,17 @@ type fakeSender struct {
 }
 
 type fakeNextActionAdvisor struct {
-	calls int
-	facts DeliveryAdviceFacts
+	calls    int
+	facts    DeliveryAdviceFacts
+	response json.RawMessage
 }
 
 func (f *fakeNextActionAdvisor) RecommendDelivery(_ context.Context, _ store.Round, facts DeliveryAdviceFacts) json.RawMessage {
 	f.calls++
 	f.facts = facts
+	if len(f.response) != 0 {
+		return f.response
+	}
 	return json.RawMessage(`{"status":"selected","action":"review_delivery"}`)
 }
 
@@ -431,6 +435,28 @@ func TestExactReviewDoubleClickAndSubmissionIsNotReceipt(t *testing.T) {
 	result, err = svc.SendReview(context.Background(), owner, review.ID)
 	if err != nil || result.Review.Items[0].State != "accepted_by_smtp" || sender.calls != 1 {
 		t.Fatalf("existing outcome hidden after sender config loss: %+v err=%v calls=%d", result, err, sender.calls)
+	}
+}
+
+func TestUnavailableAdvicePreservesRecordedDeliveryResult(t *testing.T) {
+	db, _, owner, _ := deliveryFixture(t)
+	defer db.Close()
+	review, svc := prepareApproved(t, db, owner)
+	sender := &fakeSender{fn: func(context.Context) delivery.Outcome {
+		return delivery.Outcome{State: delivery.AcceptedBySMTP, Stage: "data_reply", SMTPCode: 250}
+	}}
+	advisor := &fakeNextActionAdvisor{response: json.RawMessage(`{"status":"unavailable","code":"recommendation_provider_unavailable"}`)}
+	svc.Sender, svc.Advisor = sender, advisor
+	result, err := svc.SendReview(context.Background(), owner, review.ID)
+	if err != nil || sender.calls != 1 || advisor.calls != 1 || result.Round.State != store.RoundCompleted || result.Review.Items[0].State != "accepted_by_smtp" {
+		t.Fatalf("saved submission lost with unavailable advice: %+v %v", result, err)
+	}
+	var report struct {
+		EmployerReceiptVerified bool            `json:"employerReceiptVerified"`
+		Recommendation          json.RawMessage `json:"recommendation"`
+	}
+	if json.Unmarshal(result.Round.Report, &report) != nil || report.EmployerReceiptVerified || string(report.Recommendation) != string(advisor.response) {
+		t.Fatalf("unavailable advice changed delivery truth: %s", result.Round.Report)
 	}
 }
 

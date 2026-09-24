@@ -101,7 +101,7 @@ func prepareRoundFixture(t *testing.T, db *store.Store, selected bool) (store.Ro
 	}
 	resource := "opportunity:" + opportunity.ID
 	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "prepare", Intent: "Prepare selected role", Outcome: "prepare", ProfileVersion: profile.Version,
-		Scope:  store.RoundScope{Resources: []string{resource}, Operations: []string{store.RoundCodexTurn, store.RoundJevRequest, store.RoundPrepareApplicationPack}, Delegates: []string{"codex-runner"}},
+		Scope:  store.RoundScope{Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundJevRequest, store.RoundPrepareApplicationPack}, Delegates: []string{"codex-runner"}},
 		Limits: store.RoundAllowance{Requests: 7, Items: 1, Tools: 2, Turns: 1}, Deadline: time.Now().Add(time.Minute)})
 	if err != nil {
 		t.Fatal(err)

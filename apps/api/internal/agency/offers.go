@@ -21,8 +21,7 @@ func (e *Engine) checkOfferComparison(ctx context.Context) error {
 }
 
 func offerIntakeScope(round store.Round) (string, error) {
-	if len(round.Scope.Resources) < 1 || len(round.Scope.Resources) > 2 ||
-		len(round.Scope.Resources) == 2 && round.Scope.Resources[1] != "campaign:active" ||
+	if len(round.Scope.Resources) != 2 || round.Scope.Resources[1] != "campaign:active" ||
 		!strings.HasPrefix(round.Scope.Resources[0], "offer_intake:") || len(round.Scope.Resources[0]) == len("offer_intake:") {
 		return "", store.ErrInvalid
 	}
@@ -212,6 +211,9 @@ func (e *Engine) RecoverLocalDispatch(ctx context.Context, roundID, attemptID st
 	}
 	if round.Generation != generation || round.State != store.RoundPaused || attempt.RoundID != roundID {
 		return false, false, store.ErrFenced
+	}
+	if handled, resolved, err := e.recoverOutcomeRecommendation(ctx, round, attempt); handled || err != nil {
+		return handled, resolved, err
 	}
 	if round.Outcome != "compare_offers" || attempt.Operation != store.RoundJevRequest {
 		return false, false, nil
