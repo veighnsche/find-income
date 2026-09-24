@@ -1,0 +1,18 @@
+{
+  "runId": "run-fixture-001",
+  "outcomes": ["opp-fixture-001: senior backend role saved with 3 cited captures", "inv-002 cross-post merged into opp-fixture-001 (2 sightings)"],
+  "searched": ["12 vacancy index pages", "3 public API queries", "1 rendered board page"],
+  "reused": ["obs-000: exact-repeat vacancy index from prior run (zero redispatch)"],
+  "uncertainty": ["obs-002: API rate limit outcome unknown until retry window", "salary range missing on 1 saved role (confirmation_state unknown)"],
+  "budget": {
+    "observed": {
+      "enforced": { "timeMs": 900000, "maxActions": 60, "maxJev": 12, "maxTurns": 8, "maxConcurrent": 2 },
+      "reserved": { "actions": 0, "jev": 0, "turns": 0 },
+      "observed": { "actions": 41, "jev": 7, "turns": 5, "bytes": 1048576 },
+      "unknown": true
+    },
+    "unknown": true,
+    "stopReason": "owner_stop"
+  },
+  "nextWork": ["Retry rate-limited API query after window", "Investigate unresolved salary question for opp-fixture-001"]
+}

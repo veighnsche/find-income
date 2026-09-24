@@ -1,0 +1,24 @@
+[
+  {
+    "captureId": "cap-fixture-complete",
+    "observedUrl": "https://example.com/jobs",
+    "finalUrl": "https://example.com/jobs",
+    "retrievedAt": "2026-09-24T10:00:03Z",
+    "status": "200",
+    "mediaType": "text/html",
+    "contentHash": "sha256:0a5c530d-example-complete",
+    "extent": { "bytes": 12288, "complete": true },
+    "excerptRefs": [{ "spanStart": 120, "spanEnd": 240, "excerptSha256": "sha256:excerpt-example-001" }]
+  },
+  {
+    "captureId": "cap-fixture-truncated",
+    "observedUrl": "https://example.com/huge-report",
+    "finalUrl": "https://example.com/huge-report",
+    "retrievedAt": "2026-09-24T10:00:05Z",
+    "status": "200",
+    "mediaType": "application/pdf",
+    "contentHash": "sha256:b2aef59b-example-truncated",
+    "extent": { "bytes": 1048576, "complete": false, "truncation": "byte bound 1048576 reached; remainder available via artifact pagination" },
+    "excerptRefs": []
+  }
+]

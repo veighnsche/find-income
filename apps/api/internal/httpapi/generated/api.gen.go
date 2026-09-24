@@ -1519,6 +1519,84 @@ func (e RelationshipEventInputKind) Valid() bool {
 	}
 }
 
+// Defines values for ResearchIdentityViewDecision.
+const (
+	ResearchIdentityViewDecisionNew        ResearchIdentityViewDecision = "new"
+	ResearchIdentityViewDecisionSame       ResearchIdentityViewDecision = "same"
+	ResearchIdentityViewDecisionUnresolved ResearchIdentityViewDecision = "unresolved"
+)
+
+// Valid indicates whether the value is a known member of the ResearchIdentityViewDecision enum.
+func (e ResearchIdentityViewDecision) Valid() bool {
+	switch e {
+	case ResearchIdentityViewDecisionNew:
+		return true
+	case ResearchIdentityViewDecisionSame:
+		return true
+	case ResearchIdentityViewDecisionUnresolved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResearchInvestigationStatus.
+const (
+	ResearchInvestigationStatusActive    ResearchInvestigationStatus = "active"
+	ResearchInvestigationStatusConcluded ResearchInvestigationStatus = "concluded"
+	ResearchInvestigationStatusExhausted ResearchInvestigationStatus = "exhausted"
+	ResearchInvestigationStatusOpen      ResearchInvestigationStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the ResearchInvestigationStatus enum.
+func (e ResearchInvestigationStatus) Valid() bool {
+	switch e {
+	case ResearchInvestigationStatusActive:
+		return true
+	case ResearchInvestigationStatusConcluded:
+		return true
+	case ResearchInvestigationStatusExhausted:
+		return true
+	case ResearchInvestigationStatusOpen:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResearchRunViewState.
+const (
+	ResearchRunViewStateAwaitingInput ResearchRunViewState = "awaiting_input"
+	ResearchRunViewStateCompleted     ResearchRunViewState = "completed"
+	ResearchRunViewStateFailed        ResearchRunViewState = "failed"
+	ResearchRunViewStatePaused        ResearchRunViewState = "paused"
+	ResearchRunViewStateQueued        ResearchRunViewState = "queued"
+	ResearchRunViewStateRunning       ResearchRunViewState = "running"
+	ResearchRunViewStateStopping      ResearchRunViewState = "stopping"
+)
+
+// Valid indicates whether the value is a known member of the ResearchRunViewState enum.
+func (e ResearchRunViewState) Valid() bool {
+	switch e {
+	case ResearchRunViewStateAwaitingInput:
+		return true
+	case ResearchRunViewStateCompleted:
+		return true
+	case ResearchRunViewStateFailed:
+		return true
+	case ResearchRunViewStatePaused:
+		return true
+	case ResearchRunViewStateQueued:
+		return true
+	case ResearchRunViewStateRunning:
+		return true
+	case ResearchRunViewStateStopping:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RoleCriterionKind.
 const (
 	RoleCriterionKindResponsibility RoleCriterionKind = "responsibility"
@@ -1867,6 +1945,27 @@ func (e StatementSourceInputSpeakerAffiliation) Valid() bool {
 	}
 }
 
+// Defines values for SteeringMessageAck.
+const (
+	SteeringMessageAckAcknowledged SteeringMessageAck = "acknowledged"
+	SteeringMessageAckApplied      SteeringMessageAck = "applied"
+	SteeringMessageAckPending      SteeringMessageAck = "pending"
+)
+
+// Valid indicates whether the value is a known member of the SteeringMessageAck enum.
+func (e SteeringMessageAck) Valid() bool {
+	switch e {
+	case SteeringMessageAckAcknowledged:
+		return true
+	case SteeringMessageAckApplied:
+		return true
+	case SteeringMessageAckPending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WriteEvidenceRequestCriterion.
 const (
 	WriteEvidenceRequestCriterionLocationArrangement  WriteEvidenceRequestCriterion = "location_arrangement"
@@ -1993,6 +2092,24 @@ func (e ListOpportunitiesParamsKind) Valid() bool {
 	case ListOpportunitiesParamsKindEmployment:
 		return true
 	case ListOpportunitiesParamsKindProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExplainResearchIdentityParamsSubjectKind.
+const (
+	ExplainResearchIdentityParamsSubjectKindEmployer ExplainResearchIdentityParamsSubjectKind = "employer"
+	ExplainResearchIdentityParamsSubjectKindVacancy  ExplainResearchIdentityParamsSubjectKind = "vacancy"
+)
+
+// Valid indicates whether the value is a known member of the ExplainResearchIdentityParamsSubjectKind enum.
+func (e ExplainResearchIdentityParamsSubjectKind) Valid() bool {
+	switch e {
+	case ExplainResearchIdentityParamsSubjectKindEmployer:
+		return true
+	case ExplainResearchIdentityParamsSubjectKindVacancy:
 		return true
 	default:
 		return false
@@ -2273,6 +2390,14 @@ type CodexStatus struct {
 
 // CodexStatusState defines model for CodexStatus.State.
 type CodexStatusState string
+
+// CommissionResearchRequest defines model for CommissionResearchRequest.
+type CommissionResearchRequest struct {
+	Allowance      *ResearchAllowance `json:"allowance,omitempty"`
+	BriefText      *string            `json:"briefText,omitempty"`
+	CorrectionsRef *string            `json:"correctionsRef,omitempty"`
+	IdempotencyKey *string            `json:"idempotencyKey,omitempty"`
+}
 
 // Company defines model for Company.
 type Company struct {
@@ -3790,6 +3915,144 @@ type RescheduleActionRequest struct {
 	ExpectedRevision int64     `json:"expectedRevision"`
 }
 
+// ResearchActivityEvent defines model for ResearchActivityEvent.
+type ResearchActivityEvent struct {
+	At      time.Time `json:"at"`
+	Cursor  *string   `json:"cursor,omitempty"`
+	EventId string    `json:"eventId"`
+	Kind    string    `json:"kind"`
+	Refs    *struct {
+		AssessmentId  *string `json:"assessmentId,omitempty"`
+		CaptureId     *string `json:"captureId,omitempty"`
+		ObservationId *string `json:"observationId,omitempty"`
+		RecordId      *string `json:"recordId,omitempty"`
+	} `json:"refs,omitempty"`
+	Summary string `json:"summary"`
+}
+
+// ResearchActivityPage defines model for ResearchActivityPage.
+type ResearchActivityPage struct {
+	Events     []ResearchActivityEvent `json:"events"`
+	NextCursor *string                 `json:"nextCursor,omitempty"`
+}
+
+// ResearchAllowance defines model for ResearchAllowance.
+type ResearchAllowance struct {
+	MaxActions    int `json:"maxActions"`
+	MaxConcurrent int `json:"maxConcurrent"`
+	MaxJev        int `json:"maxJev"`
+	MaxTurns      int `json:"maxTurns"`
+	TimeMs        int `json:"timeMs"`
+}
+
+// ResearchCaptureView defines model for ResearchCaptureView.
+type ResearchCaptureView struct {
+	CaptureId   string `json:"captureId"`
+	ContentHash string `json:"contentHash"`
+	ExcerptRefs *[]struct {
+		ExcerptSha256 string `json:"excerptSha256"`
+		SpanEnd       int    `json:"spanEnd"`
+		SpanStart     int    `json:"spanStart"`
+	} `json:"excerptRefs,omitempty"`
+	Extent struct {
+		Bytes      int     `json:"bytes"`
+		Complete   bool    `json:"complete"`
+		Truncation *string `json:"truncation,omitempty"`
+	} `json:"extent"`
+	FinalUrl    *string   `json:"finalUrl,omitempty"`
+	MediaType   string    `json:"mediaType"`
+	ObservedUrl string    `json:"observedUrl"`
+	RetrievedAt time.Time `json:"retrievedAt"`
+	Status      string    `json:"status"`
+}
+
+// ResearchIdentityCandidate defines model for ResearchIdentityCandidate.
+type ResearchIdentityCandidate struct {
+	RecordId string `json:"recordId"`
+	Revision int    `json:"revision"`
+}
+
+// ResearchIdentityView defines model for ResearchIdentityView.
+type ResearchIdentityView struct {
+	AssessmentId *string                      `json:"assessmentId,omitempty"`
+	Basis        string                       `json:"basis"`
+	Candidates   []ResearchIdentityCandidate  `json:"candidates"`
+	Decision     ResearchIdentityViewDecision `json:"decision"`
+	Sightings    *[]struct {
+		CaptureId   string    `json:"captureId"`
+		ObservedAt  time.Time `json:"observedAt"`
+		ObservedUrl string    `json:"observedUrl"`
+	} `json:"sightings,omitempty"`
+	SubjectId string `json:"subjectId"`
+}
+
+// ResearchIdentityViewDecision defines model for ResearchIdentityView.Decision.
+type ResearchIdentityViewDecision string
+
+// ResearchInvestigation defines model for ResearchInvestigation.
+type ResearchInvestigation struct {
+	Id     string                      `json:"id"`
+	Intent string                      `json:"intent"`
+	Status ResearchInvestigationStatus `json:"status"`
+}
+
+// ResearchInvestigationStatus defines model for ResearchInvestigation.Status.
+type ResearchInvestigationStatus string
+
+// ResearchReportView defines model for ResearchReportView.
+type ResearchReportView struct {
+	Budget struct {
+		Observed   ResearchUsage `json:"observed"`
+		StopReason *string       `json:"stopReason,omitempty"`
+		Unknown    bool          `json:"unknown"`
+	} `json:"budget"`
+	NextWork    *[]string `json:"nextWork,omitempty"`
+	Outcomes    []string  `json:"outcomes"`
+	Reused      []string  `json:"reused"`
+	RunId       string    `json:"runId"`
+	Searched    []string  `json:"searched"`
+	Uncertainty []string  `json:"uncertainty"`
+}
+
+// ResearchRunView defines model for ResearchRunView.
+type ResearchRunView struct {
+	Allowance    ResearchAllowance `json:"allowance"`
+	BriefVersion struct {
+		ProfileVersion int    `json:"profileVersion"`
+		RubricVersion  string `json:"rubricVersion"`
+	} `json:"briefVersion"`
+	Investigations  []ResearchInvestigation `json:"investigations"`
+	ReportRef       *string                 `json:"reportRef,omitempty"`
+	RunId           string                  `json:"runId"`
+	SavedIds        []string                `json:"savedIds"`
+	State           ResearchRunViewState    `json:"state"`
+	StopReason      *string                 `json:"stopReason,omitempty"`
+	UnresolvedCount int                     `json:"unresolvedCount"`
+	Usage           ResearchUsage           `json:"usage"`
+}
+
+// ResearchRunViewState defines model for ResearchRunView.State.
+type ResearchRunViewState string
+
+// ResearchUsage defines model for ResearchUsage.
+type ResearchUsage struct {
+	Enforced ResearchAllowance `json:"enforced"`
+	Observed struct {
+		Actions int `json:"actions"`
+		Bytes   int `json:"bytes"`
+		Jev     int `json:"jev"`
+		Turns   int `json:"turns"`
+	} `json:"observed"`
+	Reserved struct {
+		Actions int `json:"actions"`
+		Jev     int `json:"jev"`
+		Turns   int `json:"turns"`
+	} `json:"reserved"`
+
+	// Unknown True once any uncertain work exists; never silently false.
+	Unknown bool `json:"unknown"`
+}
+
 // RetryIngestionRequest defines model for RetryIngestionRequest.
 type RetryIngestionRequest struct {
 	OriginalText *string `json:"originalText,omitempty"`
@@ -4100,6 +4363,23 @@ type StatementSourceInput struct {
 // StatementSourceInputSpeakerAffiliation defines model for StatementSourceInput.SpeakerAffiliation.
 type StatementSourceInputSpeakerAffiliation string
 
+// SteerResearchRequest defines model for SteerResearchRequest.
+type SteerResearchRequest struct {
+	Body           string  `json:"body"`
+	IdempotencyKey *string `json:"idempotencyKey,omitempty"`
+}
+
+// SteeringMessage defines model for SteeringMessage.
+type SteeringMessage struct {
+	Ack       SteeringMessageAck `json:"ack"`
+	Body      string             `json:"body"`
+	MessageId string             `json:"messageId"`
+	Revision  int                `json:"revision"`
+}
+
+// SteeringMessageAck defines model for SteeringMessage.Ack.
+type SteeringMessageAck string
+
 // SubmitIngestionRequest defines model for SubmitIngestionRequest.
 type SubmitIngestionRequest struct {
 	IdempotencyKey string  `json:"idempotencyKey"`
@@ -4316,6 +4596,21 @@ type ListOwnerInstructionsParams struct {
 	RoundId *string `form:"roundId,omitempty" json:"roundId,omitempty"`
 }
 
+// ExplainResearchIdentityParams defines parameters for ExplainResearchIdentity.
+type ExplainResearchIdentityParams struct {
+	SubjectKind ExplainResearchIdentityParamsSubjectKind `form:"subjectKind" json:"subjectKind"`
+	SubjectId   string                                   `form:"subjectId" json:"subjectId"`
+}
+
+// ExplainResearchIdentityParamsSubjectKind defines parameters for ExplainResearchIdentity.
+type ExplainResearchIdentityParamsSubjectKind string
+
+// ListResearchActivityParams defines parameters for ListResearchActivity.
+type ListResearchActivityParams struct {
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // GetLatestCompletedRoundParams defines parameters for GetLatestCompletedRound.
 type GetLatestCompletedRoundParams struct {
 	Outcome GetLatestCompletedRoundParamsOutcome `form:"outcome" json:"outcome"`
@@ -4370,6 +4665,12 @@ type SetOwnerOpportunityDecisionJSONRequestBody = OwnerDecisionInput
 
 // AddOwnerInstructionJSONRequestBody defines body for AddOwnerInstruction for application/json ContentType.
 type AddOwnerInstructionJSONRequestBody = OwnerInstructionInput
+
+// CommissionResearchRunJSONRequestBody defines body for CommissionResearchRun for application/json ContentType.
+type CommissionResearchRunJSONRequestBody = CommissionResearchRequest
+
+// SteerResearchRunJSONRequestBody defines body for SteerResearchRun for application/json ContentType.
+type SteerResearchRunJSONRequestBody = SteerResearchRequest
 
 // CompareOffersRoundJSONRequestBody defines body for CompareOffersRound for application/json ContentType.
 type CompareOffersRoundJSONRequestBody = CompareOffersRoundRequest

@@ -1,0 +1,10 @@
+{
+  "events": [
+    { "eventId": "ev-001", "cursor": "c001", "at": "2026-09-24T10:00:00Z", "kind": "claim", "summary": "Claimed exact request fetch https://example.com/jobs", "refs": {} },
+    { "eventId": "ev-002", "cursor": "c002", "at": "2026-09-24T10:00:03Z", "kind": "capture", "summary": "Captured 12 KB vacancy index (complete)", "refs": { "captureId": "cap-fixture-complete", "observationId": "obs-001" } },
+    { "eventId": "ev-003", "cursor": "c003", "at": "2026-09-24T10:00:09Z", "kind": "observation", "summary": "API query returned 429 rate_limited; retry scheduled with backoff", "refs": { "observationId": "obs-002" } },
+    { "eventId": "ev-004", "cursor": "c004", "at": "2026-09-24T10:01:22Z", "kind": "jev_assessment", "summary": "Jev judged two listings one opening (uncertainty: medium)", "refs": { "assessmentId": "jev-fixture-001", "captureId": "cap-fixture-complete" } },
+    { "eventId": "ev-005", "cursor": "c005", "at": "2026-09-24T10:02:01Z", "kind": "late_observation", "summary": "Late bytes retained as inert observation after lease expiry", "refs": { "observationId": "obs-003" } }
+  ],
+  "nextCursor": "c005"
+}

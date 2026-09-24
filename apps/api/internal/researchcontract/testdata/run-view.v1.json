@@ -1,0 +1,18 @@
+{
+  "runId": "run-fixture-001",
+  "state": "running",
+  "briefVersion": { "profileVersion": 3, "rubricVersion": "r2026-09" },
+  "allowance": { "timeMs": 900000, "maxActions": 60, "maxJev": 12, "maxTurns": 8, "maxConcurrent": 2 },
+  "usage": {
+    "enforced": { "timeMs": 900000, "maxActions": 60, "maxJev": 12, "maxTurns": 8, "maxConcurrent": 2 },
+    "reserved": { "actions": 2, "jev": 1, "turns": 1 },
+    "observed": { "actions": 17, "jev": 3, "turns": 2, "bytes": 412090 },
+    "unknown": true
+  },
+  "investigations": [
+    { "id": "inv-001", "intent": "Senior backend roles at climate-tech employers", "status": "active" },
+    { "id": "inv-002", "intent": "Cross-post check for role at Example Corp", "status": "open" }
+  ],
+  "savedIds": ["opp-fixture-001"],
+  "unresolvedCount": 1
+}

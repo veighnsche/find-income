@@ -599,6 +599,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/research/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commission one bounded autonomous research run
+         * @description Creates a run from the current brief plus optional corrections and a finite allowance. No source, query, company or vacancy fields are required. Run control stays on rounds/{id}/stop|resume.
+         */
+        post: operations["commissionResearchRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/research/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read one research run projection
+         * @description Side-effect-free; reading never commissions work.
+         */
+        get: operations["getResearchRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/research/runs/{id}/steer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a durable steering message to a run
+         * @description Corrections that change applicable facts or permissions rotate authority and fence affected pending writes.
+         */
+        post: operations["steerResearchRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/research/runs/{id}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Page journaled research activity events
+         * @description Deduplicated event IDs with cursor pagination; reconnect resumes without double-count. Side-effect-free.
+         */
+        get: operations["listResearchActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/research/runs/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the evidence-backed run report
+         * @description Useful outcomes, what was searched/reused, remaining uncertainty, budget/stop reasons and next work. Side-effect-free.
+         */
+        get: operations["getResearchReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/research/captures/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read one immutable capture descriptor
+         * @description Originals stay server-side; no raw protocol payloads or credentials in the DTO. Side-effect-free.
+         */
+        get: operations["getResearchCapture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/research/identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Explain an employer/vacancy identity decision
+         * @description Candidates, decision, basis, assessment and sightings behind a same/new/unresolved call. Side-effect-free.
+         */
+        get: operations["explainResearchIdentity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/login": {
         parameters: {
             query?: never;
@@ -3126,6 +3276,137 @@ export interface components {
             changeId: string;
             currentInputVersions: components["schemas"]["QualificationInputVersions"];
         };
+        ResearchAllowance: {
+            timeMs: number;
+            maxActions: number;
+            maxJev: number;
+            maxTurns: number;
+            maxConcurrent: number;
+        };
+        ResearchUsage: {
+            enforced: components["schemas"]["ResearchAllowance"];
+            reserved: {
+                actions: number;
+                jev: number;
+                turns: number;
+            };
+            observed: {
+                actions: number;
+                jev: number;
+                turns: number;
+                bytes: number;
+            };
+            /** @description True once any uncertain work exists; never silently false. */
+            unknown: boolean;
+        };
+        ResearchInvestigation: {
+            id: string;
+            intent: string;
+            /** @enum {string} */
+            status: "open" | "active" | "concluded" | "exhausted";
+        };
+        CommissionResearchRequest: {
+            briefText?: string;
+            correctionsRef?: string;
+            allowance?: components["schemas"]["ResearchAllowance"];
+            idempotencyKey?: string;
+        };
+        ResearchRunView: {
+            runId: string;
+            /** @enum {string} */
+            state: "queued" | "running" | "awaiting_input" | "stopping" | "paused" | "completed" | "failed";
+            briefVersion: {
+                profileVersion: number;
+                rubricVersion: string;
+            };
+            allowance: components["schemas"]["ResearchAllowance"];
+            usage: components["schemas"]["ResearchUsage"];
+            investigations: components["schemas"]["ResearchInvestigation"][];
+            savedIds: string[];
+            unresolvedCount: number;
+            stopReason?: string;
+            reportRef?: string;
+        };
+        SteerResearchRequest: {
+            body: string;
+            idempotencyKey?: string;
+        };
+        SteeringMessage: {
+            messageId: string;
+            revision: number;
+            body: string;
+            /** @enum {string} */
+            ack: "pending" | "acknowledged" | "applied";
+        };
+        ResearchActivityEvent: {
+            eventId: string;
+            cursor?: string;
+            /** Format: date-time */
+            at: string;
+            kind: string;
+            summary: string;
+            refs?: {
+                observationId?: string;
+                captureId?: string;
+                recordId?: string;
+                assessmentId?: string;
+            };
+        };
+        ResearchActivityPage: {
+            events: components["schemas"]["ResearchActivityEvent"][];
+            nextCursor?: string;
+        };
+        ResearchCaptureView: {
+            captureId: string;
+            observedUrl: string;
+            finalUrl?: string;
+            /** Format: date-time */
+            retrievedAt: string;
+            status: string;
+            mediaType: string;
+            contentHash: string;
+            extent: {
+                bytes: number;
+                complete: boolean;
+                truncation?: string;
+            };
+            excerptRefs?: {
+                spanStart: number;
+                spanEnd: number;
+                excerptSha256: string;
+            }[];
+        };
+        ResearchIdentityCandidate: {
+            recordId: string;
+            revision: number;
+        };
+        ResearchIdentityView: {
+            subjectId: string;
+            candidates: components["schemas"]["ResearchIdentityCandidate"][];
+            /** @enum {string} */
+            decision: "same" | "new" | "unresolved";
+            basis: string;
+            assessmentId?: string;
+            sightings?: {
+                captureId: string;
+                observedUrl: string;
+                /** Format: date-time */
+                observedAt: string;
+            }[];
+        };
+        ResearchReportView: {
+            runId: string;
+            outcomes: string[];
+            searched: string[];
+            reused: string[];
+            uncertainty: string[];
+            budget: {
+                observed: components["schemas"]["ResearchUsage"];
+                unknown: boolean;
+                stopReason?: string;
+            };
+            nextWork?: string[];
+        };
     };
     responses: {
         /** @description Required round execution capability is unavailable */
@@ -4126,6 +4407,181 @@ export interface operations {
             };
             409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
+        };
+    };
+    commissionResearchRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommissionResearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Run commissioned */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchRunView"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getResearchRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchRunView"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    steerResearchRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SteerResearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Steering message stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SteeringMessage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listResearchActivity: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchActivityPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getResearchReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchReportView"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getResearchCapture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Capture view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchCaptureView"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    explainResearchIdentity: {
+        parameters: {
+            query: {
+                subjectKind: "employer" | "vacancy";
+                subjectId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Identity explanation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchIdentityView"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
         };
     };
     login: {

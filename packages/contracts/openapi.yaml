@@ -620,6 +620,142 @@ paths:
           }
         '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
+  /research/runs:
+    post:
+      operationId: commissionResearchRun
+      summary: Commission one bounded autonomous research run
+      description: Creates a run from the current brief plus optional corrections and a finite allowance. No source, query, company or vacancy fields are required. Run control stays on rounds/{id}/stop|resume.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              { schema: { $ref: '#/components/schemas/CommissionResearchRequest' } },
+          }
+      responses:
+        '201':
+          {
+            description: Run commissioned,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/ResearchRunView' } } },
+          }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /research/runs/{id}:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getResearchRun
+      summary: Read one research run projection
+      description: Side-effect-free; reading never commissions work.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Run view,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/ResearchRunView' } } },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /research/runs/{id}/steer:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: steerResearchRun
+      summary: Send a durable steering message to a run
+      description: Corrections that change applicable facts or permissions rotate authority and fence affected pending writes.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/SteerResearchRequest' } } }
+      responses:
+        '200':
+          {
+            description: Steering message stored,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/SteeringMessage' } } },
+          }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /research/runs/{id}/activity:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: listResearchActivity
+      summary: Page journaled research activity events
+      description: Deduplicated event IDs with cursor pagination; reconnect resumes without double-count. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200':
+          {
+            description: Activity page,
+            content:
+              {
+                application/json: { schema: { $ref: '#/components/schemas/ResearchActivityPage' } },
+              },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /research/runs/{id}/report:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getResearchReport
+      summary: Read the evidence-backed run report
+      description: Useful outcomes, what was searched/reused, remaining uncertainty, budget/stop reasons and next work. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Run report,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/ResearchReportView' } } },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /research/captures/{id}:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getResearchCapture
+      summary: Read one immutable capture descriptor
+      description: Originals stay server-side; no raw protocol payloads or credentials in the DTO. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Capture view,
+            content:
+              {
+                application/json: { schema: { $ref: '#/components/schemas/ResearchCaptureView' } },
+              },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /research/identity:
+    get:
+      operationId: explainResearchIdentity
+      summary: Explain an employer/vacancy identity decision
+      description: Candidates, decision, basis, assessment and sightings behind a same/new/unresolved call. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: subjectKind
+          in: query
+          required: true
+          schema: { type: string, enum: [employer, vacancy] }
+        - name: subjectId
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          {
+            description: Identity explanation,
+            content:
+              {
+                application/json: { schema: { $ref: '#/components/schemas/ResearchIdentityView' } },
+              },
+          }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /auth/login:
     post:
       operationId: login
@@ -3975,3 +4111,183 @@ components:
         evaluation: { $ref: '#/components/schemas/QualificationEvaluation' }
         changeId: { type: string }
         currentInputVersions: { $ref: '#/components/schemas/QualificationInputVersions' }
+    ResearchAllowance:
+      type: object
+      required: [timeMs, maxActions, maxJev, maxTurns, maxConcurrent]
+      properties:
+        timeMs: { type: integer, minimum: 1 }
+        maxActions: { type: integer, minimum: 1 }
+        maxJev: { type: integer, minimum: 0 }
+        maxTurns: { type: integer, minimum: 1 }
+        maxConcurrent: { type: integer, minimum: 1, maximum: 4 }
+    ResearchUsage:
+      type: object
+      required: [enforced, reserved, observed, unknown]
+      properties:
+        enforced: { $ref: '#/components/schemas/ResearchAllowance' }
+        reserved:
+          type: object
+          required: [actions, jev, turns]
+          properties:
+            actions: { type: integer, minimum: 0 }
+            jev: { type: integer, minimum: 0 }
+            turns: { type: integer, minimum: 0 }
+        observed:
+          type: object
+          required: [actions, jev, turns, bytes]
+          properties:
+            actions: { type: integer, minimum: 0 }
+            jev: { type: integer, minimum: 0 }
+            turns: { type: integer, minimum: 0 }
+            bytes: { type: integer, minimum: 0 }
+        unknown:
+          { type: boolean, description: True once any uncertain work exists; never silently false. }
+    ResearchInvestigation:
+      type: object
+      required: [id, intent, status]
+      properties:
+        id: { type: string }
+        intent: { type: string }
+        status: { type: string, enum: [open, active, concluded, exhausted] }
+    CommissionResearchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        briefText: { type: string, maxLength: 20000 }
+        correctionsRef: { type: string }
+        allowance: { $ref: '#/components/schemas/ResearchAllowance' }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 128 }
+    ResearchRunView:
+      type: object
+      required:
+        [runId, state, briefVersion, allowance, usage, investigations, savedIds, unresolvedCount]
+      properties:
+        runId: { type: string }
+        state:
+          type: string
+          enum: [queued, running, awaiting_input, stopping, paused, completed, failed]
+        briefVersion:
+          type: object
+          required: [profileVersion, rubricVersion]
+          properties:
+            profileVersion: { type: integer }
+            rubricVersion: { type: string }
+        allowance: { $ref: '#/components/schemas/ResearchAllowance' }
+        usage: { $ref: '#/components/schemas/ResearchUsage' }
+        investigations:
+          type: array
+          items: { $ref: '#/components/schemas/ResearchInvestigation' }
+        savedIds: { type: array, items: { type: string } }
+        unresolvedCount: { type: integer, minimum: 0 }
+        stopReason: { type: string }
+        reportRef: { type: string }
+    SteerResearchRequest:
+      type: object
+      additionalProperties: false
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 20000 }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 128 }
+    SteeringMessage:
+      type: object
+      required: [messageId, revision, body, ack]
+      properties:
+        messageId: { type: string }
+        revision: { type: integer, minimum: 1 }
+        body: { type: string }
+        ack: { type: string, enum: [pending, acknowledged, applied] }
+    ResearchActivityEvent:
+      type: object
+      required: [eventId, at, kind, summary]
+      properties:
+        eventId: { type: string }
+        cursor: { type: string }
+        at: { type: string, format: date-time }
+        kind: { type: string }
+        summary: { type: string }
+        refs:
+          type: object
+          additionalProperties: false
+          properties:
+            observationId: { type: string }
+            captureId: { type: string }
+            recordId: { type: string }
+            assessmentId: { type: string }
+    ResearchActivityPage:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/ResearchActivityEvent' }
+        nextCursor: { type: string }
+    ResearchCaptureView:
+      type: object
+      required: [captureId, observedUrl, retrievedAt, status, mediaType, contentHash, extent]
+      properties:
+        captureId: { type: string }
+        observedUrl: { type: string }
+        finalUrl: { type: string }
+        retrievedAt: { type: string, format: date-time }
+        status: { type: string }
+        mediaType: { type: string }
+        contentHash: { type: string }
+        extent:
+          type: object
+          required: [bytes, complete]
+          properties:
+            bytes: { type: integer, minimum: 0 }
+            complete: { type: boolean }
+            truncation: { type: string }
+        excerptRefs:
+          type: array
+          items:
+            type: object
+            required: [spanStart, spanEnd, excerptSha256]
+            properties:
+              spanStart: { type: integer, minimum: 0 }
+              spanEnd: { type: integer, minimum: 0 }
+              excerptSha256: { type: string }
+    ResearchIdentityCandidate:
+      type: object
+      required: [recordId, revision]
+      properties:
+        recordId: { type: string }
+        revision: { type: integer, minimum: 1 }
+    ResearchIdentityView:
+      type: object
+      required: [subjectId, candidates, decision, basis]
+      properties:
+        subjectId: { type: string }
+        candidates:
+          type: array
+          items: { $ref: '#/components/schemas/ResearchIdentityCandidate' }
+        decision: { type: string, enum: [same, new, unresolved] }
+        basis: { type: string }
+        assessmentId: { type: string }
+        sightings:
+          type: array
+          items:
+            type: object
+            required: [captureId, observedUrl, observedAt]
+            properties:
+              captureId: { type: string }
+              observedUrl: { type: string }
+              observedAt: { type: string, format: date-time }
+    ResearchReportView:
+      type: object
+      required: [runId, outcomes, searched, reused, uncertainty, budget]
+      properties:
+        runId: { type: string }
+        outcomes: { type: array, items: { type: string } }
+        searched: { type: array, items: { type: string } }
+        reused: { type: array, items: { type: string } }
+        uncertainty: { type: array, items: { type: string } }
+        budget:
+          type: object
+          required: [observed, unknown]
+          properties:
+            observed: { $ref: '#/components/schemas/ResearchUsage' }
+            unknown: { type: boolean }
+            stopReason: { type: string }
+        nextWork: { type: array, items: { type: string } }
