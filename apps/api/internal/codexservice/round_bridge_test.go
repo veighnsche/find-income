@@ -32,7 +32,7 @@ func TestRoundContextUsesPrepareOpportunityAuthority(t *testing.T) {
 	}
 	resource := "opportunity:" + opportunity.ID
 	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "prepare-context", Intent: "Prepare selected role", Outcome: "prepare", ProfileVersion: profile.Version,
-		Scope:  store.RoundScope{Resources: []string{resource}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool}, Delegates: []string{agent.ID}},
+		Scope:  store.RoundScope{Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool}, Delegates: []string{agent.ID}},
 		Limits: store.RoundAllowance{Tools: 3, Turns: 1}, Deadline: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)

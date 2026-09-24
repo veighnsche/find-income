@@ -47,7 +47,7 @@ func interviewRoundFixture(t *testing.T) (*Service, *store.Store, store.Round, s
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "interview-round", Intent: "Prepare one sourced interview brief", Outcome: "interview_prepare", ProfileVersion: interview.ProfileVersion, Deadline: time.Now().Add(time.Hour), Scope: store.RoundScope{InputRefs: []string{"interview:" + interview.ID}, Resources: []string{"opportunity:" + opportunity.ID}, Operations: []string{store.RoundCodexTurn, store.RoundInterviewBriefSave, store.RoundJevRequest}, Delegates: []string{agent.ID}}, Limits: store.RoundAllowance{Requests: 4, Items: 1, Tools: 4, Turns: 1}})
+	r, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "interview-round", Intent: "Prepare one sourced interview brief", Outcome: "interview_prepare", ProfileVersion: interview.ProfileVersion, Deadline: time.Now().Add(time.Hour), Scope: store.RoundScope{InputRefs: []string{"interview:" + interview.ID}, Resources: []string{"opportunity:" + opportunity.ID, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundInterviewBriefSave, store.RoundJevRequest}, Delegates: []string{agent.ID}}, Limits: store.RoundAllowance{Requests: 4, Items: 1, Tools: 4, Turns: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestInterviewDebriefToolSavesOnlyOwnerReportedCitations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	debriefRound, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "debrief-round", Intent: "Record owner notes", Outcome: "interview_debrief", ProfileVersion: interview.ProfileVersion, Deadline: time.Now().Add(time.Hour), Scope: store.RoundScope{InputRefs: []string{"debrief:" + d.ID}, Resources: []string{"interview:" + interview.ID}, Operations: []string{store.RoundCodexTurn, store.RoundInterviewDebriefSave}, Delegates: []string{agent.ID}}, Limits: store.RoundAllowance{Requests: 1, Items: 1, Tools: 2, Turns: 1}})
+	debriefRound, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "debrief-round", Intent: "Record owner notes", Outcome: "interview_debrief", ProfileVersion: interview.ProfileVersion, Deadline: time.Now().Add(time.Hour), Scope: store.RoundScope{InputRefs: []string{"debrief:" + d.ID}, Resources: []string{"interview:" + interview.ID, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundInterviewDebriefSave}, Delegates: []string{agent.ID}}, Limits: store.RoundAllowance{Requests: 1, Items: 1, Tools: 2, Turns: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}

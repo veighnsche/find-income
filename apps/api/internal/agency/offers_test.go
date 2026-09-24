@@ -180,7 +180,7 @@ func TestOfferComparisonRemainsReadableWhenJevUnavailable(t *testing.T) {
 		t.Fatal(err)
 	}
 	resource := "offer_intake:" + intake.ID
-	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "offline-jev", Intent: "Compare offers", Outcome: "compare_offers", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Minute), Scope: store.RoundScope{Resources: []string{resource}, Operations: []string{store.RoundCodexTurn, store.RoundPrepareOfferComparison, store.RoundJevRequest}, Delegates: []string{"codex-runner"}}, Limits: store.RoundAllowance{Requests: 4, Items: 1, Tools: 3, Turns: 1}})
+	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "offline-jev", Intent: "Compare offers", Outcome: "compare_offers", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Minute), Scope: store.RoundScope{Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundPrepareOfferComparison, store.RoundJevRequest}, Delegates: []string{"codex-runner"}}, Limits: store.RoundAllowance{Requests: 5, Items: 1, Tools: 3, Turns: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,6 +209,11 @@ func TestOfferComparisonRemainsReadableWhenJevUnavailable(t *testing.T) {
 	if err != nil || current.State != store.RoundCompleted || current.DeliverableStatus != "partial" || current.Used.Requests != 1 || runtime.turns != 1 || !saved.Current || saved.TradeoffStatus != "unavailable" {
 		t.Fatalf("saved partial: round=%+v comparison=%+v err=%v", current, saved, err)
 	}
+	var outcome offerReport
+	if json.Unmarshal(current.Report, &outcome) != nil || outcome.ComparisonID != saved.ID || outcome.Recommendation == nil ||
+		outcome.Recommendation.Status != "unavailable" || outcome.Recommendation.Code != "recommendation_provider_unavailable" {
+		t.Fatalf("disabled advice provider lost useful comparison: %s", current.Report)
+	}
 }
 
 func TestOfferTradeoffCapturedBeforeStopRecoversWithoutReplayOrCharge(t *testing.T) {
@@ -228,7 +233,7 @@ func TestOfferTradeoffCapturedBeforeStopRecoversWithoutReplayOrCharge(t *testing
 		t.Fatal(err)
 	}
 	resource := "offer_intake:" + intake.ID
-	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "offer-recover", Intent: "Compare offers", Outcome: "compare_offers", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Minute), Scope: store.RoundScope{InputRefs: []string{resource}, Resources: []string{resource}, Operations: []string{store.RoundCodexTurn, store.RoundPrepareOfferComparison, store.RoundJevRequest}, Delegates: []string{"codex-runner"}}, Limits: store.RoundAllowance{Requests: 4, Items: 1, Tools: 3, Turns: 1}})
+	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "offer-recover", Intent: "Compare offers", Outcome: "compare_offers", ProfileVersion: profile.Version, Deadline: time.Now().Add(time.Minute), Scope: store.RoundScope{InputRefs: []string{resource}, Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundPrepareOfferComparison, store.RoundJevRequest}, Delegates: []string{"codex-runner"}}, Limits: store.RoundAllowance{Requests: 5, Items: 1, Tools: 3, Turns: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +328,7 @@ func TestIncompleteOfferTradeoffCaptureStaysPausedWithoutReconcileCharge(t *test
 		t.Fatal(err)
 	}
 	resource := "offer_intake:" + intake.ID
-	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "missing-capture", Intent: "Compare offers", Outcome: "compare_offers", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Minute), Scope: store.RoundScope{Resources: []string{resource}, Operations: []string{store.RoundJevRequest}, Delegates: []string{agent.ID}}, Limits: store.RoundAllowance{Requests: 3, Tools: 2}})
+	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "missing-capture", Intent: "Compare offers", Outcome: "compare_offers", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Minute), Scope: store.RoundScope{Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundJevRequest}, Delegates: []string{agent.ID}}, Limits: store.RoundAllowance{Requests: 4, Tools: 2}})
 	if err != nil {
 		t.Fatal(err)
 	}

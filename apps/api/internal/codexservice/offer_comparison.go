@@ -31,7 +31,7 @@ func (s *Service) offerComparisonPrepareTool(ctx context.Context, args offerComp
 		return nil, err
 	}
 	resource := "offer_intake:" + args.IntakeID
-	if round.State != store.RoundRunning || round.Outcome != "compare_offers" || round.Generation != authority.Generation || len(round.Scope.Resources) != 1 || round.Scope.Resources[0] != resource || !scopeContains(round.Scope.Operations, store.RoundPrepareOfferComparison) || !time.Now().Before(round.Deadline) {
+	if round.State != store.RoundRunning || round.Outcome != "compare_offers" || round.Generation != authority.Generation || len(round.Scope.Resources) != 2 || round.Scope.Resources[0] != resource || round.Scope.Resources[1] != "campaign:active" || !scopeContains(round.Scope.Operations, store.RoundPrepareOfferComparison) || !time.Now().Before(round.Deadline) {
 		return nil, store.ErrFenced
 	}
 	intake, err := s.db.OfferIntake(ctx, args.IntakeID)

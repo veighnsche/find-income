@@ -139,12 +139,12 @@ func (s *Service) roundContextTool(ctx context.Context, args roundContextArgs) (
 			return nil, store.ErrFenced
 		}
 	case "prepare":
-		if len(r.Scope.Resources) != 1 || !strings.HasPrefix(r.Scope.Resources[0], "opportunity:") || len(r.Scope.Resources[0]) == len("opportunity:") {
+		if len(r.Scope.Resources) != 2 || r.Scope.Resources[1] != "campaign:active" || !strings.HasPrefix(r.Scope.Resources[0], "opportunity:") || len(r.Scope.Resources[0]) == len("opportunity:") {
 			return nil, store.ErrFenced
 		}
 		resourceID = r.Scope.Resources[0]
 	case "compare_offers":
-		if len(r.Scope.Resources) != 1 || !strings.HasPrefix(r.Scope.Resources[0], "offer_intake:") || len(r.Scope.Resources[0]) == len("offer_intake:") {
+		if len(r.Scope.Resources) != 2 || r.Scope.Resources[1] != "campaign:active" || !strings.HasPrefix(r.Scope.Resources[0], "offer_intake:") || len(r.Scope.Resources[0]) == len("offer_intake:") {
 			return nil, store.ErrFenced
 		}
 		resourceID = r.Scope.Resources[0]
@@ -158,7 +158,7 @@ func (s *Service) roundContextTool(ctx context.Context, args roundContextArgs) (
 			return nil, store.ErrFenced
 		}
 	case "interview_prepare", "interview_debrief":
-		if len(r.Scope.Resources) != 1 || len(r.Scope.InputRefs) == 0 {
+		if len(r.Scope.Resources) != 2 || r.Scope.Resources[1] != "campaign:active" || len(r.Scope.InputRefs) == 0 {
 			return nil, store.ErrFenced
 		}
 		resourceID = r.Scope.Resources[0]

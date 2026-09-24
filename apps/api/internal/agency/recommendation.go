@@ -82,7 +82,7 @@ func (e *Engine) computeHomeRecommendation(ctx context.Context, initial store.Ro
 		advice.Code = "recommendation_attempt_unavailable"
 		return advice
 	}
-	if priorErr == nil && prior.State != store.AttemptSucceeded {
+	if priorErr == nil && prior.State != store.AttemptSucceeded && prior.State != store.AttemptObservedSuccess {
 		advice.Code = "recommendation_attempt_uncertain"
 		return advice
 	}
@@ -107,7 +107,7 @@ func (e *Engine) computeHomeRecommendation(ctx context.Context, initial store.Ro
 		return advice
 	}
 	attempt, attemptErr := e.Store.RoundAttemptForRequest(ctx, r.ID, homeRecommendationRequestKey+"/0")
-	if attemptErr != nil || attempt.State != store.AttemptSucceeded {
+	if attemptErr != nil || attempt.State != store.AttemptSucceeded && attempt.State != store.AttemptObservedSuccess {
 		advice.Code = "recommendation_attempt_unavailable"
 		return advice
 	}
@@ -149,6 +149,9 @@ func (e *Engine) computeHomeRecommendation(ctx context.Context, initial store.Ro
 }
 
 func recommendationErrorCode(err error) string {
+	if errors.Is(err, errDecisionProviderUnavailable) {
+		return "recommendation_provider_unavailable"
+	}
 	if errors.Is(err, errDecisionContextTooLarge) {
 		return "recommendation_context_too_large"
 	}

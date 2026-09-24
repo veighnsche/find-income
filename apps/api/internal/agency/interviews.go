@@ -40,7 +40,7 @@ func (e *Engine) checkInterview(ctx context.Context, outcome string) error {
 
 func (e *Engine) launchInterview(r store.Round) error {
 	if r.State != store.RoundRunning || r.Outcome != "interview_prepare" && r.Outcome != "interview_debrief" ||
-		(len(r.Scope.Resources) != 1 && len(r.Scope.Resources) != 2 || len(r.Scope.Resources) == 2 && r.Scope.Resources[1] != "campaign:active") {
+		len(r.Scope.Resources) != 2 || r.Scope.Resources[1] != "campaign:active" {
 		return store.ErrFenced
 	}
 	base := e.Context

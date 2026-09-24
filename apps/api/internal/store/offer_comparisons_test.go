@@ -36,7 +36,7 @@ func TestOfferIntakeComparisonIsOwnerBoundAndRoundFenced(t *testing.T) {
 		t.Fatal(err)
 	}
 	resource := "offer_intake:" + intake.ID
-	r, _, err := db.StartRound(ctx, owner, StartRoundInput{RequestKey: "compare-1", Intent: "Compare complete offer", Outcome: "compare_offers", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour), Scope: RoundScope{InputRefs: []string{resource}, Resources: []string{resource}, Operations: []string{RoundCodexTurn, RoundPrepareOfferComparison, RoundJevRequest}, Delegates: []string{agent.ID}}, Limits: RoundAllowance{Requests: 3, Items: 1, Tools: 3, Turns: 1}})
+	r, _, err := db.StartRound(ctx, owner, StartRoundInput{RequestKey: "compare-1", Intent: "Compare complete offer", Outcome: "compare_offers", ProfileVersion: p.Version, Deadline: time.Now().Add(time.Hour), Scope: RoundScope{InputRefs: []string{resource}, Resources: []string{resource, "campaign:active"}, Operations: []string{RoundCodexTurn, RoundPrepareOfferComparison, RoundJevRequest}, Delegates: []string{agent.ID}}, Limits: RoundAllowance{Requests: 4, Items: 1, Tools: 3, Turns: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}

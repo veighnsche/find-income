@@ -94,7 +94,7 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 		verdict.Code = "decision_attempt_unavailable"
 		return verdict
 	}
-	if attempt.State != store.AttemptSucceeded || attempt.ID != advice.DecisionAttemptID || advice.DecisionInputSHA256 == "" || advice.CandidateID == "" {
+	if attempt.State != store.AttemptSucceeded && attempt.State != store.AttemptObservedSuccess || attempt.ID != advice.DecisionAttemptID || advice.DecisionInputSHA256 == "" || advice.CandidateID == "" {
 		verdict.Status, verdict.Code = "stale", "decision_identity_changed"
 		return verdict
 	}

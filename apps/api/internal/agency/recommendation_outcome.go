@@ -87,12 +87,16 @@ func (e *Engine) computeOutcomeRecommendation(ctx context.Context, initial store
 		advice.Code = "recommendation_attempt_unavailable"
 		return advice
 	}
-	if priorErr == nil && prior.State != store.AttemptSucceeded {
+	if priorErr == nil && prior.State != store.AttemptSucceeded && prior.State != store.AttemptObservedSuccess {
 		advice.Code = "recommendation_attempt_uncertain"
 		return advice
 	}
 	if r.Limits.Requests-r.Used.Requests < 1 && priorErr != nil || !hasRoundResource(r.Scope.Resources, "campaign:active") || !slices.Contains(r.Scope.Operations, store.RoundJevRequest) {
 		advice.Code = "recommendation_allowance_or_scope_unavailable"
+		return advice
+	}
+	if priorErr != nil && e.Decisions == nil {
+		advice.Code = "recommendation_provider_unavailable"
 		return advice
 	}
 	input, choices, refs, unavailable, err := e.buildOutcomeRecommendationInput(ctx, r, facts)
@@ -108,7 +112,7 @@ func (e *Engine) computeOutcomeRecommendation(ctx context.Context, initial store
 		return advice
 	}
 	attempt, err := e.Store.RoundAttemptForRequest(ctx, r.ID, homeRecommendationRequestKey+"/0")
-	if err != nil || attempt.State != store.AttemptSucceeded {
+	if err != nil || attempt.State != store.AttemptSucceeded && attempt.State != store.AttemptObservedSuccess {
 		advice.Code = "recommendation_attempt_unavailable"
 		return advice
 	}
@@ -195,7 +199,8 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 		recommendationChoice{Action: "review_result", Target: recommendationTarget{Kind: "round", ID: round.ID}, Reason: fmt.Sprintf("The %s round saved %d applied changes and %d unresolved items.", facts.Outcome, facts.AppliedChanges, facts.UnresolvedCount)})
 	if facts.Outcome == "compare_offers" {
 		comparison, err := e.Store.OfferComparisonForOwner(ctx, round.Actor, facts.ResultID)
-		if err != nil || !comparison.Current || comparison.RoundID != round.ID || comparison.TradeoffStatus != facts.TradeoffStatus {
+		pausedPending := round.State == store.RoundPaused && facts.TradeoffStatus == "pending" && comparison.TradeoffStatus == "uncertain"
+		if err != nil || !comparison.Current || comparison.RoundID != round.ID || comparison.TradeoffStatus != facts.TradeoffStatus && !pausedPending {
 			return jev.DecisionInput{}, nil, refs, nil, store.ErrConflict
 		}
 		summary := comparisonRecommendationSummary(comparison, facts.TradeoffStatus)

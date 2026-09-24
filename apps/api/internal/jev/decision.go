@@ -143,6 +143,15 @@ func DecisionLogicalRequest(input DecisionInput) ([]byte, error) {
 	return marshalDecisionLogicalRequest(decisionRequest(canonical))
 }
 
+// RecoverCapturedDecision replays validation of an already captured Choice.
+// The evaluator reads only supplied bytes and never contacts a provider.
+func RecoverCapturedDecision(input DecisionInput, logical, response []byte, requestedModel string) (DecisionResult, error) {
+	if len(logical) == 0 || len(response) == 0 || requestedModel == "" {
+		return DecisionResult{}, &Error{Kind: ErrInvalidResponse}
+	}
+	return SelectDecision(context.Background(), capturedOfferEvaluator{logical: logical, response: response, model: requestedModel}, input)
+}
+
 func decisionRequest(canonical DecisionInput) Request {
 	options := make(map[string]string, len(canonical.Candidates)+1)
 	for _, candidate := range canonical.Candidates {

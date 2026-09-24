@@ -21,6 +21,7 @@ const discoveryDecisionReportedTokenLimit int64 = 10000
 const discoveryDecisionLogicalByteLimit = 24 << 10
 
 var errDecisionContextTooLarge = errors.New("decision context exceeds supported logical request bound")
+var errDecisionProviderUnavailable = errors.New("decision provider unavailable")
 
 // savedOrRunDecision never repeats a Jev dispatch at the same phase key. A
 // successful response captured before a cursor pin is recovered only when its
@@ -35,7 +36,7 @@ func (e *Engine) savedOrRunDecision(ctx context.Context, binding jevservice.Bind
 	}
 	attempt, err := e.Store.RoundAttemptForRequest(ctx, binding.RoundID, binding.RequestKeyPrefix+"/0")
 	if err == nil {
-		if attempt.Operation != store.RoundJevRequest || attempt.State != store.AttemptSucceeded {
+		if attempt.Operation != store.RoundJevRequest || attempt.State != store.AttemptSucceeded && attempt.State != store.AttemptObservedSuccess {
 			return "", store.ErrUncertain
 		}
 		attempts, err := e.Store.JevAttemptsForRound(ctx, binding.RoundID)
@@ -75,6 +76,9 @@ func (e *Engine) savedOrRunDecision(ctx context.Context, binding jevservice.Bind
 	}
 	if !errors.Is(err, store.ErrNotFound) {
 		return "", err
+	}
+	if e.Decisions == nil {
+		return "", errDecisionProviderUnavailable
 	}
 	result, err := e.Decisions.RunDecision(ctx, binding, input)
 	if err != nil {

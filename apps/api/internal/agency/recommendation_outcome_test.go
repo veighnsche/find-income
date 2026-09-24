@@ -126,6 +126,38 @@ func TestDeliveryAdapterRunsOneBoundedChargedDecision(t *testing.T) {
 	}
 }
 
+func TestDeliveryAdapterWithoutDecisionProviderReturnsUnavailableWithoutCharge(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	profile, err := db.CurrentPreferences(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := store.Actor{Kind: "administrator", ID: "delivery-owner"}
+	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "delivery-offline-advice", Intent: "Review saved submission states", Outcome: "deliver", ProfileVersion: profile.Version,
+		Scope:  store.RoundScope{InputRefs: []string{"delivery_review:bounded-review"}, Resources: []string{"campaign:active"}, Operations: []string{store.RoundJevRequest}},
+		Limits: store.RoundAllowance{Requests: 1}, Deadline: time.Now().Add(time.Minute)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	round, err = db.ActivateRound(ctx, owner, round.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := (&Engine{Store: db}).RecommendDelivery(ctx, round, deliveryservice.DeliveryAdviceFacts{ReviewID: "bounded-review", Recorded: 1})
+	var advice homeRecommendation
+	if json.Unmarshal(data, &advice) != nil || advice.Status != "unavailable" || advice.Code != "recommendation_provider_unavailable" {
+		t.Fatalf("missing provider panicked or selected without capture: %s", data)
+	}
+	if _, err := db.RoundAttemptForRequest(ctx, round.ID, homeRecommendationRequestKey+"/0"); err != store.ErrNotFound {
+		t.Fatalf("disabled provider charged a request: %v", err)
+	}
+}
+
 func TestInputOutcomeMissingScopeOrAllowanceKeepsUsefulResult(t *testing.T) {
 	for _, scenario := range []struct {
 		name, code    string
@@ -259,7 +291,6 @@ func TestInterviewPrepareSavesBoundedAdviceWithoutSendingOwnerContext(t *testing
 	defer closeServer()
 	engine := &Engine{Store: db, Runtime: runtime, InterviewSources: interviewFixtureSources{}, InterviewFocus: interviewUnavailableFocus{}, Decisions: decisions, Context: ctx}
 	input := agencyInterviewRound(interview)
-	input.Scope.Resources = append(input.Scope.Resources, "campaign:active")
 	input.Limits.Requests++
 	service := &rounds.Service{Store: db, Readiness: engine, Worker: engine}
 	round, _, err := service.Start(ctx, owner, input)
