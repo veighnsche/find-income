@@ -151,8 +151,11 @@ func (s *Store) BeginJevAttempt(ctx context.Context, input JevAttemptStart) (Jev
 	if err != nil {
 		return JevAttempt{}, err
 	}
-	cost, _ := RoundOperationCost(RoundJevRequest)
-	if state != AttemptDispatched || generation != round.Generation || operation != RoundJevRequest ||
+	cost, ok := RoundOperationCost(operation)
+	if !ok || (operation != RoundJevRequest && operation != RoundJevAssess) {
+		return JevAttempt{}, ErrFenced
+	}
+	if state != AttemptDispatched || generation != round.Generation ||
 		(RoundAllowance{Requests: requests, Items: items, Tools: tools, Turns: turns}) != cost {
 		return JevAttempt{}, ErrFenced
 	}

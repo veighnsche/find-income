@@ -28,6 +28,7 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevservice"
+	"github.com/veighnsche/find-income-dashboard/api/internal/researchwire"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
@@ -108,6 +109,7 @@ func runWithContext(ctx context.Context, args []string) error {
 	}
 	options.Codex = runtime
 	options.Rounds = &rounds.Service{Store: database, Readiness: worker, Canceller: runtime, Reconciler: runtime, Worker: worker}
+	wireResearch(database, runtime, &options, dataDir, jevClient, jevConfig.Enabled)
 	options.Delivery = &deliveryservice.Service{Store: database, Advisor: worker, From: os.Getenv("JOBSEEK_SMTP_FROM")}
 	if address := os.Getenv("JOBSEEK_SMTP_ADDRESS"); address != "" && os.Getenv("JOBSEEK_SMTP_FROM") != "" &&
 		os.Getenv("JOBSEEK_SMTP_SERVER_NAME") != "" && os.Getenv("JOBSEEK_SMTP_HELLO_NAME") != "" &&
@@ -184,6 +186,52 @@ func privateDataDir() (string, error) {
 		return "", fmt.Errorf("find user data directory: %w", err)
 	}
 	return filepath.Join(config, "jobseek-dashboard", "data"), nil
+}
+
+// wireResearch composes the autonomous recruitment backend (T23) into the
+// HTTP API and the lazy codex runtime. Degradation is honest: without Jev or
+// when wiring fails, research stays unavailable (HTTP 503, readiness gate
+// closed) instead of half-built. Executor binary paths are environment-driven
+// with no machine defaults; empty paths fail those kinds closed at dispatch.
+// PermitLoopback is test-only and never set here.
+func wireResearch(database *store.Store, runtime *codexservice.Lazy, options *httpapi.Options, dataDir string, jevClient *jev.Client, jevEnabled bool) {
+	if !jevEnabled {
+		log.Print("research unavailable: TYPESAFE_API_KEY is not set")
+		return
+	}
+	artifactRoot := os.Getenv("JOBSEEK_ARTIFACT_ROOT")
+	if artifactRoot == "" {
+		artifactRoot = filepath.Join(dataDir, "research-artifacts")
+	}
+	stack, err := researchwire.Wire(database, researchwire.Config{
+		ArtifactRoot:         artifactRoot,
+		ScratchRoot:          os.Getenv("JOBSEEK_RESEARCH_SCRATCH_ROOT"),
+		ChromePath:           os.Getenv("JOBSEEK_RESEARCH_CHROME_PATH"),
+		ExpectedChromeSHA256: os.Getenv("JOBSEEK_RESEARCH_CHROME_SHA256"),
+		PythonPath:           os.Getenv("JOBSEEK_RESEARCH_PYTHON_PATH"),
+		JevProvider:          jevClient,
+	})
+	if err != nil {
+		log.Printf("research unavailable: %v", err)
+		return
+	}
+	options.Research = stack.Research
+	options.ResearchControl = stack.Supervisor
+	runtime.SetResearchWiring(stack.Toolchain, stack.Supervisor)
+	go sweepResearchLeases(stack)
+	log.Printf("research wired: artifacts=%s agent=%s", artifactRoot, stack.AgentID)
+}
+
+func sweepResearchLeases(stack *researchwire.Stack) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		if _, err := stack.ExpireLeases(ctx, 100); err != nil {
+			log.Printf("research lease sweep: %v", err)
+		}
+		cancel()
+	}
 }
 
 func handlerOptions(addr, publicOrigin string) (httpapi.Options, error) {

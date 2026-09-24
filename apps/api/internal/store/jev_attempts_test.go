@@ -15,7 +15,7 @@ func jevRound(t *testing.T) (*Store, Round) {
 		t.Fatal(err)
 	}
 	input := roundInput(t, s, "jev-round", RoundAllowance{Requests: 6, Tools: 3, Turns: 1})
-	input.Scope.Operations = append(input.Scope.Operations, RoundJevRequest, RoundCodexTurn, RoundContextTool)
+	input.Scope.Operations = append(input.Scope.Operations, RoundJevRequest, RoundJevAssess, RoundCodexTurn, RoundContextTool)
 	r, created, err := s.StartRound(ctx, roundOwner(), input)
 	if err != nil || !created {
 		t.Fatalf("start: %+v %v", r, err)
@@ -74,6 +74,53 @@ func TestJevAttemptRequiresOneChargedJevRequest(t *testing.T) {
 	changed.StepIndex = 1
 	if _, err := s.BeginJevAttempt(context.Background(), changed); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("extra step bypassed charge: %v", err)
+	}
+}
+
+func TestJevAttemptAcceptsAssessOperation(t *testing.T) {
+	s, r := jevRound(t)
+	defer s.Close()
+	ctx := context.Background()
+	cost, ok := RoundOperationCost(RoundJevAssess)
+	if !ok {
+		t.Fatal("missing assess cost")
+	}
+	// A merely reserved (not dispatched) assess attempt must not begin.
+	pending, created, err := s.ReserveRoundAttempt(ctx, roundOwner(), r.ID, RoundAttemptInput{
+		RequestKey: "assess-pending", Operation: RoundJevAssess, ResourceID: "source:example", Cost: cost})
+	if err != nil || !created {
+		t.Fatalf("reserve: %+v %v", pending, err)
+	}
+	if _, err := s.BeginJevAttempt(ctx, testJevStart(r, pending)); !errors.Is(err, ErrFenced) {
+		t.Fatalf("undispatched assess attempt began: %v", err)
+	}
+	// Each operation is charged at its own cost-table charge: an assess
+	// reservation carrying the wrong allowance is fenced.
+	overcharged, created, err := s.ReserveRoundAttempt(ctx, roundOwner(), r.ID, RoundAttemptInput{
+		RequestKey: "assess-overcharged", Operation: RoundJevAssess, ResourceID: "source:example",
+		Cost: RoundAllowance{Requests: cost.Requests, Items: cost.Items, Tools: cost.Tools + 1, Turns: cost.Turns}})
+	if err != nil || !created {
+		t.Fatalf("reserve: %+v %v", overcharged, err)
+	}
+	if _, err := s.MarkRoundDispatched(ctx, r.ID, overcharged.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.BeginJevAttempt(ctx, testJevStart(r, overcharged)); !errors.Is(err, ErrFenced) {
+		t.Fatalf("wrongly charged assess attempt began: %v", err)
+	}
+	// The full reserve→mark→begin→finish path works for jev_assess.
+	a := reservedJevRoundAttempt(t, s, r, "assess-1", RoundJevAssess)
+	started, err := s.BeginJevAttempt(ctx, testJevStart(r, a))
+	if err != nil || started.Status != "dispatched" {
+		t.Fatalf("begin: %+v %v", started, err)
+	}
+	finished, err := s.FinishJevAttempt(ctx, JevAttemptFinish{ID: started.ID, Status: "succeeded",
+		RawResponseBytes: []byte(`{"model":"jev-1.13.0"}`)})
+	if err != nil || finished.Status != "succeeded" {
+		t.Fatalf("finish: %+v %v", finished, err)
+	}
+	if _, err := s.BeginJevAttempt(ctx, testJevStart(r, a)); !errors.Is(err, ErrFenced) {
+		t.Fatalf("second transport under one assess charge allowed: %v", err)
 	}
 }
 
