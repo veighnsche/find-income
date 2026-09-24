@@ -281,7 +281,11 @@ function DebriefView({ detail }: { detail: InterviewDetail }) {
       {detail.debriefs.map((debrief) => {
         const names = new Map<string, string>([['owner_interview_notes', 'Owner-reported notes']]);
         return (
-          <article className="interview-debrief" key={debrief.id}>
+          <article
+            className="interview-debrief"
+            id={`interview-debrief-${debrief.id}`}
+            key={debrief.id}
+          >
             <h4>Debrief · {new Date(debrief.createdAt).toLocaleString()}</h4>
             <p className="hint">
               {debrief.attribution === 'owner_reported'
@@ -329,17 +333,21 @@ function DebriefView({ detail }: { detail: InterviewDetail }) {
 
 export function InterviewPanel({
   opportunity,
+  initialInterviewId = '',
+  initialDebriefId = '',
   session,
   onSessionLost,
   onOpenCampaign,
 }: {
   opportunity: Opportunity;
+  initialInterviewId?: string;
+  initialDebriefId?: string;
   session: Session;
   onSessionLost: () => void;
   onOpenCampaign: () => void;
 }) {
   const [interviews, setInterviews] = useState<InterviewView[]>([]);
-  const [selectedId, setSelectedId] = useState('');
+  const [selectedId, setSelectedId] = useState(initialInterviewId);
   const [detail, setDetail] = useState<InterviewDetail | null>(null);
   const [round, setRound] = useState<Round | null>(null);
   const [otherActive, setOtherActive] = useState<Round | null>(null);
@@ -362,6 +370,7 @@ export function InterviewPanel({
   const commissionInFlight = useRef(false);
   const controlInFlight = useRef(false);
   const readVersion = useRef(0);
+  const focusedRecord = useRef('');
 
   const refresh = useCallback(
     async (id = selectedId, quiet = false): Promise<boolean> => {
@@ -444,6 +453,21 @@ export function InterviewPanel({
     setNotes(selectedId ? readStored(debriefDraftKey(selectedId)) : '');
     setDebriefRejected(selectedId ? readStored(debriefRejectionKey(selectedId)) === 'true' : false);
   }, [selectedId]);
+  useEffect(() => {
+    if (initialInterviewId) setSelectedId(initialInterviewId);
+  }, [initialInterviewId]);
+  useEffect(() => {
+    if (!detail || detail.interview.id !== initialInterviewId) return;
+    const focusKey = `${initialInterviewId}:${initialDebriefId}`;
+    if (focusedRecord.current === focusKey) return;
+    const target = initialDebriefId
+      ? document.getElementById(`interview-debrief-${initialDebriefId}`)
+      : document.querySelector('[aria-label="Interview preparation"] .interview-brief');
+    if (target) {
+      target.scrollIntoView();
+      focusedRecord.current = focusKey;
+    }
+  }, [detail, initialInterviewId, initialDebriefId]);
 
   async function prepare() {
     if (

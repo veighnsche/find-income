@@ -1,5 +1,8 @@
 import {
   getApplicationPack,
+  getDeliveryReview,
+  getInterview,
+  getOfferComparison,
   getOpportunity,
   getOpportunityOrganisation,
   getOpportunityScreening,
@@ -8,15 +11,33 @@ import {
   type Round,
 } from './api';
 
-export type HomeAction = 'discover' | 'review_opportunities' | 'prepare' | 'review_pack';
+export type HomeAction =
+  | 'discover'
+  | 'review_opportunities'
+  | 'prepare'
+  | 'review_pack'
+  | 'review_result'
+  | 'review_comparison'
+  | 'review_delivery'
+  | 'review_interview'
+  | 'review_debrief';
 export type HomeRecommendation = {
   status: 'selected' | 'unresolved' | 'unavailable';
   code?: string;
   action?: HomeAction;
   target?: {
-    kind: 'campaign' | 'round' | 'opportunity' | 'application_pack';
+    kind:
+      | 'campaign'
+      | 'round'
+      | 'opportunity'
+      | 'application_pack'
+      | 'offer_comparison'
+      | 'delivery_review'
+      | 'interview'
+      | 'interview_debrief';
     id: string;
-    revision: number;
+    revision?: number;
+    updatedAt?: string;
     contentSha256?: string;
     opportunityId?: string;
     opportunityRevision?: number;
@@ -68,10 +89,19 @@ const targetKinds: Record<HomeAction, NonNullable<HomeRecommendation['target']>[
   review_opportunities: 'round',
   prepare: 'opportunity',
   review_pack: 'application_pack',
+  review_result: 'round',
+  review_comparison: 'offer_comparison',
+  review_delivery: 'delivery_review',
+  review_interview: 'interview',
+  review_debrief: 'interview_debrief',
 };
 
 export function readHomeRecommendation(round: Round | null): HomeRecommendation | null {
-  if (!round || round.outcome !== 'discover' || round.state !== 'completed') return null;
+  if (
+    !round ||
+    (round.state !== 'completed' && !(round.outcome === 'deliver' && round.state === 'failed'))
+  )
+    return null;
   const value = round.report.recommendation;
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
@@ -109,23 +139,53 @@ export function readHomeRecommendation(round: Round | null): HomeRecommendation 
     return null;
   if (item.status === 'selected') {
     if (
-      !['discover', 'review_opportunities', 'prepare', 'review_pack'].includes(
-        String(item.action),
-      ) ||
+      !Object.keys(targetKinds).includes(String(item.action)) ||
       !item.target ||
       typeof item.target !== 'object' ||
       Array.isArray(item.target)
     )
       return null;
     const target = item.target as Record<string, unknown>;
+    if (target.kind !== targetKinds[item.action as HomeAction] || typeof target.id !== 'string')
+      return null;
     if (
-      target.kind !== targetKinds[item.action as HomeAction] ||
-      typeof target.id !== 'string' ||
+      item.action === 'review_result' &&
+      (target.id !== round.id || (target.revision !== undefined && target.revision !== 0))
+    )
+      return null;
+    if (
+      [
+        'discover',
+        'review_opportunities',
+        'prepare',
+        'review_pack',
+        'review_comparison',
+        'review_delivery',
+      ].includes(String(item.action)) &&
       !Number.isSafeInteger(target.revision)
     )
       return null;
+    if (
+      item.action === 'review_comparison' &&
+      (target.revision !== 1 || typeof target.contentSha256 !== 'string')
+    )
+      return null;
+    if (
+      item.action === 'review_delivery' &&
+      (typeof target.revision !== 'number' || target.revision < 1)
+    )
+      return null;
+    if (
+      ['review_interview', 'review_debrief'].includes(String(item.action)) &&
+      typeof target.updatedAt !== 'string'
+    )
+      return null;
     if (item.action === 'discover' && target.id !== 'active') return null;
-    if (item.action === 'review_opportunities' && target.id !== round.id) return null;
+    if (
+      item.action === 'review_opportunities' &&
+      (round.outcome !== 'discover' || target.id !== round.id)
+    )
+      return null;
     if (item.action === 'prepare' && !Number.isSafeInteger(target.ownerDecisionRevision))
       return null;
     if (
@@ -150,7 +210,7 @@ export async function checkRecommendationTarget(
 ): Promise<string | null> {
   if (advice.profileVersion !== profileVersion) return 'The campaign brief has changed.';
   if (advice.roundId !== round.id || advice.roundGeneration + 1 !== round.generation)
-    return 'The saved discovery round changed.';
+    return 'The saved round changed.';
   if (advice.status !== 'selected' || !advice.action || !advice.target) return null;
   const target = advice.target;
   if (
@@ -165,6 +225,54 @@ export async function checkRecommendationTarget(
       target.revision !== advice.roundGeneration)
   )
     return 'The saved round cards no longer match this advice.';
+  if (advice.action === 'review_result' && (target.kind !== 'round' || target.id !== round.id))
+    return 'The saved result no longer matches this advice.';
+  if (advice.action === 'review_comparison') {
+    const comparison = await getOfferComparison(target.id, signal);
+    if (
+      !comparison.current ||
+      comparison.roundId !== round.id ||
+      comparison.comparison.inputSha256 !== target.contentSha256
+    )
+      return 'The saved comparison changed.';
+  }
+  if (advice.action === 'review_delivery') {
+    const review = await getDeliveryReview(target.id, signal);
+    const recorded = review.items.filter(
+      (item) =>
+        item.roundId === round.id &&
+        ['accepted_by_smtp', 'failed', 'uncertain'].includes(item.state),
+    ).length;
+    if (recorded !== target.revision) return 'The saved delivery states changed.';
+  }
+  if (advice.action === 'review_interview' || advice.action === 'review_debrief') {
+    const interviewId =
+      advice.action === 'review_interview'
+        ? target.id
+        : round.scope.resources
+            .find((ref) => ref.startsWith('interview:'))
+            ?.slice('interview:'.length);
+    if (!interviewId) return 'The saved interview target is unavailable.';
+    const detail = await getInterview(interviewId, signal);
+    if (!detail.interview.current) return 'The interview context changed.';
+    if (advice.action === 'review_interview') {
+      if (
+        detail.interview.roundId !== round.id ||
+        detail.interview.updatedAt !== target.updatedAt ||
+        !detail.interview.brief
+      )
+        return 'The saved interview brief changed.';
+    } else if (
+      !detail.debriefs.some(
+        (item) =>
+          item.id === target.id &&
+          item.roundId === round.id &&
+          item.updatedAt === target.updatedAt &&
+          item.attribution === 'owner_reported',
+      )
+    )
+      return 'The saved debrief changed.';
+  }
   if (advice.action === 'prepare' || advice.action === 'review_pack') {
     const opportunityId = advice.action === 'prepare' ? target.id : target.opportunityId!;
     const [view, decision] = await Promise.all([

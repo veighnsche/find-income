@@ -84,6 +84,34 @@ function choice(action, target, refs = []) {
   };
 }
 
+function outcomeChoice(action, target) {
+  return {
+    ...choice(action, target),
+    sourceRefs: [
+      { id: 'profile:0', kind: 'owner_profile', revision: '7', omittedBytes: 0 },
+      {
+        id: `round:${roundId}`,
+        kind: 'commissioned_outcome_facts',
+        revision: 'f'.repeat(64),
+        omittedBytes: 0,
+      },
+    ],
+  };
+}
+
+function outcomeRound(fixture, outcome, recommendation, report = {}, state = 'completed') {
+  fixture.state.round = {
+    ...fixture.state.round,
+    id: roundId,
+    outcome,
+    state,
+    generation: 2,
+    report: { ...report, recommendation, recommendationCurrentness: { ...currentness } },
+    completedAt: time,
+  };
+  fixture.state.latestCompletedAll = fixture.state.round;
+}
+
 function selectRole(fixture) {
   fixture.state.decision = {
     id: 'synthetic-decision',
@@ -159,8 +187,7 @@ export async function runRecommendationSmoke(browser) {
     assert.equal(
       discover.state.requests.some(
         (request) =>
-          request.path === '/api/v1/rounds/latest-completed' &&
-          request.query === '?outcome=discover',
+          request.path === '/api/v1/rounds/latest-completed' && request.query === '?outcome=all',
       ),
       false,
       'remembered round takes precedence',
@@ -368,7 +395,213 @@ export async function runRecommendationSmoke(browser) {
   } finally {
     await unresolved.close();
   }
+
+  const result = await startFixture();
+  try {
+    outcomeRound(
+      result,
+      'process_input',
+      outcomeChoice('review_result', { kind: 'round', id: roundId }),
+      {
+        code: 'partial',
+        appliedChanges: [{ operation: 'preferences.correct' }],
+        unresolved: ['Source date remains unknown.'],
+      },
+    );
+    const { context, page, agency } = await openHome(browser, result);
+    await agency.getByRole('button', { name: 'Review this saved round result' }).click();
+    await page
+      .getByRole('region', { name: 'Saved round result' })
+      .getByText('Source date remains unknown.')
+      .waitFor();
+    assert.equal(result.state.requests.filter((request) => request.method === 'POST').length, 0);
+    await context.close();
+  } finally {
+    await result.close();
+  }
+
+  const comparison = await startFixture();
+  try {
+    comparison.state.offerInput = {
+      offers: [
+        'Example Labs employment gross EUR 5000 per month, 32 hours, holiday included.',
+        'Research Studio employment gross EUR 6000 per month, 32 hours, holiday included.',
+        'Project Client contract project USD 7000; holiday terms are unspecified.',
+      ],
+    };
+    comparison.state.round = {
+      ...comparison.state.round,
+      id: roundId,
+      outcome: 'compare_offers',
+      state: 'running',
+      scope: {
+        ...comparison.state.round.scope,
+        inputRefs: ['offer_intake:synthetic-offer-intake-1'],
+      },
+    };
+    comparison.completeOfferComparison();
+    const saved = comparison.state.offerComparison;
+    outcomeRound(
+      comparison,
+      'compare_offers',
+      outcomeChoice('review_comparison', {
+        kind: 'offer_comparison',
+        id: saved.id,
+        revision: 1,
+        contentSha256: saved.comparison.inputSha256,
+      }),
+      { code: 'comparison_saved', comparisonId: saved.id, tradeoffStatus: saved.tradeoffStatus },
+    );
+    const { context, page, agency } = await openHome(browser, comparison);
+    await agency.getByRole('button', { name: 'Open exact saved offer comparison' }).click();
+    await page
+      .getByRole('region', { name: 'Whole-offer comparison' })
+      .getByRole('heading', { name: 'Saved whole-offer comparison' })
+      .waitFor();
+    assert.ok(
+      comparison.state.requests.some(
+        (request) => request.path === `/api/v1/offer-comparisons/${saved.id}`,
+      ),
+    );
+    assert.equal(
+      comparison.state.requests.filter((request) => request.method === 'POST').length,
+      0,
+    );
+    comparison.state.round.report.recommendationCurrentness = {
+      status: 'stale',
+      code: 'comparison_changed',
+      checkedAt: time,
+    };
+    await page.reload({ waitUntil: 'networkidle' });
+    await page
+      .getByRole('region', { name: 'Agency work' })
+      .getByText(/Historical advice: comparison_changed/)
+      .waitFor();
+    assert.equal(
+      await page
+        .getByRole('region', { name: 'Agency work' })
+        .getByRole('button', { name: 'Open exact saved offer comparison' })
+        .isDisabled(),
+      true,
+    );
+    assert.equal(
+      comparison.state.requests.filter((request) => request.method === 'POST').length,
+      0,
+    );
+    await context.close();
+  } finally {
+    await comparison.close();
+  }
+
+  const delivery = await startFixture();
+  try {
+    const review = delivery.seedDeliveryReview();
+    review.items[0].roundId = roundId;
+    review.items[0].state = 'failed';
+    outcomeRound(
+      delivery,
+      'deliver',
+      outcomeChoice('review_delivery', { kind: 'delivery_review', id: review.id, revision: 1 }),
+      { summary: 'One delivery item failed.' },
+      'failed',
+    );
+    delivery.state.round.scope = {
+      ...delivery.state.round.scope,
+      inputRefs: [`delivery_review:${review.id}`],
+    };
+    delivery.state.latestCompletedAll = delivery.state.round;
+    const context = await browser.newContext({ viewport: { width: 1180, height: 900 } });
+    const page = await context.newPage();
+    await page.goto(delivery.url, { waitUntil: 'networkidle' });
+    const agency = page.getByRole('region', { name: 'Agency work' });
+    await agency.getByRole('button', { name: 'Open exact saved delivery review' }).click();
+    await page
+      .getByRole('region', { name: 'Application delivery' })
+      .getByText(/Your Send action approves/)
+      .waitFor();
+    assert.ok(
+      delivery.state.requests.some(
+        (request) =>
+          request.path === '/api/v1/rounds/latest-completed' && request.query === '?outcome=all',
+      ),
+    );
+    assert.equal(delivery.state.requests.filter((request) => request.method === 'POST').length, 0);
+    await context.close();
+  } finally {
+    await delivery.close();
+  }
+
+  for (const action of ['review_interview', 'review_debrief']) {
+    const fixture = await startFixture();
+    try {
+      const interviewId = 'synthetic-interview-advice';
+      fixture.state.interviews.set(interviewId, {
+        interview: {
+          id: interviewId,
+          opportunityId: roleId,
+          opportunityRevision: 3,
+          profileVersion: 7,
+          context: 'Interview research work by video on 2026-10-02.',
+          contextSha256: '6'.repeat(64),
+          current: true,
+          roundId: roundId,
+          createdAt: time,
+          updatedAt: time,
+        },
+        debriefs: [],
+      });
+      fixture.state.round = {
+        ...fixture.state.round,
+        id: roundId,
+        outcome: 'interview_prepare',
+        state: 'running',
+        scope: { ...fixture.state.round.scope, inputRefs: [`interview:${interviewId}`] },
+      };
+      fixture.completeInterviewBrief();
+      const debriefId = 'synthetic-debrief-advice';
+      fixture.state.interviews.get(interviewId).debriefs.push({
+        id: debriefId,
+        interviewId,
+        notes: 'We discussed the research prototype.',
+        roundId,
+        attribution: 'owner_reported',
+        observations: [],
+        createdAt: time,
+        updatedAt: time,
+      });
+      const isDebrief = action === 'review_debrief';
+      outcomeRound(
+        fixture,
+        isDebrief ? 'interview_debrief' : 'interview_prepare',
+        outcomeChoice(action, {
+          kind: isDebrief ? 'interview_debrief' : 'interview',
+          id: isDebrief ? debriefId : interviewId,
+          updatedAt: time,
+        }),
+        { code: 'brief_saved', interviewId, ...(isDebrief ? { debriefId } : {}) },
+      );
+      fixture.state.round.scope = {
+        ...fixture.state.round.scope,
+        resources: [`interview:${interviewId}`],
+      };
+      const { context, page, agency } = await openHome(browser, fixture);
+      await agency
+        .getByRole('button', {
+          name: isDebrief
+            ? 'Open exact saved interview debrief'
+            : 'Open exact saved interview brief',
+        })
+        .click();
+      const panel = page.getByRole('region', { name: 'Interview preparation' });
+      if (isDebrief) await panel.locator(`#interview-debrief-${debriefId}`).waitFor();
+      else await panel.getByRole('heading', { name: 'Prepared interview brief' }).waitFor();
+      assert.equal(fixture.state.requests.filter((request) => request.method === 'POST').length, 0);
+      await context.close();
+    } finally {
+      await fixture.close();
+    }
+  }
   console.log(
-    'Recommendation UI smoke passed: fresh-browser server recovery, remembered-round precedence, four saved actions, exact navigation, profile/target/server staleness, unresolved results, and read-only reload.',
+    'Recommendation UI smoke passed: latest all and remembered recovery, nine saved actions, exact record navigation, failed delivery, currentness refusal, unresolved results, and read-only reload.',
   );
 }

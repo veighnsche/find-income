@@ -292,6 +292,8 @@ function OpportunityDetail({
   id,
   initialPackId,
   focusPreparation,
+  initialInterviewId,
+  initialDebriefId,
   session,
   companies,
   onSessionLost,
@@ -301,6 +303,8 @@ function OpportunityDetail({
   id: string;
   initialPackId?: string;
   focusPreparation?: boolean;
+  initialInterviewId?: string;
+  initialDebriefId?: string;
   session: Session;
   companies: Company[];
   onSessionLost: () => void;
@@ -412,6 +416,8 @@ function OpportunityDetail({
           />
           <InterviewPanel
             opportunity={opportunity}
+            initialInterviewId={initialInterviewId}
+            initialDebriefId={initialDebriefId}
             session={session}
             onSessionLost={onSessionLost}
             onOpenCampaign={onBack}
@@ -499,6 +505,8 @@ export function Opportunities({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [initialInterviewId, setInitialInterviewId] = useState('');
+  const [initialDebriefId, setInitialDebriefId] = useState('');
   const [stageFilter, setStageFilter] = useState('');
   const [kindFilter, setKindFilter] = useState('');
   const [archiveFilter, setArchiveFilter] = useState<'active' | 'archived' | 'all'>('active');
@@ -506,6 +514,8 @@ export function Opportunities({
     setSelected(id);
     setInitialPackId('');
     setFocusPreparation(false);
+    setInitialInterviewId('');
+    setInitialDebriefId('');
     try {
       if (id) localStorage.setItem(selectedKey, id);
       else localStorage.removeItem(selectedKey);
@@ -593,6 +603,8 @@ export function Opportunities({
           id={selected}
           initialPackId={initialPackId}
           focusPreparation={focusPreparation}
+          initialInterviewId={initialInterviewId}
+          initialDebriefId={initialDebriefId}
           session={session}
           companies={companies}
           onSessionLost={onSessionLost}
@@ -633,6 +645,11 @@ export function Opportunities({
         onOpenOpportunity={(id) => openOpportunity(id)}
         onOpenPack={openRecommendedPack}
         onOpenPreparation={openRecommendedPreparation}
+        onOpenInterview={(opportunityId, interviewId, debriefId) => {
+          openOpportunity(opportunityId);
+          setInitialInterviewId(interviewId);
+          setInitialDebriefId(debriefId || '');
+        }}
         onEditBrief={(version) => {
           setBriefInstruction(true);
           setBriefVersion(version);

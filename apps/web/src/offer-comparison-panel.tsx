@@ -3,6 +3,7 @@ import {
   compareOffersRound,
   getActiveRound,
   getLatestCompletedOfferRound,
+  getOfferComparison,
   getOfferComparisonByRound,
   getRound,
   isUnauthenticated,
@@ -323,9 +324,11 @@ function ComparisonView({ result }: { result: Comparison }) {
 export function OfferComparisonPanel({
   session,
   onSessionLost,
+  focusResultId = '',
 }: {
   session: Session;
   onSessionLost: () => void;
+  focusResultId?: string;
 }) {
   const [draft, setDraft] = useState(readDraft);
   const [pending, setPending] = useState(readPending);
@@ -374,9 +377,11 @@ export function OfferComparisonPanel({
               (knownIntake && active.scope.inputRefs.includes(`offer_intake:${knownIntake}`)))
             ? active
             : null;
-        const chosen = ownActive || remembered || latest;
-        let comparison: Comparison | null = null;
-        if (chosen?.outcome === 'compare_offers') {
+        const focused = focusResultId ? await getOfferComparison(focusResultId) : null;
+        const chosen =
+          (focused ? await getRound(focused.roundId) : null) || ownActive || remembered || latest;
+        let comparison: Comparison | null = focused;
+        if (!comparison && chosen?.outcome === 'compare_offers') {
           try {
             comparison = await getOfferComparisonByRound(chosen.id);
           } catch (cause) {
@@ -398,7 +403,7 @@ export function OfferComparisonPanel({
         if (version === readVersion.current) setLoading(false);
       }
     },
-    [onSessionLost],
+    [focusResultId, onSessionLost],
   );
 
   useEffect(() => {

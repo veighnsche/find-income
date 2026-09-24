@@ -10,7 +10,8 @@ import {
 import {
   getActiveRound,
   getDeliveryReview,
-  getLatestCompletedDiscoveryRound,
+  getLatestCompletedSavedRound,
+  listInterviews,
   getRoundCards,
   getRoundCapability,
   getRoundHistory,
@@ -149,6 +150,7 @@ export function AgencyHome({
   onOpenOpportunity,
   onOpenPack,
   onOpenPreparation,
+  onOpenInterview,
   onEditBrief,
   onBriefLoaded,
 }: {
@@ -157,6 +159,7 @@ export function AgencyHome({
   onOpenOpportunity: (id: string) => void;
   onOpenPack: (opportunityId: string, packId: string) => void;
   onOpenPreparation: (opportunityId: string) => void;
+  onOpenInterview: (opportunityId: string, interviewId: string, debriefId?: string) => void;
   onEditBrief: (version: number) => void;
   onBriefLoaded?: (version: number) => void;
 }) {
@@ -178,6 +181,9 @@ export function AgencyHome({
   );
   const [adviceBusy, setAdviceBusy] = useState(false);
   const [adviceError, setAdviceError] = useState('');
+  const [focusedComparisonId, setFocusedComparisonId] = useState('');
+  const [reviewedResultId, setReviewedResultId] = useState('');
+  useEffect(() => setFocusedComparisonId(''), [round?.id]);
   const readController = useRef<AbortController | null>(null);
   const readPromise = useRef<Promise<Round | null | undefined> | null>(null);
   const readVersion = useRef(0);
@@ -227,7 +233,7 @@ export function AgencyHome({
                 if (!(cause instanceof RequestError && cause.status === 404)) throw cause;
               }
             }
-            if (!current) current = await getLatestCompletedDiscoveryRound(controller.signal);
+            if (!current) current = await getLatestCompletedSavedRound(controller.signal);
           }
           if (!currentRead()) return undefined;
           setPreferences(brief);
@@ -517,7 +523,9 @@ export function AgencyHome({
         freshAdvice.action !== recommendation.action ||
         freshAdvice.target?.id !== recommendation.target.id ||
         freshAdvice.target?.revision !== recommendation.target.revision ||
-        freshAdvice.target?.contentSha256 !== recommendation.target.contentSha256
+        freshAdvice.target?.contentSha256 !== recommendation.target.contentSha256 ||
+        freshAdvice.target?.updatedAt !== recommendation.target.updatedAt ||
+        freshAdvice.target?.kind !== recommendation.target.kind
       ) {
         setRound(freshRound);
         setAdviceError(
@@ -526,7 +534,7 @@ export function AgencyHome({
         return;
       }
       const stale = await checkRecommendationTarget(freshAdvice, freshRound, freshProfile.version);
-      if (stale || activeRound) {
+      if (stale || (activeRound && freshAdvice.action === 'discover')) {
         setPreferences(freshProfile);
         setRound(freshRound);
         setAdviceError(
@@ -549,6 +557,43 @@ export function AgencyHome({
         onOpenPreparation(freshAdvice.target!.id);
       } else if (freshAdvice.action === 'review_pack') {
         onOpenPack(freshAdvice.target!.opportunityId!, freshAdvice.target!.id);
+      } else if (freshAdvice.action === 'review_result') {
+        setReviewedResultId(freshRound.id);
+        window.requestAnimationFrame(() =>
+          document.getElementById('saved-round-result')?.scrollIntoView(),
+        );
+      } else if (freshAdvice.action === 'review_comparison') {
+        setFocusedComparisonId(freshAdvice.target!.id);
+        window.requestAnimationFrame(() =>
+          document.getElementById('saved-offer-comparison')?.scrollIntoView(),
+        );
+      } else if (freshAdvice.action === 'review_delivery') {
+        const review = await getDeliveryReview(freshAdvice.target!.id);
+        const opportunityId = review.items.find(
+          (item) => item.roundId === freshRound.id,
+        )?.opportunityId;
+        if (!opportunityId)
+          throw new Error('The saved delivery review has no item for this round.');
+        localStorage.setItem('jobseek.delivery-review-id', review.id);
+        onOpenOpportunity(opportunityId);
+      } else if (
+        freshAdvice.action === 'review_interview' ||
+        freshAdvice.action === 'review_debrief'
+      ) {
+        const interviewId =
+          freshAdvice.action === 'review_interview'
+            ? freshAdvice.target!.id
+            : freshRound.scope.resources
+                .find((ref) => ref.startsWith('interview:'))
+                ?.slice('interview:'.length);
+        const saved = await listInterviews();
+        const interview = saved.find((item) => item.id === interviewId);
+        if (!interview) throw new Error('The saved interview is unavailable.');
+        onOpenInterview(
+          interview.opportunityId,
+          interview.id,
+          freshAdvice.action === 'review_debrief' ? freshAdvice.target!.id : undefined,
+        );
       }
     } catch (cause) {
       if (isUnauthenticated(cause)) onSessionLost();
@@ -559,14 +604,17 @@ export function AgencyHome({
     }
   }
 
-  const recommendedActionLabel =
-    recommendation?.action === 'discover'
-      ? 'Find more sourced opportunities'
-      : recommendation?.action === 'review_opportunities'
-        ? 'Review saved opportunity cards'
-        : recommendation?.action === 'prepare'
-          ? 'Open selected role to prepare its application'
-          : 'Open exact saved application pack';
+  const recommendedActionLabel = {
+    discover: 'Find more sourced opportunities',
+    review_opportunities: 'Review saved opportunity cards',
+    prepare: 'Open selected role to prepare its application',
+    review_pack: 'Open exact saved application pack',
+    review_result: 'Review this saved round result',
+    review_comparison: 'Open exact saved offer comparison',
+    review_delivery: 'Open exact saved delivery review',
+    review_interview: 'Open exact saved interview brief',
+    review_debrief: 'Open exact saved interview debrief',
+  }[recommendation?.action || 'review_result'];
 
   const active = round && ['queued', 'running', 'awaiting_input', 'stopping'].includes(round.state);
   const paused = round?.state === 'paused';
@@ -676,117 +724,130 @@ export function AgencyHome({
                 remaining allowance remain readable.
               </p>
             )}
-            {!active && round.outcome === 'discover' && round.state === 'completed' && (
-              <div className="agency-next" aria-label="Saved next-action advice">
-                <h3>Saved next-action advice</h3>
-                {recommendation ? (
-                  <>
-                    <p>
-                      <strong>
-                        {recommendation.status === 'selected'
-                          ? 'Suggested action'
-                          : recommendation.status === 'unresolved'
-                            ? 'No action selected'
-                            : 'Advice unavailable'}
-                        .
-                      </strong>{' '}
-                      {recommendation.status === 'selected'
-                        ? recommendation.reason ||
-                          'A supported action was saved for this completed work.'
-                        : recommendationExplanation(recommendation.code)}
-                    </p>
-                    {recommendation.code && recommendation.status !== 'selected' && (
-                      <p className="hint">Saved reason code: {recommendation.code}.</p>
-                    )}
-                    {recommendation.status === 'selected' && (
-                      <>
-                        <p
-                          className={
-                            currentness?.status === 'current' &&
-                            adviceCheck?.key === adviceKey &&
-                            !adviceCheck.reason
-                              ? 'hint'
-                              : 'error'
-                          }
-                        >
-                          {currentness?.status !== 'current'
-                            ? `Historical advice: ${currentness?.code || 'currentness could not be checked'}.`
-                            : adviceCheck?.key !== adviceKey
-                              ? 'Checking the current brief, target and saved source revisions…'
-                              : adviceCheck.reason
-                                ? `Historical advice: ${adviceCheck.reason}`
-                                : 'Current saved advice. The action still checks server state when you click.'}
-                        </p>
-                        <button
-                          type="button"
-                          disabled={
-                            busy ||
-                            adviceBusy ||
-                            currentness?.status !== 'current' ||
-                            adviceCheck?.key !== adviceKey ||
-                            Boolean(adviceCheck.reason) ||
-                            (recommendation.action === 'discover' && !capability?.canStart)
-                          }
-                          onClick={() => void followRecommendation()}
-                        >
-                          {recommendedActionLabel}
-                        </button>
-                      </>
-                    )}
-                    {recommendation.unavailableActions?.length ? (
-                      <p className="hint">
-                        Some actions were unavailable when this advice was saved:{' '}
-                        {recommendation.unavailableActions
-                          .map((value) => value.replaceAll('_', ' '))
-                          .join(', ')}
-                        .
-                      </p>
-                    ) : null}
-                    <details>
-                      <summary>Recommendation evidence</summary>
+            {!active &&
+              (round.state === 'completed' ||
+                (round.outcome === 'deliver' && round.state === 'failed')) && (
+                <div className="agency-next" aria-label="Saved next-action advice">
+                  <h3>Saved next-action advice</h3>
+                  {recommendation ? (
+                    <>
                       <p>
-                        Saved with the completed discovery work{' '}
-                        {round.completedAt
-                          ? new Date(round.completedAt).toLocaleString()
-                          : new Date(round.updatedAt).toLocaleString()}
-                        .
+                        <strong>
+                          {recommendation.status === 'selected'
+                            ? 'Suggested action'
+                            : recommendation.status === 'unresolved'
+                              ? 'No action selected'
+                              : 'Advice unavailable'}
+                          .
+                        </strong>{' '}
+                        {recommendation.status === 'selected'
+                          ? recommendation.reason ||
+                            'A supported action was saved for this completed work.'
+                          : recommendationExplanation(recommendation.code)}
                       </p>
-                      {recommendation.sourceRefs?.length ? (
-                        <ul>
-                          {recommendation.sourceRefs.map((ref) => (
-                            <li key={ref.id}>
-                              {ref.kind.replaceAll('_', ' ')} · <code>{ref.id}</code> · revision{' '}
-                              <code>{ref.revision}</code>
-                              {ref.omittedBytes
-                                ? ` · ${ref.omittedBytes} source bytes omitted`
-                                : ''}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p>No source references were included in this saved advice.</p>
+                      {recommendation.code && recommendation.status !== 'selected' && (
+                        <p className="hint">Saved reason code: {recommendation.code}.</p>
                       )}
-                    </details>
-                  </>
-                ) : (
-                  <p>
-                    No saved next-action advice is available for this completed round. Its
-                    opportunity cards remain below.
-                  </p>
-                )}
-                {adviceError && (
-                  <p role="alert" className="error">
-                    {adviceError}
-                  </p>
-                )}
-              </div>
-            )}
+                      {['compare_offers', 'interview_prepare', 'interview_debrief'].includes(
+                        round.outcome,
+                      ) && (
+                        <p className="hint">
+                          This advice used bounded result facts such as saved status and unknown
+                          counts. Open the exact record to inspect its full sources; the advice
+                          alone does not assess every term or conversation detail.
+                        </p>
+                      )}
+                      {recommendation.status === 'selected' && (
+                        <>
+                          <p
+                            className={
+                              currentness?.status === 'current' &&
+                              adviceCheck?.key === adviceKey &&
+                              !adviceCheck.reason
+                                ? 'hint'
+                                : 'error'
+                            }
+                          >
+                            {currentness?.status !== 'current'
+                              ? `Historical advice: ${currentness?.code || 'currentness could not be checked'}.`
+                              : adviceCheck?.key !== adviceKey
+                                ? 'Checking the current brief, target and saved source revisions…'
+                                : adviceCheck.reason
+                                  ? `Historical advice: ${adviceCheck.reason}`
+                                  : 'Current saved advice. The action still checks server state when you click.'}
+                          </p>
+                          <button
+                            type="button"
+                            disabled={
+                              busy ||
+                              adviceBusy ||
+                              currentness?.status !== 'current' ||
+                              adviceCheck?.key !== adviceKey ||
+                              Boolean(adviceCheck.reason) ||
+                              (recommendation.action === 'discover' && !capability?.canStart)
+                            }
+                            onClick={() => void followRecommendation()}
+                          >
+                            {recommendedActionLabel}
+                          </button>
+                        </>
+                      )}
+                      {recommendation.unavailableActions?.length ? (
+                        <p className="hint">
+                          Some actions were unavailable when this advice was saved:{' '}
+                          {recommendation.unavailableActions
+                            .map((value) => value.replaceAll('_', ' '))
+                            .join(', ')}
+                          .
+                        </p>
+                      ) : null}
+                      <details>
+                        <summary>Recommendation evidence</summary>
+                        <p>
+                          Saved with this commissioned work{' '}
+                          {round.completedAt
+                            ? new Date(round.completedAt).toLocaleString()
+                            : new Date(round.updatedAt).toLocaleString()}
+                          .
+                        </p>
+                        {recommendation.sourceRefs?.length ? (
+                          <ul>
+                            {recommendation.sourceRefs.map((ref) => (
+                              <li key={ref.id}>
+                                {ref.kind.replaceAll('_', ' ')} · <code>{ref.id}</code> · revision{' '}
+                                <code>{ref.revision}</code>
+                                {ref.omittedBytes
+                                  ? ` · ${ref.omittedBytes} source bytes omitted`
+                                  : ''}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No source references were included in this saved advice.</p>
+                        )}
+                      </details>
+                    </>
+                  ) : (
+                    <p>
+                      No saved next-action advice is available for this completed round. Its
+                      opportunity cards remain below.
+                    </p>
+                  )}
+                  {adviceError && (
+                    <p role="alert" className="error">
+                      {adviceError}
+                    </p>
+                  )}
+                </div>
+              )}
             {!active && !pendingStart && capability && (
               <div className="agency-next">
                 <h3>Another search</h3>
                 <p>
                   Choose another bounded search if you want more sourced opportunities. A new round
-                  receives its own server-selected scope.
+                  receives its own server-selected scope and may save in-round Jev next-action
+                  advice. Advice opens saved records or points to an existing owner control; it does
+                  not start another round or send anything by itself.
                 </p>
                 <button
                   type="button"
@@ -810,6 +871,10 @@ export function AgencyHome({
             <p>
               {capability?.intent ||
                 'A bounded search would return sourced roles and a coverage report.'}
+            </p>
+            <p className="hint">
+              A completed round may save Jev next-action advice. Each later commission or delivery
+              still requires its own explicit owner action.
             </p>
             {capability && (
               <details>
@@ -926,7 +991,86 @@ export function AgencyHome({
           !loading && <p>Campaign brief unavailable. Refresh to try again.</p>
         )}
       </section>
-      <OfferComparisonPanel session={session} onSessionLost={onSessionLost} />
+      {round && reviewedResultId === round.id && (
+        <section className="op-card" id="saved-round-result" aria-label="Saved round result">
+          <h2>Saved result from this round</h2>
+          <p>{reportSummary || round.intent}</p>
+          {typeof round.report.code === 'string' && (
+            <p>Result: {round.report.code.replaceAll('_', ' ')}.</p>
+          )}
+          {typeof round.report.packId === 'string' && (
+            <p>
+              Saved pack: <code>{round.report.packId}</code>
+              {typeof round.report.version === 'number' ? ` · version ${round.report.version}` : ''}
+              .
+            </p>
+          )}
+          {typeof round.report.comparisonId === 'string' && (
+            <p>
+              Saved offer comparison: <code>{round.report.comparisonId}</code> · qualitative status{' '}
+              {String(round.report.tradeoffStatus || 'unknown').replaceAll('_', ' ')}.
+            </p>
+          )}
+          {typeof round.report.interviewId === 'string' && (
+            <p>
+              Saved interview brief: <code>{round.report.interviewId}</code>.
+            </p>
+          )}
+          {typeof round.report.debriefId === 'string' && (
+            <p>
+              Saved owner-reported debrief: <code>{round.report.debriefId}</code>.
+            </p>
+          )}
+          {round.outcome === 'deliver' && (
+            <p>
+              Delivery status: {round.deliverableStatus.replaceAll('_', ' ') || 'unverified'}.
+              Employer receipt is not confirmed here.
+            </p>
+          )}
+          {round.outcome === 'process_input' && <ProcessInputReport round={round} />}
+          {Array.isArray(round.report.unknowns) && round.report.unknowns.length > 0 && (
+            <div>
+              <h3>Stated unknowns</h3>
+              <ul>
+                {round.report.unknowns
+                  .filter((value): value is string => typeof value === 'string')
+                  .map((value, index) => (
+                    <li key={index}>{value}</li>
+                  ))}
+              </ul>
+            </div>
+          )}
+          {Array.isArray(round.report.unresolved) && round.report.unresolved.length > 0 && (
+            <div>
+              <h3>Unresolved facts</h3>
+              <ul>
+                {round.report.unresolved
+                  .filter((value): value is string => typeof value === 'string')
+                  .map((value, index) => (
+                    <li key={index}>{value}</li>
+                  ))}
+              </ul>
+            </div>
+          )}
+          {round.unresolved.length > 0 && (
+            <p>
+              {round.unresolved.length} execution attempt{round.unresolved.length === 1 ? '' : 's'}{' '}
+              remain unresolved.
+            </p>
+          )}
+          <p className="hint">
+            This view opens saved work only. Any new commission or delivery remains a separate owner
+            action.
+          </p>
+        </section>
+      )}
+      <div id="saved-offer-comparison">
+        <OfferComparisonPanel
+          session={session}
+          onSessionLost={onSessionLost}
+          focusResultId={focusedComparisonId}
+        />
+      </div>
       {round?.outcome === 'prepare' && (
         <section className="op-card" aria-label="Application preparation">
           <h2>Application preparation</h2>

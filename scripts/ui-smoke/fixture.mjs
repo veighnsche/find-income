@@ -272,6 +272,7 @@ export async function startFixture() {
     staleNextDiscovery: false,
     discoveryReady: false,
     latestCompletedDiscover: null,
+    latestCompletedAll: null,
     recommendationCards: [],
     interviews: new Map(),
     interviewPrepareByKey: new Map(),
@@ -714,7 +715,9 @@ export async function startFixture() {
           200,
           url.searchParams.get('outcome') === 'compare_offers'
             ? state.latestCompletedOffer
-            : state.latestCompletedDiscover,
+            : url.searchParams.get('outcome') === 'all'
+              ? state.latestCompletedAll || state.latestCompletedDiscover
+              : state.latestCompletedDiscover,
         );
       if (path === `/api/v1/rounds/${state.round.id}`) return sendJson(res, 200, state.round);
       if (
@@ -981,6 +984,11 @@ export async function startFixture() {
   return {
     url: `http://127.0.0.1:${address.port}`,
     state,
+    seedDeliveryReview(id = 'synthetic-advice-delivery') {
+      const review = deliveryReview(id, ['synthetic-pack-2']);
+      state.delivery.reviews.set(id, review);
+      return review;
+    },
     completePreparation() {
       state.round = {
         ...state.round,

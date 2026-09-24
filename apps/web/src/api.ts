@@ -275,6 +275,10 @@ export function getLatestCompletedDiscoveryRound(signal?: AbortSignal): Promise<
   return request<LatestCompletedRound>('/rounds/latest-completed?outcome=discover', { signal });
 }
 
+export function getLatestCompletedSavedRound(signal?: AbortSignal): Promise<Round | null> {
+  return request<Round | null>('/rounds/latest-completed?outcome=all', { signal });
+}
+
 export function getDeliveryCapability(signal?: AbortSignal): Promise<DeliveryCapability> {
   return request<DeliveryCapability>('/delivery/capability', { signal });
 }
