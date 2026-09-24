@@ -10,7 +10,7 @@ mkdir -p "$out/bin" "$out/web"
 python3 "$repo/ops/i12/check-runtime-tools.py"
 python3 "$repo/ops/i12/test-probes.py"
 (cd "$repo/apps/api" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -o "$out/bin/jobseek-api" ./cmd/server && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -o "$out/bin/codex-runner" ./cmd/codex-runner)
-(cd "$repo" && pnpm --filter @jobseek/web build)
+(cd "$repo" && bun --filter @jobseek/web build)
 cp -R "$repo/apps/web/dist/." "$out/web/"
 chmod 0755 "$out/bin/jobseek-api" "$out/bin/codex-runner"
 python3 - "$out" <<'PY'

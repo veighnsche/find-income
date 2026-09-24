@@ -47,7 +47,7 @@ def load_pins():
                            "linux64_zip_sha256", "linux64_binary_sha256", "linux64_url"},
         "python": {"binary", "min_version"},
         "typst": {"version"},
-        "toolchain": {"go", "node", "pnpm"},
+        "toolchain": {"go", "node", "bun"},
     }.items():
         if set(pins.get(role, {})) != keys:
             raise SystemExit("pins role %s has missing or unreviewed keys" % role)

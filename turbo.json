@@ -4,7 +4,7 @@
     "experimentalGoWorkspaces": true,
     "experimentalTaskCommand": true
   },
-  "globalDependencies": [".node-version", "go.work", "pnpm-lock.yaml"],
+  "globalDependencies": [".node-version", "go.work", "bun.lock"],
   "globalPassThroughEnv": ["GOMODCACHE", "GOCACHE", "GOPATH", "GOPROXY"],
   "tasks": {
     "validate": { "outputs": [] },

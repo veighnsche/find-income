@@ -28,8 +28,8 @@ import {
 // smoke can claim without the runner.
 //
 // Run from the dashboard root after building the web bundle:
-//   pnpm --filter @jobseek/web build && node scripts/ui-smoke/research-smoke.mjs
-// or: pnpm e2e:research
+//   bun --filter @jobseek/web build && node scripts/ui-smoke/research-smoke.mjs
+// or: bun run e2e:research
 
 const smokeDir = dirname(fileURLToPath(import.meta.url));
 const dashboardRoot = resolve(smokeDir, '../..');

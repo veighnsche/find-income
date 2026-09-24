@@ -12,16 +12,16 @@ The autonomous-recruitment replacement is implemented through T28 and packaged a
 
 ## Local setup
 
-Use the pinned toolchain: Node `24.21.0`, pnpm `12.3.4`, and Go `1.27.1`. From the repository root, install from the lockfile and build the web app and Go service:
+Use the pinned toolchain: Node `24.21.0`, bun `1.4.2`, and Go `1.27.1`. From the repository root, install from the lockfile and build the web app and Go service:
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm build
+bun install --frozen-lockfile
+bun run build
 ```
 
 The initial schema changes directly with this prototype. Databases created from the removed pipeline are not migrated; use a fresh data directory for this checkout. Existing private data is not reset automatically.
 
-The server stores SQLite data under `JOBSEEK_DATA_DIR`. Choose one private directory and use it for both administrator setup and every `pnpm dev` session. For a local macOS account, for example:
+The server stores SQLite data under `JOBSEEK_DATA_DIR`. Choose one private directory and use it for both administrator setup and every `bun run dev` session. For a local macOS account, for example:
 
 ```sh
 export JOBSEEK_DATA_DIR="$HOME/Library/Application Support/jobseek-dashboard/data"
@@ -40,7 +40,7 @@ Configure the local administrator interactively; the terminal hides both passwor
 Start the dashboard in the same terminal so it uses the same data directory:
 
 ```sh
-pnpm dev
+bun run dev
 ```
 
 Open <http://127.0.0.1:5173/> and sign in with the password just configured. The Go API listens on `127.0.0.1:8080`; Vite proxies `/api` to it. Both development servers bind to loopback. Check the local connection with:
@@ -49,19 +49,19 @@ Open <http://127.0.0.1:5173/> and sign in with the password just configured. The
 curl --fail http://127.0.0.1:5173/api/v1/health
 ```
 
-Stop both services with Ctrl+C. To use a different terminal later, repeat the `JOBSEEK_DATA_DIR` export there before running setup or `pnpm dev`. The default data path is the OS user config directory, but setting an explicit private path avoids accidentally using different databases between commands.
+Stop both services with Ctrl+C. To use a different terminal later, repeat the `JOBSEEK_DATA_DIR` export there before running setup or `bun run dev`. The default data path is the OS user config directory, but setting an explicit private path avoids accidentally using different databases between commands.
 
 ## Verification
 
 Run these from this repository:
 
 ```sh
-pnpm check
-pnpm test
-pnpm build
+bun run check
+bun run test
+bun run build
 ```
 
-`pnpm e2e` runs browser fixture checks; they do not establish live provider behavior. [Foundation notes](docs/foundation.md) describe the workspace/toolchain.
+`bun run e2e` runs browser fixture checks; they do not establish live provider behavior. [Foundation notes](docs/foundation.md) describe the workspace/toolchain.
 
 ## Development handoffs
 

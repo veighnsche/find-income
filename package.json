@@ -2,6 +2,10 @@
   "name": "@jobseek/workspace",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/contracts"
+  ],
   "scripts": {
     "dev": "turbo run dev",
     "check": "turbo run check:generated && turbo run lint",
@@ -9,8 +13,8 @@
     "build": "turbo run build",
     "generate": "turbo run generate",
     "format": "turbo run format",
-    "e2e": "pnpm --filter @jobseek/web build && node scripts/ui-smoke/smoke.mjs",
-    "e2e:research": "pnpm --filter @jobseek/web build && node scripts/ui-smoke/research-smoke.mjs"
+    "e2e": "bun --filter @jobseek/web build && node scripts/ui-smoke/smoke.mjs",
+    "e2e:research": "bun --filter @jobseek/web build && node scripts/ui-smoke/research-smoke.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.63.0",
@@ -19,7 +23,7 @@
   },
   "engines": {
     "node": "24.21.0",
-    "pnpm": "12.3.4"
+    "bun": "1.4.2"
   },
-  "packageManager": "pnpm@12.3.4"
+  "packageManager": "bun@1.4.2"
 }

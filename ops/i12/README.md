@@ -6,7 +6,7 @@ The package deliberately uses one transport: the API's existing SSH client sends
 
 ## Build and pin artifacts
 
-Run on a trusted build machine with the repository's pinned Go/Node/pnpm dependencies. The output directory must be outside the checkout and must not contain secrets:
+Run on a trusted build machine with the repository's pinned Go/Node/bun dependencies. The output directory must be outside the checkout and must not contain secrets:
 
 ```sh
 dashboard/ops/i12/build.sh /private/tmp/jobseek-i12-artifacts
