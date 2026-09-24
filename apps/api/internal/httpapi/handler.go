@@ -28,6 +28,7 @@ type Options struct {
 	Codex                 CodexControl
 	Rounds                *rounds.Service
 	Delivery              *deliveryservice.Service
+	Research              ResearchService
 }
 
 type CodexControl interface {
@@ -47,6 +48,7 @@ type Handler struct {
 	codex                 CodexControl
 	rounds                *rounds.Service
 	delivery              *deliveryservice.Service
+	research              ResearchService
 	limiter               *loginLimiter
 }
 
@@ -56,6 +58,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 		codex:               options.Codex,
 		rounds:              options.Rounds,
 		delivery:            options.Delivery,
+		research:            options.Research,
 		limiter:             newLoginLimiter()}
 	for _, origin := range options.AllowedOrigins {
 		h.origins[origin] = true
@@ -88,6 +91,13 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("POST /api/v1/rounds/{id}/stop", h.stopAnyRound)
 	mux.HandleFunc("POST /api/v1/rounds/{id}/resume", h.resumeAnyRound)
 	mux.HandleFunc("POST /api/v1/rounds/{id}/mutations", h.roundMutation)
+	mux.HandleFunc("POST /api/v1/research/runs", h.commissionResearchRun)
+	mux.HandleFunc("GET /api/v1/research/runs/{id}", h.getResearchRun)
+	mux.HandleFunc("POST /api/v1/research/runs/{id}/steer", h.steerResearchRun)
+	mux.HandleFunc("GET /api/v1/research/runs/{id}/activity", h.listResearchActivity)
+	mux.HandleFunc("GET /api/v1/research/runs/{id}/report", h.getResearchReport)
+	mux.HandleFunc("GET /api/v1/research/captures/{id}", h.getResearchCapture)
+	mux.HandleFunc("GET /api/v1/research/identity", h.explainResearchIdentity)
 	mux.HandleFunc("GET /api/v1/owner-instructions", h.ownerInstructions)
 	mux.HandleFunc("POST /api/v1/owner-instructions", h.addOwnerInstruction)
 	mux.HandleFunc("POST /api/v1/owner-instructions/{id}/revoke", h.revokeOwnerInstruction)
