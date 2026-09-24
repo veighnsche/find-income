@@ -3921,6 +3921,9 @@ type RoleCriterion struct {
 	Kind        RoleCriterionKind `json:"kind"`
 	Label       string            `json:"label"`
 	Mode        RoleCriterionMode `json:"mode"`
+
+	// SearchTerms Exact job-board queries for a require/prefer criterion. Boards match these literally; the human label is never sent as a query when terms are present.
+	SearchTerms *[]string `json:"searchTerms,omitempty"`
 }
 
 // RoleCriterionKind defines model for RoleCriterion.Kind.
@@ -3938,6 +3941,9 @@ type RoleCriterionView struct {
 	Kind           RoleCriterionViewKind `json:"kind"`
 	Label          string                `json:"label"`
 	Mode           RoleCriterionViewMode `json:"mode"`
+
+	// SearchTerms Exact job-board queries for a require/prefer criterion. Boards match these literally; the human label is never sent as a query when terms are present.
+	SearchTerms *[]string `json:"searchTerms,omitempty"`
 }
 
 // RoleCriterionViewKind defines model for RoleCriterionView.Kind.
@@ -3983,6 +3989,34 @@ type RoundAllowance struct {
 	Requests int64 `json:"requests"`
 	Tools    int64 `json:"tools"`
 	Turns    int64 `json:"turns"`
+}
+
+// RoundCandidateLead defines model for RoundCandidateLead.
+type RoundCandidateLead struct {
+	CompanyUrl    string    `json:"companyUrl"`
+	EvidenceQuote string    `json:"evidenceQuote"`
+	Id            string    `json:"id"`
+	Kind          string    `json:"kind"`
+	ObservedAt    time.Time `json:"observedAt"`
+	Status        string    `json:"status"`
+	StatusReason  string    `json:"statusReason"`
+	Title         string    `json:"title"`
+	Url           string    `json:"url"`
+}
+
+// RoundCandidateSearch defines model for RoundCandidateSearch.
+type RoundCandidateSearch struct {
+	Candidates int64     `json:"candidates"`
+	Method     string    `json:"method"`
+	ObservedAt time.Time `json:"observedAt"`
+	Source     string    `json:"source"`
+	Succeeded  bool      `json:"succeeded"`
+}
+
+// RoundCandidates defines model for RoundCandidates.
+type RoundCandidates struct {
+	Leads    []RoundCandidateLead   `json:"leads"`
+	Searches []RoundCandidateSearch `json:"searches"`
 }
 
 // RoundCapability defines model for RoundCapability.

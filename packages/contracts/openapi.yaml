@@ -505,6 +505,16 @@ paths:
         '200':
           description: Cards from linked audited records
           content: { application/json: { schema: { $ref: '#/components/schemas/RoundCards' } } }
+  /rounds/{id}/candidates:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getRoundCandidates
+      summary: Read staged discovery leads and recorded source reads of a round
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Leads with verification status and source reads
+          content: { application/json: { schema: { $ref: '#/components/schemas/RoundCandidates' } } }
   /rounds/{id}/history:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     get:
@@ -2334,6 +2344,35 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/RoundCard' } }
+    RoundCandidates:
+      type: object
+      required: [leads, searches]
+      properties:
+        leads: { type: array, items: { $ref: '#/components/schemas/RoundCandidateLead' } }
+        searches: { type: array, items: { $ref: '#/components/schemas/RoundCandidateSearch' } }
+    RoundCandidateLead:
+      type: object
+      required:
+        [id, kind, title, url, companyUrl, evidenceQuote, observedAt, status, statusReason]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        title: { type: string }
+        url: { type: string }
+        companyUrl: { type: string }
+        evidenceQuote: { type: string }
+        observedAt: { type: string, format: date-time }
+        status: { type: string }
+        statusReason: { type: string }
+    RoundCandidateSearch:
+      type: object
+      required: [source, method, observedAt, candidates, succeeded]
+      properties:
+        source: { type: string }
+        method: { type: string }
+        observedAt: { type: string, format: date-time }
+        candidates: { type: integer, format: int64 }
+        succeeded: { type: boolean }
     RoundCard:
       type: object
       required:
@@ -3144,6 +3183,11 @@ components:
         description: { type: string, maxLength: 1000 }
         kind: { type: string, enum: [role, responsibility, technology] }
         mode: { type: string, enum: [require, avoid, prefer] }
+        searchTerms:
+          type: array
+          maxItems: 4
+          items: { type: string, minLength: 2, maxLength: 120 }
+          description: Exact job-board queries for a require/prefer criterion. Boards match these literally; the human label is never sent as a query when terms are present.
     RoleCriterionView:
       allOf:
         - $ref: '#/components/schemas/RoleCriterion'

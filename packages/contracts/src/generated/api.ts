@@ -519,6 +519,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rounds/{id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Read staged discovery leads and recorded source reads of a round */
+        get: operations["getRoundCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rounds/{id}/history": {
         parameters: {
             query?: never;
@@ -2082,6 +2101,31 @@ export interface components {
         RoundCards: {
             items: components["schemas"]["RoundCard"][];
         };
+        RoundCandidates: {
+            leads: components["schemas"]["RoundCandidateLead"][];
+            searches: components["schemas"]["RoundCandidateSearch"][];
+        };
+        RoundCandidateLead: {
+            id: string;
+            kind: string;
+            title: string;
+            url: string;
+            companyUrl: string;
+            evidenceQuote: string;
+            /** Format: date-time */
+            observedAt: string;
+            status: string;
+            statusReason: string;
+        };
+        RoundCandidateSearch: {
+            source: string;
+            method: string;
+            /** Format: date-time */
+            observedAt: string;
+            /** Format: int64 */
+            candidates: number;
+            succeeded: boolean;
+        };
         RoundCard: {
             opportunityId: string;
             /** Format: int64 */
@@ -2630,6 +2674,8 @@ export interface components {
             kind: "role" | "responsibility" | "technology";
             /** @enum {string} */
             mode: "require" | "avoid" | "prefer";
+            /** @description Exact job-board queries for a require/prefer criterion. Boards match these literally; the human label is never sent as a query when terms are present. */
+            searchTerms?: string[];
         };
         RoleCriterionView: components["schemas"]["RoleCriterion"] & {
             /** @description Server-calculated SHA-256 of the complete criterion definition. */
@@ -4123,6 +4169,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoundCards"];
+                };
+            };
+        };
+    };
+    getRoundCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Leads with verification status and source reads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundCandidates"];
                 };
             };
         };
