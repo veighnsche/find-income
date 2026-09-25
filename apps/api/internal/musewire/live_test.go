@@ -68,29 +68,79 @@ func TestFoldExecLine(t *testing.T) {
 	line := func(payloadType, payload string) string {
 		return fmt.Sprintf(`{"payload_type":%q,"payload":%s}`, payloadType, payload)
 	}
-	cases := []struct {
-		name       string
-		line       string
+	propose := func(id, kind string) string {
+		return line("task.lifecycle.proposed", fmt.Sprintf(`{"task_id":%q,"event":{"kind":"proposed","task_kind":%q}}`, id, kind))
+	}
+	lifecycle := func(payloadType, id string) string {
+		return line(payloadType, fmt.Sprintf(`{"task_id":%q,"event":{"kind":"x"}}`, id))
+	}
+	type expectation struct {
 		kind, tool string
+		bytes      int64
 		step, done bool
 		fatal      bool
+	}
+	cases := []struct {
+		name   string
+		lines  []string
+		expect []expectation
 	}{
-		{"terminal completed", line("run.terminal.completed", `{"kind":"run_terminal","terminal":"completed"}`), "completed", "", false, true, false},
-		{"terminal failed", line("run.terminal.failed", `{"kind":"run_terminal","terminal":"failed","reason":"boom"}`), "failed", "", false, true, false},
-		{"model step", line("task.lifecycle.completed", `{"task_id":"a","task_kind":"model.response","event":{"kind":"completed"}}`), "", "", true, false, false},
-		{"tool started", line("task.lifecycle.started", `{"task_id":"a","task_kind":"tool.public_list_saved","event":{"kind":"started"}}`), "toolCall", "public_list_saved", false, false, false},
-		{"tool completed", line("task.lifecycle.completed", `{"task_id":"a","task_kind":"tool.public_list_saved","event":{"kind":"completed"}}`), "toolResult", "public_list_saved", false, false, false},
-		{"subagent forbidden", line("task.lifecycle.started", `{"task_id":"a","task_kind":"subagent.spawn","event":{"kind":"started"}}`), "forbidden", "subagent.spawn", false, false, false},
-		{"failed tool is a result", line("task.lifecycle.failed", `{"task_id":"a","task_kind":"tool.public_search","event":{"kind":"failed","reason":"denied"}}`), "toolResult", "public_search", false, false, false},
-		{"failed session task fatal", line("task.lifecycle.failed", `{"task_id":"a","task_kind":"session.init","event":{"kind":"failed","reason":"auth"}}`), "", "", false, false, true},
-		{"reminder failure ignored", line("task.lifecycle.failed", `{"task_id":"a","task_kind":"reminder.agent.x","event":{"kind":"failed","reason":"y"}}`), "", "", false, false, false},
-		{"output delta ignored", line("run.output.delta", `{"kind":"run_output_delta","text":"hi"}`), "", "", false, false, false},
-		{"non-JSON ignored", "muse: workspace root: /tmp", "", "", false, false, false},
+		{"terminal completed",
+			[]string{line("run.terminal.completed", `{"kind":"run_terminal","terminal":"completed"}`)},
+			[]expectation{{kind: "completed", done: true}}},
+		{"terminal failed",
+			[]string{line("run.terminal.failed", `{"kind":"run_terminal","terminal":"failed","reason":"boom"}`)},
+			[]expectation{{kind: "failed", done: true}}},
+		{"route enforced",
+			[]string{line("run.model.configured", `{"model_id":"other","provider_id":"meta"}`)},
+			[]expectation{{fatal: true}}},
+		{"route pinned passes",
+			[]string{line("run.model.configured", `{"model_id":"fixture-model","provider_id":"meta"}`)},
+			[]expectation{{}}},
+		{"model step",
+			[]string{propose("m1", "model.meta.response"), lifecycle("task.lifecycle.completed", "m1")},
+			[]expectation{{}, {step: true}}},
+		{"tool call and result",
+			[]string{
+				propose("t1", "tool.mcp__find_income_public__public_list_saved"),
+				lifecycle("task.lifecycle.started", "t1"),
+				line("tool.result", `{"text":"{}","correlation_facts":{"tool_name":"mcp__find_income_public__public_list_saved","outcome":"success"}}`),
+				lifecycle("task.lifecycle.completed", "t1"),
+			},
+			[]expectation{{}, {kind: "toolCall", tool: "mcp__find_income_public__public_list_saved"},
+				{kind: "toolResult", tool: "mcp__find_income_public__public_list_saved", bytes: 2},
+				{kind: "toolResult", tool: "mcp__find_income_public__public_list_saved"}}},
+		{"subagent forbidden",
+			[]string{propose("s1", "subagent.spawn"), lifecycle("task.lifecycle.started", "s1")},
+			[]expectation{{}, {kind: "forbidden", tool: "subagent.spawn"}}},
+		{"failed tool is a result",
+			[]string{propose("t2", "tool.mcp__find_income_public__public_search"), lifecycle("task.lifecycle.failed", "t2")},
+			[]expectation{{}, {kind: "toolResult", tool: "mcp__find_income_public__public_search"}}},
+		{"failed session task fatal",
+			[]string{propose("x1", "session.init"), lifecycle("task.lifecycle.failed", "x1")},
+			[]expectation{{}, {fatal: true}}},
+		{"reminder failure ignored",
+			[]string{propose("r1", "reminder.agent.x"), lifecycle("task.lifecycle.failed", "r1")},
+			[]expectation{{}, {}}},
+		{"unknown task ignored",
+			[]string{lifecycle("task.lifecycle.started", "ghost")},
+			[]expectation{{}}},
+		{"output delta ignored",
+			[]string{line("run.output.delta", `{"kind":"run_output_delta","text":"hi"}`)},
+			[]expectation{{}}},
+		{"non-JSON ignored",
+			[]string{"muse: workspace root: /tmp"},
+			[]expectation{{}}},
 	}
 	for _, tc := range cases {
-		kind, tool, step, done, fatal := foldExecLine([]byte(tc.line))
-		if kind != tc.kind || tool != tc.tool || step != tc.step || done != tc.done || (fatal != "") != tc.fatal {
-			t.Errorf("%s: got kind=%q tool=%q step=%v done=%v fatal=%q", tc.name, kind, tool, step, done, fatal)
+		folder := newExecFolder("fixture-model", "meta")
+		for i, raw := range tc.lines {
+			kind, tool, bytes, step, done, fatal := folder.fold([]byte(raw))
+			want := tc.expect[i]
+			if kind != want.kind || tool != want.tool || bytes != want.bytes || step != want.step || done != want.done || (fatal != "") != want.fatal {
+				t.Errorf("%s line %d: got kind=%q tool=%q bytes=%d step=%v done=%v fatal=%q",
+					tc.name, i, kind, tool, bytes, step, done, fatal)
+			}
 		}
 	}
 }
@@ -98,7 +148,7 @@ func TestFoldExecLine(t *testing.T) {
 func TestMapToolName(t *testing.T) {
 	for in, want := range map[string]string{
 		"public_search":                          "public_search",
-		"mcp__find-income-public__public_fetch":  "public_fetch",
+		"mcp__find_income_public__public_fetch":  "public_fetch",
 		"find-income-public.public_save_vacancy": "public_save_vacancy",
 		"shell":                                  "shell",
 		"mcp__other__public_search":              "mcp__other__public_search",
@@ -216,7 +266,13 @@ func TestLiveTransportValidationTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := liveFixtureServer(t)
-	traceFile, err := os.Create(filepath.Join(t.TempDir(), "validate-trace.jsonl"))
+	traceDir := os.Getenv("E11_TRACE_DIR")
+	if traceDir == "" {
+		traceDir = t.TempDir()
+	} else if err := os.MkdirAll(traceDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	traceFile, err := os.Create(filepath.Join(traceDir, "validate-trace.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}

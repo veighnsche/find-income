@@ -94,7 +94,10 @@ func mapToolName(name string) string {
 	if musecode.ContributorToolAllowed(name) {
 		return name
 	}
-	if parts := strings.Split(name, "__"); len(parts) == 3 && parts[0] == "mcp" && parts[1] == mcpServerName {
+	// The host sanitizes the server segment (hyphens become underscores):
+	// mcp__find_income_public__public_search.
+	if parts := strings.Split(name, "__"); len(parts) == 3 && parts[0] == "mcp" &&
+		parts[1] == strings.ReplaceAll(mcpServerName, "-", "_") {
 		return parts[2]
 	}
 	if rest, ok := strings.CutPrefix(name, mcpServerName+"."); ok {
@@ -142,18 +145,42 @@ func (t *traceWriter) note(format string, args ...any) {
 type execEvent struct {
 	PayloadType string `json:"payload_type"`
 	Payload     struct {
-		Kind     string `json:"kind"`
-		Terminal string `json:"terminal"`
-		Text     string `json:"text"`
-		Reason   string `json:"reason"`
-		TaskID   string `json:"task_id"`
-		TaskKind string `json:"task_kind"`
-		Event    struct {
+		Kind       string `json:"kind"`
+		Terminal   string `json:"terminal"`
+		Text       string `json:"text"`
+		Reason     string `json:"reason"`
+		TaskID     string `json:"task_id"`
+		ModelID    string `json:"model_id"`
+		ProviderID string `json:"provider_id"`
+		Event      struct {
 			Kind     string `json:"kind"`
 			TaskKind string `json:"task_kind"`
 			Reason   string `json:"reason"`
 		} `json:"event"`
+		CorrelationFacts struct {
+			ToolName string `json:"tool_name"`
+			Outcome  string `json:"outcome"`
+		} `json:"correlation_facts"`
 	} `json:"payload"`
+}
+
+// execFolder maps --json lines to supervisor observations. It is stateful:
+// task_kind appears only on proposed events, so later lifecycle events
+// resolve through the task id. Model steps count one per model-task
+// terminal (success or failure); in-task provider retries undercount
+// slightly, and the host-side --max-model-steps cap stays the hard
+// backstop.
+type execFolder struct {
+	modelID    string
+	providerID string
+	tasks      map[string]string
+	called     map[string]bool
+	routeSeen  bool
+}
+
+func newExecFolder(modelID, providerID string) *execFolder {
+	return &execFolder{modelID: modelID, providerID: providerID,
+		tasks: map[string]string{}, called: map[string]bool{}}
 }
 
 // Run conducts one Contributor discovery turn to transport-terminal state.
@@ -214,6 +241,24 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 	if err != nil {
 		return err
 	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	// The meta provider reads auth.json next to the active settings file;
+	// MUSE_AUTH_PATH does not redirect it on the observed 1.4.0 host. Copy
+	// the owner's credential file into the isolated home unread: its bytes
+	// are never parsed, printed, or proxied, and the copy lives and dies
+	// with the 0700 run workspace.
+	if provider == "meta" {
+		credential, err := os.ReadFile(filepath.Join(homeDir, ".config", "muse", "auth.json"))
+		if err != nil {
+			return fmt.Errorf("musewire: owner CLI credentials unavailable: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(home, "config", "muse", "auth.json"), credential, 0o600); err != nil {
+			return err
+		}
+	}
 	prompt := discoveryPrompt(public.Criteria)
 	if t.ValidationPrompt != "" {
 		prompt = t.ValidationPrompt
@@ -221,10 +266,6 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 	}
 	promptFile := filepath.Join(spec.Workspace, "prompt.txt")
 	if err := os.WriteFile(promptFile, []byte(prompt), 0o600); err != nil {
-		return err
-	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
 		return err
 	}
 	maxSteps := spec.Bounds.MaxModelSteps
@@ -248,7 +289,6 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 	cmd.Env = append(os.Environ(),
 		"XDG_CONFIG_HOME="+filepath.Join(home, "config"),
 		"XDG_DATA_HOME="+filepath.Join(home, "data"),
-		"MUSE_AUTH_PATH="+filepath.Join(homeDir, ".config", "muse", "auth.json"),
 	)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -295,6 +335,7 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 	defer stop()
 
 	emitted := map[string]bool{}
+	folder := newExecFolder(t.ModelID, t.ProviderID)
 	fetch := 0
 	finished := false
 	terminal := ""
@@ -311,7 +352,7 @@ loop:
 		line, err := reader.ReadBytes('\n')
 		if len(line) > 0 {
 			trace.hostLine(line)
-			kind, tool, step, done, terr := foldExecLine(line)
+			kind, tool, bytes, step, done, terr := folder.fold(line)
 			switch {
 			case terr != "":
 				detail = terr
@@ -332,7 +373,7 @@ loop:
 					}
 				}
 			case kind == "toolResult":
-				sink.Emit(musecode.Event{Kind: musecode.EventToolResult, Tool: mapToolName(tool)})
+				sink.Emit(musecode.Event{Kind: musecode.EventToolResult, Tool: mapToolName(tool), BytesOut: bytes})
 				emitNewSaves(server, sink, emitted)
 			case kind == "forbidden":
 				detail = "forbidden item kind " + tool
@@ -366,61 +407,76 @@ loop:
 	return nil
 }
 
-// foldExecLine maps one --json line to a supervisor observation. It
-// returns the mapped kind (toolCall, toolResult, forbidden, or a run
-// terminal), the verbatim tool/task name, whether a model step
-// completed, whether the run reached terminal state, and a fatal
-// detail. Unknown lines are ignored: the trace keeps them and the
+// fold maps one --json line to a supervisor observation. It returns the
+// mapped kind (toolCall, toolResult, forbidden, or a run terminal), the
+// verbatim tool/task name, result bytes for tool results, whether a
+// model step completed, whether the run reached terminal state, and a
+// fatal detail. Unknown lines are ignored: the trace keeps them and the
 // terminal event decides the outcome.
-func foldExecLine(line []byte) (kind, tool string, step, done bool, fatal string) {
+func (f *execFolder) fold(line []byte) (kind, tool string, bytes int64, step, done bool, fatal string) {
 	trimmed := strings.TrimSpace(string(line))
 	if !strings.HasPrefix(trimmed, "{") {
-		return "", "", false, false, ""
+		return "", "", 0, false, false, ""
 	}
 	var event execEvent
 	if err := json.Unmarshal([]byte(trimmed), &event); err != nil {
-		return "", "", false, false, ""
+		return "", "", 0, false, false, ""
 	}
 	switch event.PayloadType {
+	case "run.model.configured":
+		f.routeSeen = true
+		if event.Payload.ModelID != f.modelID || event.Payload.ProviderID != f.providerID {
+			return "", "", 0, false, false, fmt.Sprintf("route drift: %s/%s != pinned %s/%s",
+				event.Payload.ProviderID, event.Payload.ModelID, f.providerID, f.modelID)
+		}
+		return "", "", 0, false, false, ""
 	case "run.terminal.completed", "run.terminal.failed", "run.terminal.cancelled":
 		terminal := strings.TrimPrefix(event.PayloadType, "run.terminal.")
 		if event.Payload.Terminal != "" {
 			terminal = event.Payload.Terminal
 		}
-		return terminal, "", false, true, ""
-	case "task.lifecycle.completed", "task.lifecycle.failed":
-		taskKind := event.Payload.TaskKind
-		if taskKind == "" {
-			taskKind = event.Payload.Event.TaskKind
+		return terminal, "", 0, false, true, ""
+	case "tool.result":
+		return "toolResult", event.Payload.CorrelationFacts.ToolName, int64(len(event.Payload.Text)), false, false, ""
+	case "task.lifecycle.proposed":
+		if event.Payload.TaskID != "" && event.Payload.Event.TaskKind != "" {
+			f.tasks[event.Payload.TaskID] = event.Payload.Event.TaskKind
 		}
+		return "", "", 0, false, false, ""
+	case "task.lifecycle.started":
+		taskKind := f.tasks[event.Payload.TaskID]
+		if name, ok := strings.CutPrefix(taskKind, "tool."); ok && name != "" {
+			if f.called[event.Payload.TaskID] {
+				return "", "", 0, false, false, ""
+			}
+			f.called[event.Payload.TaskID] = true
+			return "toolCall", name, 0, false, false, ""
+		}
+		if isForbiddenTask(taskKind) {
+			return "forbidden", taskKind, 0, false, false, ""
+		}
+	case "task.lifecycle.completed", "task.lifecycle.failed":
+		taskKind := f.tasks[event.Payload.TaskID]
 		if name, ok := strings.CutPrefix(taskKind, "model."); ok && name != "" {
-			return "", "", true, false, ""
+			return "", "", 0, true, false, ""
 		}
 		if name, ok := strings.CutPrefix(taskKind, "tool."); ok && name != "" {
-			return "toolResult", name, false, false, ""
+			return "toolResult", name, 0, false, false, ""
 		}
-		if taskKind == "subagent" || strings.HasPrefix(taskKind, "subagent.") ||
-			taskKind == "workflow" || strings.HasPrefix(taskKind, "workflow.") {
-			return "forbidden", taskKind, false, false, ""
+		if isForbiddenTask(taskKind) {
+			return "forbidden", taskKind, 0, false, false, ""
 		}
 		if event.PayloadType == "task.lifecycle.failed" && taskKind != "" &&
 			!strings.HasPrefix(taskKind, "reminder.") {
-			return "", "", false, false, "task failed: " + taskKind + ": " + event.Payload.Event.Reason
-		}
-	case "task.lifecycle.started", "task.lifecycle.scheduled":
-		taskKind := event.Payload.TaskKind
-		if taskKind == "" {
-			taskKind = event.Payload.Event.TaskKind
-		}
-		if name, ok := strings.CutPrefix(taskKind, "tool."); ok && name != "" {
-			return "toolCall", name, false, false, ""
-		}
-		if taskKind == "subagent" || strings.HasPrefix(taskKind, "subagent.") ||
-			taskKind == "workflow" || strings.HasPrefix(taskKind, "workflow.") {
-			return "forbidden", taskKind, false, false, ""
+			return "", "", 0, false, false, "task failed: " + taskKind + ": " + event.Payload.Event.Reason
 		}
 	}
-	return "", "", false, false, ""
+	return "", "", 0, false, false, ""
+}
+
+func isForbiddenTask(taskKind string) bool {
+	return taskKind == "subagent" || strings.HasPrefix(taskKind, "subagent.") ||
+		taskKind == "workflow" || strings.HasPrefix(taskKind, "workflow.")
 }
 
 func emitNewSaves(server *publicresearch.Server, sink musecode.EventSink, emitted map[string]bool) {
