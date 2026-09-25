@@ -215,6 +215,71 @@ func (h *Handler) resumeRound(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, roundModel(round))
 }
 
+func (h *Handler) stopAnyRound(w http.ResponseWriter, r *http.Request) {
+	round, err := h.database.Round(r.Context(), r.PathValue("id"))
+	if err == nil && round.Outcome == "research_run" {
+		h.stopResearchRun(w, r, round.ID)
+		return
+	}
+	h.stopRound(w, r)
+}
+
+func (h *Handler) resumeAnyRound(w http.ResponseWriter, r *http.Request) {
+	round, err := h.database.Round(r.Context(), r.PathValue("id"))
+	if err == nil && round.Outcome == "research_run" {
+		h.resumeResearchRun(w, r, round.ID)
+		return
+	}
+	h.resumeRound(w, r)
+}
+
+// stopResearchRun and resumeResearchRun route research runs to the run
+// supervisor so browser Stop/Resume share the tested fence, journal,
+// checkpoint and remaining-allowance behavior. The shared rounds service
+// cannot resume research runs (its worker launches legacy outcomes only),
+// so research must never fall through to it.
+func (h *Handler) stopResearchRun(w http.ResponseWriter, r *http.Request, id string) {
+	p, ok := h.owner(w, r)
+	if !ok || !h.mutationAllowed(w, r, p) {
+		return
+	}
+	if h.researchControl == nil {
+		fail(w, http.StatusServiceUnavailable, generated.ApiErrorCodeUnavailable, "Research supervision is not connected yet.")
+		return
+	}
+	if _, err := h.researchControl.Stop(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, id, "owner stop"); err != nil {
+		failResearch(w, err)
+		return
+	}
+	round, err := h.database.Round(r.Context(), id)
+	if err != nil {
+		failResearch(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, roundModel(round))
+}
+
+func (h *Handler) resumeResearchRun(w http.ResponseWriter, r *http.Request, id string) {
+	p, ok := h.owner(w, r)
+	if !ok || !h.mutationAllowed(w, r, p) {
+		return
+	}
+	if h.researchControl == nil {
+		fail(w, http.StatusServiceUnavailable, generated.ApiErrorCodeUnavailable, "Research supervision is not connected yet.")
+		return
+	}
+	if _, err := h.researchControl.Resume(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, id); err != nil {
+		failResearch(w, err)
+		return
+	}
+	round, err := h.database.Round(r.Context(), id)
+	if err != nil {
+		failResearch(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, roundModel(round))
+}
+
 func (h *Handler) roundMutation(w http.ResponseWriter, r *http.Request) {
 	p, ok := h.recordPrincipal(w, r, "opportunities:write", true)
 	if !ok {

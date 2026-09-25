@@ -12,10 +12,9 @@ import (
 )
 
 // Material/version operations (A6 contract). Grounded preparation and reads
-// are live (D3); direct edits and explicit rewrites land with D4. Delivery
-// review, approval, and send stay on the existing digest-bound pack/delivery
-// services; new material versions produce new pack identities, so stale
-// approvals cannot transfer.
+// are live (D3); direct edits and explicit rewrites land with D4. There is
+// no delivery step: new material versions produce new pack identities, and
+// the owner applies manually from the saved Handoff page.
 func (h *Handler) materialUnavailable(w http.ResponseWriter, operation string) {
 	fail(w, http.StatusServiceUnavailable, generated.ApiErrorCodeUnavailable,
 		operation+" is unavailable until preparation is implemented.")

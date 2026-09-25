@@ -273,26 +273,6 @@ func (s Service) RunOrganisation(ctx context.Context, binding Binding, input jev
 	return result, nil
 }
 
-func (s Service) RunDeliveryRoute(ctx context.Context, binding Binding, input jev.DeliveryRouteInput) (jev.DeliveryRouteResult, error) {
-	if err := s.ready(binding); err != nil {
-		return jev.DeliveryRouteResult{}, err
-	}
-	refs, _ := json.Marshal(struct {
-		OpportunityID string `json:"opportunity_id"`
-		RouteID       string `json:"route_id"`
-		SourceSHA256  string `json:"source_sha256"`
-		RouteSHA256   string `json:"route_sha256"`
-	}{input.OpportunityID, input.RouteID, input.SourceSHA256, input.RouteSHA256})
-	criteria, _ := json.Marshal([]string{"application_mailbox", "other_contact", "unresolved"})
-	evaluator := &recordingEvaluator{service: s, binding: binding, purpose: "delivery_route", rubric: "delivery-route-v1", sourceRefs: refs, candidates: criteria,
-		maxReportedTokens: input.MaxReportedTokens}
-	result, err := jev.AssessDeliveryRoute(ctx, evaluator, input)
-	if err = evaluator.finish(ctx, err); err != nil {
-		return jev.DeliveryRouteResult{}, err
-	}
-	return result, nil
-}
-
 func (s Service) RunOfferTradeoff(ctx context.Context, binding Binding, input jev.OfferTradeoffInput) (jev.OfferTradeoffResult, error) {
 	if err := s.ready(binding); err != nil {
 		return jev.OfferTradeoffResult{}, err

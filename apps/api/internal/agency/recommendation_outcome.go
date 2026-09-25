@@ -10,38 +10,25 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/veighnsche/find-income-dashboard/api/internal/deliveryservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-// RecommendDelivery is the narrow delivery-service seam. Only counts and a
-// saved review ID cross into the commissioned Jev choice.
-func (e *Engine) RecommendDelivery(ctx context.Context, round store.Round, summary deliveryservice.DeliveryAdviceFacts) json.RawMessage {
-	facts := outcomeRecommendationFacts{Outcome: round.Outcome, Code: "delivery_attempts_recorded", ResultID: summary.ReviewID,
-		RecordedDelivery: summary.Recorded, FailedDelivery: summary.Failed, UncertainDelivery: summary.Uncertain}
-	encoded, _ := json.Marshal(e.computeOutcomeRecommendation(ctx, round, facts))
-	return encoded
-}
-
 // outcomeRecommendationFacts contains only bounded record/status facts. No
 // owner text, offer source, contact address, message, or report JSON enters a
 // next-action request for these outcomes.
 type outcomeRecommendationFacts struct {
-	Outcome           string `json:"outcome"`
-	Code              string `json:"code"`
-	ResultID          string `json:"resultId"`
-	ResultRevision    int64  `json:"resultRevision"`
-	ResultUpdatedAt   string `json:"resultUpdatedAt,omitempty"`
-	FocusSaved        bool   `json:"focusSaved,omitempty"`
-	AppliedChanges    int    `json:"appliedChanges"`
-	UnresolvedCount   int    `json:"unresolvedCount"`
-	TradeoffStatus    string `json:"tradeoffStatus"`
-	RecordedDelivery  int    `json:"recordedDelivery"`
-	FailedDelivery    int    `json:"failedDelivery"`
-	UncertainDelivery int    `json:"uncertainDelivery"`
-	Intent            string `json:"intent,omitempty"`
+	Outcome         string `json:"outcome"`
+	Code            string `json:"code"`
+	ResultID        string `json:"resultId"`
+	ResultRevision  int64  `json:"resultRevision"`
+	ResultUpdatedAt string `json:"resultUpdatedAt,omitempty"`
+	FocusSaved      bool   `json:"focusSaved,omitempty"`
+	AppliedChanges  int    `json:"appliedChanges"`
+	UnresolvedCount int    `json:"unresolvedCount"`
+	TradeoffStatus  string `json:"tradeoffStatus"`
+	Intent          string `json:"intent,omitempty"`
 }
 
 func (f outcomeRecommendationFacts) useful() bool {
@@ -52,8 +39,6 @@ func (f outcomeRecommendationFacts) useful() bool {
 		return f.ResultID != ""
 	case "compare_offers":
 		return f.ResultID != ""
-	case "deliver":
-		return f.RecordedDelivery > 0
 	case "interview_prepare", "interview_debrief":
 		return f.ResultID != "" && f.ResultUpdatedAt != ""
 	case "process_replies":
@@ -169,7 +154,6 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 			{ID: "home_prepare", Description: "Suggest owner-clicked preparation for one exact current owner-selected role."},
 			{ID: "home_review_pack", Description: "Review one exact current saved application pack without sending it."},
 			{ID: "home_review_comparison", Description: "Review the saved offer comparison without accepting an offer."},
-			{ID: "home_review_delivery", Description: "Review recorded delivery submission states without claiming receipt."},
 			{ID: "home_review_interview", Description: "Review the saved sourced interview brief without booking or messaging."},
 			{ID: "home_review_debrief", Description: "Review the saved owner-reported debrief without contacting anyone."},
 		}, Sources: profileSources,
@@ -220,10 +204,6 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 		refs = append(refs, recommendationSourceRef{ID: id, Kind: "saved_comparison_facts", Revision: revision})
 		add("review-comparison", "home_review_comparison", "Review exact cited comparison and unknown terms before any owner decision.", "Open saved comparison; no accept or contact authority.", append(append([]string{}, baseRefs...), id),
 			recommendationChoice{Action: "review_comparison", Target: recommendationTarget{Kind: "offer_comparison", ID: comparison.ID, Revision: 1, ContentSHA256: comparison.Comparison.InputSHA256}, Reason: "A current cited offer comparison is saved for owner review; no employer decision has been made."})
-	}
-	if facts.Outcome == "deliver" {
-		add("review-delivery", "home_review_delivery", "Review recorded submission states and unresolved delivery uncertainty.", "Open saved delivery review; never resend from advice.", baseRefs,
-			recommendationChoice{Action: "review_delivery", Target: recommendationTarget{Kind: "delivery_review", ID: facts.ResultID, Revision: int64(facts.RecordedDelivery)}, Reason: fmt.Sprintf("This commissioned delivery recorded %d item states; %d failed and %d remain uncertain. Employer receipt is unverified.", facts.RecordedDelivery, facts.FailedDelivery, facts.UncertainDelivery)})
 	}
 	if facts.Outcome == "interview_prepare" || facts.Outcome == "interview_debrief" {
 		kind, action, capability := "interview", "review_interview", "home_review_interview"
@@ -343,31 +323,6 @@ func savedOutcomeRecommendationFacts(ctx context.Context, db *store.Store, round
 			return facts, store.ErrInvalid
 		}
 		facts.Code, facts.ResultID, facts.TradeoffStatus = offer.Code, offer.ComparisonID, offer.TradeoffStatus
-	case "deliver":
-		if len(round.Scope.InputRefs) != 1 || len(round.Scope.InputRefs[0]) <= len("delivery_review:") ||
-			round.Scope.InputRefs[0][:len("delivery_review:")] != "delivery_review:" {
-			return facts, store.ErrInvalid
-		}
-		facts.Code, facts.ResultID = "delivery_attempts_recorded", round.Scope.InputRefs[0][len("delivery_review:"):]
-		review, err := db.DeliveryReview(ctx, facts.ResultID)
-		if err != nil {
-			return facts, err
-		}
-		for _, item := range review.Items {
-			if item.RoundID != round.ID {
-				continue
-			}
-			switch item.State {
-			case "accepted_by_smtp":
-				facts.RecordedDelivery++
-			case "failed":
-				facts.RecordedDelivery++
-				facts.FailedDelivery++
-			case "uncertain":
-				facts.RecordedDelivery++
-				facts.UncertainDelivery++
-			}
-		}
 	case "interview_prepare":
 		var outcome interviewOutcome
 		if json.Unmarshal(round.Report, &outcome) != nil || !outcome.BriefSaved || outcome.InterviewID == "" {

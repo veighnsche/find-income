@@ -39,7 +39,7 @@ func recommendationOpportunityRevision(revision int64, decision store.OwnerDecis
 // unknown read is unavailable, while a proven changed snapshot is stale.
 func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, round store.Round) HomeRecommendationCurrentness {
 	verdict := HomeRecommendationCurrentness{Status: "unavailable", Code: "no_saved_recommendation", CheckedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-	if db == nil || ctx == nil || round.ID == "" || round.Outcome != "process_input" && round.Outcome != "prepare" && round.Outcome != "compare_offers" && round.Outcome != "deliver" && round.Outcome != "interview_prepare" && round.Outcome != "interview_debrief" && round.Outcome != "process_replies" {
+	if db == nil || ctx == nil || round.ID == "" || round.Outcome != "process_input" && round.Outcome != "prepare" && round.Outcome != "compare_offers" && round.Outcome != "interview_prepare" && round.Outcome != "interview_debrief" && round.Outcome != "process_replies" {
 		return verdict
 	}
 	var saved struct {
@@ -57,7 +57,7 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 		verdict.Code = "recommendation_not_selected"
 		return verdict
 	}
-	if round.State != store.RoundCompleted && (round.Outcome != "deliver" || round.State != store.RoundFailed) ||
+	if round.State != store.RoundCompleted ||
 		advice.RoundID != round.ID || advice.RoundGeneration+1 != round.Generation || advice.ProfileVersion != round.ProfileVersion {
 		verdict.Status, verdict.Code = "stale", "round_identity_changed"
 		return verdict

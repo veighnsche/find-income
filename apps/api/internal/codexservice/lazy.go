@@ -152,13 +152,6 @@ func (l *Lazy) ExecuteRoundTurn(ctx context.Context, actor store.Actor, roundID 
 	return s.ExecuteRoundTurn(ctx, actor, roundID, input)
 }
 
-func (l *Lazy) CompletePackDeliveryRoute(ctx context.Context, roundID, packID string) (string, error) {
-	s, err := l.get()
-	if err != nil {
-		return "", err
-	}
-	return s.CompletePackDeliveryRoute(ctx, roundID, packID)
-}
 func (l *Lazy) CancelDispatch(ctx context.Context, attemptID string) error {
 	s, err := l.get()
 	if err != nil {

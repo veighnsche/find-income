@@ -14,7 +14,6 @@ import (
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
 	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
-	"github.com/veighnsche/find-income-dashboard/api/internal/deliveryservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
 	"github.com/veighnsche/find-income-dashboard/api/internal/musewire"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
@@ -28,7 +27,6 @@ type Options struct {
 	OrganisationAvailable bool
 	Codex                 CodexControl
 	Rounds                *rounds.Service
-	Delivery              *deliveryservice.Service
 	Research              ResearchService
 	ResearchControl       ResearchRunControl
 	AnswerMatcher         AnswerMatcher
@@ -53,7 +51,6 @@ type Handler struct {
 	organisationAvailable bool
 	codex                 CodexControl
 	rounds                *rounds.Service
-	delivery              *deliveryservice.Service
 	research              ResearchService
 	researchControl       ResearchRunControl
 	answerMatcher         AnswerMatcher
@@ -68,7 +65,6 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 		ingestionAvailable: options.IngestionAvailable, organisationAvailable: options.OrganisationAvailable,
 		codex:           options.Codex,
 		rounds:          options.Rounds,
-		delivery:        options.Delivery,
 		research:        options.Research,
 		researchControl: options.ResearchControl,
 		answerMatcher:   options.AnswerMatcher,
@@ -157,14 +153,8 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/application-packs/{id}", h.getApplicationPack)
 	mux.HandleFunc("GET /api/v1/application-packs/{id}/pdf", h.applicationPackPDF)
 	mux.HandleFunc("GET /api/v1/application-packs/{id}/source.zip", h.applicationPackSourceArchive)
-	mux.HandleFunc("GET /api/v1/delivery/capability", h.deliveryCapability)
-	mux.HandleFunc("POST /api/v1/delivery/reviews", h.prepareDeliveryReview)
-	mux.HandleFunc("GET /api/v1/delivery/reviews/{id}", h.getDeliveryReview)
-	mux.HandleFunc("POST /api/v1/delivery/reviews/{id}/approve", h.approveDeliveryReview)
-	mux.HandleFunc("POST /api/v1/delivery/reviews/{id}/send", h.sendDeliveryReview)
-	mux.HandleFunc("POST /api/v1/delivery/reviews/{id}/reconcile", h.reconcileDeliveryReview)
-	mux.HandleFunc("POST /api/v1/delivery/reviews/{id}/close", h.closeDeliveryReview)
-	mux.HandleFunc("PATCH /api/v1/opportunities/{id}", h.unsupportedRecruitmentMutation)
+	// No delivery routes: this app never emails, submits, attaches, or
+	// autofills on an employer site. Handoff is manual and owner-driven.	mux.HandleFunc("PATCH /api/v1/opportunities/{id}", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/archive", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/actions", h.listActions)
 	mux.HandleFunc("POST /api/v1/actions", h.unsupportedRecruitmentMutation)

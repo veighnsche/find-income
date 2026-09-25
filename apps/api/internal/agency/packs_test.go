@@ -17,17 +17,12 @@ import (
 )
 
 type packRuntimeFixture struct {
-	db               *store.Store
-	turns            int
-	routeCompletions int
-	evidence         string
+	db       *store.Store
+	turns    int
+	evidence string
 }
 
 func (f *packRuntimeFixture) CheckRound(context.Context, string) error { return nil }
-func (f *packRuntimeFixture) CompletePackDeliveryRoute(context.Context, string, string) (string, error) {
-	f.routeCompletions++
-	return "application_mailbox", nil
-}
 func (f *packRuntimeFixture) ExecuteRoundTurn(ctx context.Context, agent store.Actor, roundID string, input codexservice.RoundTurnInput) (store.RoundAttempt, error) {
 	f.turns++
 	f.evidence = input.Evidence
@@ -166,7 +161,7 @@ func TestPrepareCommissionSuppliesApprovedEvidenceAndReportsPack(t *testing.T) {
 		t.Fatal(err)
 	}
 	finished := waitPackRound(t, db, round.ID)
-	if finished.DeliverableStatus != "complete" || runtime.turns != 1 || runtime.routeCompletions != 1 {
+	if finished.DeliverableStatus != "complete" || runtime.turns != 1 {
 		t.Fatalf("round=%+v turns=%d", finished, runtime.turns)
 	}
 	var evidence packTurnEvidence
@@ -227,8 +222,8 @@ func TestResumeAfterPackCommitCompletesRouteWithoutAnotherTurn(t *testing.T) {
 	if err := json.Unmarshal(finished.Report, &report); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.turns != 1 || runtime.routeCompletions != 1 || report.Code != "pack_ready" || report.DeliveryRouteStatus != "application_mailbox" {
-		t.Fatalf("resume did not complete pending step: turns=%d route=%d report=%+v", runtime.turns, runtime.routeCompletions, report)
+	if runtime.turns != 1 || report.Code != "pack_ready" {
+		t.Fatalf("resume did not complete pending step: turns=%d report=%+v", runtime.turns, report)
 	}
 }
 

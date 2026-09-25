@@ -116,24 +116,6 @@ func (e *Engine) checkRecommendationTarget(ctx context.Context, round store.Roun
 			return store.ErrConflict
 		}
 		return nil
-	case "review_delivery":
-		if target.Kind != "delivery_review" || target.ID == "" || target.Revision < 1 {
-			return store.ErrConflict
-		}
-		review, err := e.Store.DeliveryReview(ctx, target.ID)
-		if err != nil {
-			return store.ErrConflict
-		}
-		recorded := int64(0)
-		for _, item := range review.Items {
-			if item.RoundID == round.ID && (item.State == "accepted_by_smtp" || item.State == "failed" || item.State == "uncertain") {
-				recorded++
-			}
-		}
-		if recorded != target.Revision {
-			return store.ErrConflict
-		}
-		return nil
 	case "review_interview":
 		if target.Kind != "interview" || target.ID == "" || target.UpdatedAt == "" {
 			return store.ErrConflict

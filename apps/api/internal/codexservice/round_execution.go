@@ -193,11 +193,7 @@ func (s *Service) RecoverLocalDispatch(ctx context.Context, roundID, attemptID s
 	if s == nil || s.db == nil {
 		return false, false, ErrUnavailable
 	}
-	handled, resolved, err := s.db.RecoverCapturedDeliveryRouteAttempt(ctx, roundID, attemptID, generation)
-	if handled || err != nil {
-		return handled, resolved, err
-	}
-	handled, resolved, err = s.recoverInterviewDispatch(ctx, roundID, attemptID, generation)
+	handled, resolved, err := s.recoverInterviewDispatch(ctx, roundID, attemptID, generation)
 	if handled || err != nil {
 		return handled, resolved, err
 	}

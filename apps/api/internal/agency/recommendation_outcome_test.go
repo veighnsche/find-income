@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/applicationpacks"
-	"github.com/veighnsche/find-income-dashboard/api/internal/deliveryservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/interviewprep"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevservice"
@@ -82,79 +81,6 @@ func TestInputOutcomeSavesOneChargedAdviceAndPureCurrentness(t *testing.T) {
 	again, err := db.Round(ctx, round.ID)
 	if err != nil || !bytes.Equal(again.Report, before) || again.Used != finished.Used {
 		t.Fatalf("read changed saved outcome: %s %v", again.Report, err)
-	}
-}
-
-func TestDeliveryAdapterRunsOneBoundedChargedDecision(t *testing.T) {
-	ctx := context.Background()
-	db, err := store.Open(ctx, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	profile, err := db.CurrentPreferences(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	owner := store.Actor{Kind: "administrator", ID: "delivery-owner"}
-	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "delivery-advice", Intent: "Review saved submission states", Outcome: "deliver", ProfileVersion: profile.Version,
-		Scope:  store.RoundScope{InputRefs: []string{"delivery_review:bounded-review"}, Resources: []string{"campaign:active"}, Operations: []string{store.RoundJevRequest}},
-		Limits: store.RoundAllowance{Requests: 1}, Deadline: time.Now().Add(time.Minute)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	round, err = db.ActivateRound(ctx, owner, round.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	decisions, calls, closeServer := recommendationDecisions(t, db, "home_review_result")
-	defer closeServer()
-	engine := &Engine{Store: db, Decisions: decisions}
-	data := engine.RecommendDelivery(ctx, round, deliveryservice.DeliveryAdviceFacts{ReviewID: "bounded-review", Recorded: 2, Failed: 1})
-	var advice homeRecommendation
-	if json.Unmarshal(data, &advice) != nil || advice.Status != "selected" || advice.Action != "review_result" || calls.Load() != 1 {
-		t.Fatalf("bounded delivery choice unavailable: %s calls=%d", data, calls.Load())
-	}
-	attempts, err := db.JevAttemptsForRound(ctx, round.ID)
-	if err != nil || len(attempts) != 1 || !bytes.Contains(attempts[0].LogicalRequestJSON, []byte("bounded-review")) ||
-		bytes.Contains(attempts[0].LogicalRequestJSON, []byte("recipient")) || bytes.Contains(attempts[0].LogicalRequestJSON, []byte("messageBody")) {
-		t.Fatalf("delivery decision evidence exceeded bounded facts: %+v %v", attempts, err)
-	}
-	charged, err := db.Round(ctx, round.ID)
-	if err != nil || charged.Used.Requests != 1 {
-		t.Fatalf("delivery decision did not consume one authorized request: %+v %v", charged, err)
-	}
-}
-
-func TestDeliveryAdapterWithoutDecisionProviderReturnsUnavailableWithoutCharge(t *testing.T) {
-	ctx := context.Background()
-	db, err := store.Open(ctx, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	profile, err := db.CurrentPreferences(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	owner := store.Actor{Kind: "administrator", ID: "delivery-owner"}
-	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "delivery-offline-advice", Intent: "Review saved submission states", Outcome: "deliver", ProfileVersion: profile.Version,
-		Scope:  store.RoundScope{InputRefs: []string{"delivery_review:bounded-review"}, Resources: []string{"campaign:active"}, Operations: []string{store.RoundJevRequest}},
-		Limits: store.RoundAllowance{Requests: 1}, Deadline: time.Now().Add(time.Minute)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	round, err = db.ActivateRound(ctx, owner, round.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	data := (&Engine{Store: db}).RecommendDelivery(ctx, round, deliveryservice.DeliveryAdviceFacts{ReviewID: "bounded-review", Recorded: 1})
-	var advice homeRecommendation
-	if json.Unmarshal(data, &advice) != nil || advice.Status != "unavailable" || advice.Code != "recommendation_provider_unavailable" {
-		t.Fatalf("missing provider panicked or selected without capture: %s", data)
-	}
-	if _, err := db.RoundAttemptForRequest(ctx, round.ID, homeRecommendationRequestKey+"/0"); err != store.ErrNotFound {
-		t.Fatalf("disabled provider charged a request: %v", err)
 	}
 }
 
