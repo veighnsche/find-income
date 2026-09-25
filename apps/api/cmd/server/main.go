@@ -269,6 +269,18 @@ func wireMuse(database *store.Store, options *httpapi.Options, dataDir string, s
 		return
 	}
 	options.Muse = service
+	// The deterministic check performer stays unauthorized until the E12
+	// live authorization; checks remain pending through the existing path.
+	checker, err := musewire.NewChecker(musewire.CheckDeps{
+		DB: database, Actor: researchwire.OwnerActor(),
+		Executor: stack.Executor, Captures: stack.Captures,
+		Bounds: musecode.DefaultBounds(), Authorized: false,
+	})
+	if err != nil {
+		log.Printf("muse check unavailable: %v", err)
+	} else {
+		options.MuseCheck = checker
+	}
 	log.Printf("muse wired: cli=%s", bin)
 }
 

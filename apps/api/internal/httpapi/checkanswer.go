@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
+	"github.com/veighnsche/find-income-dashboard/api/internal/musewire"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
@@ -131,6 +132,24 @@ func (h *Handler) startOpportunityCheck(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		failCheck(w, err)
 		return
+	}
+	if h.museCheck != nil && h.museCheck.Authorized() && value.Status == store.CheckStatusChecking {
+		if _, err := h.museCheck.PerformCheck(r.Context(), r.PathValue("id"), value.ID); err != nil {
+			if !errors.Is(err, musewire.ErrCheckNotMuse) {
+				failCheck(w, err)
+				return
+			}
+		} else if current, err := h.database.CurrentJobCheck(r.Context(), r.PathValue("id")); err != nil {
+			failCheck(w, err)
+			return
+		} else {
+			status := http.StatusOK
+			if created {
+				status = http.StatusCreated
+			}
+			writeJSON(w, status, checkStatusModel(current))
+			return
+		}
 	}
 	status := http.StatusOK
 	if created {

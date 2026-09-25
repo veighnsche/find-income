@@ -34,6 +34,7 @@ type Options struct {
 	AnswerMatcher         AnswerMatcher
 	Materials             MaterialPreparer
 	Muse                  *musewire.Service
+	MuseCheck             musewire.CheckPerformer
 }
 
 type CodexControl interface {
@@ -58,6 +59,7 @@ type Handler struct {
 	answerMatcher         AnswerMatcher
 	materials             MaterialPreparer
 	muse                  *musewire.Service
+	museCheck             musewire.CheckPerformer
 	limiter               *loginLimiter
 }
 
@@ -72,6 +74,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 		answerMatcher:   options.AnswerMatcher,
 		materials:       options.Materials,
 		muse:            options.Muse,
+		museCheck:       options.MuseCheck,
 		limiter:         newLoginLimiter()}
 	for _, origin := range options.AllowedOrigins {
 		h.origins[origin] = true

@@ -98,8 +98,18 @@ type fakeCaptures struct {
 	mu       sync.Mutex
 	receipts map[string]researchcontract.ExecutionReceipt
 	blobs    map[string][]byte
+	broken   map[string]bool
 	resolves int
 	opens    int
+}
+
+func (f *fakeCaptures) breakOpen(captureID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.broken == nil {
+		f.broken = map[string]bool{}
+	}
+	f.broken[captureID] = true
 }
 
 func (f *fakeCaptures) ResolveReceipt(_ context.Context, receiptID string) (researchcontract.ExecutionReceipt, error) {
@@ -118,6 +128,10 @@ func (f *fakeCaptures) OpenCapture(_ context.Context, captureID string) (researc
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.opens++
+	if f.broken[captureID] {
+		return researchcontract.Capture{}, nil, researchcontract.NewError(
+			researchcontract.OutcomeStale, "capture", "capture unreadable "+captureID)
+	}
 	blob, ok := f.blobs[captureID]
 	if !ok {
 		return researchcontract.Capture{}, nil, researchcontract.NewError(
@@ -371,7 +385,7 @@ func newConnectedFixture(t *testing.T, transport musecode.Transport, scripts []m
 	catalog := authorFixtureCatalog(t, db, prefs.Version)
 	captures := &fakeCaptures{receipts: map[string]researchcontract.ExecutionReceipt{}, blobs: map[string][]byte{}}
 	for i, page := range []string{"https://jobs.example.invalid/1", "https://careers.example.invalid/2"} {
-		body := []byte("<html><body>Senior support engineer, hybrid Amsterdam. Base pay unstated.</body></html>")
+		body := []byte("<html><body>\nSenior support engineer, hybrid Amsterdam.\nWhy do you want this support role?\nAre you available for night shifts (required)?\nBase pay unstated.\n</body></html>")
 		capture := insertFixtureCapture(t, db, page, body)
 		receiptID := "rc-1"
 		if i == 1 {
