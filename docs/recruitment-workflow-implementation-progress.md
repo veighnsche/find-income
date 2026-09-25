@@ -11,15 +11,15 @@ Plan: `docs/recruitment-workflow-implementation-plan.md`. Only the coordinator u
 | RW-D0 | D | complete | worker-rw-d0 (Sol-Medium) | (read-only) | — | /tmp/rw-d0-handoff.md: 10-row table; host unselected (owner blocker); sandbox-binary wiring gap; no paid calls/secrets | — | — |
 | RW-E0 | E | complete | worker-rw-e0 (Sol-Medium) | (read-only) | — | /tmp/rw-e0-handoff.md: stage→test map, 4-class evidence format, per-gate scenarios incl. owner-met regression | — | — |
 | RW-G0 | A+D/E | complete | coordinator | this ledger | RW-A0, RW-B0, RW-D0, RW-E0 | e5cc228 Wave-0 checkpoint. Diagnosis accepted: behavior gaps → RW-A1/B1/C1; config gaps block live gates only; live services NOT marked ready | Host selection (owner) blocks RW-D1/G1+ | RW-A1, RW-A3, RW-D1–D3, RW-E1 |
-| RW-A1 | A | complete | coordinator | process_input_test.go, docs/rw-a1-correction-contract.md | RW-A0, RW-B0 | No production fix needed (validation airtight); new HTTP readback test; contract answers all 6 B0 questions (no workPattern enum, criteria in roleCriteria[], numeric bounds) | — | RW-B1, RW-C1 |
+| RW-A1 | A | complete | coordinator | process_input_test.go, docs/rw-a1-correction-contract.md | RW-A0, RW-B0 | 4d91983. No production fix needed; new HTTP readback test; contract answers all 6 B0 questions | — | RW-B1, RW-C1 |
 | RW-A2 | A | pending | — | — | RW-A1 | — | — | — |
-| RW-B1 | B | pending | — | — | RW-A1 | — | — | — |
+| RW-B1 | B | in_progress | worker-rw-b1 (Sol-High) | SearchPage.tsx, features/owner-context/*, shell.test.tsx | RW-A1 | — | — | — |
 | RW-C1 | C | pending | — | — | RW-A1 | — | — | — |
 | RW-C2 | C(+B) | pending | — | — | RW-A2, RW-B1, RW-C1 | — | — | — |
 | RW-D1 | D | in_progress | worker-rw-d123 (Sol-Medium) | cmd/server/main.go (sandbox fix only) + readiness doc | RW-A0, RW-D0 | — | — | — |
 | RW-D2 | D | in_progress | worker-rw-d123 (Sol-Medium) | (same worker) | RW-A0, RW-D0 | — | — | — |
 | RW-D3 | D | in_progress | worker-rw-d123 (Sol-Medium) | (same worker) | RW-A0, RW-D0 | — | — | — |
-| RW-E1 | E(+D) | in_progress | worker-rw-e1 (Sol-Medium) | docs/rw-e1-live-exercise.md (new) | RW-G0 | — | — | — |
+| RW-E1 | E(+D) | complete | worker-rw-e1 (Sol-Medium) | docs/rw-e1-live-exercise.md (new) | RW-G0 | Staged-canary plan: correction→anchor discovery→classification→checks; op ceiling 2+12+6, owner-set $C (no invented limit), tracing table, versions, no-result scenario; no paid calls/secrets | — | RW-P1 |
 | RW-P1 | E/coord | pending | — | — | RW-E1 | — | — | — |
 | RW-E2 | E | pending | — | — | RW-C2, RW-E0 | — | — | — |
 | RW-G1 | E+A/C/D | pending | — | — | RW-E2, RW-D1, RW-P1 | — | — | — |
