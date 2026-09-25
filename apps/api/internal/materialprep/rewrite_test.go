@@ -7,30 +7,31 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/materialprep"
+	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-// stubTurns records rewrite turn prompts and replays scripted model output.
-// It proves rewrite runs through the shared one-shot primitive: exactly one
-// Run call per rewrite attempt, no retries, no second turn.
+// stubTurns records Standard rewrite inputs and replays scripted model output.
+// It proves rewrite runs through the shared Standard primitive: exactly one
+// RunStandard call per rewrite attempt, no retries, no second turn.
 type stubTurns struct {
-	calls   int
-	prompts []string
-	fn      func(prompt string) ([]string, error)
+	calls  int
+	inputs []musecode.StandardInput
+	fn     func(musecode.StandardInput) ([]string, error)
 }
 
-func (f *stubTurns) Run(_ context.Context, prompt string) (codexservice.OneShotResult, error) {
+func (f *stubTurns) RunStandard(_ context.Context, input musecode.StandardInput) (materialprep.StandardResult, error) {
 	f.calls++
-	f.prompts = append(f.prompts, prompt)
-	messages, err := f.fn(prompt)
+	f.inputs = append(f.inputs, input)
+	messages, err := f.fn(input)
 	if err != nil {
-		return codexservice.OneShotResult{}, err
+		return materialprep.StandardResult{}, err
 	}
-	return codexservice.OneShotResult{ThreadID: "thread-stub", TurnID: "turn-stub",
-		State: "completed", Messages: messages}, nil
+	return materialprep.StandardResult{Messages: messages}, nil
 }
+
+func stubPrompt(input musecode.StandardInput) string { return input.Context["prompt"] }
 
 // rewriteManifestMaterial mirrors the rewrite manifest section for test
 // assertions: one exact ordinal text per pinned question.
@@ -88,8 +89,8 @@ func rewritePayloadJSON(t *testing.T, f prepFixture, texts map[string]string) st
 }
 
 // setupRewrite prepares a held v1 (Q0 answered, Q1 held) and wires the
-// rewrite turn stub through the shared one-shot shape: Draft becomes a
-// CodexDrafter carrying the stub runner. The default stub covers every
+// rewrite turn stub through the shared Standard shape: Draft becomes a
+// StandardDrafter carrying the stub runner. The default stub covers every
 // pinned question with Q1 (required) left blank, exercising the honest hold.
 func setupRewrite(t *testing.T, key string) (prepFixture, *stubTurns) {
 	t.Helper()
@@ -103,8 +104,8 @@ func setupRewrite(t *testing.T, key string) (prepFixture, *stubTurns) {
 		f.check.Questions[3].ID: "",
 	}
 	payload := rewritePayloadJSON(t, f, texts)
-	turns := &stubTurns{fn: func(string) ([]string, error) { return []string{payload}, nil }}
-	f.svc.Draft = &materialprep.CodexDrafter{Turns: turns}
+	turns := &stubTurns{fn: func(musecode.StandardInput) ([]string, error) { return []string{payload}, nil }}
+	f.svc.Draft = &materialprep.StandardDrafter{Runner: turns}
 	return f, turns
 }
 
@@ -139,7 +140,14 @@ func TestRewriteOpportunityMaterialsCommitsVersion(t *testing.T) {
 	if f.render.calls != renderCalls+1 {
 		t.Fatalf("rewrite renders once: %d->%d", renderCalls, f.render.calls)
 	}
-	prompt := turns.prompts[0]
+	stdInput := turns.inputs[0]
+	if stdInput.Purpose != materialprep.StandardRewritePurpose || stdInput.BundleRef == "" {
+		t.Fatalf("rewrite Standard input purpose/bundle: %+v", stdInput)
+	}
+	if len(stdInput.Targets) != len(f.check.Questions) {
+		t.Fatalf("rewrite Standard targets: %v", stdInput.Targets)
+	}
+	prompt := stubPrompt(stdInput)
 	if !strings.Contains(prompt, materialprep.RewriteInstructions) || !strings.Contains(prompt, instruction) {
 		t.Fatalf("rewrite prompt lacks discipline or instruction")
 	}
@@ -202,7 +210,7 @@ func TestRewriteSingleTurnFencing(t *testing.T) {
 		{"unclosed fence", []string{"```json\n" + good}},
 	}
 	for i, tc := range cases {
-		turns.fn = func(string) ([]string, error) { return tc.messages, nil }
+		turns.fn = func(musecode.StandardInput) ([]string, error) { return tc.messages, nil }
 		turnCalls, renderCalls := turns.calls, f.render.calls
 		_, _, err := f.svc.RewriteOpportunityMaterials(ctx, testOwner(), f.opportunity.ID, "rewrite-fence-key", 1, "instruction")
 		if err == nil {
@@ -230,13 +238,13 @@ func TestRewriteAcceptsFencedJSON(t *testing.T) {
 	f, turns := setupRewrite(t, "rewrite-fenced")
 	ids := []string{f.check.Questions[0].ID, f.check.Questions[1].ID, f.check.Questions[2].ID, f.check.Questions[3].ID}
 	payload := rewritePayloadJSON(t, f, map[string]string{ids[0]: "a", ids[1]: "b", ids[2]: "c", ids[3]: "d"})
-	turns.fn = func(string) ([]string, error) { return []string{"```json\n" + payload + "\n```"}, nil }
+	turns.fn = func(musecode.StandardInput) ([]string, error) { return []string{"```json\n" + payload + "\n```"}, nil }
 	if _, created, err := f.svc.RewriteOpportunityMaterials(ctx, testOwner(), f.opportunity.ID, "rewrite-fenced-1", 1, "instruction"); err != nil || !created {
 		t.Fatalf("fenced rewrite: created=%v err=%v", created, err)
 	}
 }
 
-func TestRewriteRequiresSharedOneShotRunner(t *testing.T) {
+func TestRewriteRequiresSharedStandardRunner(t *testing.T) {
 	ctx := context.Background()
 	f := setupPrep(t, "rewrite-norunner")
 	savePrepAnswer(t, f, 0, "I want this role for its Go platform work.")
@@ -250,9 +258,14 @@ func TestRewriteRequiresSharedOneShotRunner(t *testing.T) {
 	if _, _, err := f.svc.RewriteOpportunityMaterials(ctx, testOwner(), f.opportunity.ID, "rewrite-norunner-2", 1, "instruction"); !errors.Is(err, materialprep.ErrUnavailable) {
 		t.Fatalf("nil drafter: %v", err)
 	}
-	f.svc.Draft = &materialprep.CodexDrafter{}
+	f.svc.Draft = &materialprep.StandardDrafter{}
 	if _, _, err := f.svc.RewriteOpportunityMaterials(ctx, testOwner(), f.opportunity.ID, "rewrite-norunner-3", 1, "instruction"); !errors.Is(err, materialprep.ErrUnavailable) {
 		t.Fatalf("nil runner: %v", err)
+	}
+	// Legacy Codex drafters cannot supply Standard rewrite turns.
+	f.svc.Draft = &materialprep.CodexDrafter{}
+	if _, _, err := f.svc.RewriteOpportunityMaterials(ctx, testOwner(), f.opportunity.ID, "rewrite-norunner-4", 1, "instruction"); !errors.Is(err, materialprep.ErrUnavailable) {
+		t.Fatalf("legacy codex drafter: %v", err)
 	}
 	if f.render.calls != renderCalls {
 		t.Fatalf("unavailable rewrite rendered")
@@ -296,8 +309,8 @@ func TestRewriteReplayAfterSuccess(t *testing.T) {
 	ids := []string{f.check.Questions[0].ID, f.check.Questions[1].ID, f.check.Questions[2].ID, f.check.Questions[3].ID}
 	planA := rewritePayloadJSON(t, f, map[string]string{ids[0]: "Plan A motivation.", ids[1]: "Plan A story.", ids[2]: "Plan A note.", ids[3]: ""})
 	planB := rewritePayloadJSON(t, f, map[string]string{ids[0]: "Plan B motivation.", ids[1]: "Plan A story.", ids[2]: "Plan A note.", ids[3]: ""})
-	turns.fn = func(prompt string) ([]string, error) {
-		if strings.Contains(prompt, "PLAN-B") {
+	turns.fn = func(input musecode.StandardInput) ([]string, error) {
+		if strings.Contains(stubPrompt(input), "PLAN-B") {
 			return []string{planB}, nil
 		}
 		return []string{planA}, nil
@@ -361,10 +374,10 @@ func TestRewriteOverDirectEditBase(t *testing.T) {
 	if view.Provenance.RewriteOf == nil || *view.Provenance.RewriteOf != 2 {
 		t.Fatalf("rewrite linkage: %+v", view.Provenance)
 	}
-	if !strings.Contains(turns.prompts[0], "COMBINED-EDIT-MARKER") {
+	if !strings.Contains(stubPrompt(turns.inputs[0]), "COMBINED-EDIT-MARKER") {
 		t.Fatalf("rewrite prompt lacks combined edit context")
 	}
-	if !strings.Contains(turns.prompts[0], "I want this role for its Go platform work.") {
+	if !strings.Contains(stubPrompt(turns.inputs[0]), "I want this role for its Go platform work.") {
 		t.Fatalf("rewrite prompt lacks saved answer context")
 	}
 }
@@ -375,8 +388,8 @@ func TestRewriteEmptyInstructionAllowed(t *testing.T) {
 	if _, created, err := f.svc.RewriteOpportunityMaterials(ctx, testOwner(), f.opportunity.ID, "rewrite-noinstr-1", 1, ""); err != nil || !created {
 		t.Fatalf("empty instruction rewrite: created=%v err=%v", created, err)
 	}
-	if !strings.Contains(turns.prompts[0], "(none") {
-		t.Fatalf("empty instruction prompt: %q", turns.prompts[0][:200])
+	if !strings.Contains(stubPrompt(turns.inputs[0]), "(none") {
+		t.Fatalf("empty instruction prompt: %q", stubPrompt(turns.inputs[0])[:200])
 	}
 }
 
@@ -384,7 +397,7 @@ func TestRewriteAllBlankHeld(t *testing.T) {
 	ctx := context.Background()
 	f, turns := setupRewrite(t, "rewrite-blank")
 	ids := []string{f.check.Questions[0].ID, f.check.Questions[1].ID, f.check.Questions[2].ID, f.check.Questions[3].ID}
-	turns.fn = func(string) ([]string, error) {
+	turns.fn = func(musecode.StandardInput) ([]string, error) {
 		return []string{rewritePayloadJSON(t, f, map[string]string{ids[0]: "", ids[1]: "", ids[2]: "", ids[3]: ""})}, nil
 	}
 	view, created, err := f.svc.RewriteOpportunityMaterials(ctx, testOwner(), f.opportunity.ID, "rewrite-blank-1", 1, "Blank everything.")

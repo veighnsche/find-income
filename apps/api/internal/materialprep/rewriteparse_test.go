@@ -9,22 +9,31 @@ import (
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/applicationpacks"
 	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
+	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-// stubRewriteTurns is a recording one-shot runner for constructor tests.
+// stubRewriteTurns is a recording Standard runner for constructor tests.
 type stubRewriteTurns struct {
-	calls   int
-	prompts []string
+	calls  int
+	inputs []musecode.StandardInput
 }
 
-func (f *stubRewriteTurns) Run(_ context.Context, prompt string) (codexservice.OneShotResult, error) {
+func (f *stubRewriteTurns) RunStandard(_ context.Context, input musecode.StandardInput) (StandardResult, error) {
 	f.calls++
-	f.prompts = append(f.prompts, prompt)
+	f.inputs = append(f.inputs, input)
+	return StandardResult{}, nil
+}
+
+// stubLegacyTurns is a recording legacy one-shot runner kept for the legacy
+// rewriteRunner test until E13.
+type stubLegacyTurns struct{}
+
+func (f *stubLegacyTurns) Run(_ context.Context, _ string) (codexservice.OneShotResult, error) {
 	return codexservice.OneShotResult{State: "completed"}, nil
 }
 
-// stubForeignDrafter implements Drafter without the shared one-shot runner.
+// stubForeignDrafter implements Drafter without the shared Standard runner.
 type stubForeignDrafter struct{}
 
 func (stubForeignDrafter) DraftRequiredAnswers(context.Context, DraftRequest) ([]RequiredDraft, error) {
@@ -33,20 +42,26 @@ func (stubForeignDrafter) DraftRequiredAnswers(context.Context, DraftRequest) ([
 
 func TestRewriteRunnerCases(t *testing.T) {
 	turns := &stubRewriteTurns{}
-	got, err := rewriteRunner(&CodexDrafter{Turns: turns})
+	got, err := standardRewriteRunner(&StandardDrafter{Runner: turns})
 	if err != nil || got != turns {
 		t.Fatalf("shared runner: %v %v", got, err)
 	}
-	var nilDrafter *CodexDrafter
+	var nilDrafter *StandardDrafter
 	for name, draft := range map[string]Drafter{
 		"nil interface":   nil,
 		"nil concrete":    nilDrafter,
-		"nil runner":      &CodexDrafter{},
+		"nil runner":      &StandardDrafter{},
 		"foreign drafter": stubForeignDrafter{},
+		"legacy drafter":  &CodexDrafter{Turns: &stubLegacyTurns{}},
 	} {
-		if _, err := rewriteRunner(draft); !errors.Is(err, ErrUnavailable) {
+		if _, err := standardRewriteRunner(draft); !errors.Is(err, ErrUnavailable) {
 			t.Fatalf("%s: %v", name, err)
 		}
+	}
+	// Legacy accessor still resolves the legacy binding until E13 removal.
+	legacy := &stubLegacyTurns{}
+	if got, err := rewriteRunner(&CodexDrafter{Turns: legacy}); err != nil || got == nil {
+		t.Fatalf("legacy runner: %v %v", got, err)
 	}
 }
 

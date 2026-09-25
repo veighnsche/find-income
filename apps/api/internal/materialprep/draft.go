@@ -14,12 +14,13 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-// Production grounded drafter (D4). CodexDrafter implements Drafter with one
-// bounded one-shot Codex turn over verified facts only: the required+unset
-// employer questions, E3 answered texts, owner-approved saved answers,
-// pinned approved career sources, and profile scalars. The same one-shot
-// primitive serves explicit rewrite, so drafting and rewrite share one
-// Codex entry point and rewrite can never run implicitly.
+// Production grounded drafter (D4, legacy Codex path).
+// TODO E13 (M): remove this legacy Codex binding once main.go wires
+// StandardDrafter; the production path is standard.go. CodexDrafter
+// implements Drafter with one bounded one-shot Codex turn over verified
+// facts only: the required+unset employer questions, E3 answered texts,
+// owner-approved saved answers, pinned approved career sources, and profile
+// scalars.
 //
 // The collected model text is untrusted until validated here: scope-fenced
 // question ids, no duplicates, 1-8 cited lines per draft, exact excerpts
@@ -30,6 +31,7 @@ import (
 
 // OneShotTurn runs one bounded one-shot turn and returns its collected
 // agent texts. It is satisfied by *codexservice.OneShot; tests stub it.
+// TODO E13 (M): remove with the legacy CodexDrafter binding.
 type OneShotTurn interface {
 	Run(ctx context.Context, prompt string) (codexservice.OneShotResult, error)
 }
@@ -37,6 +39,8 @@ type OneShotTurn interface {
 // DraftInstructions is the trusted turn instructions for grounded drafting.
 // The coordinator wires it into the one-shot runner. It carries no facts,
 // prompts, or authority: only the drafting discipline.
+// TODO E13 (M): remove with the legacy CodexDrafter binding; M's Standard
+// runner hardcodes the equivalent discipline (see standard.go E13 seam).
 const DraftInstructions = `You draft employer-question answers from supplied verified facts only. Use only the facts in the prompt: never invent experience, dates, credentials, or availability, and never contact anyone or browse. Cite an exact approved-source excerpt for every line. Omit any question the facts cannot support.`
 
 const (
@@ -56,8 +60,10 @@ const (
 	maxDraftAnswerBytes = 2000
 )
 
-// CodexDrafter is the production Drafter. Turns is required; a nil runner
-// reports ErrUnavailable so the HTTP layer stays honestly 503.
+// CodexDrafter is the legacy Drafter kept for building until E13.
+// TODO E13 (M): remove once main.go wires StandardDrafter. Turns is
+// required; a nil runner reports ErrUnavailable so the HTTP layer stays
+// honestly 503.
 type CodexDrafter struct {
 	Turns OneShotTurn
 }

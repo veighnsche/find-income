@@ -14,14 +14,15 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-// Explicit one-shot rewrite (D4). RewriteOpportunityMaterials is the SOLE
+// Explicit Standard rewrite (E09). RewriteOpportunityMaterials is the SOLE
 // caller of the rewrite turn and of store.RewriteOpportunityMaterials: no
 // hook, retry, or background path invokes either, so a rewrite only happens
 // when the owner explicitly requests it and only the reviewed result is
-// committed. The turn runs through the shared one-shot primitive behind the
-// Service's Draft collaborator (see rewriteRunner), so drafting and rewrite
-// share one Codex entry point. The service performs no research, capture,
-// fetch, contact, or send: the prompt carries saved state only.
+// committed. The turn runs through the shared Standard primitive behind the
+// Service's Draft collaborator (see standardRewriteRunner in standard.go),
+// so drafting and rewrite share one Standard entry point. The service
+// performs no research, capture, fetch, contact, or send: the Standard input
+// carries saved state only.
 
 // RewriteInstructions is the trusted rewrite discipline, composed into the
 // rewrite prompt ahead of the owner instruction, current texts, and verified
@@ -38,11 +39,10 @@ const (
 	maxRewriteTextBytes = 20000
 )
 
-// rewriteRunner returns the shared one-shot turn runner behind the Service's
-// Draft collaborator. Rewrite owns no Codex dials and builds no turn
-// primitive of its own: it reuses the production drafter's runner, so
-// rewrite can never run without the drafting path's bounded primitive. A nil
-// or foreign Drafter reports ErrUnavailable instead of failing open.
+// rewriteRunner is the legacy Codex shared-runner accessor kept for building
+// until E13.
+// TODO E13 (M): remove with the legacy CodexDrafter binding; rewrite uses
+// standardRewriteRunner (see standard.go).
 func rewriteRunner(draft Drafter) (OneShotTurn, error) {
 	drafter, ok := draft.(*CodexDrafter)
 	if !ok || drafter == nil || drafter.Turns == nil {
@@ -321,10 +321,10 @@ func buildRewriteInput(p revisionPins, sources []applicationpacks.Source, templa
 	return input, section, nil
 }
 
-// RewriteOpportunityMaterials runs one explicit one-shot rewrite turn and
+// RewriteOpportunityMaterials runs one explicit Standard rewrite turn and
 // commits it as a new immutable version. It validates the owner instruction,
 // recovers current per-question texts from saved answers plus the prior
-// pack manifest, runs exactly one turn through the shared one-shot runner,
+// pack manifest, runs exactly one turn through the shared Standard runner,
 // strictly validates full pinned coverage, probes the store for a replay
 // before rendering, then renders and commits. The turn runs before the
 // probe (like drafting in prepare) because the replay digest needs the
@@ -336,7 +336,7 @@ func (s *Service) RewriteOpportunityMaterials(ctx context.Context, actor store.A
 	if s == nil || s.Store == nil || s.Career == nil || s.Render == nil {
 		return store.MaterialVersionView{}, false, ErrUnavailable
 	}
-	turns, err := rewriteRunner(s.Draft)
+	runner, err := standardRewriteRunner(s.Draft)
 	if err != nil {
 		return store.MaterialVersionView{}, false, err
 	}
@@ -394,7 +394,8 @@ func (s *Service) RewriteOpportunityMaterials(ctx context.Context, actor store.A
 	if err != nil {
 		return store.MaterialVersionView{}, false, err
 	}
-	result, err := turns.Run(ctx, rewritePrompt(instruction, pins.questions, current, prior.combined, answered, saved, sources, pins.profile))
+	stdInput := buildStandardRewriteInput(pins.check.ID, instruction, pins.questions, current, prior.combined, answered, saved, sources, pins.profile)
+	result, err := runner.RunStandard(ctx, stdInput)
 	if err != nil {
 		return store.MaterialVersionView{}, false, err
 	}

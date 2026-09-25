@@ -13,9 +13,9 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-// Direct exact edits (D4). EditOpportunityMaterials saves one owner-supplied
-// exact text as a new immutable material version. No Codex call and no Jev
-// call exists anywhere on this path: the text is stored byte-exact, the
+// Direct exact edits (E09). EditOpportunityMaterials saves one owner-supplied
+// exact text as a new immutable material version. No Standard call and no
+// Jev call exists anywhere on this path: the text is stored byte-exact, the
 // store carries the base version's answer resolution into the new version
 // (drafted texts survive edits), and the role returns to prepared so the
 // changed version needs fresh review before any send.
@@ -278,7 +278,7 @@ func buildEditInput(p revisionPins, sources []applicationpacks.Source, template 
 
 // EditOpportunityMaterials saves one exact owner edit as a new immutable
 // version. It validates actor, request key, and text, probes the store for a
-// replay before rendering, then renders and commits. It performs no Codex
+// replay before rendering, then renders and commits. It performs no Standard
 // turn, no Jev assessment, no research, capture, fetch, or send: the Draft
 // and Relevance collaborators are never touched on this path.
 func (s *Service) EditOpportunityMaterials(ctx context.Context, actor store.Actor, opportunityID, requestKey string, expectedVersion int64, text string) (store.MaterialVersionView, bool, error) {

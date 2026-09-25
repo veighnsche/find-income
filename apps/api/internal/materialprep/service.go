@@ -1,15 +1,16 @@
 // Package materialprep runs grounded preparation for one selected role: it
 // verifies the pinned check and saved answers, drafts required-but-unset
-// answers in one bounded Codex turn over verified facts only, validates
-// citation-exactness, runs Jev relevance per unique citation, Typst-renders
-// the pack, and commits through store.PrepareOpportunityMaterials.
+// answers in one bounded Muse Standard turn over verified facts only,
+// validates citation-exactness, runs Jev relevance per unique citation,
+// Typst-renders the pack, and commits through
+// store.PrepareOpportunityMaterials.
 //
 // The service performs no research, capture, fetch, or send of any kind. It
 // holds no capability for employer contact: its only outbound dependencies
 // are the injected Career, Draft, Relevance, and Render collaborators plus
 // the store. Pin verification (check, answers, workflow, opportunity) always
-// precedes any Codex spend, and zero required+unset questions means zero
-// Codex call.
+// precedes any Standard spend, and zero required+unset questions means zero
+// Standard call.
 package materialprep
 
 import (
@@ -48,7 +49,7 @@ const (
 )
 
 // Material answer states carried in the manifest material section. Answered
-// and blank mirror E3 rows; drafted marks a Codex draft (bytes in the
+// and blank mirror E3 rows; drafted marks a Standard draft (bytes in the
 // manifest only, never written back to E3); held marks a required question
 // with neither value nor draft.
 const (
@@ -89,7 +90,7 @@ type SavedAnswerFact struct {
 	ContextNote string
 }
 
-// DraftRequest is the whole verified-fact envelope for one bounded Codex
+// DraftRequest is the whole verified-fact envelope for one bounded Standard
 // turn. It carries saved state only: answered texts, library versions,
 // pinned career sources, and profile scalars. It never carries employer
 // contact handles, credentials, or send authority.
@@ -105,14 +106,14 @@ type DraftRequest struct {
 	Profile          store.Preferences
 }
 
-// RequiredDraft is one Codex-drafted answer. Lines carry exact citations
+// RequiredDraft is one Standard-drafted answer. Lines carry exact citations
 // against the pack sources; ValidateInput rejects invented excerpts.
 type RequiredDraft struct {
 	QuestionID string
 	Lines      []applicationpacks.Line
 }
 
-// Drafter runs the single bounded Codex turn. It is invoked at most once
+// Drafter runs the single bounded Standard turn. It is invoked at most once
 // per prepare, and never when no required question is unset.
 type Drafter interface {
 	DraftRequiredAnswers(ctx context.Context, request DraftRequest) ([]RequiredDraft, error)
@@ -374,7 +375,7 @@ func draftText(lines []applicationpacks.Line) string {
 	return strings.Join(texts, "\n\n")
 }
 
-// checkDrafts fences Codex output to the required+unset scope: every draft
+// checkDrafts fences Standard output to the required+unset scope: every draft
 // names a question from this prepare's required+unset set exactly once,
 // carries 1-8 cited lines, and joins to valid non-blank text.
 func checkDrafts(requiredUnset []store.CheckQuestionView, drafts []RequiredDraft) (map[string]RequiredDraft, error) {
@@ -678,7 +679,7 @@ func (s *Service) replayAfterPinDrift(ctx context.Context, actor store.Actor, op
 
 // PrepareOpportunityMaterials implements the httpapi MaterialPreparer
 // contract: verify pins, draft required+unset questions in one bounded
-// Codex turn (skipped when empty), validate citations, run Jev relevance
+// Standard turn (skipped when empty), validate citations, run Jev relevance
 // per unique citation, Typst-render, and commit. It performs no research,
 // capture, fetch, or send.
 func (s *Service) PrepareOpportunityMaterials(ctx context.Context, actor store.Actor, opportunityID, requestKey string, expectedCheckID, expectedQuestionSetSHA256 string, expectedWorkflowRevision int64) (store.MaterialStatusView, bool, error) {
@@ -694,7 +695,7 @@ func (s *Service) PrepareOpportunityMaterials(ctx context.Context, actor store.A
 			// Stale pins may still address an already-committed key: the
 			// store digest pins resolved state only, so a retry after a
 			// lost response replays. Attempt that probe when it costs no
-			// Codex (nothing needs drafting); anything else keeps the
+			// Standard call (nothing needs drafting); anything else keeps the
 			// fast 409 and the client refreshes before retrying.
 			if view, replayed, ok := s.replayAfterPinDrift(ctx, actor, opportunityID, requestKey,
 				expectedCheckID, expectedQuestionSetSHA256, expectedWorkflowRevision); ok {
