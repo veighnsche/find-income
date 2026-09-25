@@ -208,6 +208,34 @@ func TestJobCheckStartRevisionAndStageGuards(t *testing.T) {
 	}
 }
 
+func TestCheckSaveAcceptsContentSHA(t *testing.T) {
+	ctx := context.Background()
+	s := openJobTestStore(t)
+	company := createFixtureCompany(t, s)
+	opportunity := selectFixtureOpportunity(t, s, company.ID, "select-sha")
+	started, _, err := s.StartJobCheck(ctx, ownerActor(), opportunity.ID,
+		CheckStartInput{RequestKey: "check-sha", ExpectedOpportunityRevision: opportunity.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	capture := insertCheckCapture(t, s, "https://harbour.example/jobs/sha")
+	round, capability := startCheckRound(t, s, "round-sha", []string{RoundCodexTurn, RoundCheckSave}, opportunity.ID)
+	// Production receipts bind the content sha256, not the retrieval row
+	// id; the vacancy, documents and question spans must all validate.
+	save := checkSaveFixture(opportunity.ID, started.ID, capture.ContentSHA256)
+	if _, _, err := applyCheckSave(t, s, round, capability, "save-sha", started.WorkflowRevision, save); err != nil {
+		t.Fatalf("sha-form spans: %v", err)
+	}
+	view, err := s.GetJobCheck(ctx, opportunity.ID, started.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Status != CheckStatusChecked || len(view.Questions) != 2 ||
+		view.Questions[0].SourceSpan.CaptureID != capture.ID {
+		t.Fatalf("sha-form view: %+v", view)
+	}
+}
+
 func TestCheckSaveCompletesOnlyWhenComplete(t *testing.T) {
 	ctx := context.Background()
 	s := openJobTestStore(t)

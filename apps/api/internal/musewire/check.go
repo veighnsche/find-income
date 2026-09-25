@@ -77,30 +77,33 @@ func (c *Checker) PerformCheck(ctx context.Context, opportunityID, checkID strin
 	}
 	opportunity, err := c.db.Opportunity(ctx, opportunityID)
 	if err != nil {
-		return store.CheckView{}, err
+		return store.CheckView{}, fmt.Errorf("musewire: read opportunity: %w", err)
 	}
 	company, err := c.db.Company(ctx, opportunity.CompanyID)
 	if err != nil {
-		return store.CheckView{}, err
+		return store.CheckView{}, fmt.Errorf("musewire: read company: %w", err)
 	}
 	finding, err := c.db.GetOpportunityFinding(ctx, opportunityID)
 	if err != nil {
-		// Not a Muse-discovered role: leave the check for other
-		// performers instead of blocking a path this bridge cannot see.
-		return store.CheckView{}, ErrCheckNotMuse
+		if errors.Is(err, store.ErrNotFound) {
+			// Not a Muse-discovered role: leave the check for other
+			// performers instead of blocking a path this bridge cannot see.
+			return store.CheckView{}, ErrCheckNotMuse
+		}
+		return store.CheckView{}, fmt.Errorf("musewire: read finding: %w", err)
 	}
 	if finding.SourceRef == nil {
 		return c.saveBlocked(ctx, opportunityID, checkID, store.CheckBlockedSourceUnavailable,
 			"saved finding carries no vacancy receipt")
 	}
-	server, err := publicresearch.NewServer(publicresearch.Deps{
+	seedServer, err := publicresearch.NewServer(publicresearch.Deps{
 		Executor: c.executor, Captures: c.captures, Bounds: c.bounds,
 		RunID: checkID, Generation: 1,
 	})
 	if err != nil {
 		return store.CheckView{}, err
 	}
-	seeded, err := server.SeedVacancies([]publicresearch.SeedVacancy{{
+	seeded, err := seedServer.SeedVacancies([]publicresearch.SeedVacancy{{
 		PageURL: strings.TrimSpace(opportunity.SourceURL), EmployerName: company.Name,
 		Title: strings.TrimSpace(opportunity.Title), LocationText: strings.TrimSpace(opportunity.LocationText),
 		ReceiptRef: finding.SourceRef.SourceRevision,
@@ -109,14 +112,57 @@ func (c *Checker) PerformCheck(ctx context.Context, opportunityID, checkID strin
 		return c.saveBlocked(ctx, opportunityID, checkID, store.CheckBlockedSourceUnavailable,
 			"saved vacancy evidence does not validate: "+err.Error())
 	}
+	// Retrieval runs under a real check round: the production executor
+	// authorizes research.dispatch against the round ledger, so a bare
+	// check id would fence every fetch.
+	round, created, err := c.db.StartRound(ctx, c.actor, store.StartRoundInput{
+		RequestKey: "muse-check:" + checkID, Intent: "muse.check", Outcome: "pending",
+		ProfileVersion: finding.ProfileVersion,
+		Scope: store.RoundScope{
+			Operations: []string{store.RoundResearchSearch, store.RoundResearchFetch, store.RoundResearchAPI},
+			Resources:  []string{store.ResearchAuthorityResource},
+		},
+		Limits:   store.RoundAllowance{Requests: 20, Items: 200, Tools: 20, Turns: 5},
+		Deadline: time.Now().Add(c.bounds.MaxWallClock),
+	})
+	if err != nil {
+		return store.CheckView{}, fmt.Errorf("musewire: start check round: %w", err)
+	}
+	if !created {
+		return store.CheckView{}, fmt.Errorf("musewire: check %q was already attempted", checkID)
+	}
+	if _, err := c.db.ActivateRound(ctx, c.actor, round.ID); err != nil {
+		return store.CheckView{}, fmt.Errorf("musewire: activate check round: %w", err)
+	}
+	view, err := c.runCheck(ctx, opportunity, checkID, round.ID, seedServer, seeded[0].VacancyRef)
+	state := store.RoundCompleted
+	reason := "check completed"
+	if err != nil {
+		state = store.RoundFailed
+		reason = "check failed: " + err.Error()
+	}
+	if len(reason) > 100 {
+		reason = reason[:100]
+	}
+	summary, summaryErr := json.Marshal(map[string]any{"checkID": checkID, "opportunityID": opportunityID})
+	if summaryErr != nil {
+		return store.CheckView{}, summaryErr
+	}
+	if _, finishErr := c.db.FinishRound(ctx, c.actor, round.ID, state, reason, reason, summary); finishErr != nil {
+		return store.CheckView{}, fmt.Errorf("musewire: finish check round: %w", finishErr)
+	}
+	return view, err
+}
+
+func (c *Checker) runCheck(ctx context.Context, opportunity store.Opportunity, checkID, roundID string, server *publicresearch.Server, vacancyRef string) (store.CheckView, error) {
 	checkService, err := publicresearch.NewCheckService(publicresearch.CheckDeps{
 		Executor: c.executor, Captures: c.captures, Saved: server,
-		Bounds: c.bounds, RunID: checkID, Generation: 1,
+		Bounds: c.bounds, RunID: roundID, Generation: 1,
 	})
 	if err != nil {
 		return store.CheckView{}, err
 	}
-	report, err := checkService.Check(ctx, publicresearch.NewSelection(seeded[0].VacancyRef))
+	report, err := checkService.Check(ctx, publicresearch.NewSelection(vacancyRef))
 	if err != nil {
 		return store.CheckView{}, err
 	}

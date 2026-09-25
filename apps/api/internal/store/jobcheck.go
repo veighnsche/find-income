@@ -663,12 +663,31 @@ func validCheckSpan(span CheckSourceSpan) bool {
 }
 
 func checkCaptureExistsTx(ctx context.Context, tx *sql.Tx, captureID string) error {
+	_, err := checkCaptureRowIDTx(ctx, tx, captureID)
+	return err
+}
+
+// checkCaptureRowIDTx resolves a capture reference to its retrieval row
+// id. Production receipts bind the content sha256 while fixtures bind
+// row ids; both forms resolve. FK-bound columns must store the row id.
+func checkCaptureRowIDTx(ctx context.Context, tx *sql.Tx, captureID string) (string, error) {
 	var found int
 	err := tx.QueryRowContext(ctx, `SELECT 1 FROM source_captures WHERE id=?`, captureID).Scan(&found)
-	if errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("%w: unknown capture %q", ErrInvalid, captureID)
+	if err == nil {
+		return captureID, nil
 	}
-	return err
+	if !errors.Is(err, sql.ErrNoRows) {
+		return "", err
+	}
+	var rowID string
+	err = tx.QueryRowContext(ctx, `SELECT id FROM source_captures WHERE content_sha256=? ORDER BY retrieved_at DESC,id DESC LIMIT 1`, captureID).Scan(&rowID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("%w: unknown capture %q", ErrInvalid, captureID)
+	}
+	if err != nil {
+		return "", err
+	}
+	return rowID, nil
 }
 
 func checkEvidenceOwnedTx(ctx context.Context, tx *sql.Tx, opportunityID, evidenceID string) error {
@@ -956,9 +975,13 @@ func writeCheckSaveTx(ctx context.Context, tx *sql.Tx, actor Actor, expectedRevi
 		if err != nil {
 			return "", 0, err
 		}
+		span := question.SourceSpan
+		if span.CaptureID, err = checkCaptureRowIDTx(ctx, tx, question.SourceSpan.CaptureID); err != nil {
+			return "", 0, err
+		}
 		questions = append(questions, CheckQuestionView{ID: id, CheckID: row.ID,
 			Ordinal: ordinal, Text: question.Text, Required: question.Required, Kind: question.Kind,
-			SourceSpan: question.SourceSpan, SourceExcerpt: question.SourceExcerpt,
+			SourceSpan: span, SourceExcerpt: question.SourceExcerpt,
 			TextSHA256: sourceDigest(question.Text)})
 	}
 	status := CheckStatusChecked
@@ -1103,13 +1126,19 @@ func appendCheckActivityTx(ctx context.Context, tx *sql.Tx, entry checkActivityE
 	if err != nil {
 		return err
 	}
+	captureID := entry.CaptureID
+	if captureID != "" {
+		if captureID, err = checkCaptureRowIDTx(ctx, tx, entry.CaptureID); err != nil {
+			return err
+		}
+	}
 	now := recordNow()
 	_, err = tx.ExecContext(ctx, `INSERT INTO job_check_activity
 	  (event_id,opportunity_id,check_id,kind,request_fingerprint,observation_id,
 	   capture_id,outcome,payload_json,actor_kind,actor_id,observed_at,recorded_at)
 	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, entry.OpportunityID, nullString(entry.CheckID),
 		entry.Kind, nullString(entry.RequestFingerprint), nullString(entry.ObservationID),
-		nullString(entry.CaptureID), nullString(entry.Outcome), nullString(string(payload)),
+		nullString(captureID), nullString(entry.Outcome), nullString(string(payload)),
 		entry.Actor.Kind, entry.Actor.ID, now, now)
 	return err
 }
