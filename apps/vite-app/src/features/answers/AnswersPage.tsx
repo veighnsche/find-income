@@ -460,6 +460,14 @@ function AnswerCard({
           {requiredLabel(question.required)}
         </Badge>
       </div>
+      <p className="text-xs wrap-break-word text-muted-foreground">
+        Source:{" "}
+        {question.sourceExcerpt === ""
+          ? "excerpt not recorded"
+          : question.sourceExcerpt}{" "}
+        · {question.sourceSpan.captureId} · chars {question.sourceSpan.start}–
+        {question.sourceSpan.end}
+      </p>
       <SuggestionNote
         entry={entry}
         suggestion={suggestion}

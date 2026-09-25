@@ -382,20 +382,10 @@ function CheckStatusSection({
           </h2>
           <EmptyBlock
             title="Saved check is outdated"
-            description="The role changed since this check was saved. Run a new check to refresh the vacancy, route, gaps and employer questions."
+            description="The role changed since this check was saved. Run a new check to refresh the vacancy, route, gaps and employer questions. Answering stays closed until the new check completes."
           />
           {status.check !== undefined ? (
-            <>
-              <CheckEvidence check={status.check} />
-              <p>
-                <a
-                  href={`#/jobs/${encodeURIComponent(jobId)}/answers`}
-                  className="text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                  Answer questions
-                </a>
-              </p>
-            </>
+            <CheckEvidence check={status.check} />
           ) : null}
           <StartCheckControls
             jobId={jobId}
@@ -587,6 +577,10 @@ function CheckEvidence({ check }: { check: CheckView }) {
                 <p className="mt-1 text-xs text-muted-foreground wrap-break-word">
                   {question.required}
                   {question.kind === undefined ? "" : ` · ${question.kind}`}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground wrap-break-word">
+                  Source: {question.sourceSpan.captureId} · chars{" "}
+                  {question.sourceSpan.start}–{question.sourceSpan.end}
                 </p>
                 {question.sourceExcerpt === "" ? null : (
                   <p className="mt-1 text-xs text-muted-foreground wrap-break-word">

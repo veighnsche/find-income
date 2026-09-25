@@ -509,6 +509,85 @@ describe("check page states", () => {
     ).toBe(false)
   })
 
+  it("exposes only checked roles as answerable, with no Answer link otherwise", async () => {
+    const statuses: {
+      name: string
+      check: CheckStatusView
+      marker: string
+    }[] = [
+      { name: "not_checked", check: { status: "not_checked" }, marker: "No check yet" },
+      { name: "checking", check: { status: "checking" }, marker: "Check in progress…" },
+      {
+        name: "blocked",
+        check: {
+          status: "blocked",
+          check: checkFixture("job-1", "blocked", {
+            blockedReason: { code: "source_unavailable", detail: "Down." },
+          }),
+        },
+        marker: "Check blocked",
+      },
+      {
+        name: "outdated",
+        check: { status: "outdated", check: checkFixture("job-1", "checked") },
+        marker: "Saved check is outdated",
+      },
+    ]
+    for (const entry of statuses) {
+      stubCheckFetch({
+        opportunities: { "job-1": jobOne },
+        workflows: {
+          "job-1": roleWorkflowFixture("job-1", "selected", {
+            revision: 0,
+            opportunityRevision: 2,
+          }),
+        },
+        checks: { "job-1": entry.check },
+        postCheck: () => jsonResponse(201, { status: "checking" }),
+      })
+      const rendered = renderCheckPage("job-1")
+      expect(await screen.findByText(entry.marker)).toBeDefined()
+      expect(
+        screen.queryByRole("link", { name: "Answer questions" }),
+        `${entry.name} must not link into Answer questions`
+      ).toBeNull()
+      rendered.unmount()
+      cleanup()
+    }
+  })
+
+  it("links every checked question to its source span and excerpt", async () => {
+    stubCheckFetch({
+      opportunities: { "job-1": jobOne },
+      workflows: {
+        "job-1": roleWorkflowFixture("job-1", "checked", {
+          revision: 1,
+          opportunityRevision: 2,
+        }),
+      },
+      checks: {
+        "job-1": {
+          status: "checked",
+          check: checkFixture("job-1", "checked"),
+        },
+      },
+    })
+    renderCheckPage("job-1")
+
+    expect(
+      await screen.findByText("Why do you want this role?")
+    ).toBeDefined()
+    expect(
+      await screen.findByText(
+        (_content, element) =>
+          element?.textContent === "Source: cap-1 · chars 30–58"
+      )
+    ).toBeDefined()
+    expect(
+      await screen.findByText("Excerpt: Why do you want this role?")
+    ).toBeDefined()
+  })
+
   it("paginates check activity without starting work", async () => {
     const { calls } = stubCheckFetch({
       opportunities: { "job-1": jobOne },

@@ -616,4 +616,127 @@ describe("answers page honest states", () => {
     expect(await screen.findByText("Check in progress")).toBeDefined()
     expect(screen.queryAllByLabelText("Your answer")).toHaveLength(0)
   })
+
+  it("links every question to its source excerpt and span", async () => {
+    stubAnswersFetch(answeredOptions())
+    renderAnswersPage("job-1")
+
+    expect(
+      await screen.findByRole("heading", { name: "1. Can you work remotely?" })
+    ).toBeDefined()
+    expect(
+      await screen.findByText(
+        (_content, element) =>
+          element?.textContent ===
+          "Source: Can you work remotely? · cap-1 · chars 30–58"
+      )
+    ).toBeDefined()
+    expect(
+      await screen.findByText(
+        (_content, element) =>
+          element?.textContent ===
+          "Source: When can you start? · cap-1 · chars 60–80"
+      )
+    ).toBeDefined()
+  })
+
+  it("ignores stored values pinned to a different check", async () => {
+    stubAnswersFetch(
+      answeredOptions({
+        values: {
+          "job-1": {
+            checkId: "check-stale",
+            questionSetSha256: "old-sha",
+            values: [
+              valueFixture("q-remote", {
+                text: "Stale text from a previous check.",
+              }),
+            ],
+          },
+        },
+      })
+    )
+    renderAnswersPage("job-1")
+
+    expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
+    expect(screen.queryByDisplayValue("Stale text from a previous check.")).toBeNull()
+  })
+
+  it("holds answering on an outdated check without boxes or writes", async () => {
+    const { calls } = stubAnswersFetch(
+      answeredOptions({
+        checks: { "job-1": checkFixture("job-1", "checked", "outdated") },
+      })
+    )
+    renderAnswersPage("job-1")
+
+    expect(await screen.findByText("Check outdated")).toBeDefined()
+    expect(screen.queryAllByLabelText("Your answer")).toHaveLength(0)
+    for (const call of calls) expect(call.method).toBe("GET")
+    expect(unexpectedPosts(calls)).toHaveLength(0)
+  })
+})
+
+describe("answers page model-call boundary", () => {
+  it("mounts, saves, and conflicts with zero POSTs and zero model endpoints", async () => {
+    let attempts = 0
+    const { calls } = stubAnswersFetch(
+      answeredOptions({
+        putAnswer: (_jobId, questionId, body) => {
+          attempts += 1
+          if (attempts === 1)
+            return jsonResponse(409, { error: { message: "Conflict." } })
+          const payload = body as {
+            expectedAnswerVersion: number
+            text: string
+          }
+          return jsonResponse(
+            200,
+            valueFixture(questionId, {
+              version: payload.expectedAnswerVersion + 1,
+              state: "answered",
+              text: payload.text,
+              provenance: {
+                origin: "owner_written",
+                editedAt: "2026-09-22T11:00:00Z",
+                editedBy: { actorKind: "administrator", actorId: "owner" },
+              },
+            })
+          )
+        },
+      })
+    )
+    renderAnswersPage("job-1")
+
+    const boxes = (await screen.findAllByLabelText(
+      "Your answer"
+    )) as HTMLTextAreaElement[]
+    fireEvent.change(boxes[1] as HTMLTextAreaElement, {
+      target: { value: "Boundary probe." },
+    })
+    fireEvent.click(
+      (
+        await screen.findAllByRole("button", { name: "Save answer" })
+      )[1] as HTMLElement
+    )
+    expect(
+      await screen.findByText(/This answer changed elsewhere\./)
+    ).toBeDefined()
+
+    fireEvent.click(
+      (
+        await screen.findAllByRole("button", { name: "Save answer" })
+      )[1] as HTMLElement
+    )
+    expect(await screen.findByText("Saved · v1.")).toBeDefined()
+
+    expect(calls.length).toBeGreaterThan(0)
+    for (const call of calls) {
+      expect(["GET", "PUT"]).toContain(call.method)
+      expect(call.url.toLowerCase()).not.toMatch(/codex|llm|openai|anthropic/)
+      if (call.method === "PUT")
+        expect(call.url).toMatch(/\/questions\/[^/]+\/answer$/)
+    }
+    expect(unexpectedPosts(calls)).toHaveLength(0)
+  })
 })
