@@ -215,15 +215,6 @@ def check_packs(db, assets):
     return count
 
 
-def check_delivery_material(db):
-    for mime, mime_sha, attachment_sha, pack_sha, pdf, saved_pack_sha in db.execute(
-        "SELECT d.mime_bytes,d.mime_sha256,d.attachment_sha256,d.pack_content_sha256,p.pdf,p.content_sha256 "
-        "FROM delivery_items d JOIN application_packs p ON p.id=d.pack_id"
-    ):
-        if digest(mime) != mime_sha or digest(pdf) != attachment_sha or pack_sha != saved_pack_sha:
-            fail("saved delivery MIME or referenced pack differs from its digest")
-
-
 def require_space(path, needed, what):
     try:
         free = shutil.disk_usage(path).free
@@ -388,7 +379,6 @@ def sanitize(db):
         db.execute("UPDATE rounds SET state='failed',generation=generation+1,revision=revision+1,stop_reason='restored_inactive',reconciliation_required=1,updated_at=?,completed_at=? WHERE state IN ('queued','running','awaiting_input','stopping','paused')", (now, now))
         db.execute("UPDATE round_reconciliation_checks SET state='unknown',finished_at=? WHERE state='pending'", (now,))
         db.execute("UPDATE jev_attempts SET status='uncertain',finished_at=? WHERE status='dispatched'", (now,))
-        db.execute("UPDATE delivery_items SET state='uncertain',smtp_stage='interrupted',smtp_code=0,outcome_detail='send intent existed at restore; submission outcome unknown',updated_at=? WHERE state='sending'", (now,))
         db.execute("UPDATE ingestion_requests SET status='failed',safe_error_code='restored_inactive',updated_at=? WHERE status IN ('pending','processing')", (now,))
         db.execute("DELETE FROM qualification_refresh_queue")
         db.execute("UPDATE research_requests SET state='uncertain',lease_owner=NULL,lease_generation=NULL,lease_until=NULL,updated_at=? WHERE state='claimed'", (now,))
@@ -400,7 +390,7 @@ def sanitize(db):
         fail("restored database kept a live research claim")
     if db.execute("SELECT 1 FROM run_checkpoints WHERE active_claims_json<>'[]'").fetchone():
         fail("restored database kept active checkpoint claims")
-    if db.execute("SELECT 1 FROM jobs WHERE state IN ('queued','running') UNION SELECT 1 FROM rounds WHERE state IN ('queued','running','awaiting_input','stopping','paused') UNION SELECT 1 FROM delivery_items WHERE state='sending'").fetchone():
+    if db.execute("SELECT 1 FROM jobs WHERE state IN ('queued','running') UNION SELECT 1 FROM rounds WHERE state IN ('queued','running','awaiting_input','stopping','paused')").fetchone():
         fail("restored database would resume recruitment")
 
 
@@ -474,7 +464,6 @@ def verify_archive(archive, expected_manifest_sha, approved=ASSETS):
     with closing(open_ro(db_path)) as db:
         schema = check_db(db)
         packs = check_packs(db, assets)
-        check_delivery_material(db)
         live_captures, live_receipts, live_executors = check_captures(db, captures_root)
         events, checkpoints = check_run_history(db)
         if schema != manifest["schemaSha256"] or packs != manifest.get("packCount"):
@@ -488,7 +477,7 @@ def verify_archive(archive, expected_manifest_sha, approved=ASSETS):
         check_executor_record(executor_path.read_bytes(), live_executors)
         if db.execute("SELECT 1 FROM administrator UNION SELECT 1 FROM auth_sessions UNION SELECT 1 FROM agent_credentials UNION SELECT 1 FROM round_tool_capabilities").fetchone():
             fail("backup contains credential rows")
-        if db.execute("SELECT 1 FROM jobs WHERE state IN ('queued','running') UNION SELECT 1 FROM rounds WHERE state IN ('queued','running','awaiting_input','stopping','paused') UNION SELECT 1 FROM delivery_items WHERE state='sending'").fetchone():
+        if db.execute("SELECT 1 FROM jobs WHERE state IN ('queued','running') UNION SELECT 1 FROM rounds WHERE state IN ('queued','running','awaiting_input','stopping','paused')").fetchone():
             fail("backup contains runnable recruitment state")
         if db.execute("SELECT 1 FROM research_requests WHERE state='claimed' UNION SELECT 1 FROM run_checkpoints WHERE active_claims_json<>'[]'").fetchone():
             fail("backup contains live research claims")
@@ -522,7 +511,6 @@ def create(data_dir, assets_root, artifact_root, output, approved=ASSETS, known_
             with closing(sqlite3.connect(raw)) as db:
                 schema = check_db(db)
                 check_packs(db, assets)
-                check_delivery_material(db)
                 live_captures, live_receipts, live_executors = check_captures(db, artifacts)
                 sanitize(db)
                 final = output / DB_NAME
@@ -552,7 +540,6 @@ def create(data_dir, assets_root, artifact_root, output, approved=ASSETS, known_
         with closing(open_ro(final)) as db:
             check_db(db)
             count = check_packs(db, assets)
-            check_delivery_material(db)
             final_captures, final_receipts, final_executors = check_captures(db, captures_out)
             if final_captures != live_captures or final_receipts != live_receipts or final_executors != live_executors:
                 fail("sanitization altered capture evidence")

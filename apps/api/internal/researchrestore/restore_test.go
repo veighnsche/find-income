@@ -1194,9 +1194,6 @@ func assertRestoredRows(t *testing.T, dataDir string, snap snapshot, runID strin
 	if n := queryInt(t, db, "SELECT COUNT(*) FROM rounds WHERE state IN ('queued','running','awaiting_input','stopping','paused')"); n != 0 {
 		t.Fatalf("restored runnable rounds: %d", n)
 	}
-	if n := queryInt(t, db, "SELECT COUNT(*) FROM delivery_items WHERE state='sending'"); n != 0 {
-		t.Fatalf("restored sending deliveries: %d", n)
-	}
 	t.Logf("restored rows: run=%s/gen=%d claims=0 capabilities=0 uncertain-requests=%d",
 		round.State, round.Generation,
 		queryInt(t, db, "SELECT COUNT(*) FROM research_requests WHERE state='uncertain'"))
