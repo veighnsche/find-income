@@ -119,7 +119,7 @@ func runWithContext(ctx context.Context, args []string) error {
 			standardBounds.MaxBytesPerOp = 1 << 20
 			standardBounds.MaxBytesTotal = 4 << 20
 			if factory, err := musewire.NewStandardRunnerFactory(musewire.StandardRunnerConfig{
-				CLIPath: museBin, ModelID: "muse-spark-1.3-standard", ProviderID: "meta",
+				CLIPath: museBin, ModelID: "muse-spark-1.3", ProviderID: "meta",
 				Cursors: musewire.StoreCursors{DB: database},
 				Facts:   musecode.ProbeLocalFacts(museBin), Bounds: standardBounds,
 				Workspaces: filepath.Join(dataDir, "muse-sessions"),

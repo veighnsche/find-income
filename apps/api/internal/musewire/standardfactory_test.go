@@ -11,7 +11,7 @@ import (
 )
 
 func standardFactoryConfig(workspaces string) StandardRunnerConfig {
-	return StandardRunnerConfig{CLIPath: "/bin/muse", ModelID: "muse-spark-1.3-standard",
+	return StandardRunnerConfig{CLIPath: "/bin/muse", ModelID: "muse-spark-1.3",
 		ProviderID: "meta", Cursors: &runnerMemoryCursors{}, Facts: standardRunnerFacts(),
 		Bounds: standardRunnerSpec().Bounds, Workspaces: workspaces}
 }

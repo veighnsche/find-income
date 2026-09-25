@@ -59,7 +59,7 @@ func TestStandardPromptGuards(t *testing.T) {
 
 func TestWriteStandardHomePinsModelWithoutTools(t *testing.T) {
 	workspace := t.TempDir()
-	home, err := writeStandardHome(workspace, "muse-spark-1.3-standard")
+	home, err := writeStandardHome(workspace, "muse-spark-1.3")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestWriteStandardHomePinsModelWithoutTools(t *testing.T) {
 	if err := json.Unmarshal(raw, &settings); err != nil {
 		t.Fatal(err)
 	}
-	if settings.Model != "muse-spark-1.3-standard" || len(settings.MCPServers) != 0 {
+	if settings.Model != "muse-spark-1.3" || len(settings.MCPServers) != 0 {
 		t.Fatalf("settings = %s, want pinned standard model and no MCP servers", raw)
 	}
 	info, err := os.Stat(filepath.Join(home, "config", "muse", "settings.json"))

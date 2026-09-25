@@ -37,7 +37,7 @@ func (m *runnerMemoryCursors) LoadCursor(_ context.Context, runRef string) (muse
 
 func standardRunnerFacts() musecode.Facts {
 	return musecode.Facts{CLIPath: "/bin/muse", CLIReportVersion: "1.4.0",
-		EffectiveModel: "meta/muse-spark-1.3-standard", SubscriptionLaneProved: true,
+		EffectiveModel: "meta/muse-spark-1.3", SubscriptionLaneProved: true,
 		SessionProtocolProved: true, WorkspaceIsolatedProved: true}
 }
 

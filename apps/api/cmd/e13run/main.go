@@ -28,7 +28,11 @@ import (
 )
 
 const (
-	pinnedModel    = "muse-spark-1.3-standard"
+	// The Standard model id is the bare 1.3 id: the CLI rejects a
+	// -standard suffix ("does not exist or you lack access") while the
+	// bare id resolves and completes. The -contributor suffix marks the
+	// discounted tier; the bare id is the full Standard surface.
+	pinnedModel    = "muse-spark-1.3"
 	pinnedProvider = "meta"
 	// The owner authorized Standard drafting for this role only. The
 	// harness pins it; any other opportunity is refused.
