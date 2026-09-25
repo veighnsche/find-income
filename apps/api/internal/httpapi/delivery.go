@@ -149,7 +149,7 @@ func (h *Handler) prepareDeliveryReview(w http.ResponseWriter, r *http.Request) 
 		failDelivery(w, deliveryservice.ErrUnavailable)
 		return
 	}
-	review, err := h.delivery.PrepareReview(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, input.RequestKey, input.PackIDs)
+	review, err := h.delivery.PrepareMaterialReview(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, input.RequestKey, input.PackIDs)
 	if err != nil {
 		failDelivery(w, err)
 		return
@@ -184,7 +184,7 @@ func (h *Handler) approveDeliveryReview(w http.ResponseWriter, r *http.Request) 
 		failDelivery(w, deliveryservice.ErrUnavailable)
 		return
 	}
-	review, err := h.delivery.ApproveReview(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, r.PathValue("id"), input.MaterialSHA256)
+	review, err := h.delivery.ApproveMaterialReview(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, r.PathValue("id"), input.MaterialSHA256)
 	if err != nil {
 		failDelivery(w, err)
 		return
@@ -199,6 +199,16 @@ func (h *Handler) sendDeliveryReview(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.delivery == nil {
 		failDelivery(w, deliveryservice.ErrUnavailable)
+		return
+	}
+	// F2: re-verify the material binding immediately before the send
+	// commission. Changed answers or a superseded version stop here with
+	// the same conflict/invalid verdicts as review and approval.
+	if review, err := h.database.DeliveryReview(r.Context(), r.PathValue("id")); err != nil {
+		failDelivery(w, err)
+		return
+	} else if err := h.delivery.VerifyReviewMaterials(r.Context(), review); err != nil {
+		failDelivery(w, err)
 		return
 	}
 	result, err := h.delivery.SendReview(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, r.PathValue("id"))

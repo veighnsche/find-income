@@ -21,6 +21,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/agency"
+	"github.com/veighnsche/find-income-dashboard/api/internal/applicationpacks"
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
 	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/delivery"
@@ -28,6 +29,7 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevservice"
+	"github.com/veighnsche/find-income-dashboard/api/internal/materialprep"
 	"github.com/veighnsche/find-income-dashboard/api/internal/researchwire"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
@@ -90,6 +92,7 @@ func runWithContext(ctx context.Context, args []string) error {
 	var interviewFocus agency.InterviewFocusEvaluator
 	if jevConfig.Enabled {
 		decisions = jevservice.Service{Store: database, Client: jevClient}
+		options.AnswerMatcher = jevservice.Service{Store: database, Client: jevClient}
 		if root := os.Getenv("JOBSEEK_APPROVED_CAREER_ROOT"); root != "" {
 			interviewSources = &agency.LocalPackSources{ProjectRoot: root}
 			interviewFocus = jevservice.Service{Store: database, Client: jevClient}
@@ -98,6 +101,25 @@ func runWithContext(ctx context.Context, args []string) error {
 		if root, typst := os.Getenv("JOBSEEK_APPROVED_CAREER_ROOT"), os.Getenv("JOBSEEK_TYPST_PATH"); root != "" && typst != "" {
 			packSources = &agency.LocalPackSources{ProjectRoot: root}
 			runtime.SetApplicationPackConfig(codexservice.ApplicationPackRuntimeConfig{ProjectRoot: root, TypstPath: typst, PrivateTempDir: filepath.Join(dataDir, "application-pack-tmp"), RenderTimeout: 20 * time.Second, Relevance: jevservice.Service{Store: database, Client: jevClient}})
+			// Grounded preparation (D3/D4): live including required+unset
+			// drafting through one bounded one-shot turn. Without
+			// model/effort the drafter stays nil and drafting roles keep
+			// their honest 503 instead of invented drafts.
+			var drafter materialprep.Drafter
+			if model, effort := os.Getenv("JOBSEEK_CODEX_MODEL"), os.Getenv("JOBSEEK_CODEX_EFFORT"); model != "" && effort != "" {
+				drafter = &materialprep.CodexDrafter{Turns: &codexservice.OneShot{
+					Dial: codexservice.DialOneShot, Instructions: materialprep.DraftInstructions,
+					Model: model, Effort: effort}}
+			}
+			options.Materials = &materialprep.Service{Store: database,
+				Career: func() ([]applicationpacks.Source, []byte, error) {
+					return applicationpacks.LoadApprovedCareerSources(root, []string{"cv-vince-liem.typ", "cv-vince-liem.md", "github-evidence-review.md"})
+				},
+				Draft:     drafter,
+				Relevance: materialprep.JevRelevance{Evaluator: jevClient},
+				Render: applicationpacks.Renderer{TypstPath: typst,
+					PrivateTempDir: filepath.Join(dataDir, "material-prep-tmp"), Timeout: 10 * time.Second},
+			}
 		}
 	}
 	worker := &agency.Engine{Store: database, Runtime: runtime, Decisions: decisions, PackSources: packSources, InterviewSources: interviewSources, InterviewFocus: interviewFocus, Context: ctx}

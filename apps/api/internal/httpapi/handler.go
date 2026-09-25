@@ -30,6 +30,8 @@ type Options struct {
 	Delivery              *deliveryservice.Service
 	Research              ResearchService
 	ResearchControl       ResearchRunControl
+	AnswerMatcher         AnswerMatcher
+	Materials             MaterialPreparer
 }
 
 type CodexControl interface {
@@ -51,6 +53,8 @@ type Handler struct {
 	delivery              *deliveryservice.Service
 	research              ResearchService
 	researchControl       ResearchRunControl
+	answerMatcher         AnswerMatcher
+	materials             MaterialPreparer
 	limiter               *loginLimiter
 }
 
@@ -62,6 +66,8 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 		delivery:        options.Delivery,
 		research:        options.Research,
 		researchControl: options.ResearchControl,
+		answerMatcher:   options.AnswerMatcher,
+		materials:       options.Materials,
 		limiter:         newLoginLimiter()}
 	for _, origin := range options.AllowedOrigins {
 		h.origins[origin] = true
@@ -172,6 +178,29 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/qualification/reevaluate", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/changes", h.listChanges)
 	mux.HandleFunc("GET /api/v1/changes/{id}", h.getChange)
+	mux.HandleFunc("GET /api/v1/workflow/roles", h.listRoleWorkflows)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/workflow", h.getRoleWorkflow)
+	mux.HandleFunc("GET /api/v1/research/brief", h.getSearchBrief)
+	mux.HandleFunc("GET /api/v1/research/briefs/{version}/catalog", h.getReasonCatalog)
+	mux.HandleFunc("GET /api/v1/research/runs/{id}/findings", h.listRunFindings)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/finding", h.getOpportunityFinding)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/checks", h.startOpportunityCheck)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/checks/current", h.getCurrentOpportunityCheck)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/checks/current/activity", h.listOpportunityCheckActivity)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/checks/{checkId}", h.getOpportunityCheck)
+	mux.HandleFunc("GET /api/v1/answers", h.listSavedAnswers)
+	mux.HandleFunc("POST /api/v1/answers", h.createSavedAnswer)
+	mux.HandleFunc("GET /api/v1/answers/{answerId}", h.getSavedAnswer)
+	mux.HandleFunc("POST /api/v1/answers/{answerId}/versions", h.approveSavedAnswerVersion)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/answers/match", h.matchOpportunityAnswers)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/answers/match/current", h.getCurrentAnswerMatch)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/answers/current", h.getCurrentQuestionAnswers)
+	mux.HandleFunc("PUT /api/v1/opportunities/{id}/questions/{questionId}/answer", h.saveQuestionAnswer)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/materials/prepare", h.prepareOpportunityMaterials)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/materials/current", h.getCurrentOpportunityMaterials)
+	mux.HandleFunc("PUT /api/v1/opportunities/{id}/materials/current", h.editOpportunityMaterials)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/materials/rewrite", h.rewriteOpportunityMaterials)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/materials/versions/{version}", h.getOpportunityMaterialVersion)
 	mux.HandleFunc("/api/v1/", h.privateNotFound)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")

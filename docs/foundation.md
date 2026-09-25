@@ -18,14 +18,14 @@ The selected Go module path is `github.com/veighnsche/find-income-dashboard/api`
 
 ## Task graph
 
-`go.work` lists one native module; `turbo ls` includes `api`, `@jobseek/contracts`, `@jobseek/web` and Turbo's synthetic `go-workspace`. The root `turbo.json` enables `experimentalGoWorkspaces` and `experimentalTaskCommand`. The API package overrides `build` to produce `apps/api/bin/jobseek`, and declares that file as a restorable output. Go's own build/module caches are outside Turbo outputs. `api#generate` depends on contract validation and has only the generator configuration/script as its package inputs. Its contract input is included through the dependency hash. Native Go build/test/lint run after generation; web build/check run after contracts generation. `dev`, `format`, generated-code drift checks and future e2e journeys are uncached.
+`go.work` lists one native module; `turbo ls` includes `api`, `@jobseek/contracts`, `@jobseek/vite-app` and Turbo's synthetic `go-workspace`. The root `turbo.json` enables `experimentalGoWorkspaces` and `experimentalTaskCommand`. The API package overrides `build` to produce `apps/api/bin/jobseek`, and declares that file as a restorable output. Go's own build/module caches are outside Turbo outputs. `api#generate` depends on contract validation and has only the generator configuration/script as its package inputs. Its contract input is included through the dependency hash. Native Go build/test/lint run after generation; web build/check run after contracts generation. `dev`, `format`, generated-code drift checks and future e2e journeys are uncached.
 
 Useful filters:
 
 ```sh
 bunx turbo run api#test
 bunx turbo run lint --filter=api
-bunx turbo run build --filter=@jobseek/web
+bunx turbo run build --filter=@jobseek/vite-app
 ```
 
 Runtime SQLite files, attachments, personal PDFs, backups, sessions and secrets must live in an external private data directory when those features are implemented. They are not build inputs or cache outputs. M0 does not create a data directory or store private records.

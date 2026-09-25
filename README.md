@@ -61,7 +61,7 @@ bun run test
 bun run build
 ```
 
-`bun run e2e` runs browser fixture checks; they do not establish live provider behavior. [Foundation notes](docs/foundation.md) describe the workspace/toolchain.
+`bun run e2e:slice0` through `bun run e2e:slice5b` run the browser fixture gates (see `scripts/ui-smoke/README.md`); they do not establish live provider behavior. [Foundation notes](docs/foundation.md) describe the workspace/toolchain.
 
 ## Development handoffs
 

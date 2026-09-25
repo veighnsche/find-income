@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const webDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../apps/web/dist');
+const webDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../apps/vite-app/dist');
 const time = '2026-09-23T12:00:00Z';
 const allowance = { requests: 7, items: 1, tools: 3, turns: 1 };
 const opportunity = {
@@ -380,13 +380,28 @@ export async function startFixture() {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(json);
       }
-      if (path === '/api/v1/auth/session')
+      if (path === '/api/v1/auth/session') {
+        if (state.expireSession) return error(res, 401);
         return sendJson(res, 200, {
           actorKind: 'administrator',
           actorId: 'synthetic-owner',
           csrfToken: 'synthetic-csrf',
           expiresAt: '2099-01-01T00:00:00Z',
         });
+      }
+      if (path === '/api/v1/auth/login' && req.method === 'POST') {
+        if (payload?.password !== 'synthetic-owner-password') return error(res, 401);
+        return sendJson(res, 200, {
+          actorKind: 'administrator',
+          actorId: 'synthetic-owner',
+          csrfToken: 'synthetic-csrf',
+          expiresAt: '2099-01-01T00:00:00Z',
+        });
+      }
+      if (path === '/api/v1/auth/logout' && req.method === 'POST') {
+        res.writeHead(204);
+        return res.end();
+      }
       if (path === '/api/v1/health')
         return sendJson(res, 200, { status: 'ok', service: 'jobseek-api', version: 'ui-fixture' });
       if (path === '/api/v1/preferences')
@@ -901,6 +916,10 @@ export async function startFixture() {
         return sendJson(res, 200, { items: [] });
       if (path === `/api/v1/opportunities/${opportunity.id}/routes`)
         return sendJson(res, 200, { items: state.delivery.routeSupported ? [deliveryRoute] : [] });
+      if (path === '/api/v1/workflow/roles') return sendJson(res, 200, { items: [] });
+      if (path === '/api/v1/research/brief') return error(res, 404);
+      if (path === `/api/v1/opportunities/${opportunity.id}/finding`) return error(res, 404);
+      if (path === `/api/v1/opportunities/${opportunity.id}/workflow`) return error(res, 404);
       return error(res, 503);
     } catch (cause) {
       sendJson(res, 500, { error: { message: `Synthetic fixture error: ${cause.message}` } });

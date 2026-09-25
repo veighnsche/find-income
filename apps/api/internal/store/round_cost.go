@@ -29,6 +29,7 @@ const (
 	RoundInterviewDebriefSave           = "interview.debrief_save"
 	RoundReplyUpdateSave                = "reply.update_save"
 	RoundReplyDraftSave                 = "reply.draft_save"
+	RoundCheckSave                      = "opportunity.check_save"
 	RoundResearchSearch                 = "research.search"
 	RoundResearchFetch                  = "research.fetch"
 	RoundResearchBrowse                 = "research.browse"
@@ -56,7 +57,7 @@ func IsResearchOperation(op string) bool {
 // added here without changing the reservation ledger.
 func RoundOperationCost(operation string) (RoundAllowance, bool) {
 	switch operation {
-	case RoundCreateCompany, RoundCreateOpportunity, RoundSaveSourceOpportunity, RoundCorrectPreferences, RoundCorrectEvidence, RoundCorrectOpportunity, RoundRelationshipCounterpartyCreate, RoundRelationshipEventCreate, RoundRelationshipRouteCreate, RoundRelationshipCorrect, RoundInterviewBriefSave, RoundInterviewDebriefSave, RoundReplyUpdateSave, RoundReplyDraftSave:
+	case RoundCreateCompany, RoundCreateOpportunity, RoundSaveSourceOpportunity, RoundCorrectPreferences, RoundCorrectEvidence, RoundCorrectOpportunity, RoundRelationshipCounterpartyCreate, RoundRelationshipEventCreate, RoundRelationshipRouteCreate, RoundRelationshipCorrect, RoundInterviewBriefSave, RoundInterviewDebriefSave, RoundReplyUpdateSave, RoundReplyDraftSave, RoundCheckSave:
 		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
 	case RoundFetchSource, RoundSearchSource:
 		return RoundAllowance{Requests: 1, Tools: 1}, true

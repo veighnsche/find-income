@@ -557,6 +557,28 @@ paths:
         '201':
           description: Decision saved
           content: { application/json: { schema: { $ref: '#/components/schemas/OwnerDecision' } } }
+  /workflow/roles:
+    get:
+      operationId: listRoleWorkflows
+      summary: List each selected role with its authoritative journey stage
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Selected roles and stages
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/RoleWorkflowList' } } }
+  /opportunities/{id}/workflow:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getRoleWorkflow
+      summary: Read one selected role's authoritative journey stage
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Role stage
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/RoleWorkflowState' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
   /rounds/{id}/stop:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     post:
@@ -756,6 +778,76 @@ paths:
           }
         '400': { $ref: '#/components/responses/ValidationError' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /research/brief:
+    get:
+      operationId: getSearchBrief
+      summary: Read the current search brief with rubric and catalog versions
+      description: Versioned owner profile, retained requirements, and reason-catalog version. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Search brief,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/SearchBriefView' } } },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /research/briefs/{version}/catalog:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      operationId: getReasonCatalog
+      summary: Read the saved reason catalog for one brief version
+      description: Immutable authored positive, negative, and missing-information reason choices. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Reason catalog,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/ReasonCatalogView' } } },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /research/runs/{id}/findings:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: listRunFindings
+      summary: List collected vacancies with saved groups and reasons
+      description: One entry per collected vacancy with group, saved reason selections, and evidence links. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - name: group
+          in: query
+          schema:
+            type: string
+            enum:
+              [
+                recommended,
+                could_be_recommended,
+                probably_not_recommended,
+                not_recommended,
+                unknown,
+              ]
+      responses:
+        '200':
+          {
+            description: Finding list,
+            content: { application/json: { schema: { $ref: '#/components/schemas/FindingList' } } },
+          }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /auth/login:
     post:
       operationId: login
@@ -1045,6 +1137,339 @@ paths:
               { application/json: { schema: { $ref: '#/components/schemas/RoundScreeningView' } } },
           }
         '404': { $ref: '#/components/responses/NotFound' }
+  /opportunities/{id}/finding:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getOpportunityFinding
+      summary: Read one collected vacancy's saved classification and reasons
+      description: Why-this-job view from saved assessment state. Makes no model call. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          {
+            description: Saved finding,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/FindingEntry' } } },
+          }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/checks:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: startOpportunityCheck
+      summary: Start an explicit detail check for one selected role
+      description: Selected or blocked roles only; selection alone never starts a check. Idempotent on requestKey.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/CheckStartRequest' } } }
+      responses:
+        '200':
+          description: Exact replay
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/CheckStatusView' } } }
+        '201':
+          description: Check started
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/CheckStatusView' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/checks/current:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getCurrentOpportunityCheck
+      summary: Read the current saved check view for one selected role
+      description: Saved proposal with staleness; never triggers work. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Check status
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/CheckStatusView' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/checks/current/activity:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: listOpportunityCheckActivity
+      summary: Read per-role check activity for one selected role
+      description: Cursor-paginated role-scoped Codex activity. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: Check activity
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/CheckActivityPage' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/checks/{checkId}:
+    parameters:
+      - { $ref: '#/components/parameters/RecordId' }
+      - name: checkId
+        in: path
+        required: true
+        schema: { type: string, minLength: 1 }
+    get:
+      operationId: getOpportunityCheck
+      summary: Read one immutable check by id
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Saved check
+          content: { application/json: { schema: { $ref: '#/components/schemas/CheckView' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /answers:
+    get:
+      operationId: listSavedAnswers
+      summary: List owner-approved reusable answers
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - name: scope
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Answer library
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/SavedAnswerList' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    post:
+      operationId: createSavedAnswer
+      summary: Create and explicitly approve a reusable answer
+      description: Creation confers approved status; unapproved drafts are out of scope.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/SavedAnswerCreate' } } }
+      responses:
+        '201':
+          description: Answer approved
+          content: { application/json: { schema: { $ref: '#/components/schemas/SavedAnswer' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /answers/{answerId}:
+    parameters:
+      - name: answerId
+        in: path
+        required: true
+        schema: { type: string, minLength: 1 }
+    get:
+      operationId: getSavedAnswer
+      summary: Read one approved answer with versions and provenance
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Saved answer
+          content: { application/json: { schema: { $ref: '#/components/schemas/SavedAnswer' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /answers/{answerId}/versions:
+    parameters:
+      - name: answerId
+        in: path
+        required: true
+        schema: { type: string, minLength: 1 }
+    post:
+      operationId: approveSavedAnswerVersion
+      summary: Approve a new exact-text version of a saved answer
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          {
+            application/json: { schema: { $ref: '#/components/schemas/SavedAnswerVersionCreate' } },
+          }
+      responses:
+        '201':
+          description: Version approved
+          content: { application/json: { schema: { $ref: '#/components/schemas/SavedAnswer' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/answers/match:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: matchOpportunityAnswers
+      summary: Run Jev answer matching for the current question set
+      description: Jev Choice only; zero Codex/LLM calls. Idempotent on requestKey plus pinned versions.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/AnswerMatchRequest' } } }
+      responses:
+        '201':
+          description: Matches saved
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/AnswerMatchView' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/answers/match/current:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getCurrentAnswerMatch
+      summary: Read the saved answer-match view for one selected role
+      description: Saved Choice results; re-reads never re-invoke Jev. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Match view
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/AnswerMatchView' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/answers/current:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getCurrentQuestionAnswers
+      summary: Read per-question answer values for the Answer stage
+      description: Exact owner values or blanks with provenance. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Answer values
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/QuestionAnswerList' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/questions/{questionId}/answer:
+    parameters:
+      - { $ref: '#/components/parameters/RecordId' }
+      - name: questionId
+        in: path
+        required: true
+        schema: { type: string, minLength: 1 }
+    put:
+      operationId: saveQuestionAnswer
+      summary: Save the owner's exact answer text or an explicit blank
+      description: Exact round-trip, no LLM call; blank is a value distinct from unset.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AnswerValueSave' } } }
+      responses:
+        '200':
+          description: Answer saved
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/QuestionAnswerValue' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/materials/prepare:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: prepareOpportunityMaterials
+      summary: Prepare grounded application materials for one answered role
+      description: Drafts unanswered required items only from verified facts; assembles a new immutable version. Idempotent on requestKey.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/MaterialPrepareRequest' } } }
+      responses:
+        '201':
+          description: Materials prepared
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/MaterialStatusView' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/materials/current:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getCurrentOpportunityMaterials
+      summary: Read the current prepared materials for one role
+      description: Saved version with readiness and provenance. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Material status
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/MaterialStatusView' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    put:
+      operationId: editOpportunityMaterials
+      summary: Save an exact direct edit as a new material version
+      description: Exact text, no LLM call; invalidates prior review authorization.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/MaterialEditRequest' } } }
+      responses:
+        '200':
+          description: Edited version saved
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/MaterialVersion' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/materials/rewrite:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: rewriteOpportunityMaterials
+      summary: Request an explicit Codex rewrite as a new reviewable version
+      description: Explicit action only; never implicit; prior versions retained.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/MaterialRewriteRequest' } } }
+      responses:
+        '201':
+          description: Rewrite requested
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/MaterialVersion' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/materials/versions/{version}:
+    parameters:
+      - { $ref: '#/components/parameters/RecordId' }
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer, format: int64, minimum: 1 }
+    get:
+      operationId: getOpportunityMaterialVersion
+      summary: Read one immutable material version
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Material version
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/MaterialVersion' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /opportunities/{id}/application-packs:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     get:
@@ -2480,6 +2905,38 @@ components:
         opportunityRevision: { type: integer, format: int64 }
         auditId: { type: string }
         createdAt: { type: string, format: date-time }
+    RoleWorkflowState:
+      type: object
+      required: [opportunityId, stage, revision, updatedAt, decisionAt, opportunityRevision]
+      properties:
+        opportunityId: { type: string }
+        stage:
+          {
+            type: string,
+            enum:
+              [
+                selected,
+                checking,
+                checked,
+                answering,
+                answered,
+                preparing,
+                prepared,
+                reviewing,
+                sent,
+                blocked,
+              ],
+          }
+        revision: { type: integer, format: int64 }
+        blockedReason: { type: string }
+        updatedAt: { type: string, format: date-time }
+        decisionAt: { type: string, format: date-time }
+        opportunityRevision: { type: integer, format: int64 }
+    RoleWorkflowList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/RoleWorkflowState' } }
     RoundMutationRequest:
       type: object
       additionalProperties: false
@@ -2500,6 +2957,7 @@ components:
                 relationship.event_create,
                 relationship.route_create,
                 relationship.correct,
+                opportunity.check_save,
               ],
           }
         resourceId: { type: string }
@@ -4181,6 +4639,7 @@ components:
         unresolvedCount: { type: integer, minimum: 0 }
         stopReason: { type: string }
         reportRef: { type: string }
+        catalogVersion: { type: string }
     SteerResearchRequest:
       type: object
       additionalProperties: false
@@ -4204,6 +4663,7 @@ components:
         cursor: { type: string }
         at: { type: string, format: date-time }
         kind: { type: string }
+        phase: { type: string, enum: [collect, classify] }
         summary: { type: string }
         refs:
           type: object
@@ -4221,6 +4681,490 @@ components:
           type: array
           items: { $ref: '#/components/schemas/ResearchActivityEvent' }
         nextCursor: { type: string }
+    SearchBriefView:
+      type: object
+      required: [profileVersion, rubricVersion, rubricSource, requirements, facts]
+      properties:
+        profileVersion: { type: integer, format: int64 }
+        rubricVersion: { type: string }
+        rubricSource: { type: string }
+        catalogVersion: { type: string }
+        requirements:
+          type: array
+          items: { $ref: '#/components/schemas/RoleCriterionView' }
+        facts:
+          type: array
+          items:
+            type: object
+            required: [key, value]
+            properties:
+              key: { type: string }
+              value: { type: string }
+    ReasonChoice:
+      type: object
+      required: [id, label, detail]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        detail: { type: string }
+    ReasonCatalogView:
+      type: object
+      required:
+        [profileVersion, rubricVersion, catalogVersion, positive, negative, missingInformation]
+      properties:
+        profileVersion: { type: integer, format: int64 }
+        rubricVersion: { type: string }
+        catalogVersion: { type: string }
+        positive: { type: array, items: { $ref: '#/components/schemas/ReasonChoice' } }
+        negative: { type: array, items: { $ref: '#/components/schemas/ReasonChoice' } }
+        missingInformation: { type: array, items: { $ref: '#/components/schemas/ReasonChoice' } }
+    FindingReason:
+      type: object
+      required: [reasonId, kind, label, detail, jevSupport]
+      properties:
+        reasonId: { type: string }
+        kind: { type: string, enum: [positive, negative, missing_information] }
+        label: { type: string }
+        detail: { type: string }
+        jevSupport: { type: number }
+    FindingEvidenceLink:
+      type: object
+      required: [captureId, spanStart, spanEnd, excerptSha256]
+      properties:
+        captureId: { type: string }
+        spanStart: { type: integer }
+        spanEnd: { type: integer }
+        excerptSha256: { type: string }
+    FindingEntry:
+      type: object
+      required:
+        [
+          opportunityId,
+          opportunityRevision,
+          group,
+          assessmentId,
+          profileVersion,
+          rubricVersion,
+          catalogVersion,
+          reasons,
+          evidenceLinks,
+          stale,
+        ]
+      properties:
+        opportunityId: { type: string }
+        opportunityRevision: { type: integer, format: int64 }
+        group:
+          type: string
+          enum:
+            [recommended, could_be_recommended, probably_not_recommended, not_recommended, unknown]
+        unknownBasis: { type: string }
+        assessmentId: { type: string }
+        profileVersion: { type: integer, format: int64 }
+        rubricVersion: { type: string }
+        catalogVersion: { type: string }
+        reasons: { type: array, items: { $ref: '#/components/schemas/FindingReason' } }
+        conflict: { $ref: '#/components/schemas/ReasonChoice' }
+        missingFact: { $ref: '#/components/schemas/ReasonChoice' }
+        evidenceLinks:
+          type: array
+          items: { $ref: '#/components/schemas/FindingEvidenceLink' }
+        sourceRef:
+          type: object
+          required: [sourceId, sourceRevision]
+          properties:
+            sourceId: { type: string }
+            sourceRevision: { type: string }
+            observedUrl: { type: string }
+        stale: { type: boolean }
+        staleBasis: { type: string }
+    FindingList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/FindingEntry' } }
+        nextCursor: { type: string }
+    CheckSourceSpan:
+      type: object
+      required: [captureId, start, end]
+      properties:
+        captureId: { type: string }
+        start: { type: integer, minimum: 0 }
+        end: { type: integer, minimum: 0 }
+    CheckQuestion:
+      type: object
+      required: [id, checkId, ordinal, text, required, sourceSpan, sourceExcerpt, textSha256]
+      properties:
+        id: { type: string }
+        checkId: { type: string }
+        ordinal: { type: integer, minimum: 0 }
+        text: { type: string }
+        required: { type: string, enum: [required, optional, unknown] }
+        kind: { type: string, enum: [free_text, choice, attachment, other] }
+        sourceSpan: { $ref: '#/components/schemas/CheckSourceSpan' }
+        sourceExcerpt: { type: string }
+        textSha256: { type: string }
+    RequestedDocument:
+      type: object
+      required: [label, required, sourceExcerpt, sourceSpan]
+      properties:
+        label: { type: string }
+        required: { type: boolean }
+        sourceExcerpt: { type: string }
+        sourceSpan: { $ref: '#/components/schemas/CheckSourceSpan' }
+    CheckRoute:
+      type: object
+      required: [judgment, sourceExcerpt, observedAt]
+      properties:
+        routeId: { type: string }
+        kind: { type: string, enum: [direct, referral, recruiter, unsupported] }
+        destinationText: { type: string }
+        judgment: { type: string, enum: [application_route, other_contact, unresolved] }
+        judgmentSha256: { type: string }
+        jevAttemptId: { type: string }
+        assessmentId: { type: string }
+        sourceExcerpt: { type: string }
+        observedAt: { type: string, format: date-time }
+    CheckGap:
+      type: object
+      required: [id, description, consequential, kind]
+      properties:
+        id: { type: string }
+        description: { type: string }
+        consequential: { type: boolean }
+        kind: { type: string, enum: [missing_fact, ambiguous_source, unverified_claim, other] }
+    CheckVacancy:
+      type: object
+      required: [captureIds, evidenceSourceIds, completeness, sourceUrl, retrievedAt]
+      properties:
+        captureIds: { type: array, items: { type: string } }
+        evidenceSourceIds: { type: array, items: { type: string } }
+        completeness: { type: string, enum: [complete, truncated, paginated, partial] }
+        sourceUrl: { type: string }
+        retrievedAt: { type: string, format: date-time }
+    CheckBlockedReason:
+      type: object
+      required: [code, detail]
+      properties:
+        code:
+          type: string
+          enum:
+            [source_unavailable, route_ambiguous, route_unsupported, questions_unresolved, other]
+        detail: { type: string }
+    CheckView:
+      type: object
+      required:
+        [
+          id,
+          opportunityId,
+          opportunityRevision,
+          workflowRevision,
+          status,
+          vacancy,
+          requestedDocuments,
+          route,
+          gaps,
+          questions,
+          questionSetSha256,
+          questionSetVersion,
+          createdAt,
+          createdBy,
+        ]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        opportunityRevision: { type: integer, format: int64 }
+        workflowRevision: { type: integer, format: int64 }
+        status: { type: string, enum: [checking, checked, blocked] }
+        blockedReason: { $ref: '#/components/schemas/CheckBlockedReason' }
+        vacancy: { $ref: '#/components/schemas/CheckVacancy' }
+        requestedDocuments:
+          type: array
+          items: { $ref: '#/components/schemas/RequestedDocument' }
+        route: { $ref: '#/components/schemas/CheckRoute' }
+        gaps: { type: array, items: { $ref: '#/components/schemas/CheckGap' } }
+        questions: { type: array, items: { $ref: '#/components/schemas/CheckQuestion' } }
+        questionSetSha256: { type: string }
+        questionSetVersion: { type: integer, format: int64 }
+        activityCursor: { type: string }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        createdBy:
+          type: object
+          required: [actorKind, actorId]
+          properties:
+            actorKind: { type: string }
+            actorId: { type: string }
+    CheckStatusView:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [not_checked, checking, checked, blocked, outdated] }
+        check: { $ref: '#/components/schemas/CheckView' }
+    CheckStartRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey, expectedOpportunityRevision, expectedWorkflowRevision]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        expectedOpportunityRevision: { type: integer, format: int64, minimum: 1 }
+        expectedWorkflowRevision: { type: integer, format: int64, minimum: 0 }
+    CheckActivityPage:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/ResearchActivityEvent' }
+        nextCursor: { type: string }
+    SavedAnswerSourceRef:
+      type: object
+      required: [kind, ref]
+      properties:
+        kind: { type: string, enum: [owner_statement, capture, cv_source] }
+        ref: { type: string }
+        excerpt: { type: string }
+    SavedAnswerVersion:
+      type: object
+      required: [version, text, textSha256, approvedAt, approvedBy, approvalRequestKey]
+      properties:
+        version: { type: integer, format: int64 }
+        text: { type: string }
+        textSha256: { type: string }
+        approvedAt: { type: string, format: date-time }
+        approvedBy:
+          type: object
+          required: [actorKind, actorId]
+          properties:
+            actorKind: { type: string }
+            actorId: { type: string }
+        approvalRequestKey: { type: string }
+        changeNote: { type: string }
+        sourceRefs:
+          type: array
+          items: { $ref: '#/components/schemas/SavedAnswerSourceRef' }
+        supersedes: { type: integer, format: int64 }
+    SavedAnswer:
+      type: object
+      required: [id, currentVersion, scopeTags, versions]
+      properties:
+        id: { type: string }
+        currentVersion: { type: integer, format: int64 }
+        scopeTags: { type: array, items: { type: string } }
+        contextNote: { type: string }
+        versions:
+          type: array
+          items: { $ref: '#/components/schemas/SavedAnswerVersion' }
+    SavedAnswerList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/SavedAnswer' } }
+        nextCursor: { type: string }
+    SavedAnswerCreate:
+      type: object
+      additionalProperties: false
+      required: [requestKey, text, scopeTags]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        text: { type: string, minLength: 1, maxLength: 20000 }
+        scopeTags: { type: array, items: { type: string } }
+        contextNote: { type: string, maxLength: 2000 }
+        sourceRefs:
+          type: array
+          items: { $ref: '#/components/schemas/SavedAnswerSourceRef' }
+    SavedAnswerVersionCreate:
+      type: object
+      additionalProperties: false
+      required: [requestKey, expectedVersion, text]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        expectedVersion: { type: integer, format: int64, minimum: 1 }
+        text: { type: string, minLength: 1, maxLength: 20000 }
+        changeNote: { type: string, maxLength: 2000 }
+    AnswerMatchChoice:
+      type: object
+      properties:
+        answerId: { type: string }
+        answerVersion: { type: integer, format: int64 }
+        textSha256: { type: string }
+        noneFits: { type: boolean }
+    AnswerMatch:
+      type: object
+      required:
+        [
+          questionId,
+          questionTextSha256,
+          choice,
+          candidateSetHash,
+          jevAttemptId,
+          confidence,
+          matchedAt,
+        ]
+      properties:
+        questionId: { type: string }
+        questionTextSha256: { type: string }
+        choice: { $ref: '#/components/schemas/AnswerMatchChoice' }
+        candidateSetHash: { type: string }
+        jevAttemptId: { type: string }
+        confidence: { type: number }
+        model: { type: string }
+        matchedAt: { type: string, format: date-time }
+    AnswerMatchView:
+      type: object
+      required: [status, checkId, questionSetSha256, answerCatalog, matches]
+      properties:
+        status: { type: string, enum: [unmatched, matched, partial, outdated] }
+        checkId: { type: string }
+        questionSetSha256: { type: string }
+        answerCatalog:
+          type: object
+          required: [digest, matchedAt]
+          properties:
+            digest: { type: string }
+            matchedAt: { type: string, format: date-time }
+        matches: { type: array, items: { $ref: '#/components/schemas/AnswerMatch' } }
+    AnswerMatchRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey, expectedCheckId, expectedQuestionSetSha256]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        expectedCheckId: { type: string }
+        expectedQuestionSetSha256: { type: string }
+    QuestionAnswerValue:
+      type: object
+      required:
+        [questionId, questionTextSha256, required, version, state, text, provenance, updatedAt]
+      properties:
+        questionId: { type: string }
+        questionTextSha256: { type: string }
+        required: { type: string, enum: [required, optional, unknown] }
+        version: { type: integer, format: int64 }
+        state: { type: string, enum: [unset, answered, blank] }
+        text: { type: string }
+        textSha256: { type: string }
+        provenance:
+          type: object
+          required: [origin, editedAt, editedBy]
+          properties:
+            origin:
+              type: string
+              enum: [jev_suggestion, owner_written, owner_edited, carried_blank]
+            matchChoice: { $ref: '#/components/schemas/AnswerMatchChoice' }
+            matchId: { type: string }
+            editedAt: { type: string, format: date-time }
+            editedBy:
+              type: object
+              required: [actorKind, actorId]
+              properties:
+                actorKind: { type: string }
+                actorId: { type: string }
+        updatedAt: { type: string, format: date-time }
+    QuestionAnswerList:
+      type: object
+      required: [checkId, questionSetSha256, values]
+      properties:
+        checkId: { type: string }
+        questionSetSha256: { type: string }
+        values:
+          type: array
+          items: { $ref: '#/components/schemas/QuestionAnswerValue' }
+    AnswerValueSave:
+      type: object
+      additionalProperties: false
+      required: [expectedAnswerVersion, text]
+      properties:
+        expectedAnswerVersion: { type: integer, format: int64, minimum: 0 }
+        text: { type: string, maxLength: 20000 }
+    MaterialAnswerRef:
+      type: object
+      required: [questionId, questionTextSha256, answerVersion, textSha256]
+      properties:
+        questionId: { type: string }
+        questionTextSha256: { type: string }
+        answerVersion: { type: integer, format: int64 }
+        textSha256: { type: string }
+    MaterialReadiness:
+      type: object
+      required: [ready, missingRequired, held]
+      properties:
+        ready: { type: boolean }
+        missingRequired: { type: array, items: { type: string } }
+        held: { type: array, items: { type: string } }
+    MaterialVersion:
+      type: object
+      required:
+        [
+          packId,
+          version,
+          opportunityId,
+          opportunityRevision,
+          profileRevision,
+          checkId,
+          questionSetSha256,
+          answers,
+          readiness,
+          provenance,
+          createdAt,
+          createdBy,
+        ]
+      properties:
+        packId: { type: string }
+        version: { type: integer, format: int64 }
+        opportunityId: { type: string }
+        opportunityRevision: { type: integer, format: int64 }
+        profileRevision: { type: integer, format: int64 }
+        checkId: { type: string }
+        questionSetSha256: { type: string }
+        answers:
+          type: array
+          items: { $ref: '#/components/schemas/MaterialAnswerRef' }
+        readiness: { $ref: '#/components/schemas/MaterialReadiness' }
+        provenance:
+          type: object
+          required: [origin, sourceShas]
+          properties:
+            origin: { type: string, enum: [prepared, direct_edit, rewrite] }
+            sourceShas: { type: array, items: { type: string } }
+            rewriteOf: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        createdBy:
+          type: object
+          required: [actorKind, actorId]
+          properties:
+            actorKind: { type: string }
+            actorId: { type: string }
+    MaterialStatusView:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [not_prepared, preparing, prepared, held, outdated] }
+        current: { $ref: '#/components/schemas/MaterialVersion' }
+    MaterialPrepareRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey, expectedCheckId, expectedQuestionSetSha256, expectedWorkflowRevision]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        expectedCheckId: { type: string }
+        expectedQuestionSetSha256: { type: string }
+        expectedWorkflowRevision: { type: integer, format: int64, minimum: 0 }
+    MaterialEditRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey, expectedVersion, text]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        expectedVersion: { type: integer, format: int64, minimum: 1 }
+        text: { type: string, minLength: 1, maxLength: 100000 }
+    MaterialRewriteRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey, expectedVersion]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        expectedVersion: { type: integer, format: int64, minimum: 1 }
+        instruction: { type: string, maxLength: 2000 }
     ResearchCaptureView:
       type: object
       required: [captureId, observedUrl, retrievedAt, status, mediaType, contentHash, extent]

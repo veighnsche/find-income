@@ -22,7 +22,8 @@ func (s *contractSender) Send(context.Context, delivery.Material, string) delive
 	return delivery.Outcome{State: delivery.AcceptedBySMTP, Stage: "data_reply", SMTPCode: 250}
 }
 
-func TestDeliverySendHTTPRoundContractOnFirstCallAndReplay(t *testing.T) {
+func setupBoundSendFixture(t *testing.T) (*harness, *contractSender, store.Opportunity) {
+	t.Helper()
 	h := newHarness(t)
 	ctx := context.Background()
 	owner := store.Actor{Kind: "administrator", ID: "owner"}
@@ -36,17 +37,46 @@ func TestDeliverySendHTTPRoundContractOnFirstCallAndReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest, _ := json.Marshal(map[string]any{"role": map[string]any{"opportunityId": opportunity.ID,
-		"opportunityRevision": opportunity.Revision, "profileRevision": 1, "title": opportunity.Title,
-		"company": company.Name, "sourceUrl": opportunity.SourceURL, "description": opportunity.OriginalText}})
+	if _, _, err := h.db.SetOwnerOpportunityDecision(ctx, owner, opportunity.ID, store.OwnerDecisionInput{
+		RequestKey: "http-select", ExpectedOpportunityRevision: opportunity.Revision,
+		ExpectedDecisionRevision: 0, Decision: "selected"}); err != nil {
+		t.Fatal(err)
+	}
+	preferences, err := h.db.CurrentPreferences(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setSHA := sha256.Sum256([]byte("http-question-set"))
+	setHex := hex.EncodeToString(setSHA[:])
+	manifest, _ := json.Marshal(map[string]any{
+		"role": map[string]any{"opportunityId": opportunity.ID,
+			"opportunityRevision": opportunity.Revision, "profileRevision": preferences.Version, "title": opportunity.Title,
+			"company": company.Name, "sourceUrl": opportunity.SourceURL, "description": opportunity.OriginalText},
+		"draft": map[string]any{"materialUnknowns": []string{}},
+	})
 	source, pdf := []byte("= CV"), append([]byte("%PDF-1.7\n"), make([]byte, 110)...)
 	packed, _ := json.Marshal(struct{ Manifest, Source, PDF []byte }{manifest, source, pdf})
 	packHash := sha256.Sum256(packed)
 	pdfHash := sha256.Sum256(pdf)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = h.db.WriteAudited(ctx, owner, func(tx *sql.Tx) (store.Change, error) {
-		_, err := tx.ExecContext(ctx, `INSERT INTO application_packs(id,opportunity_id,opportunity_revision,profile_revision,version,content_sha256,manifest_json,typst_source,pdf,created_at)
+		// F2: bind the pack to a prepared question-less material version so
+		// the send pre-check verifies instead of rejecting the fixture.
+		_, err := tx.ExecContext(ctx, `INSERT INTO job_checks(id,opportunity_id,request_key,request_sha256,opportunity_revision,workflow_revision,status,question_set_sha256,actor_kind,actor_id,created_at,completed_at)
+		 VALUES('http-check',?,?,?,?,1,'checked',?,'administrator','owner',?,?)`, opportunity.ID,
+			"http-check-key", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+			opportunity.Revision, setHex, now, now)
+		if err != nil {
+			return store.Change{}, err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO application_packs(id,opportunity_id,opportunity_revision,profile_revision,version,content_sha256,manifest_json,typst_source,pdf,created_at)
 		 VALUES('http-pack',?,?,1,1,?,?,?,?,?)`, opportunity.ID, opportunity.Revision, hex.EncodeToString(packHash[:]), string(manifest), source, pdf, now)
+		if err != nil {
+			return store.Change{}, err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO opportunity_material_versions(opportunity_id,version,pack_id,check_id,question_set_sha256,opportunity_revision,profile_revision,workflow_revision,origin,answers_json,readiness_json,source_shas_json,request_key,request_sha256,actor_kind,actor_id,created_at)
+		 VALUES(?,1,'http-pack','http-check',?,?,?,?, 'prepared','[]','{"ready":true,"missingRequired":[],"held":[]}','[]','http-material','dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd','administrator','owner',?)`,
+			opportunity.ID, setHex, opportunity.Revision, preferences.Version, 1, now)
 		if err != nil {
 			return store.Change{}, err
 		}
@@ -82,6 +112,11 @@ func TestDeliverySendHTTPRoundContractOnFirstCallAndReplay(t *testing.T) {
 	sender := &contractSender{}
 	h.handler = NewHandler(h.db, h.service, Options{AllowedOrigins: []string{origin}, Delivery: &deliveryservice.Service{
 		Store: h.db, Sender: sender, From: "owner@example.org"}})
+	return h, sender, opportunity
+}
+
+func TestDeliverySendHTTPRoundContractOnFirstCallAndReplay(t *testing.T) {
+	h, sender, _ := setupBoundSendFixture(t)
 	cookie, csrf := h.login()
 	var firstID string
 	for call := 0; call < 2; call++ {
@@ -113,5 +148,46 @@ func TestDeliverySendHTTPRoundContractOnFirstCallAndReplay(t *testing.T) {
 	}
 	if sender.calls != 0 {
 		t.Fatalf("fixture's unsupported route reached sender: %d calls", sender.calls)
+	}
+}
+
+func TestDeliverySendRejectsSupersededPack(t *testing.T) {
+	h, sender, opportunity := setupBoundSendFixture(t)
+	ctx := context.Background()
+	owner := store.Actor{Kind: "administrator", ID: "owner"}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	preferences, err := h.db.CurrentPreferences(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setSHA := sha256.Sum256([]byte("http-question-set"))
+	manifest, _ := json.Marshal(map[string]any{
+		"draft": map[string]any{"materialUnknowns": []string{}},
+	})
+	pdf := append([]byte("%PDF-1.7 v2\n"), make([]byte, 120)...)
+	packed, _ := json.Marshal(struct{ Manifest, Source, PDF []byte }{manifest, []byte("= CV v2"), pdf})
+	packHash := sha256.Sum256(packed)
+	_, err = h.db.WriteAudited(ctx, owner, func(tx *sql.Tx) (store.Change, error) {
+		_, err := tx.ExecContext(ctx, `INSERT INTO application_packs(id,opportunity_id,opportunity_revision,profile_revision,version,content_sha256,manifest_json,typst_source,pdf,created_at)
+		 VALUES('http-pack-2',?,?,1,2,?,?,?,?,?)`, opportunity.ID, opportunity.Revision,
+			hex.EncodeToString(packHash[:]), string(manifest), []byte("= CV v2"), pdf, now)
+		if err != nil {
+			return store.Change{}, err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO opportunity_material_versions(opportunity_id,version,pack_id,check_id,question_set_sha256,opportunity_revision,profile_revision,workflow_revision,origin,answers_json,readiness_json,source_shas_json,request_key,request_sha256,actor_kind,actor_id,created_at)
+		 VALUES(? ,2,'http-pack-2','http-check',?,?,?,1,'direct_edit','[]','{"ready":true,"missingRequired":[],"held":[]}','[]','http-material-2','eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee','administrator','owner',?)`,
+			opportunity.ID, hex.EncodeToString(setSHA[:]), opportunity.Revision, preferences.Version, now)
+		return store.Change{Operation: "fixture.delivery_supersede", EntityKind: "opportunity_material_versions", EntityID: "http-pack-2"}, err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie, csrf := h.login()
+	response := h.request(http.MethodPost, "/api/v1/delivery/reviews/http-review/send", "", cookie, "", csrf, origin)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("superseded send: got %d, want 409", response.Code)
+	}
+	if sender.calls != 0 {
+		t.Fatalf("superseded review reached sender: %d calls", sender.calls)
 	}
 }

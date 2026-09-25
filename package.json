@@ -3,18 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "apps/web",
+    "apps/vite-app",
     "packages/contracts"
   ],
   "scripts": {
     "dev": "turbo run dev",
     "check": "turbo run check:generated && turbo run lint",
+    "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "build": "turbo run build",
     "generate": "turbo run generate",
     "format": "turbo run format",
-    "e2e": "bun --filter @jobseek/web build && node scripts/ui-smoke/smoke.mjs",
-    "e2e:research": "bun --filter @jobseek/web build && node scripts/ui-smoke/research-smoke.mjs"
+    "e2e:slice0": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/slice0-smoke.mjs",
+    "e2e:slice1": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/slice1-smoke.mjs",
+    "e2e:slice2": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/slice2-smoke.mjs",
+    "e2e:slice3": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/slice3-smoke.mjs",
+    "e2e:slice4": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/slice4-smoke.mjs",
+    "e2e:slice5": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/slice5-smoke.mjs",
+    "e2e:slice5b": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/slice5b-journey.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.63.0",

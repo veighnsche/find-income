@@ -91,6 +91,30 @@ func (e AdvertisedCompensationPeriod) Valid() bool {
 	}
 }
 
+// Defines values for AnswerMatchViewStatus.
+const (
+	AnswerMatchViewStatusMatched   AnswerMatchViewStatus = "matched"
+	AnswerMatchViewStatusOutdated  AnswerMatchViewStatus = "outdated"
+	AnswerMatchViewStatusPartial   AnswerMatchViewStatus = "partial"
+	AnswerMatchViewStatusUnmatched AnswerMatchViewStatus = "unmatched"
+)
+
+// Valid indicates whether the value is a known member of the AnswerMatchViewStatus enum.
+func (e AnswerMatchViewStatus) Valid() bool {
+	switch e {
+	case AnswerMatchViewStatusMatched:
+		return true
+	case AnswerMatchViewStatusOutdated:
+		return true
+	case AnswerMatchViewStatusPartial:
+		return true
+	case AnswerMatchViewStatusUnmatched:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ApiErrorCode.
 const (
 	ApiErrorCodeConflict        ApiErrorCode = "conflict"
@@ -145,6 +169,219 @@ func (e ApplicationPackRelevanceScope) Valid() bool {
 	case ApplicationPackRelevanceScopeUncertain:
 		return true
 	case ApplicationPackRelevanceScopeUnrelated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CheckBlockedReasonCode.
+const (
+	CheckBlockedReasonCodeOther               CheckBlockedReasonCode = "other"
+	CheckBlockedReasonCodeQuestionsUnresolved CheckBlockedReasonCode = "questions_unresolved"
+	CheckBlockedReasonCodeRouteAmbiguous      CheckBlockedReasonCode = "route_ambiguous"
+	CheckBlockedReasonCodeRouteUnsupported    CheckBlockedReasonCode = "route_unsupported"
+	CheckBlockedReasonCodeSourceUnavailable   CheckBlockedReasonCode = "source_unavailable"
+)
+
+// Valid indicates whether the value is a known member of the CheckBlockedReasonCode enum.
+func (e CheckBlockedReasonCode) Valid() bool {
+	switch e {
+	case CheckBlockedReasonCodeOther:
+		return true
+	case CheckBlockedReasonCodeQuestionsUnresolved:
+		return true
+	case CheckBlockedReasonCodeRouteAmbiguous:
+		return true
+	case CheckBlockedReasonCodeRouteUnsupported:
+		return true
+	case CheckBlockedReasonCodeSourceUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CheckGapKind.
+const (
+	CheckGapKindAmbiguousSource CheckGapKind = "ambiguous_source"
+	CheckGapKindMissingFact     CheckGapKind = "missing_fact"
+	CheckGapKindOther           CheckGapKind = "other"
+	CheckGapKindUnverifiedClaim CheckGapKind = "unverified_claim"
+)
+
+// Valid indicates whether the value is a known member of the CheckGapKind enum.
+func (e CheckGapKind) Valid() bool {
+	switch e {
+	case CheckGapKindAmbiguousSource:
+		return true
+	case CheckGapKindMissingFact:
+		return true
+	case CheckGapKindOther:
+		return true
+	case CheckGapKindUnverifiedClaim:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CheckQuestionKind.
+const (
+	CheckQuestionKindAttachment CheckQuestionKind = "attachment"
+	CheckQuestionKindChoice     CheckQuestionKind = "choice"
+	CheckQuestionKindFreeText   CheckQuestionKind = "free_text"
+	CheckQuestionKindOther      CheckQuestionKind = "other"
+)
+
+// Valid indicates whether the value is a known member of the CheckQuestionKind enum.
+func (e CheckQuestionKind) Valid() bool {
+	switch e {
+	case CheckQuestionKindAttachment:
+		return true
+	case CheckQuestionKindChoice:
+		return true
+	case CheckQuestionKindFreeText:
+		return true
+	case CheckQuestionKindOther:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CheckQuestionRequired.
+const (
+	CheckQuestionRequiredOptional CheckQuestionRequired = "optional"
+	CheckQuestionRequiredRequired CheckQuestionRequired = "required"
+	CheckQuestionRequiredUnknown  CheckQuestionRequired = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the CheckQuestionRequired enum.
+func (e CheckQuestionRequired) Valid() bool {
+	switch e {
+	case CheckQuestionRequiredOptional:
+		return true
+	case CheckQuestionRequiredRequired:
+		return true
+	case CheckQuestionRequiredUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CheckRouteJudgment.
+const (
+	CheckRouteJudgmentApplicationRoute CheckRouteJudgment = "application_route"
+	CheckRouteJudgmentOtherContact     CheckRouteJudgment = "other_contact"
+	CheckRouteJudgmentUnresolved       CheckRouteJudgment = "unresolved"
+)
+
+// Valid indicates whether the value is a known member of the CheckRouteJudgment enum.
+func (e CheckRouteJudgment) Valid() bool {
+	switch e {
+	case CheckRouteJudgmentApplicationRoute:
+		return true
+	case CheckRouteJudgmentOtherContact:
+		return true
+	case CheckRouteJudgmentUnresolved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CheckRouteKind.
+const (
+	CheckRouteKindDirect      CheckRouteKind = "direct"
+	CheckRouteKindRecruiter   CheckRouteKind = "recruiter"
+	CheckRouteKindReferral    CheckRouteKind = "referral"
+	CheckRouteKindUnsupported CheckRouteKind = "unsupported"
+)
+
+// Valid indicates whether the value is a known member of the CheckRouteKind enum.
+func (e CheckRouteKind) Valid() bool {
+	switch e {
+	case CheckRouteKindDirect:
+		return true
+	case CheckRouteKindRecruiter:
+		return true
+	case CheckRouteKindReferral:
+		return true
+	case CheckRouteKindUnsupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CheckStatusViewStatus.
+const (
+	CheckStatusViewStatusBlocked    CheckStatusViewStatus = "blocked"
+	CheckStatusViewStatusChecked    CheckStatusViewStatus = "checked"
+	CheckStatusViewStatusChecking   CheckStatusViewStatus = "checking"
+	CheckStatusViewStatusNotChecked CheckStatusViewStatus = "not_checked"
+	CheckStatusViewStatusOutdated   CheckStatusViewStatus = "outdated"
+)
+
+// Valid indicates whether the value is a known member of the CheckStatusViewStatus enum.
+func (e CheckStatusViewStatus) Valid() bool {
+	switch e {
+	case CheckStatusViewStatusBlocked:
+		return true
+	case CheckStatusViewStatusChecked:
+		return true
+	case CheckStatusViewStatusChecking:
+		return true
+	case CheckStatusViewStatusNotChecked:
+		return true
+	case CheckStatusViewStatusOutdated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CheckVacancyCompleteness.
+const (
+	CheckVacancyCompletenessComplete  CheckVacancyCompleteness = "complete"
+	CheckVacancyCompletenessPaginated CheckVacancyCompleteness = "paginated"
+	CheckVacancyCompletenessPartial   CheckVacancyCompleteness = "partial"
+	CheckVacancyCompletenessTruncated CheckVacancyCompleteness = "truncated"
+)
+
+// Valid indicates whether the value is a known member of the CheckVacancyCompleteness enum.
+func (e CheckVacancyCompleteness) Valid() bool {
+	switch e {
+	case CheckVacancyCompletenessComplete:
+		return true
+	case CheckVacancyCompletenessPaginated:
+		return true
+	case CheckVacancyCompletenessPartial:
+		return true
+	case CheckVacancyCompletenessTruncated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CheckViewStatus.
+const (
+	CheckViewStatusBlocked  CheckViewStatus = "blocked"
+	CheckViewStatusChecked  CheckViewStatus = "checked"
+	CheckViewStatusChecking CheckViewStatus = "checking"
+)
+
+// Valid indicates whether the value is a known member of the CheckViewStatus enum.
+func (e CheckViewStatus) Valid() bool {
+	switch e {
+	case CheckViewStatusBlocked:
+		return true
+	case CheckViewStatusChecked:
+		return true
+	case CheckViewStatusChecking:
 		return true
 	default:
 		return false
@@ -409,6 +646,54 @@ func (e EvidenceSourceSourceKind) Valid() bool {
 	}
 }
 
+// Defines values for FindingEntryGroup.
+const (
+	FindingEntryGroupCouldBeRecommended     FindingEntryGroup = "could_be_recommended"
+	FindingEntryGroupNotRecommended         FindingEntryGroup = "not_recommended"
+	FindingEntryGroupProbablyNotRecommended FindingEntryGroup = "probably_not_recommended"
+	FindingEntryGroupRecommended            FindingEntryGroup = "recommended"
+	FindingEntryGroupUnknown                FindingEntryGroup = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the FindingEntryGroup enum.
+func (e FindingEntryGroup) Valid() bool {
+	switch e {
+	case FindingEntryGroupCouldBeRecommended:
+		return true
+	case FindingEntryGroupNotRecommended:
+		return true
+	case FindingEntryGroupProbablyNotRecommended:
+		return true
+	case FindingEntryGroupRecommended:
+		return true
+	case FindingEntryGroupUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FindingReasonKind.
+const (
+	MissingInformation FindingReasonKind = "missing_information"
+	Negative           FindingReasonKind = "negative"
+	Positive           FindingReasonKind = "positive"
+)
+
+// Valid indicates whether the value is a known member of the FindingReasonKind enum.
+func (e FindingReasonKind) Valid() bool {
+	switch e {
+	case MissingInformation:
+		return true
+	case Negative:
+		return true
+	case Positive:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthResponseService.
 const (
 	JobseekApi HealthResponseService = "jobseek-api"
@@ -616,6 +901,54 @@ func (e InterviewScheduleClaimMode) Valid() bool {
 	case Phone:
 		return true
 	case Video:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MaterialStatusViewStatus.
+const (
+	MaterialStatusViewStatusHeld        MaterialStatusViewStatus = "held"
+	MaterialStatusViewStatusNotPrepared MaterialStatusViewStatus = "not_prepared"
+	MaterialStatusViewStatusOutdated    MaterialStatusViewStatus = "outdated"
+	MaterialStatusViewStatusPrepared    MaterialStatusViewStatus = "prepared"
+	MaterialStatusViewStatusPreparing   MaterialStatusViewStatus = "preparing"
+)
+
+// Valid indicates whether the value is a known member of the MaterialStatusViewStatus enum.
+func (e MaterialStatusViewStatus) Valid() bool {
+	switch e {
+	case MaterialStatusViewStatusHeld:
+		return true
+	case MaterialStatusViewStatusNotPrepared:
+		return true
+	case MaterialStatusViewStatusOutdated:
+		return true
+	case MaterialStatusViewStatusPrepared:
+		return true
+	case MaterialStatusViewStatusPreparing:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MaterialVersionProvenanceOrigin.
+const (
+	MaterialVersionProvenanceOriginDirectEdit MaterialVersionProvenanceOrigin = "direct_edit"
+	MaterialVersionProvenanceOriginPrepared   MaterialVersionProvenanceOrigin = "prepared"
+	MaterialVersionProvenanceOriginRewrite    MaterialVersionProvenanceOrigin = "rewrite"
+)
+
+// Valid indicates whether the value is a known member of the MaterialVersionProvenanceOrigin enum.
+func (e MaterialVersionProvenanceOrigin) Valid() bool {
+	switch e {
+	case MaterialVersionProvenanceOriginDirectEdit:
+		return true
+	case MaterialVersionProvenanceOriginPrepared:
+		return true
+	case MaterialVersionProvenanceOriginRewrite:
 		return true
 	default:
 		return false
@@ -1375,6 +1708,72 @@ func (e QualificationViewStatus) Valid() bool {
 	}
 }
 
+// Defines values for QuestionAnswerValueProvenanceOrigin.
+const (
+	CarriedBlank  QuestionAnswerValueProvenanceOrigin = "carried_blank"
+	JevSuggestion QuestionAnswerValueProvenanceOrigin = "jev_suggestion"
+	OwnerEdited   QuestionAnswerValueProvenanceOrigin = "owner_edited"
+	OwnerWritten  QuestionAnswerValueProvenanceOrigin = "owner_written"
+)
+
+// Valid indicates whether the value is a known member of the QuestionAnswerValueProvenanceOrigin enum.
+func (e QuestionAnswerValueProvenanceOrigin) Valid() bool {
+	switch e {
+	case CarriedBlank:
+		return true
+	case JevSuggestion:
+		return true
+	case OwnerEdited:
+		return true
+	case OwnerWritten:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for QuestionAnswerValueRequired.
+const (
+	QuestionAnswerValueRequiredOptional QuestionAnswerValueRequired = "optional"
+	QuestionAnswerValueRequiredRequired QuestionAnswerValueRequired = "required"
+	QuestionAnswerValueRequiredUnknown  QuestionAnswerValueRequired = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the QuestionAnswerValueRequired enum.
+func (e QuestionAnswerValueRequired) Valid() bool {
+	switch e {
+	case QuestionAnswerValueRequiredOptional:
+		return true
+	case QuestionAnswerValueRequiredRequired:
+		return true
+	case QuestionAnswerValueRequiredUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for QuestionAnswerValueState.
+const (
+	QuestionAnswerValueStateAnswered QuestionAnswerValueState = "answered"
+	QuestionAnswerValueStateBlank    QuestionAnswerValueState = "blank"
+	QuestionAnswerValueStateUnset    QuestionAnswerValueState = "unset"
+)
+
+// Valid indicates whether the value is a known member of the QuestionAnswerValueState enum.
+func (e QuestionAnswerValueState) Valid() bool {
+	switch e {
+	case QuestionAnswerValueStateAnswered:
+		return true
+	case QuestionAnswerValueStateBlank:
+		return true
+	case QuestionAnswerValueStateUnset:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RecordChangeActorKind.
 const (
 	RecordChangeActorKindAdministrator RecordChangeActorKind = "administrator"
@@ -1513,6 +1912,24 @@ func (e RelationshipEventInputKind) Valid() bool {
 	case RelationshipEventInputKindOther:
 		return true
 	case RelationshipEventInputKindReferral:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResearchActivityEventPhase.
+const (
+	Classify ResearchActivityEventPhase = "classify"
+	Collect  ResearchActivityEventPhase = "collect"
+)
+
+// Valid indicates whether the value is a known member of the ResearchActivityEventPhase enum.
+func (e ResearchActivityEventPhase) Valid() bool {
+	switch e {
+	case Classify:
+		return true
+	case Collect:
 		return true
 	default:
 		return false
@@ -1681,6 +2098,48 @@ func (e RoleCriterionViewMode) Valid() bool {
 	}
 }
 
+// Defines values for RoleWorkflowStateStage.
+const (
+	RoleWorkflowStateStageAnswered  RoleWorkflowStateStage = "answered"
+	RoleWorkflowStateStageAnswering RoleWorkflowStateStage = "answering"
+	RoleWorkflowStateStageBlocked   RoleWorkflowStateStage = "blocked"
+	RoleWorkflowStateStageChecked   RoleWorkflowStateStage = "checked"
+	RoleWorkflowStateStageChecking  RoleWorkflowStateStage = "checking"
+	RoleWorkflowStateStagePrepared  RoleWorkflowStateStage = "prepared"
+	RoleWorkflowStateStagePreparing RoleWorkflowStateStage = "preparing"
+	RoleWorkflowStateStageReviewing RoleWorkflowStateStage = "reviewing"
+	RoleWorkflowStateStageSelected  RoleWorkflowStateStage = "selected"
+	RoleWorkflowStateStageSent      RoleWorkflowStateStage = "sent"
+)
+
+// Valid indicates whether the value is a known member of the RoleWorkflowStateStage enum.
+func (e RoleWorkflowStateStage) Valid() bool {
+	switch e {
+	case RoleWorkflowStateStageAnswered:
+		return true
+	case RoleWorkflowStateStageAnswering:
+		return true
+	case RoleWorkflowStateStageBlocked:
+		return true
+	case RoleWorkflowStateStageChecked:
+		return true
+	case RoleWorkflowStateStageChecking:
+		return true
+	case RoleWorkflowStateStagePrepared:
+		return true
+	case RoleWorkflowStateStagePreparing:
+		return true
+	case RoleWorkflowStateStageReviewing:
+		return true
+	case RoleWorkflowStateStageSelected:
+		return true
+	case RoleWorkflowStateStageSent:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RoundState.
 const (
 	RoundStateAwaitingInput RoundState = "awaiting_input"
@@ -1717,6 +2176,7 @@ func (e RoundState) Valid() bool {
 // Defines values for RoundMutationRequestOperation.
 const (
 	CompanyCreate                  RoundMutationRequestOperation = "company.create"
+	OpportunityCheckSave           RoundMutationRequestOperation = "opportunity.check_save"
 	OpportunityCreate              RoundMutationRequestOperation = "opportunity.create"
 	OpportunityOwnerCorrection     RoundMutationRequestOperation = "opportunity.owner_correction"
 	OpportunitySourceSave          RoundMutationRequestOperation = "opportunity.source_save"
@@ -1731,6 +2191,8 @@ const (
 func (e RoundMutationRequestOperation) Valid() bool {
 	switch e {
 	case CompanyCreate:
+		return true
+	case OpportunityCheckSave:
 		return true
 	case OpportunityCreate:
 		return true
@@ -1906,6 +2368,27 @@ func (e RoundScreeningViewStatus) Valid() bool {
 	case RoundScreeningViewStatusProposed:
 		return true
 	case RoundScreeningViewStatusUnresolved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SavedAnswerSourceRefKind.
+const (
+	Capture        SavedAnswerSourceRefKind = "capture"
+	CvSource       SavedAnswerSourceRefKind = "cv_source"
+	OwnerStatement SavedAnswerSourceRefKind = "owner_statement"
+)
+
+// Valid indicates whether the value is a known member of the SavedAnswerSourceRefKind enum.
+func (e SavedAnswerSourceRefKind) Valid() bool {
+	switch e {
+	case Capture:
+		return true
+	case CvSource:
+		return true
+	case OwnerStatement:
 		return true
 	default:
 		return false
@@ -2116,6 +2599,33 @@ func (e ExplainResearchIdentityParamsSubjectKind) Valid() bool {
 	}
 }
 
+// Defines values for ListRunFindingsParamsGroup.
+const (
+	ListRunFindingsParamsGroupCouldBeRecommended     ListRunFindingsParamsGroup = "could_be_recommended"
+	ListRunFindingsParamsGroupNotRecommended         ListRunFindingsParamsGroup = "not_recommended"
+	ListRunFindingsParamsGroupProbablyNotRecommended ListRunFindingsParamsGroup = "probably_not_recommended"
+	ListRunFindingsParamsGroupRecommended            ListRunFindingsParamsGroup = "recommended"
+	ListRunFindingsParamsGroupUnknown                ListRunFindingsParamsGroup = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the ListRunFindingsParamsGroup enum.
+func (e ListRunFindingsParamsGroup) Valid() bool {
+	switch e {
+	case ListRunFindingsParamsGroupCouldBeRecommended:
+		return true
+	case ListRunFindingsParamsGroupNotRecommended:
+		return true
+	case ListRunFindingsParamsGroupProbablyNotRecommended:
+		return true
+	case ListRunFindingsParamsGroupRecommended:
+		return true
+	case ListRunFindingsParamsGroupUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetLatestCompletedRoundParamsOutcome.
 const (
 	All              GetLatestCompletedRoundParamsOutcome = "all"
@@ -2251,6 +2761,54 @@ type AgentCredentialList struct {
 	Items []AgentCredential `json:"items"`
 }
 
+// AnswerMatch defines model for AnswerMatch.
+type AnswerMatch struct {
+	CandidateSetHash   string            `json:"candidateSetHash"`
+	Choice             AnswerMatchChoice `json:"choice"`
+	Confidence         float32           `json:"confidence"`
+	JevAttemptId       string            `json:"jevAttemptId"`
+	MatchedAt          time.Time         `json:"matchedAt"`
+	Model              *string           `json:"model,omitempty"`
+	QuestionId         string            `json:"questionId"`
+	QuestionTextSha256 string            `json:"questionTextSha256"`
+}
+
+// AnswerMatchChoice defines model for AnswerMatchChoice.
+type AnswerMatchChoice struct {
+	AnswerId      *string `json:"answerId,omitempty"`
+	AnswerVersion *int64  `json:"answerVersion,omitempty"`
+	NoneFits      *bool   `json:"noneFits,omitempty"`
+	TextSha256    *string `json:"textSha256,omitempty"`
+}
+
+// AnswerMatchRequest defines model for AnswerMatchRequest.
+type AnswerMatchRequest struct {
+	ExpectedCheckId           string `json:"expectedCheckId"`
+	ExpectedQuestionSetSha256 string `json:"expectedQuestionSetSha256"`
+	RequestKey                string `json:"requestKey"`
+}
+
+// AnswerMatchView defines model for AnswerMatchView.
+type AnswerMatchView struct {
+	AnswerCatalog struct {
+		Digest    string    `json:"digest"`
+		MatchedAt time.Time `json:"matchedAt"`
+	} `json:"answerCatalog"`
+	CheckId           string                `json:"checkId"`
+	Matches           []AnswerMatch         `json:"matches"`
+	QuestionSetSha256 string                `json:"questionSetSha256"`
+	Status            AnswerMatchViewStatus `json:"status"`
+}
+
+// AnswerMatchViewStatus defines model for AnswerMatchView.Status.
+type AnswerMatchViewStatus string
+
+// AnswerValueSave defines model for AnswerValueSave.
+type AnswerValueSave struct {
+	ExpectedAnswerVersion int64  `json:"expectedAnswerVersion"`
+	Text                  string `json:"text"`
+}
+
 // ApiError defines model for ApiError.
 type ApiError struct {
 	// Code Stable machine-readable error code.
@@ -2369,6 +2927,132 @@ type ApproveDeliveryReviewRequest struct {
 type ArchiveRequest struct {
 	ExpectedRevision int64 `json:"expectedRevision"`
 }
+
+// CheckActivityPage defines model for CheckActivityPage.
+type CheckActivityPage struct {
+	Events     []ResearchActivityEvent `json:"events"`
+	NextCursor *string                 `json:"nextCursor,omitempty"`
+}
+
+// CheckBlockedReason defines model for CheckBlockedReason.
+type CheckBlockedReason struct {
+	Code   CheckBlockedReasonCode `json:"code"`
+	Detail string                 `json:"detail"`
+}
+
+// CheckBlockedReasonCode defines model for CheckBlockedReason.Code.
+type CheckBlockedReasonCode string
+
+// CheckGap defines model for CheckGap.
+type CheckGap struct {
+	Consequential bool         `json:"consequential"`
+	Description   string       `json:"description"`
+	Id            string       `json:"id"`
+	Kind          CheckGapKind `json:"kind"`
+}
+
+// CheckGapKind defines model for CheckGap.Kind.
+type CheckGapKind string
+
+// CheckQuestion defines model for CheckQuestion.
+type CheckQuestion struct {
+	CheckId       string                `json:"checkId"`
+	Id            string                `json:"id"`
+	Kind          *CheckQuestionKind    `json:"kind,omitempty"`
+	Ordinal       int                   `json:"ordinal"`
+	Required      CheckQuestionRequired `json:"required"`
+	SourceExcerpt string                `json:"sourceExcerpt"`
+	SourceSpan    CheckSourceSpan       `json:"sourceSpan"`
+	Text          string                `json:"text"`
+	TextSha256    string                `json:"textSha256"`
+}
+
+// CheckQuestionKind defines model for CheckQuestion.Kind.
+type CheckQuestionKind string
+
+// CheckQuestionRequired defines model for CheckQuestion.Required.
+type CheckQuestionRequired string
+
+// CheckRoute defines model for CheckRoute.
+type CheckRoute struct {
+	AssessmentId    *string            `json:"assessmentId,omitempty"`
+	DestinationText *string            `json:"destinationText,omitempty"`
+	JevAttemptId    *string            `json:"jevAttemptId,omitempty"`
+	Judgment        CheckRouteJudgment `json:"judgment"`
+	JudgmentSha256  *string            `json:"judgmentSha256,omitempty"`
+	Kind            *CheckRouteKind    `json:"kind,omitempty"`
+	ObservedAt      time.Time          `json:"observedAt"`
+	RouteId         *string            `json:"routeId,omitempty"`
+	SourceExcerpt   string             `json:"sourceExcerpt"`
+}
+
+// CheckRouteJudgment defines model for CheckRoute.Judgment.
+type CheckRouteJudgment string
+
+// CheckRouteKind defines model for CheckRoute.Kind.
+type CheckRouteKind string
+
+// CheckSourceSpan defines model for CheckSourceSpan.
+type CheckSourceSpan struct {
+	CaptureId string `json:"captureId"`
+	End       int    `json:"end"`
+	Start     int    `json:"start"`
+}
+
+// CheckStartRequest defines model for CheckStartRequest.
+type CheckStartRequest struct {
+	ExpectedOpportunityRevision int64  `json:"expectedOpportunityRevision"`
+	ExpectedWorkflowRevision    int64  `json:"expectedWorkflowRevision"`
+	RequestKey                  string `json:"requestKey"`
+}
+
+// CheckStatusView defines model for CheckStatusView.
+type CheckStatusView struct {
+	Check  *CheckView            `json:"check,omitempty"`
+	Status CheckStatusViewStatus `json:"status"`
+}
+
+// CheckStatusViewStatus defines model for CheckStatusView.Status.
+type CheckStatusViewStatus string
+
+// CheckVacancy defines model for CheckVacancy.
+type CheckVacancy struct {
+	CaptureIds        []string                 `json:"captureIds"`
+	Completeness      CheckVacancyCompleteness `json:"completeness"`
+	EvidenceSourceIds []string                 `json:"evidenceSourceIds"`
+	RetrievedAt       time.Time                `json:"retrievedAt"`
+	SourceUrl         string                   `json:"sourceUrl"`
+}
+
+// CheckVacancyCompleteness defines model for CheckVacancy.Completeness.
+type CheckVacancyCompleteness string
+
+// CheckView defines model for CheckView.
+type CheckView struct {
+	ActivityCursor *string             `json:"activityCursor,omitempty"`
+	BlockedReason  *CheckBlockedReason `json:"blockedReason,omitempty"`
+	CompletedAt    *time.Time          `json:"completedAt,omitempty"`
+	CreatedAt      time.Time           `json:"createdAt"`
+	CreatedBy      struct {
+		ActorId   string `json:"actorId"`
+		ActorKind string `json:"actorKind"`
+	} `json:"createdBy"`
+	Gaps                []CheckGap          `json:"gaps"`
+	Id                  string              `json:"id"`
+	OpportunityId       string              `json:"opportunityId"`
+	OpportunityRevision int64               `json:"opportunityRevision"`
+	QuestionSetSha256   string              `json:"questionSetSha256"`
+	QuestionSetVersion  int64               `json:"questionSetVersion"`
+	Questions           []CheckQuestion     `json:"questions"`
+	RequestedDocuments  []RequestedDocument `json:"requestedDocuments"`
+	Route               CheckRoute          `json:"route"`
+	Status              CheckViewStatus     `json:"status"`
+	Vacancy             CheckVacancy        `json:"vacancy"`
+	WorkflowRevision    int64               `json:"workflowRevision"`
+}
+
+// CheckViewStatus defines model for CheckView.Status.
+type CheckViewStatus string
 
 // CodexConnection defines model for CodexConnection.
 type CodexConnection struct {
@@ -2777,6 +3461,58 @@ type EvidenceSourcePage struct {
 	NextCursor *string          `json:"nextCursor,omitempty"`
 }
 
+// FindingEntry defines model for FindingEntry.
+type FindingEntry struct {
+	AssessmentId        string                `json:"assessmentId"`
+	CatalogVersion      string                `json:"catalogVersion"`
+	Conflict            *ReasonChoice         `json:"conflict,omitempty"`
+	EvidenceLinks       []FindingEvidenceLink `json:"evidenceLinks"`
+	Group               FindingEntryGroup     `json:"group"`
+	MissingFact         *ReasonChoice         `json:"missingFact,omitempty"`
+	OpportunityId       string                `json:"opportunityId"`
+	OpportunityRevision int64                 `json:"opportunityRevision"`
+	ProfileVersion      int64                 `json:"profileVersion"`
+	Reasons             []FindingReason       `json:"reasons"`
+	RubricVersion       string                `json:"rubricVersion"`
+	SourceRef           *struct {
+		ObservedUrl    *string `json:"observedUrl,omitempty"`
+		SourceId       string  `json:"sourceId"`
+		SourceRevision string  `json:"sourceRevision"`
+	} `json:"sourceRef,omitempty"`
+	Stale        bool    `json:"stale"`
+	StaleBasis   *string `json:"staleBasis,omitempty"`
+	UnknownBasis *string `json:"unknownBasis,omitempty"`
+}
+
+// FindingEntryGroup defines model for FindingEntry.Group.
+type FindingEntryGroup string
+
+// FindingEvidenceLink defines model for FindingEvidenceLink.
+type FindingEvidenceLink struct {
+	CaptureId     string `json:"captureId"`
+	ExcerptSha256 string `json:"excerptSha256"`
+	SpanEnd       int    `json:"spanEnd"`
+	SpanStart     int    `json:"spanStart"`
+}
+
+// FindingList defines model for FindingList.
+type FindingList struct {
+	Items      []FindingEntry `json:"items"`
+	NextCursor *string        `json:"nextCursor,omitempty"`
+}
+
+// FindingReason defines model for FindingReason.
+type FindingReason struct {
+	Detail     string            `json:"detail"`
+	JevSupport float32           `json:"jevSupport"`
+	Kind       FindingReasonKind `json:"kind"`
+	Label      string            `json:"label"`
+	ReasonId   string            `json:"reasonId"`
+}
+
+// FindingReasonKind defines model for FindingReason.Kind.
+type FindingReasonKind string
+
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
 	Service HealthResponseService `json:"service"`
@@ -3012,6 +3748,78 @@ type InterviewView struct {
 type LoginRequest struct {
 	Password *string `json:"password,omitempty"`
 }
+
+// MaterialAnswerRef defines model for MaterialAnswerRef.
+type MaterialAnswerRef struct {
+	AnswerVersion      int64  `json:"answerVersion"`
+	QuestionId         string `json:"questionId"`
+	QuestionTextSha256 string `json:"questionTextSha256"`
+	TextSha256         string `json:"textSha256"`
+}
+
+// MaterialEditRequest defines model for MaterialEditRequest.
+type MaterialEditRequest struct {
+	ExpectedVersion int64  `json:"expectedVersion"`
+	RequestKey      string `json:"requestKey"`
+	Text            string `json:"text"`
+}
+
+// MaterialPrepareRequest defines model for MaterialPrepareRequest.
+type MaterialPrepareRequest struct {
+	ExpectedCheckId           string `json:"expectedCheckId"`
+	ExpectedQuestionSetSha256 string `json:"expectedQuestionSetSha256"`
+	ExpectedWorkflowRevision  int64  `json:"expectedWorkflowRevision"`
+	RequestKey                string `json:"requestKey"`
+}
+
+// MaterialReadiness defines model for MaterialReadiness.
+type MaterialReadiness struct {
+	Held            []string `json:"held"`
+	MissingRequired []string `json:"missingRequired"`
+	Ready           bool     `json:"ready"`
+}
+
+// MaterialRewriteRequest defines model for MaterialRewriteRequest.
+type MaterialRewriteRequest struct {
+	ExpectedVersion int64   `json:"expectedVersion"`
+	Instruction     *string `json:"instruction,omitempty"`
+	RequestKey      string  `json:"requestKey"`
+}
+
+// MaterialStatusView defines model for MaterialStatusView.
+type MaterialStatusView struct {
+	Current *MaterialVersion         `json:"current,omitempty"`
+	Status  MaterialStatusViewStatus `json:"status"`
+}
+
+// MaterialStatusViewStatus defines model for MaterialStatusView.Status.
+type MaterialStatusViewStatus string
+
+// MaterialVersion defines model for MaterialVersion.
+type MaterialVersion struct {
+	Answers   []MaterialAnswerRef `json:"answers"`
+	CheckId   string              `json:"checkId"`
+	CreatedAt time.Time           `json:"createdAt"`
+	CreatedBy struct {
+		ActorId   string `json:"actorId"`
+		ActorKind string `json:"actorKind"`
+	} `json:"createdBy"`
+	OpportunityId       string `json:"opportunityId"`
+	OpportunityRevision int64  `json:"opportunityRevision"`
+	PackId              string `json:"packId"`
+	ProfileRevision     int64  `json:"profileRevision"`
+	Provenance          struct {
+		Origin     MaterialVersionProvenanceOrigin `json:"origin"`
+		RewriteOf  *int64                          `json:"rewriteOf,omitempty"`
+		SourceShas []string                        `json:"sourceShas"`
+	} `json:"provenance"`
+	QuestionSetSha256 string            `json:"questionSetSha256"`
+	Readiness         MaterialReadiness `json:"readiness"`
+	Version           int64             `json:"version"`
+}
+
+// MaterialVersionProvenanceOrigin defines model for MaterialVersion.Provenance.Origin.
+type MaterialVersionProvenanceOrigin string
 
 // OfferCitation defines model for OfferCitation.
 type OfferCitation struct {
@@ -3742,6 +4550,61 @@ type QualificationView struct {
 // QualificationViewStatus defines model for QualificationView.Status.
 type QualificationViewStatus string
 
+// QuestionAnswerList defines model for QuestionAnswerList.
+type QuestionAnswerList struct {
+	CheckId           string                `json:"checkId"`
+	QuestionSetSha256 string                `json:"questionSetSha256"`
+	Values            []QuestionAnswerValue `json:"values"`
+}
+
+// QuestionAnswerValue defines model for QuestionAnswerValue.
+type QuestionAnswerValue struct {
+	Provenance struct {
+		EditedAt time.Time `json:"editedAt"`
+		EditedBy struct {
+			ActorId   string `json:"actorId"`
+			ActorKind string `json:"actorKind"`
+		} `json:"editedBy"`
+		MatchChoice *AnswerMatchChoice                  `json:"matchChoice,omitempty"`
+		MatchId     *string                             `json:"matchId,omitempty"`
+		Origin      QuestionAnswerValueProvenanceOrigin `json:"origin"`
+	} `json:"provenance"`
+	QuestionId         string                      `json:"questionId"`
+	QuestionTextSha256 string                      `json:"questionTextSha256"`
+	Required           QuestionAnswerValueRequired `json:"required"`
+	State              QuestionAnswerValueState    `json:"state"`
+	Text               string                      `json:"text"`
+	TextSha256         *string                     `json:"textSha256,omitempty"`
+	UpdatedAt          time.Time                   `json:"updatedAt"`
+	Version            int64                       `json:"version"`
+}
+
+// QuestionAnswerValueProvenanceOrigin defines model for QuestionAnswerValue.Provenance.Origin.
+type QuestionAnswerValueProvenanceOrigin string
+
+// QuestionAnswerValueRequired defines model for QuestionAnswerValue.Required.
+type QuestionAnswerValueRequired string
+
+// QuestionAnswerValueState defines model for QuestionAnswerValue.State.
+type QuestionAnswerValueState string
+
+// ReasonCatalogView defines model for ReasonCatalogView.
+type ReasonCatalogView struct {
+	CatalogVersion     string         `json:"catalogVersion"`
+	MissingInformation []ReasonChoice `json:"missingInformation"`
+	Negative           []ReasonChoice `json:"negative"`
+	Positive           []ReasonChoice `json:"positive"`
+	ProfileVersion     int64          `json:"profileVersion"`
+	RubricVersion      string         `json:"rubricVersion"`
+}
+
+// ReasonChoice defines model for ReasonChoice.
+type ReasonChoice struct {
+	Detail string `json:"detail"`
+	Id     string `json:"id"`
+	Label  string `json:"label"`
+}
+
 // RecordChange defines model for RecordChange.
 type RecordChange struct {
 	ActorId        string                 `json:"actorId"`
@@ -3908,6 +4771,14 @@ type ReplyProcessingDetail struct {
 	Processing ReplyProcessing `json:"processing"`
 }
 
+// RequestedDocument defines model for RequestedDocument.
+type RequestedDocument struct {
+	Label         string          `json:"label"`
+	Required      bool            `json:"required"`
+	SourceExcerpt string          `json:"sourceExcerpt"`
+	SourceSpan    CheckSourceSpan `json:"sourceSpan"`
+}
+
 // RescheduleActionRequest defines model for RescheduleActionRequest.
 type RescheduleActionRequest struct {
 	// Due Exactly date or at plus timezone is required; the server rejects mixed or incomplete shapes.
@@ -3917,10 +4788,11 @@ type RescheduleActionRequest struct {
 
 // ResearchActivityEvent defines model for ResearchActivityEvent.
 type ResearchActivityEvent struct {
-	At      time.Time `json:"at"`
-	Cursor  *string   `json:"cursor,omitempty"`
-	EventId string    `json:"eventId"`
-	Kind    string    `json:"kind"`
+	At      time.Time                   `json:"at"`
+	Cursor  *string                     `json:"cursor,omitempty"`
+	EventId string                      `json:"eventId"`
+	Kind    string                      `json:"kind"`
+	Phase   *ResearchActivityEventPhase `json:"phase,omitempty"`
 	Refs    *struct {
 		AssessmentId  *string `json:"assessmentId,omitempty"`
 		CaptureId     *string `json:"captureId,omitempty"`
@@ -3929,6 +4801,9 @@ type ResearchActivityEvent struct {
 	} `json:"refs,omitempty"`
 	Summary string `json:"summary"`
 }
+
+// ResearchActivityEventPhase defines model for ResearchActivityEvent.Phase.
+type ResearchActivityEventPhase string
 
 // ResearchActivityPage defines model for ResearchActivityPage.
 type ResearchActivityPage struct {
@@ -4021,6 +4896,7 @@ type ResearchRunView struct {
 		ProfileVersion int    `json:"profileVersion"`
 		RubricVersion  string `json:"rubricVersion"`
 	} `json:"briefVersion"`
+	CatalogVersion  *string                 `json:"catalogVersion,omitempty"`
 	Investigations  []ResearchInvestigation `json:"investigations"`
 	ReportRef       *string                 `json:"reportRef,omitempty"`
 	RunId           string                  `json:"runId"`
@@ -4089,6 +4965,25 @@ type RoleCriterionViewKind string
 
 // RoleCriterionViewMode defines model for RoleCriterionView.Mode.
 type RoleCriterionViewMode string
+
+// RoleWorkflowList defines model for RoleWorkflowList.
+type RoleWorkflowList struct {
+	Items []RoleWorkflowState `json:"items"`
+}
+
+// RoleWorkflowState defines model for RoleWorkflowState.
+type RoleWorkflowState struct {
+	BlockedReason       *string                `json:"blockedReason,omitempty"`
+	DecisionAt          time.Time              `json:"decisionAt"`
+	OpportunityId       string                 `json:"opportunityId"`
+	OpportunityRevision int64                  `json:"opportunityRevision"`
+	Revision            int64                  `json:"revision"`
+	Stage               RoleWorkflowStateStage `json:"stage"`
+	UpdatedAt           time.Time              `json:"updatedAt"`
+}
+
+// RoleWorkflowStateStage defines model for RoleWorkflowState.Stage.
+type RoleWorkflowStateStage string
 
 // Round defines model for Round.
 type Round struct {
@@ -4337,6 +5232,77 @@ type RuntimeStatus struct {
 	OrganisationAvailable bool `json:"organisationAvailable"`
 }
 
+// SavedAnswer defines model for SavedAnswer.
+type SavedAnswer struct {
+	ContextNote    *string              `json:"contextNote,omitempty"`
+	CurrentVersion int64                `json:"currentVersion"`
+	Id             string               `json:"id"`
+	ScopeTags      []string             `json:"scopeTags"`
+	Versions       []SavedAnswerVersion `json:"versions"`
+}
+
+// SavedAnswerCreate defines model for SavedAnswerCreate.
+type SavedAnswerCreate struct {
+	ContextNote *string                 `json:"contextNote,omitempty"`
+	RequestKey  string                  `json:"requestKey"`
+	ScopeTags   []string                `json:"scopeTags"`
+	SourceRefs  *[]SavedAnswerSourceRef `json:"sourceRefs,omitempty"`
+	Text        string                  `json:"text"`
+}
+
+// SavedAnswerList defines model for SavedAnswerList.
+type SavedAnswerList struct {
+	Items      []SavedAnswer `json:"items"`
+	NextCursor *string       `json:"nextCursor,omitempty"`
+}
+
+// SavedAnswerSourceRef defines model for SavedAnswerSourceRef.
+type SavedAnswerSourceRef struct {
+	Excerpt *string                  `json:"excerpt,omitempty"`
+	Kind    SavedAnswerSourceRefKind `json:"kind"`
+	Ref     string                   `json:"ref"`
+}
+
+// SavedAnswerSourceRefKind defines model for SavedAnswerSourceRef.Kind.
+type SavedAnswerSourceRefKind string
+
+// SavedAnswerVersion defines model for SavedAnswerVersion.
+type SavedAnswerVersion struct {
+	ApprovalRequestKey string    `json:"approvalRequestKey"`
+	ApprovedAt         time.Time `json:"approvedAt"`
+	ApprovedBy         struct {
+		ActorId   string `json:"actorId"`
+		ActorKind string `json:"actorKind"`
+	} `json:"approvedBy"`
+	ChangeNote *string                 `json:"changeNote,omitempty"`
+	SourceRefs *[]SavedAnswerSourceRef `json:"sourceRefs,omitempty"`
+	Supersedes *int64                  `json:"supersedes,omitempty"`
+	Text       string                  `json:"text"`
+	TextSha256 string                  `json:"textSha256"`
+	Version    int64                   `json:"version"`
+}
+
+// SavedAnswerVersionCreate defines model for SavedAnswerVersionCreate.
+type SavedAnswerVersionCreate struct {
+	ChangeNote      *string `json:"changeNote,omitempty"`
+	ExpectedVersion int64   `json:"expectedVersion"`
+	RequestKey      string  `json:"requestKey"`
+	Text            string  `json:"text"`
+}
+
+// SearchBriefView defines model for SearchBriefView.
+type SearchBriefView struct {
+	CatalogVersion *string `json:"catalogVersion,omitempty"`
+	Facts          []struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	} `json:"facts"`
+	ProfileVersion int64               `json:"profileVersion"`
+	Requirements   []RoleCriterionView `json:"requirements"`
+	RubricSource   string              `json:"rubricSource"`
+	RubricVersion  string              `json:"rubricVersion"`
+}
+
 // SessionResponse defines model for SessionResponse.
 type SessionResponse struct {
 	ActorId   string                   `json:"actorId"`
@@ -4530,6 +5496,13 @@ type ListOverdueActionsParams struct {
 	CalendarTimezone ActionCalendarTimezone `form:"calendarTimezone" json:"calendarTimezone"`
 }
 
+// ListSavedAnswersParams defines parameters for ListSavedAnswers.
+type ListSavedAnswersParams struct {
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Scope  *string `form:"scope,omitempty" json:"scope,omitempty"`
+}
+
 // ListRecordChangesParams defines parameters for ListRecordChanges.
 type ListRecordChangesParams struct {
 	Limit      *Limit                             `form:"limit,omitempty" json:"limit,omitempty"`
@@ -4566,6 +5539,12 @@ type ListOpportunitiesParams struct {
 
 // ListOpportunitiesParamsKind defines parameters for ListOpportunities.
 type ListOpportunitiesParamsKind string
+
+// ListOpportunityCheckActivityParams defines parameters for ListOpportunityCheckActivity.
+type ListOpportunityCheckActivityParams struct {
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
 
 // ListEvidenceParams defines parameters for ListEvidence.
 type ListEvidenceParams struct {
@@ -4611,6 +5590,16 @@ type ListResearchActivityParams struct {
 	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListRunFindingsParams defines parameters for ListRunFindings.
+type ListRunFindingsParams struct {
+	Cursor *string                     `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int                        `form:"limit,omitempty" json:"limit,omitempty"`
+	Group  *ListRunFindingsParamsGroup `form:"group,omitempty" json:"group,omitempty"`
+}
+
+// ListRunFindingsParamsGroup defines parameters for ListRunFindings.
+type ListRunFindingsParamsGroup string
+
 // GetLatestCompletedRoundParams defines parameters for GetLatestCompletedRound.
 type GetLatestCompletedRoundParams struct {
 	Outcome GetLatestCompletedRoundParamsOutcome `form:"outcome" json:"outcome"`
@@ -4632,6 +5621,12 @@ type CompleteActionJSONRequestBody = ActionTransitionRequest
 
 // CreateAgentCredentialJSONRequestBody defines body for CreateAgentCredential for application/json ContentType.
 type CreateAgentCredentialJSONRequestBody = CreateAgentCredentialRequest
+
+// CreateSavedAnswerJSONRequestBody defines body for CreateSavedAnswer for application/json ContentType.
+type CreateSavedAnswerJSONRequestBody = SavedAnswerCreate
+
+// ApproveSavedAnswerVersionJSONRequestBody defines body for ApproveSavedAnswerVersion for application/json ContentType.
+type ApproveSavedAnswerVersionJSONRequestBody = SavedAnswerVersionCreate
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
@@ -4660,8 +5655,26 @@ type PrepareInterviewJSONRequestBody = PrepareInterviewRequest
 // DebriefInterviewJSONRequestBody defines body for DebriefInterview for application/json ContentType.
 type DebriefInterviewJSONRequestBody = DebriefInterviewRequest
 
+// MatchOpportunityAnswersJSONRequestBody defines body for MatchOpportunityAnswers for application/json ContentType.
+type MatchOpportunityAnswersJSONRequestBody = AnswerMatchRequest
+
+// StartOpportunityCheckJSONRequestBody defines body for StartOpportunityCheck for application/json ContentType.
+type StartOpportunityCheckJSONRequestBody = CheckStartRequest
+
 // SetOwnerOpportunityDecisionJSONRequestBody defines body for SetOwnerOpportunityDecision for application/json ContentType.
 type SetOwnerOpportunityDecisionJSONRequestBody = OwnerDecisionInput
+
+// EditOpportunityMaterialsJSONRequestBody defines body for EditOpportunityMaterials for application/json ContentType.
+type EditOpportunityMaterialsJSONRequestBody = MaterialEditRequest
+
+// PrepareOpportunityMaterialsJSONRequestBody defines body for PrepareOpportunityMaterials for application/json ContentType.
+type PrepareOpportunityMaterialsJSONRequestBody = MaterialPrepareRequest
+
+// RewriteOpportunityMaterialsJSONRequestBody defines body for RewriteOpportunityMaterials for application/json ContentType.
+type RewriteOpportunityMaterialsJSONRequestBody = MaterialRewriteRequest
+
+// SaveQuestionAnswerJSONRequestBody defines body for SaveQuestionAnswer for application/json ContentType.
+type SaveQuestionAnswerJSONRequestBody = AnswerValueSave
 
 // AddOwnerInstructionJSONRequestBody defines body for AddOwnerInstruction for application/json ContentType.
 type AddOwnerInstructionJSONRequestBody = OwnerInstructionInput

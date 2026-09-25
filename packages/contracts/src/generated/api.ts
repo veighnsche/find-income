@@ -539,6 +539,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workflow/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List each selected role with its authoritative journey stage */
+        get: operations["listRoleWorkflows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/workflow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Read one selected role's authoritative journey stage */
+        get: operations["getRoleWorkflow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rounds/{id}/stop": {
         parameters: {
             query?: never;
@@ -741,6 +777,70 @@ export interface paths {
          * @description Candidates, decision, basis, assessment and sightings behind a same/new/unresolved call. Side-effect-free.
          */
         get: operations["explainResearchIdentity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/research/brief": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the current search brief with rubric and catalog versions
+         * @description Versioned owner profile, retained requirements, and reason-catalog version. Side-effect-free.
+         */
+        get: operations["getSearchBrief"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/research/briefs/{version}/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the saved reason catalog for one brief version
+         * @description Immutable authored positive, negative, and missing-information reason choices. Side-effect-free.
+         */
+        get: operations["getReasonCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/research/runs/{id}/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List collected vacancies with saved groups and reasons
+         * @description One entry per collected vacancy with group, saved reason selections, and evidence links. Side-effect-free.
+         */
+        get: operations["listRunFindings"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1046,6 +1146,352 @@ export interface paths {
         };
         /** Read current sourced Jev screening proposal, separate from confirmed qualification */
         get: operations["getOpportunityScreening"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/finding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read one collected vacancy's saved classification and reasons
+         * @description Why-this-job view from saved assessment state. Makes no model call. Side-effect-free.
+         */
+        get: operations["getOpportunityFinding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start an explicit detail check for one selected role
+         * @description Selected or blocked roles only; selection alone never starts a check. Idempotent on requestKey.
+         */
+        post: operations["startOpportunityCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/checks/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the current saved check view for one selected role
+         * @description Saved proposal with staleness; never triggers work. Side-effect-free.
+         */
+        get: operations["getCurrentOpportunityCheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/checks/current/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read per-role check activity for one selected role
+         * @description Cursor-paginated role-scoped Codex activity. Side-effect-free.
+         */
+        get: operations["listOpportunityCheckActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/checks/{checkId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                checkId: string;
+            };
+            cookie?: never;
+        };
+        /** Read one immutable check by id */
+        get: operations["getOpportunityCheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List owner-approved reusable answers */
+        get: operations["listSavedAnswers"];
+        put?: never;
+        /**
+         * Create and explicitly approve a reusable answer
+         * @description Creation confers approved status; unapproved drafts are out of scope.
+         */
+        post: operations["createSavedAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/answers/{answerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                answerId: string;
+            };
+            cookie?: never;
+        };
+        /** Read one approved answer with versions and provenance */
+        get: operations["getSavedAnswer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/answers/{answerId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                answerId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a new exact-text version of a saved answer */
+        post: operations["approveSavedAnswerVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/answers/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Jev answer matching for the current question set
+         * @description Jev Choice only; zero Codex/LLM calls. Idempotent on requestKey plus pinned versions.
+         */
+        post: operations["matchOpportunityAnswers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/answers/match/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the saved answer-match view for one selected role
+         * @description Saved Choice results; re-reads never re-invoke Jev. Side-effect-free.
+         */
+        get: operations["getCurrentAnswerMatch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/answers/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read per-question answer values for the Answer stage
+         * @description Exact owner values or blanks with provenance. Side-effect-free.
+         */
+        get: operations["getCurrentQuestionAnswers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/questions/{questionId}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save the owner's exact answer text or an explicit blank
+         * @description Exact round-trip, no LLM call; blank is a value distinct from unset.
+         */
+        put: operations["saveQuestionAnswer"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/materials/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prepare grounded application materials for one answered role
+         * @description Drafts unanswered required items only from verified facts; assembles a new immutable version. Idempotent on requestKey.
+         */
+        post: operations["prepareOpportunityMaterials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/materials/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the current prepared materials for one role
+         * @description Saved version with readiness and provenance. Side-effect-free.
+         */
+        get: operations["getCurrentOpportunityMaterials"];
+        /**
+         * Save an exact direct edit as a new material version
+         * @description Exact text, no LLM call; invalidates prior review authorization.
+         */
+        put: operations["editOpportunityMaterials"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/materials/rewrite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request an explicit Codex rewrite as a new reviewable version
+         * @description Explicit action only; never implicit; prior versions retained.
+         */
+        post: operations["rewriteOpportunityMaterials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/materials/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                version: number;
+            };
+            cookie?: never;
+        };
+        /** Read one immutable material version */
+        get: operations["getOpportunityMaterialVersion"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2202,10 +2648,27 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        RoleWorkflowState: {
+            opportunityId: string;
+            /** @enum {string} */
+            stage: "selected" | "checking" | "checked" | "answering" | "answered" | "preparing" | "prepared" | "reviewing" | "sent" | "blocked";
+            /** Format: int64 */
+            revision: number;
+            blockedReason?: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            decisionAt: string;
+            /** Format: int64 */
+            opportunityRevision: number;
+        };
+        RoleWorkflowList: {
+            items: components["schemas"]["RoleWorkflowState"][];
+        };
         RoundMutationRequest: {
             requestKey: string;
             /** @enum {string} */
-            operation: "company.create" | "opportunity.create" | "opportunity.source_save" | "opportunity.owner_correction" | "preferences.correct" | "relationship.counterparty_create" | "relationship.event_create" | "relationship.route_create" | "relationship.correct";
+            operation: "company.create" | "opportunity.create" | "opportunity.source_save" | "opportunity.owner_correction" | "preferences.correct" | "relationship.counterparty_create" | "relationship.event_create" | "relationship.route_create" | "relationship.correct" | "opportunity.check_save";
             resourceId: string;
             /** Format: int64 */
             expectedRevision: number;
@@ -3326,6 +3789,7 @@ export interface components {
             unresolvedCount: number;
             stopReason?: string;
             reportRef?: string;
+            catalogVersion?: string;
         };
         SteerResearchRequest: {
             body: string;
@@ -3344,6 +3808,8 @@ export interface components {
             /** Format: date-time */
             at: string;
             kind: string;
+            /** @enum {string} */
+            phase?: "collect" | "classify";
             summary: string;
             refs?: {
                 observationId?: string;
@@ -3355,6 +3821,360 @@ export interface components {
         ResearchActivityPage: {
             events: components["schemas"]["ResearchActivityEvent"][];
             nextCursor?: string;
+        };
+        SearchBriefView: {
+            /** Format: int64 */
+            profileVersion: number;
+            rubricVersion: string;
+            rubricSource: string;
+            catalogVersion?: string;
+            requirements: components["schemas"]["RoleCriterionView"][];
+            facts: {
+                key: string;
+                value: string;
+            }[];
+        };
+        ReasonChoice: {
+            id: string;
+            label: string;
+            detail: string;
+        };
+        ReasonCatalogView: {
+            /** Format: int64 */
+            profileVersion: number;
+            rubricVersion: string;
+            catalogVersion: string;
+            positive: components["schemas"]["ReasonChoice"][];
+            negative: components["schemas"]["ReasonChoice"][];
+            missingInformation: components["schemas"]["ReasonChoice"][];
+        };
+        FindingReason: {
+            reasonId: string;
+            /** @enum {string} */
+            kind: "positive" | "negative" | "missing_information";
+            label: string;
+            detail: string;
+            jevSupport: number;
+        };
+        FindingEvidenceLink: {
+            captureId: string;
+            spanStart: number;
+            spanEnd: number;
+            excerptSha256: string;
+        };
+        FindingEntry: {
+            opportunityId: string;
+            /** Format: int64 */
+            opportunityRevision: number;
+            /** @enum {string} */
+            group: "recommended" | "could_be_recommended" | "probably_not_recommended" | "not_recommended" | "unknown";
+            unknownBasis?: string;
+            assessmentId: string;
+            /** Format: int64 */
+            profileVersion: number;
+            rubricVersion: string;
+            catalogVersion: string;
+            reasons: components["schemas"]["FindingReason"][];
+            conflict?: components["schemas"]["ReasonChoice"];
+            missingFact?: components["schemas"]["ReasonChoice"];
+            evidenceLinks: components["schemas"]["FindingEvidenceLink"][];
+            sourceRef?: {
+                sourceId: string;
+                sourceRevision: string;
+                observedUrl?: string;
+            };
+            stale: boolean;
+            staleBasis?: string;
+        };
+        FindingList: {
+            items: components["schemas"]["FindingEntry"][];
+            nextCursor?: string;
+        };
+        CheckSourceSpan: {
+            captureId: string;
+            start: number;
+            end: number;
+        };
+        CheckQuestion: {
+            id: string;
+            checkId: string;
+            ordinal: number;
+            text: string;
+            /** @enum {string} */
+            required: "required" | "optional" | "unknown";
+            /** @enum {string} */
+            kind?: "free_text" | "choice" | "attachment" | "other";
+            sourceSpan: components["schemas"]["CheckSourceSpan"];
+            sourceExcerpt: string;
+            textSha256: string;
+        };
+        RequestedDocument: {
+            label: string;
+            required: boolean;
+            sourceExcerpt: string;
+            sourceSpan: components["schemas"]["CheckSourceSpan"];
+        };
+        CheckRoute: {
+            routeId?: string;
+            /** @enum {string} */
+            kind?: "direct" | "referral" | "recruiter" | "unsupported";
+            destinationText?: string;
+            /** @enum {string} */
+            judgment: "application_route" | "other_contact" | "unresolved";
+            judgmentSha256?: string;
+            jevAttemptId?: string;
+            assessmentId?: string;
+            sourceExcerpt: string;
+            /** Format: date-time */
+            observedAt: string;
+        };
+        CheckGap: {
+            id: string;
+            description: string;
+            consequential: boolean;
+            /** @enum {string} */
+            kind: "missing_fact" | "ambiguous_source" | "unverified_claim" | "other";
+        };
+        CheckVacancy: {
+            captureIds: string[];
+            evidenceSourceIds: string[];
+            /** @enum {string} */
+            completeness: "complete" | "truncated" | "paginated" | "partial";
+            sourceUrl: string;
+            /** Format: date-time */
+            retrievedAt: string;
+        };
+        CheckBlockedReason: {
+            /** @enum {string} */
+            code: "source_unavailable" | "route_ambiguous" | "route_unsupported" | "questions_unresolved" | "other";
+            detail: string;
+        };
+        CheckView: {
+            id: string;
+            opportunityId: string;
+            /** Format: int64 */
+            opportunityRevision: number;
+            /** Format: int64 */
+            workflowRevision: number;
+            /** @enum {string} */
+            status: "checking" | "checked" | "blocked";
+            blockedReason?: components["schemas"]["CheckBlockedReason"];
+            vacancy: components["schemas"]["CheckVacancy"];
+            requestedDocuments: components["schemas"]["RequestedDocument"][];
+            route: components["schemas"]["CheckRoute"];
+            gaps: components["schemas"]["CheckGap"][];
+            questions: components["schemas"]["CheckQuestion"][];
+            questionSetSha256: string;
+            /** Format: int64 */
+            questionSetVersion: number;
+            activityCursor?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            completedAt?: string;
+            createdBy: {
+                actorKind: string;
+                actorId: string;
+            };
+        };
+        CheckStatusView: {
+            /** @enum {string} */
+            status: "not_checked" | "checking" | "checked" | "blocked" | "outdated";
+            check?: components["schemas"]["CheckView"];
+        };
+        CheckStartRequest: {
+            requestKey: string;
+            /** Format: int64 */
+            expectedOpportunityRevision: number;
+            /** Format: int64 */
+            expectedWorkflowRevision: number;
+        };
+        CheckActivityPage: {
+            events: components["schemas"]["ResearchActivityEvent"][];
+            nextCursor?: string;
+        };
+        SavedAnswerSourceRef: {
+            /** @enum {string} */
+            kind: "owner_statement" | "capture" | "cv_source";
+            ref: string;
+            excerpt?: string;
+        };
+        SavedAnswerVersion: {
+            /** Format: int64 */
+            version: number;
+            text: string;
+            textSha256: string;
+            /** Format: date-time */
+            approvedAt: string;
+            approvedBy: {
+                actorKind: string;
+                actorId: string;
+            };
+            approvalRequestKey: string;
+            changeNote?: string;
+            sourceRefs?: components["schemas"]["SavedAnswerSourceRef"][];
+            /** Format: int64 */
+            supersedes?: number;
+        };
+        SavedAnswer: {
+            id: string;
+            /** Format: int64 */
+            currentVersion: number;
+            scopeTags: string[];
+            contextNote?: string;
+            versions: components["schemas"]["SavedAnswerVersion"][];
+        };
+        SavedAnswerList: {
+            items: components["schemas"]["SavedAnswer"][];
+            nextCursor?: string;
+        };
+        SavedAnswerCreate: {
+            requestKey: string;
+            text: string;
+            scopeTags: string[];
+            contextNote?: string;
+            sourceRefs?: components["schemas"]["SavedAnswerSourceRef"][];
+        };
+        SavedAnswerVersionCreate: {
+            requestKey: string;
+            /** Format: int64 */
+            expectedVersion: number;
+            text: string;
+            changeNote?: string;
+        };
+        AnswerMatchChoice: {
+            answerId?: string;
+            /** Format: int64 */
+            answerVersion?: number;
+            textSha256?: string;
+            noneFits?: boolean;
+        };
+        AnswerMatch: {
+            questionId: string;
+            questionTextSha256: string;
+            choice: components["schemas"]["AnswerMatchChoice"];
+            candidateSetHash: string;
+            jevAttemptId: string;
+            confidence: number;
+            model?: string;
+            /** Format: date-time */
+            matchedAt: string;
+        };
+        AnswerMatchView: {
+            /** @enum {string} */
+            status: "unmatched" | "matched" | "partial" | "outdated";
+            checkId: string;
+            questionSetSha256: string;
+            answerCatalog: {
+                digest: string;
+                /** Format: date-time */
+                matchedAt: string;
+            };
+            matches: components["schemas"]["AnswerMatch"][];
+        };
+        AnswerMatchRequest: {
+            requestKey: string;
+            expectedCheckId: string;
+            expectedQuestionSetSha256: string;
+        };
+        QuestionAnswerValue: {
+            questionId: string;
+            questionTextSha256: string;
+            /** @enum {string} */
+            required: "required" | "optional" | "unknown";
+            /** Format: int64 */
+            version: number;
+            /** @enum {string} */
+            state: "unset" | "answered" | "blank";
+            text: string;
+            textSha256?: string;
+            provenance: {
+                /** @enum {string} */
+                origin: "jev_suggestion" | "owner_written" | "owner_edited" | "carried_blank";
+                matchChoice?: components["schemas"]["AnswerMatchChoice"];
+                matchId?: string;
+                /** Format: date-time */
+                editedAt: string;
+                editedBy: {
+                    actorKind: string;
+                    actorId: string;
+                };
+            };
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        QuestionAnswerList: {
+            checkId: string;
+            questionSetSha256: string;
+            values: components["schemas"]["QuestionAnswerValue"][];
+        };
+        AnswerValueSave: {
+            /** Format: int64 */
+            expectedAnswerVersion: number;
+            text: string;
+        };
+        MaterialAnswerRef: {
+            questionId: string;
+            questionTextSha256: string;
+            /** Format: int64 */
+            answerVersion: number;
+            textSha256: string;
+        };
+        MaterialReadiness: {
+            ready: boolean;
+            missingRequired: string[];
+            held: string[];
+        };
+        MaterialVersion: {
+            packId: string;
+            /** Format: int64 */
+            version: number;
+            opportunityId: string;
+            /** Format: int64 */
+            opportunityRevision: number;
+            /** Format: int64 */
+            profileRevision: number;
+            checkId: string;
+            questionSetSha256: string;
+            answers: components["schemas"]["MaterialAnswerRef"][];
+            readiness: components["schemas"]["MaterialReadiness"];
+            provenance: {
+                /** @enum {string} */
+                origin: "prepared" | "direct_edit" | "rewrite";
+                sourceShas: string[];
+                /** Format: int64 */
+                rewriteOf?: number;
+            };
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: {
+                actorKind: string;
+                actorId: string;
+            };
+        };
+        MaterialStatusView: {
+            /** @enum {string} */
+            status: "not_prepared" | "preparing" | "prepared" | "held" | "outdated";
+            current?: components["schemas"]["MaterialVersion"];
+        };
+        MaterialPrepareRequest: {
+            requestKey: string;
+            expectedCheckId: string;
+            expectedQuestionSetSha256: string;
+            /** Format: int64 */
+            expectedWorkflowRevision: number;
+        };
+        MaterialEditRequest: {
+            requestKey: string;
+            /** Format: int64 */
+            expectedVersion: number;
+            text: string;
+        };
+        MaterialRewriteRequest: {
+            requestKey: string;
+            /** Format: int64 */
+            expectedVersion: number;
+            instruction?: string;
         };
         ResearchCaptureView: {
             captureId: string;
@@ -4324,6 +5144,49 @@ export interface operations {
             };
         };
     };
+    listRoleWorkflows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Selected roles and stages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleWorkflowList"];
+                };
+            };
+        };
+    };
+    getRoleWorkflow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Role stage */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleWorkflowState"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
     stopRound: {
         parameters: {
             query?: never;
@@ -4582,6 +5445,81 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getSearchBrief: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Search brief */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchBriefView"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getReasonCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reason catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReasonCatalogView"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listRunFindings: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                group?: "recommended" | "could_be_recommended" | "probably_not_recommended" | "not_recommended" | "unknown";
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Finding list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingList"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
         };
     };
     login: {
@@ -4981,6 +5919,501 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    getOpportunityFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved finding */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingEntry"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    startOpportunityCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Exact replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckStatusView"];
+                };
+            };
+            /** @description Check started */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckStatusView"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getCurrentOpportunityCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Check status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckStatusView"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listOpportunityCheckActivity: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Check activity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckActivityPage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getOpportunityCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                checkId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved check */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckView"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listSavedAnswers: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                scope?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Answer library */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedAnswerList"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createSavedAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedAnswerCreate"];
+            };
+        };
+        responses: {
+            /** @description Answer approved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedAnswer"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getSavedAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                answerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved answer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedAnswer"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    approveSavedAnswerVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                answerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedAnswerVersionCreate"];
+            };
+        };
+        responses: {
+            /** @description Version approved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedAnswer"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    matchOpportunityAnswers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerMatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Matches saved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerMatchView"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getCurrentAnswerMatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Match view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerMatchView"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getCurrentQuestionAnswers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Answer values */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionAnswerList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    saveQuestionAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerValueSave"];
+            };
+        };
+        responses: {
+            /** @description Answer saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionAnswerValue"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    prepareOpportunityMaterials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialPrepareRequest"];
+            };
+        };
+        responses: {
+            /** @description Materials prepared */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialStatusView"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getCurrentOpportunityMaterials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Material status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialStatusView"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    editOpportunityMaterials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialEditRequest"];
+            };
+        };
+        responses: {
+            /** @description Edited version saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialVersion"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    rewriteOpportunityMaterials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialRewriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Rewrite requested */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialVersion"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getOpportunityMaterialVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Material version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialVersion"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
         };
     };
     listApplicationPacks: {

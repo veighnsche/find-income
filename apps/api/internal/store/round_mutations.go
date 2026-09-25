@@ -35,6 +35,7 @@ type RoundMutationInput struct {
 	InterviewDebrief   *InterviewDebriefMutation       `json:"interviewDebrief,omitempty"`
 	ReplyUpdate        *ReplyUpdateMutation            `json:"replyUpdate,omitempty"`
 	ReplyDraft         *ReplyDraftMutation             `json:"replyDraft,omitempty"`
+	CheckSave          *CheckSaveInput                 `json:"checkSave,omitempty"`
 	Capability         string                          `json:"-"`
 }
 
@@ -94,6 +95,9 @@ func validRoundMutation(input RoundMutationInput) bool {
 	if input.Operation != RoundReplyUpdateSave && input.ReplyUpdate != nil || input.Operation != RoundReplyDraftSave && input.ReplyDraft != nil {
 		return false
 	}
+	if input.Operation != RoundCheckSave && input.CheckSave != nil {
+		return false
+	}
 	switch input.Operation {
 	case RoundInterviewBriefSave:
 		return input.InterviewBrief != nil && input.InterviewDebrief == nil && input.OwnerInstructionID == "" && input.ResourceID == "opportunity:"+input.InterviewBrief.OpportunityID && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.ApplicationPack == nil && input.Relationship == nil
@@ -103,6 +107,13 @@ func validRoundMutation(input RoundMutationInput) bool {
 		return input.ReplyUpdate != nil && input.ReplyUpdate.ProcessingID != "" && input.ReplyUpdate.OpportunityID != "" && input.ReplyDraft == nil && input.InterviewBrief == nil && input.InterviewDebrief == nil && input.OwnerInstructionID == "" && input.ResourceID == "thread:"+input.ReplyUpdate.ThreadID && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.ApplicationPack == nil && input.Relationship == nil
 	case RoundReplyDraftSave:
 		return input.ReplyDraft != nil && input.ReplyDraft.ProcessingID != "" && len(input.ReplyDraft.DraftJSON) != 0 && input.ReplyUpdate == nil && input.InterviewBrief == nil && input.InterviewDebrief == nil && input.OwnerInstructionID == "" && input.ResourceID == "thread:"+input.ReplyDraft.ThreadID && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.ApplicationPack == nil && input.Relationship == nil
+	case RoundCheckSave:
+		return input.CheckSave != nil && input.CheckSave.OpportunityID != "" && input.CheckSave.CheckID != "" &&
+			input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil &&
+			input.OpportunityPatch == nil && input.ApplicationPack == nil && input.OfferComparison == nil &&
+			input.Relationship == nil && input.InterviewBrief == nil && input.InterviewDebrief == nil &&
+			input.ReplyUpdate == nil && input.ReplyDraft == nil && input.OwnerInstructionID == "" &&
+			input.ResourceID == "opportunity:"+input.CheckSave.OpportunityID
 	case RoundCreateCompany:
 		return input.Company != nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.ResourceID == "campaign:active"
 	case RoundCreateOpportunity:
@@ -442,6 +453,9 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 		entityID, kind, revision, err = writeReplyUpdateTx(ctx, tx, round, input.ExpectedRevision, *input.ReplyUpdate)
 	} else if input.Operation == RoundReplyDraftSave {
 		entityID, kind, revision, err = writeReplyDraftTx(ctx, tx, round, *input.ReplyDraft)
+	} else if input.Operation == RoundCheckSave {
+		entityID, revision, err = writeCheckSaveTx(ctx, tx, actor, input.ExpectedRevision, *input.CheckSave)
+		kind = "job_check"
 	} else if input.Operation == RoundSaveSourceOpportunity {
 		entityID, revision, auditID, err = saveSourcedOpportunityTx(ctx, tx, actor, *input.SourceOpportunity)
 		kind = "opportunity"

@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  defaultPackage: './apps/web',
+  defaultPackage: './apps/vite-app',
   fmt: { singleQuote: true },
 });
