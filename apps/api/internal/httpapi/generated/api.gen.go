@@ -472,33 +472,6 @@ func (e CreateOpportunityRequestWorkPattern) Valid() bool {
 	}
 }
 
-// Defines values for DeliveryItemState.
-const (
-	DeliveryItemStateAcceptedBySmtp DeliveryItemState = "accepted_by_smtp"
-	DeliveryItemStateFailed         DeliveryItemState = "failed"
-	DeliveryItemStatePrepared       DeliveryItemState = "prepared"
-	DeliveryItemStateSending        DeliveryItemState = "sending"
-	DeliveryItemStateUncertain      DeliveryItemState = "uncertain"
-)
-
-// Valid indicates whether the value is a known member of the DeliveryItemState enum.
-func (e DeliveryItemState) Valid() bool {
-	switch e {
-	case DeliveryItemStateAcceptedBySmtp:
-		return true
-	case DeliveryItemStateFailed:
-		return true
-	case DeliveryItemStatePrepared:
-		return true
-	case DeliveryItemStateSending:
-		return true
-	case DeliveryItemStateUncertain:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for EvidenceArrangementPattern.
 const (
 	EvidenceArrangementPatternHybrid EvidenceArrangementPattern = "hybrid"
@@ -778,135 +751,6 @@ func (e IngestionRequestStatus) Valid() bool {
 	}
 }
 
-// Defines values for InterviewContextSourceKind.
-const (
-	InterviewContextSourceKindEmployer   InterviewContextSourceKind = "employer"
-	InterviewContextSourceKindInvitation InterviewContextSourceKind = "invitation"
-	InterviewContextSourceKindOwnerInput InterviewContextSourceKind = "owner_input"
-	InterviewContextSourceKindRole       InterviewContextSourceKind = "role"
-)
-
-// Valid indicates whether the value is a known member of the InterviewContextSourceKind enum.
-func (e InterviewContextSourceKind) Valid() bool {
-	switch e {
-	case InterviewContextSourceKindEmployer:
-		return true
-	case InterviewContextSourceKindInvitation:
-		return true
-	case InterviewContextSourceKindOwnerInput:
-		return true
-	case InterviewContextSourceKindRole:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for InterviewDebriefObservationKind.
-const (
-	Discussed InterviewDebriefObservationKind = "discussed"
-	FollowUp  InterviewDebriefObservationKind = "follow_up"
-	Unclear   InterviewDebriefObservationKind = "unclear"
-	WentWell  InterviewDebriefObservationKind = "went_well"
-)
-
-// Valid indicates whether the value is a known member of the InterviewDebriefObservationKind enum.
-func (e InterviewDebriefObservationKind) Valid() bool {
-	switch e {
-	case Discussed:
-		return true
-	case FollowUp:
-		return true
-	case Unclear:
-		return true
-	case WentWell:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for InterviewDebriefRecordAttribution.
-const (
-	OwnerReported InterviewDebriefRecordAttribution = "owner_reported"
-)
-
-// Valid indicates whether the value is a known member of the InterviewDebriefRecordAttribution enum.
-func (e InterviewDebriefRecordAttribution) Valid() bool {
-	switch e {
-	case OwnerReported:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for InterviewExampleExperienceKind.
-const (
-	InterviewExampleExperienceKindEducation       InterviewExampleExperienceKind = "education"
-	InterviewExampleExperienceKindEmployment      InterviewExampleExperienceKind = "employment"
-	InterviewExampleExperienceKindOther           InterviewExampleExperienceKind = "other"
-	InterviewExampleExperienceKindPersonalProject InterviewExampleExperienceKind = "personal_project"
-	InterviewExampleExperienceKindVolunteer       InterviewExampleExperienceKind = "volunteer"
-)
-
-// Valid indicates whether the value is a known member of the InterviewExampleExperienceKind enum.
-func (e InterviewExampleExperienceKind) Valid() bool {
-	switch e {
-	case InterviewExampleExperienceKindEducation:
-		return true
-	case InterviewExampleExperienceKindEmployment:
-		return true
-	case InterviewExampleExperienceKindOther:
-		return true
-	case InterviewExampleExperienceKindPersonalProject:
-		return true
-	case InterviewExampleExperienceKindVolunteer:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for InterviewFocusSummaryDisposition.
-const (
-	InterviewFocusSummaryDispositionSelected   InterviewFocusSummaryDisposition = "selected"
-	InterviewFocusSummaryDispositionUnresolved InterviewFocusSummaryDisposition = "unresolved"
-)
-
-// Valid indicates whether the value is a known member of the InterviewFocusSummaryDisposition enum.
-func (e InterviewFocusSummaryDisposition) Valid() bool {
-	switch e {
-	case InterviewFocusSummaryDispositionSelected:
-		return true
-	case InterviewFocusSummaryDispositionUnresolved:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for InterviewScheduleClaimMode.
-const (
-	InPerson InterviewScheduleClaimMode = "in_person"
-	Phone    InterviewScheduleClaimMode = "phone"
-	Video    InterviewScheduleClaimMode = "video"
-)
-
-// Valid indicates whether the value is a known member of the InterviewScheduleClaimMode enum.
-func (e InterviewScheduleClaimMode) Valid() bool {
-	switch e {
-	case InPerson:
-		return true
-	case Phone:
-		return true
-	case Video:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for MaterialStatusViewStatus.
 const (
 	MaterialStatusViewStatusHeld        MaterialStatusViewStatus = "held"
@@ -1057,194 +901,25 @@ func (e MuseRunReportTier) Valid() bool {
 	}
 }
 
-// Defines values for OfferComparisonOfferEngagement.
-const (
-	OfferComparisonOfferEngagementEmployment OfferComparisonOfferEngagement = "employment"
-	OfferComparisonOfferEngagementProject    OfferComparisonOfferEngagement = "project"
-	OfferComparisonOfferEngagementUnknown    OfferComparisonOfferEngagement = "unknown"
-)
-
-// Valid indicates whether the value is a known member of the OfferComparisonOfferEngagement enum.
-func (e OfferComparisonOfferEngagement) Valid() bool {
-	switch e {
-	case OfferComparisonOfferEngagementEmployment:
-		return true
-	case OfferComparisonOfferEngagementProject:
-		return true
-	case OfferComparisonOfferEngagementUnknown:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for OfferComparisonResultTradeoffStatus.
-const (
-	OfferComparisonResultTradeoffStatusFailed       OfferComparisonResultTradeoffStatus = "failed"
-	OfferComparisonResultTradeoffStatusInvalid      OfferComparisonResultTradeoffStatus = "invalid"
-	OfferComparisonResultTradeoffStatusNotRequested OfferComparisonResultTradeoffStatus = "not_requested"
-	OfferComparisonResultTradeoffStatusPending      OfferComparisonResultTradeoffStatus = "pending"
-	OfferComparisonResultTradeoffStatusSelected     OfferComparisonResultTradeoffStatus = "selected"
-	OfferComparisonResultTradeoffStatusUnavailable  OfferComparisonResultTradeoffStatus = "unavailable"
-	OfferComparisonResultTradeoffStatusUncertain    OfferComparisonResultTradeoffStatus = "uncertain"
-	OfferComparisonResultTradeoffStatusUnresolved   OfferComparisonResultTradeoffStatus = "unresolved"
-)
-
-// Valid indicates whether the value is a known member of the OfferComparisonResultTradeoffStatus enum.
-func (e OfferComparisonResultTradeoffStatus) Valid() bool {
-	switch e {
-	case OfferComparisonResultTradeoffStatusFailed:
-		return true
-	case OfferComparisonResultTradeoffStatusInvalid:
-		return true
-	case OfferComparisonResultTradeoffStatusNotRequested:
-		return true
-	case OfferComparisonResultTradeoffStatusPending:
-		return true
-	case OfferComparisonResultTradeoffStatusSelected:
-		return true
-	case OfferComparisonResultTradeoffStatusUnavailable:
-		return true
-	case OfferComparisonResultTradeoffStatusUncertain:
-		return true
-	case OfferComparisonResultTradeoffStatusUnresolved:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for OfferExactRangeKind.
-const (
-	OfferExactRangeKindExact OfferExactRangeKind = "exact"
-	OfferExactRangeKindFrom  OfferExactRangeKind = "from"
-	OfferExactRangeKindRange OfferExactRangeKind = "range"
-)
 
 // Valid indicates whether the value is a known member of the OfferExactRangeKind enum.
-func (e OfferExactRangeKind) Valid() bool {
-	switch e {
-	case OfferExactRangeKindExact:
-		return true
-	case OfferExactRangeKindFrom:
-		return true
-	case OfferExactRangeKindRange:
-		return true
-	default:
-		return false
-	}
-}
 
 // Defines values for OfferHolidayTermTreatment.
-const (
-	OfferHolidayTermTreatmentExcluded OfferHolidayTermTreatment = "excluded"
-	OfferHolidayTermTreatmentIncluded OfferHolidayTermTreatment = "included"
-	OfferHolidayTermTreatmentUnknown  OfferHolidayTermTreatment = "unknown"
-)
 
 // Valid indicates whether the value is a known member of the OfferHolidayTermTreatment enum.
-func (e OfferHolidayTermTreatment) Valid() bool {
-	switch e {
-	case OfferHolidayTermTreatmentExcluded:
-		return true
-	case OfferHolidayTermTreatmentIncluded:
-		return true
-	case OfferHolidayTermTreatmentUnknown:
-		return true
-	default:
-		return false
-	}
-}
 
 // Defines values for OfferPayPairStatus.
-const (
-	OfferPayPairStatusComparable       OfferPayPairStatus = "comparable"
-	OfferPayPairStatusIncompatible     OfferPayPairStatus = "incompatible"
-	OfferPayPairStatusProjectEconomics OfferPayPairStatus = "project_economics"
-	OfferPayPairStatusUnknown          OfferPayPairStatus = "unknown"
-)
 
 // Valid indicates whether the value is a known member of the OfferPayPairStatus enum.
-func (e OfferPayPairStatus) Valid() bool {
-	switch e {
-	case OfferPayPairStatusComparable:
-		return true
-	case OfferPayPairStatusIncompatible:
-		return true
-	case OfferPayPairStatusProjectEconomics:
-		return true
-	case OfferPayPairStatusUnknown:
-		return true
-	default:
-		return false
-	}
-}
 
 // Defines values for OfferPayTermAmountKind.
-const (
-	OfferPayTermAmountKindExact   OfferPayTermAmountKind = "exact"
-	OfferPayTermAmountKindFrom    OfferPayTermAmountKind = "from"
-	OfferPayTermAmountKindRange   OfferPayTermAmountKind = "range"
-	OfferPayTermAmountKindRaw     OfferPayTermAmountKind = "raw"
-	OfferPayTermAmountKindUnknown OfferPayTermAmountKind = "unknown"
-)
 
 // Valid indicates whether the value is a known member of the OfferPayTermAmountKind enum.
-func (e OfferPayTermAmountKind) Valid() bool {
-	switch e {
-	case OfferPayTermAmountKindExact:
-		return true
-	case OfferPayTermAmountKindFrom:
-		return true
-	case OfferPayTermAmountKindRange:
-		return true
-	case OfferPayTermAmountKindRaw:
-		return true
-	case OfferPayTermAmountKindUnknown:
-		return true
-	default:
-		return false
-	}
-}
 
 // Defines values for OfferReviewAlternativeKind.
-const (
-	Clarify OfferReviewAlternativeKind = "clarify"
-	Review  OfferReviewAlternativeKind = "review"
-	Weigh   OfferReviewAlternativeKind = "weigh"
-)
 
 // Valid indicates whether the value is a known member of the OfferReviewAlternativeKind enum.
-func (e OfferReviewAlternativeKind) Valid() bool {
-	switch e {
-	case Clarify:
-		return true
-	case Review:
-		return true
-	case Weigh:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for OfferTradeoffSelectionSelectionDisposition.
-const (
-	OfferTradeoffSelectionSelectionDispositionSelected   OfferTradeoffSelectionSelectionDisposition = "selected"
-	OfferTradeoffSelectionSelectionDispositionUnresolved OfferTradeoffSelectionSelectionDisposition = "unresolved"
-)
-
-// Valid indicates whether the value is a known member of the OfferTradeoffSelectionSelectionDisposition enum.
-func (e OfferTradeoffSelectionSelectionDisposition) Valid() bool {
-	switch e {
-	case OfferTradeoffSelectionSelectionDispositionSelected:
-		return true
-	case OfferTradeoffSelectionSelectionDispositionUnresolved:
-		return true
-	default:
-		return false
-	}
-}
 
 // Defines values for OpportunityKind.
 const (
@@ -2748,14 +2423,9 @@ func (e ListRunFindingsParamsGroup) Valid() bool {
 
 // Defines values for GetLatestCompletedRoundParamsOutcome.
 const (
-	All              GetLatestCompletedRoundParamsOutcome = "all"
-	CompareOffers    GetLatestCompletedRoundParamsOutcome = "compare_offers"
-	Deliver          GetLatestCompletedRoundParamsOutcome = "deliver"
-	InterviewDebrief GetLatestCompletedRoundParamsOutcome = "interview_debrief"
-	InterviewPrepare GetLatestCompletedRoundParamsOutcome = "interview_prepare"
-	Prepare          GetLatestCompletedRoundParamsOutcome = "prepare"
-	ProcessInput     GetLatestCompletedRoundParamsOutcome = "process_input"
-	ProcessReplies   GetLatestCompletedRoundParamsOutcome = "process_replies"
+	All          GetLatestCompletedRoundParamsOutcome = "all"
+	Prepare      GetLatestCompletedRoundParamsOutcome = "prepare"
+	ProcessInput GetLatestCompletedRoundParamsOutcome = "process_input"
 )
 
 // Valid indicates whether the value is a known member of the GetLatestCompletedRoundParamsOutcome enum.
@@ -2763,19 +2433,9 @@ func (e GetLatestCompletedRoundParamsOutcome) Valid() bool {
 	switch e {
 	case All:
 		return true
-	case CompareOffers:
-		return true
-	case Deliver:
-		return true
-	case InterviewDebrief:
-		return true
-	case InterviewPrepare:
-		return true
 	case Prepare:
 		return true
 	case ProcessInput:
-		return true
-	case ProcessReplies:
 		return true
 	default:
 		return false
@@ -3038,11 +2698,6 @@ type ApplicationPackSummary struct {
 	Version             int64     `json:"version"`
 }
 
-// ApproveDeliveryReviewRequest defines model for ApproveDeliveryReviewRequest.
-type ApproveDeliveryReviewRequest struct {
-	MaterialSha256 string `json:"materialSha256"`
-}
-
 // ArchiveRequest defines model for ArchiveRequest.
 type ArchiveRequest struct {
 	ExpectedRevision int64 `json:"expectedRevision"`
@@ -3242,52 +2897,6 @@ type CompanyView struct {
 	LikelyDuplicates []CompanyDuplicate `json:"likelyDuplicates"`
 }
 
-// CompareOffersRoundRequest defines model for CompareOffersRoundRequest.
-type CompareOffersRoundRequest struct {
-	Offers         []string `json:"offers"`
-	PrioritiesText *string  `json:"prioritiesText,omitempty"`
-	RequestKey     string   `json:"requestKey"`
-}
-
-// CompareOffersRoundResponse defines model for CompareOffersRoundResponse.
-type CompareOffersRoundResponse struct {
-	IntakeId string `json:"intakeId"`
-	Round    Round  `json:"round"`
-}
-
-// CorrespondenceMessage defines model for CorrespondenceMessage.
-type CorrespondenceMessage struct {
-	Body       string    `json:"body"`
-	BodySha256 string    `json:"bodySha256"`
-	Id         string    `json:"id"`
-	Recipients *[]string `json:"recipients,omitempty"`
-	Sender     string    `json:"sender"`
-	SentAt     string    `json:"sentAt"`
-}
-
-// CorrespondenceThread defines model for CorrespondenceThread.
-type CorrespondenceThread struct {
-	AccountId     string  `json:"accountId"`
-	CreatedAt     string  `json:"createdAt"`
-	Id            string  `json:"id"`
-	LastMessageAt *string `json:"lastMessageAt,omitempty"`
-	MessageCount  int     `json:"messageCount"`
-	OpportunityId *string `json:"opportunityId,omitempty"`
-	Subject       string  `json:"subject"`
-	UpdatedAt     string  `json:"updatedAt"`
-}
-
-// CorrespondenceThreadDetail defines model for CorrespondenceThreadDetail.
-type CorrespondenceThreadDetail struct {
-	Messages []CorrespondenceMessage `json:"messages"`
-	Thread   CorrespondenceThread    `json:"thread"`
-}
-
-// CorrespondenceThreadList defines model for CorrespondenceThreadList.
-type CorrespondenceThreadList struct {
-	Items []CorrespondenceThread `json:"items"`
-}
-
 // CreateActionRequest defines model for CreateActionRequest.
 type CreateActionRequest struct {
 	Description string `json:"description"`
@@ -3317,17 +2926,6 @@ type CreateEvidenceSourceRequest struct {
 	OwnerObservation       *OwnerObservationSourceInput `json:"ownerObservation,omitempty"`
 	Statement              *StatementSourceInput        `json:"statement,omitempty"`
 	VacancySnapshot        *VacancySnapshotInput        `json:"vacancySnapshot,omitempty"`
-}
-
-// CreateOfferOptionSetRequest defines model for CreateOfferOptionSetRequest.
-type CreateOfferOptionSetRequest struct {
-	ExpectedContextVersion  int64    `json:"expectedContextVersion"`
-	ExpectedEvidenceVersion int64    `json:"expectedEvidenceVersion"`
-	Labels                  []string `json:"labels"`
-	SourceId                string   `json:"sourceId"`
-	SpanEnd                 int      `json:"spanEnd"`
-	SpanStart               int      `json:"spanStart"`
-	SupersedesId            *string  `json:"supersedesId,omitempty"`
 }
 
 // CreateOpportunityRequest Provide sourceUrl or originalText; notes are separate from the source. No actor or confirmed-pay fields are accepted.
@@ -3362,83 +2960,7 @@ type CreatedAgentCredential struct {
 	Token string `json:"token"`
 }
 
-// DebriefInterviewRequest defines model for DebriefInterviewRequest.
-type DebriefInterviewRequest struct {
-	// Notes Complete owner reported debrief notes
-	Notes      string `json:"notes"`
-	RequestKey string `json:"requestKey"`
-}
-
-// DebriefInterviewResponse defines model for DebriefInterviewResponse.
-type DebriefInterviewResponse struct {
-	DebriefId   string `json:"debriefId"`
-	InterviewId string `json:"interviewId"`
-	Round       Round  `json:"round"`
-}
-
-// DeliveryCapability defines model for DeliveryCapability.
-type DeliveryCapability struct {
-	Reason              *string `json:"reason,omitempty"`
-	ReceiptLookup       bool    `json:"receiptLookup"`
-	SubmissionAvailable bool    `json:"submissionAvailable"`
-}
-
-// DeliveryItem defines model for DeliveryItem.
-type DeliveryItem struct {
-	AttachmentSha256    string            `json:"attachmentSha256"`
-	AttemptId           *string           `json:"attemptId,omitempty"`
-	BlockingReason      *string           `json:"blockingReason,omitempty"`
-	Body                string            `json:"body"`
-	CompanyName         string            `json:"companyName"`
-	Current             bool              `json:"current"`
-	Id                  string            `json:"id"`
-	MessageId           string            `json:"messageId"`
-	MimeSha256          string            `json:"mimeSha256"`
-	OpportunityId       string            `json:"opportunityId"`
-	OpportunityRevision int64             `json:"opportunityRevision"`
-	OutcomeDetail       *string           `json:"outcomeDetail,omitempty"`
-	PackContentSha256   string            `json:"packContentSha256"`
-	PackId              string            `json:"packId"`
-	ProfileRevision     int64             `json:"profileRevision"`
-	Recipient           string            `json:"recipient"`
-	ReviewId            string            `json:"reviewId"`
-	RoundId             *string           `json:"roundId,omitempty"`
-	RouteExcerpt        string            `json:"routeExcerpt"`
-	RouteId             string            `json:"routeId"`
-	RouteRevision       int64             `json:"routeRevision"`
-	RouteSha256         string            `json:"routeSha256"`
-	Sender              string            `json:"sender"`
-	SmtpCode            *int              `json:"smtpCode,omitempty"`
-	SmtpStage           *string           `json:"smtpStage,omitempty"`
-	SourceSha256        string            `json:"sourceSha256"`
-	State               DeliveryItemState `json:"state"`
-	Subject             string            `json:"subject"`
-	Title               string            `json:"title"`
-}
-
-// DeliveryItemState defines model for DeliveryItem.State.
-type DeliveryItemState string
-
-// DeliveryReconciliation defines model for DeliveryReconciliation.
-type DeliveryReconciliation struct {
-	Reason    string `json:"reason"`
-	Supported bool   `json:"supported"`
-}
-
-// DeliveryReview defines model for DeliveryReview.
-type DeliveryReview struct {
-	ApprovedAt     *time.Time     `json:"approvedAt,omitempty"`
-	ApprovedSha256 *string        `json:"approvedSha256,omitempty"`
-	Id             string         `json:"id"`
-	Items          []DeliveryItem `json:"items"`
-	MaterialSha256 string         `json:"materialSha256"`
-}
-
-// DeliverySendResult defines model for DeliverySendResult.
-type DeliverySendResult struct {
-	Review DeliveryReview `json:"review"`
-	Round  Round          `json:"round"`
-}
+// Notes Complete owner reported debrief notes
 
 // ErrorEnvelope defines model for ErrorEnvelope.
 type ErrorEnvelope struct {
@@ -3646,32 +3168,6 @@ type HealthResponseService string
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
-// ImportCorrespondenceRequest defines model for ImportCorrespondenceRequest.
-type ImportCorrespondenceRequest struct {
-	DisplayName       *string `json:"displayName,omitempty"`
-	ExternalAccountId string  `json:"externalAccountId"`
-	Provider          string  `json:"provider"`
-	Threads           []struct {
-		LastMessageAt *string `json:"lastMessageAt,omitempty"`
-		Messages      []struct {
-			Body              string    `json:"body"`
-			ProviderMessageId string    `json:"providerMessageId"`
-			Recipients        *[]string `json:"recipients,omitempty"`
-			Sender            string    `json:"sender"`
-			SentAt            string    `json:"sentAt"`
-		} `json:"messages"`
-		ProviderThreadId string  `json:"providerThreadId"`
-		Subject          *string `json:"subject,omitempty"`
-	} `json:"threads"`
-}
-
-// ImportCorrespondenceResponse defines model for ImportCorrespondenceResponse.
-type ImportCorrespondenceResponse struct {
-	AccountId string `json:"accountId"`
-	Messages  int    `json:"messages"`
-	Threads   int    `json:"threads"`
-}
-
 // IngestionPage defines model for IngestionPage.
 type IngestionPage struct {
 	Items      []IngestionRequest `json:"items"`
@@ -3700,169 +3196,6 @@ type IngestionRequestJobState string
 
 // IngestionRequestStatus defines model for IngestionRequest.Status.
 type IngestionRequestStatus string
-
-// InterviewBrief defines model for InterviewBrief.
-type InterviewBrief struct {
-	Input struct {
-		CareerSources []InterviewCareerSource  `json:"careerSources"`
-		Context       []InterviewContextSource `json:"context"`
-		Draft         InterviewDraft           `json:"draft"`
-		EmployerName  string                   `json:"employerName"`
-		InterviewId   string                   `json:"interviewId"`
-		OpportunityId string                   `json:"opportunityId"`
-		RoleTitle     string                   `json:"roleTitle"`
-	} `json:"input"`
-	InputSha256 string `json:"inputSha256"`
-}
-
-// InterviewCareerSource defines model for InterviewCareerSource.
-type InterviewCareerSource struct {
-	Approved bool   `json:"approved"`
-	Body     string `json:"body"`
-	Id       string `json:"id"`
-	Name     string `json:"name"`
-	Sha256   string `json:"sha256"`
-}
-
-// InterviewCitation defines model for InterviewCitation.
-type InterviewCitation struct {
-	Excerpt  string `json:"excerpt"`
-	SourceId string `json:"sourceId"`
-}
-
-// InterviewCitedText defines model for InterviewCitedText.
-type InterviewCitedText struct {
-	Citations []InterviewCitation `json:"citations"`
-	Text      string              `json:"text"`
-}
-
-// InterviewCommissionResponse defines model for InterviewCommissionResponse.
-type InterviewCommissionResponse struct {
-	InterviewId string `json:"interviewId"`
-	Round       Round  `json:"round"`
-}
-
-// InterviewContextSource defines model for InterviewContextSource.
-type InterviewContextSource struct {
-	Body     string                     `json:"body"`
-	Id       string                     `json:"id"`
-	Kind     InterviewContextSourceKind `json:"kind"`
-	Revision string                     `json:"revision"`
-	Sha256   string                     `json:"sha256"`
-}
-
-// InterviewContextSourceKind defines model for InterviewContextSource.Kind.
-type InterviewContextSourceKind string
-
-// InterviewDebriefObservation defines model for InterviewDebriefObservation.
-type InterviewDebriefObservation struct {
-	Detail InterviewCitedText              `json:"detail"`
-	Kind   InterviewDebriefObservationKind `json:"kind"`
-}
-
-// InterviewDebriefObservationKind defines model for InterviewDebriefObservation.Kind.
-type InterviewDebriefObservationKind string
-
-// InterviewDebriefRecord defines model for InterviewDebriefRecord.
-type InterviewDebriefRecord struct {
-	Attribution  *InterviewDebriefRecordAttribution `json:"attribution,omitempty"`
-	CreatedAt    time.Time                          `json:"createdAt"`
-	Id           string                             `json:"id"`
-	InterviewId  string                             `json:"interviewId"`
-	Notes        string                             `json:"notes"`
-	Observations *[]InterviewDebriefObservation     `json:"observations,omitempty"`
-	RoundId      *string                            `json:"roundId,omitempty"`
-	Unknowns     *[]string                          `json:"unknowns,omitempty"`
-	UpdatedAt    time.Time                          `json:"updatedAt"`
-}
-
-// InterviewDebriefRecordAttribution defines model for InterviewDebriefRecord.Attribution.
-type InterviewDebriefRecordAttribution string
-
-// InterviewDetail defines model for InterviewDetail.
-type InterviewDetail struct {
-	Debriefs  []InterviewDebriefRecord `json:"debriefs"`
-	Interview InterviewView            `json:"interview"`
-}
-
-// InterviewDraft defines model for InterviewDraft.
-type InterviewDraft struct {
-	Examples       []InterviewExample          `json:"examples"`
-	Focus          []InterviewFocusAlternative `json:"focus"`
-	Questions      []InterviewQuestion         `json:"questions"`
-	ScheduleClaims *[]InterviewScheduleClaim   `json:"scheduleClaims,omitempty"`
-	Unknowns       *[]string                   `json:"unknowns,omitempty"`
-}
-
-// InterviewExample defines model for InterviewExample.
-type InterviewExample struct {
-	Action         InterviewCitedText             `json:"action"`
-	ContextBasis   InterviewCitation              `json:"contextBasis"`
-	ExperienceKind InterviewExampleExperienceKind `json:"experienceKind"`
-	Result         *InterviewCitedText            `json:"result,omitempty"`
-	Situation      InterviewCitedText             `json:"situation"`
-	Title          string                         `json:"title"`
-	UnknownResult  *string                        `json:"unknownResult,omitempty"`
-}
-
-// InterviewExampleExperienceKind defines model for InterviewExample.ExperienceKind.
-type InterviewExampleExperienceKind string
-
-// InterviewFocusAlternative defines model for InterviewFocusAlternative.
-type InterviewFocusAlternative struct {
-	Id  string             `json:"id"`
-	Why InterviewCitedText `json:"why"`
-}
-
-// InterviewFocusSummary defines model for InterviewFocusSummary.
-type InterviewFocusSummary struct {
-	Disposition  InterviewFocusSummaryDisposition `json:"disposition"`
-	InputSha256  string                           `json:"inputSha256"`
-	JevAttemptId *string                          `json:"jevAttemptId,omitempty"`
-	SelectedId   *string                          `json:"selectedId,omitempty"`
-}
-
-// InterviewFocusSummaryDisposition defines model for InterviewFocusSummary.Disposition.
-type InterviewFocusSummaryDisposition string
-
-// InterviewList defines model for InterviewList.
-type InterviewList struct {
-	Items []InterviewView `json:"items"`
-}
-
-// InterviewQuestion defines model for InterviewQuestion.
-type InterviewQuestion struct {
-	Text string             `json:"text"`
-	Why  InterviewCitedText `json:"why"`
-}
-
-// InterviewScheduleClaim defines model for InterviewScheduleClaim.
-type InterviewScheduleClaim struct {
-	Citation     InterviewCitation           `json:"citation"`
-	EndRfc3339   *time.Time                  `json:"endRfc3339,omitempty"`
-	Mode         *InterviewScheduleClaimMode `json:"mode,omitempty"`
-	StartRfc3339 *time.Time                  `json:"startRfc3339,omitempty"`
-	Venue        *string                     `json:"venue,omitempty"`
-}
-
-// InterviewScheduleClaimMode defines model for InterviewScheduleClaim.Mode.
-type InterviewScheduleClaimMode string
-
-// InterviewView defines model for InterviewView.
-type InterviewView struct {
-	Brief               *InterviewBrief        `json:"brief,omitempty"`
-	Context             string                 `json:"context"`
-	ContextSha256       string                 `json:"contextSha256"`
-	CreatedAt           time.Time              `json:"createdAt"`
-	Current             bool                   `json:"current"`
-	Focus               *InterviewFocusSummary `json:"focus,omitempty"`
-	Id                  string                 `json:"id"`
-	OpportunityId       string                 `json:"opportunityId"`
-	OpportunityRevision int64                  `json:"opportunityRevision"`
-	ProfileVersion      int64                  `json:"profileVersion"`
-	RoundId             *string                `json:"roundId,omitempty"`
-	UpdatedAt           time.Time              `json:"updatedAt"`
-}
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
@@ -3997,223 +3330,15 @@ type MuseRunReportOutcome string
 // MuseRunReportTier defines model for MuseRunReport.Tier.
 type MuseRunReportTier string
 
-// OfferCitation defines model for OfferCitation.
-type OfferCitation struct {
-	Excerpt  string `json:"excerpt"`
-	SourceId string `json:"sourceId"`
-}
-
-// OfferCitedText defines model for OfferCitedText.
-type OfferCitedText struct {
-	Citations []OfferCitation `json:"citations"`
-	Text      string          `json:"text"`
-}
-
-// OfferComparisonInput defines model for OfferComparisonInput.
-type OfferComparisonInput struct {
-	Alternatives *[]OfferReviewAlternative `json:"alternatives,omitempty"`
-	Offers       []OfferComparisonOffer    `json:"offers"`
-	Sources      []OfferComparisonSource   `json:"sources"`
-}
-
-// OfferComparisonOffer defines model for OfferComparisonOffer.
-type OfferComparisonOffer struct {
-	Arrangement        *[]OfferCitedText              `json:"arrangement,omitempty"`
-	Benefits           *[]OfferCitedText              `json:"benefits,omitempty"`
-	Employer           string                         `json:"employer"`
-	EmployerCitation   *OfferCitation                 `json:"employerCitation,omitempty"`
-	Engagement         OfferComparisonOfferEngagement `json:"engagement"`
-	EngagementCitation *OfferCitation                 `json:"engagementCitation,omitempty"`
-	Holiday            OfferHolidayTerm               `json:"holiday"`
-	Hours              OfferHoursTerm                 `json:"hours"`
-	Id                 string                         `json:"id"`
-	Pay                OfferPayTerm                   `json:"pay"`
-	Unknowns           *[]string                      `json:"unknowns,omitempty"`
-}
-
-// OfferComparisonOfferEngagement defines model for OfferComparisonOffer.Engagement.
-type OfferComparisonOfferEngagement string
-
-// OfferComparisonResult defines model for OfferComparisonResult.
-type OfferComparisonResult struct {
-	Comparison     OfferComparisonSnapshot             `json:"comparison"`
-	CreatedAt      time.Time                           `json:"createdAt"`
-	Current        bool                                `json:"current"`
-	Id             string                              `json:"id"`
-	IntakeId       string                              `json:"intakeId"`
-	RoundId        string                              `json:"roundId"`
-	Tradeoff       *OfferTradeoffSelection             `json:"tradeoff,omitempty"`
-	TradeoffStatus OfferComparisonResultTradeoffStatus `json:"tradeoffStatus"`
-}
-
-// OfferComparisonResultTradeoffStatus defines model for OfferComparisonResult.TradeoffStatus.
-type OfferComparisonResultTradeoffStatus string
-
-// OfferComparisonSnapshot defines model for OfferComparisonSnapshot.
-type OfferComparisonSnapshot struct {
-	Input       OfferComparisonInput `json:"input"`
-	InputSha256 string               `json:"inputSha256"`
-	Missing     []OfferMissingTerms  `json:"missing"`
-	Pay         []OfferPayPair       `json:"pay"`
-	Views       []OfferPayView       `json:"views"`
-}
-
-// OfferComparisonSource defines model for OfferComparisonSource.
-type OfferComparisonSource struct {
-	Body     string  `json:"body"`
-	Id       string  `json:"id"`
-	Kind     string  `json:"kind"`
-	OfferId  *string `json:"offerId,omitempty"`
-	Revision string  `json:"revision"`
-	Sha256   string  `json:"sha256"`
-}
-
-// OfferExactCents defines model for OfferExactCents.
-type OfferExactCents struct {
-	Denominator int64 `json:"denominator"`
-	Numerator   int64 `json:"numerator"`
-}
-
-// OfferExactRange defines model for OfferExactRange.
-type OfferExactRange struct {
-	Kind OfferExactRangeKind `json:"kind"`
-	Max  *OfferExactCents    `json:"max,omitempty"`
-	Min  OfferExactCents     `json:"min"`
-}
-
 // OfferExactRangeKind defines model for OfferExactRange.Kind.
-type OfferExactRangeKind string
-
-// OfferHolidayTerm defines model for OfferHolidayTerm.
-type OfferHolidayTerm struct {
-	Citation  *OfferCitation            `json:"citation,omitempty"`
-	RateBps   *int64                    `json:"rateBps,omitempty"`
-	Treatment OfferHolidayTermTreatment `json:"treatment"`
-}
 
 // OfferHolidayTermTreatment defines model for OfferHolidayTerm.Treatment.
-type OfferHolidayTermTreatment string
-
-// OfferHoursTerm defines model for OfferHoursTerm.
-type OfferHoursTerm struct {
-	Citation         *OfferCitation `json:"citation,omitempty"`
-	WeeklyHundredths *int64         `json:"weeklyHundredths,omitempty"`
-}
-
-// OfferMissingTerms defines model for OfferMissingTerms.
-type OfferMissingTerms struct {
-	OfferId string   `json:"offerId"`
-	Terms   []string `json:"terms"`
-}
-
-// OfferOption defines model for OfferOption.
-type OfferOption struct {
-	Id    string `json:"id"`
-	Label string `json:"label"`
-}
-
-// OfferOptionSet defines model for OfferOptionSet.
-type OfferOptionSet struct {
-	ActorId        string        `json:"actorId"`
-	ActorKind      string        `json:"actorKind"`
-	ContextVersion int64         `json:"contextVersion"`
-	CreatedAt      time.Time     `json:"createdAt"`
-	ExcerptSha256  string        `json:"excerptSha256"`
-	Id             string        `json:"id"`
-	OpportunityId  string        `json:"opportunityId"`
-	Options        []OfferOption `json:"options"`
-	SourceExcerpt  string        `json:"sourceExcerpt"`
-	SourceId       string        `json:"sourceId"`
-	SpanEnd        int           `json:"spanEnd"`
-	SpanStart      int           `json:"spanStart"`
-	SupersedesId   *string       `json:"supersedesId,omitempty"`
-}
-
-// OfferOptionSetList defines model for OfferOptionSetList.
-type OfferOptionSetList struct {
-	Items []OfferOptionSet `json:"items"`
-}
-
-// OfferOptionSetMutation defines model for OfferOptionSetMutation.
-type OfferOptionSetMutation struct {
-	ChangeId             string                     `json:"changeId"`
-	CurrentInputVersions QualificationInputVersions `json:"currentInputVersions"`
-	Set                  OfferOptionSet             `json:"set"`
-}
-
-// OfferPayPair defines model for OfferPayPair.
-type OfferPayPair struct {
-	Currency            *string            `json:"currency,omitempty"`
-	DeltaRightMinusLeft *OfferExactRange   `json:"deltaRightMinusLeft,omitempty"`
-	Left                *OfferExactRange   `json:"left,omitempty"`
-	LeftId              string             `json:"leftId"`
-	Period              *string            `json:"period,omitempty"`
-	Reason              string             `json:"reason"`
-	Right               *OfferExactRange   `json:"right,omitempty"`
-	RightId             string             `json:"rightId"`
-	Status              OfferPayPairStatus `json:"status"`
-}
 
 // OfferPayPairStatus defines model for OfferPayPair.Status.
-type OfferPayPairStatus string
-
-// OfferPayTerm defines model for OfferPayTerm.
-type OfferPayTerm struct {
-	AmountKind         OfferPayTermAmountKind `json:"amountKind"`
-	AnnualConversion   *string                `json:"annualConversion,omitempty"`
-	Basis              string                 `json:"basis"`
-	Citation           *OfferCitation         `json:"citation,omitempty"`
-	ConversionCitation *OfferCitation         `json:"conversionCitation,omitempty"`
-	Currency           *string                `json:"currency,omitempty"`
-	MaxCents           *int64                 `json:"maxCents,omitempty"`
-	MinCents           *int64                 `json:"minCents,omitempty"`
-	Period             string                 `json:"period"`
-	RawAmountText      *string                `json:"rawAmountText,omitempty"`
-}
 
 // OfferPayTermAmountKind defines model for OfferPayTerm.AmountKind.
-type OfferPayTermAmountKind string
-
-// OfferPayView defines model for OfferPayView.
-type OfferPayView struct {
-	Basis                 string           `json:"basis"`
-	Currency              *string          `json:"currency,omitempty"`
-	Engagement            string           `json:"engagement"`
-	HolidayTreatment      string           `json:"holidayTreatment"`
-	MonthlyAssumption     *string          `json:"monthlyAssumption,omitempty"`
-	MonthlyEquivalent     *OfferExactRange `json:"monthlyEquivalent,omitempty"`
-	OfferId               string           `json:"offerId"`
-	Period                string           `json:"period"`
-	Reported              *OfferExactRange `json:"reported,omitempty"`
-	ReportedText          *string          `json:"reportedText,omitempty"`
-	WeeklyHoursHundredths *int64           `json:"weeklyHoursHundredths,omitempty"`
-}
-
-// OfferReviewAlternative defines model for OfferReviewAlternative.
-type OfferReviewAlternative struct {
-	Id   string                     `json:"id"`
-	Kind OfferReviewAlternativeKind `json:"kind"`
-	Why  OfferCitedText             `json:"why"`
-}
 
 // OfferReviewAlternativeKind defines model for OfferReviewAlternative.Kind.
-type OfferReviewAlternativeKind string
-
-// OfferTradeoffSelection defines model for OfferTradeoffSelection.
-type OfferTradeoffSelection struct {
-	Alternative *OfferReviewAlternative `json:"alternative,omitempty"`
-	Comparison  OfferComparisonSnapshot `json:"comparison"`
-	Selection   struct {
-		Disposition     OfferTradeoffSelectionSelectionDisposition `json:"disposition"`
-		InputSha256     string                                     `json:"input_sha256"`
-		ProviderResult  map[string]interface{}                     `json:"provider_result"`
-		RequestSnapshot map[string]interface{}                     `json:"request_snapshot"`
-		SelectedId      *string                                    `json:"selected_id,omitempty"`
-	} `json:"selection"`
-}
-
-// OfferTradeoffSelectionSelectionDisposition defines model for OfferTradeoffSelection.Selection.Disposition.
-type OfferTradeoffSelectionSelectionDisposition string
 
 // Opportunity defines model for Opportunity.
 type Opportunity struct {
@@ -4534,19 +3659,7 @@ type PreferencesResponse struct {
 	Version             int64               `json:"version"`
 }
 
-// PrepareDeliveryReviewRequest defines model for PrepareDeliveryReviewRequest.
-type PrepareDeliveryReviewRequest struct {
-	PackIds    []string `json:"packIds"`
-	RequestKey string   `json:"requestKey"`
-}
-
-// PrepareInterviewRequest defines model for PrepareInterviewRequest.
-type PrepareInterviewRequest struct {
-	// Context Complete owner supplied invitation and relevant context in one payload
-	Context       string `json:"context"`
-	OpportunityId string `json:"opportunityId"`
-	RequestKey    string `json:"requestKey"`
-}
+// Context Complete owner supplied invitation and relevant context in one payload
 
 // PrepareRoundRequest Owner selects an existing sourced opportunity; the server derives all pack details and authority.
 type PrepareRoundRequest struct {
@@ -4576,11 +3689,6 @@ type ProcessInputResponse struct {
 	InstructionId   *string `json:"instructionId,omitempty"`
 	ReplacedRoundId *string `json:"replacedRoundId,omitempty"`
 	Round           Round   `json:"round"`
-}
-
-// ProcessRepliesRequest defines model for ProcessRepliesRequest.
-type ProcessRepliesRequest struct {
-	RequestKey string `json:"requestKey"`
 }
 
 // QualificationCriterion defines model for QualificationCriterion.
@@ -4912,39 +4020,6 @@ type RelationshipSource struct {
 type ReplacePausedRound struct {
 	ExpectedRevision int64  `json:"expectedRevision"`
 	RoundId          string `json:"roundId"`
-}
-
-// ReplyCommissionResponse defines model for ReplyCommissionResponse.
-type ReplyCommissionResponse struct {
-	ProcessingId string `json:"processingId"`
-	Round        Round  `json:"round"`
-	ThreadId     string `json:"threadId"`
-}
-
-// ReplyDraft defines model for ReplyDraft.
-type ReplyDraft struct {
-	Draft       map[string]interface{} `json:"draft"`
-	DraftSha256 *string                `json:"draftSha256,omitempty"`
-	Id          string                 `json:"id"`
-	Revision    int                    `json:"revision"`
-}
-
-// ReplyProcessing defines model for ReplyProcessing.
-type ReplyProcessing struct {
-	CreatedAt     string  `json:"createdAt"`
-	Id            string  `json:"id"`
-	Intent        *string `json:"intent,omitempty"`
-	OpportunityId *string `json:"opportunityId,omitempty"`
-	ProcessedAt   *string `json:"processedAt,omitempty"`
-	RoundId       *string `json:"roundId,omitempty"`
-	ThreadId      string  `json:"threadId"`
-	UpdatedAt     string  `json:"updatedAt"`
-}
-
-// ReplyProcessingDetail defines model for ReplyProcessingDetail.
-type ReplyProcessingDetail struct {
-	Draft      *ReplyDraft     `json:"draft,omitempty"`
-	Processing ReplyProcessing `json:"processing"`
 }
 
 // RequestedDocument defines model for RequestedDocument.
@@ -5825,29 +4900,11 @@ type ApproveSavedAnswerVersionJSONRequestBody = SavedAnswerVersionCreate
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
-// ImportCorrespondenceThreadsJSONRequestBody defines body for ImportCorrespondenceThreads for application/json ContentType.
-type ImportCorrespondenceThreadsJSONRequestBody = ImportCorrespondenceRequest
-
-// ProcessCorrespondenceThreadJSONRequestBody defines body for ProcessCorrespondenceThread for application/json ContentType.
-type ProcessCorrespondenceThreadJSONRequestBody = ProcessRepliesRequest
-
-// PrepareDeliveryReviewJSONRequestBody defines body for PrepareDeliveryReview for application/json ContentType.
-type PrepareDeliveryReviewJSONRequestBody = PrepareDeliveryReviewRequest
-
-// ApproveDeliveryReviewJSONRequestBody defines body for ApproveDeliveryReview for application/json ContentType.
-type ApproveDeliveryReviewJSONRequestBody = ApproveDeliveryReviewRequest
-
 // SubmitIngestionJSONRequestBody defines body for SubmitIngestion for application/json ContentType.
 type SubmitIngestionJSONRequestBody = SubmitIngestionRequest
 
 // RetryIngestionJSONRequestBody defines body for RetryIngestion for application/json ContentType.
 type RetryIngestionJSONRequestBody = RetryIngestionRequest
-
-// PrepareInterviewJSONRequestBody defines body for PrepareInterview for application/json ContentType.
-type PrepareInterviewJSONRequestBody = PrepareInterviewRequest
-
-// DebriefInterviewJSONRequestBody defines body for DebriefInterview for application/json ContentType.
-type DebriefInterviewJSONRequestBody = DebriefInterviewRequest
 
 // MatchOpportunityAnswersJSONRequestBody defines body for MatchOpportunityAnswers for application/json ContentType.
 type MatchOpportunityAnswersJSONRequestBody = AnswerMatchRequest
@@ -5878,9 +4935,6 @@ type CommissionResearchRunJSONRequestBody = CommissionResearchRequest
 
 // SteerResearchRunJSONRequestBody defines body for SteerResearchRun for application/json ContentType.
 type SteerResearchRunJSONRequestBody = SteerResearchRequest
-
-// CompareOffersRoundJSONRequestBody defines body for CompareOffersRound for application/json ContentType.
-type CompareOffersRoundJSONRequestBody = CompareOffersRoundRequest
 
 // PrepareRoundJSONRequestBody defines body for PrepareRound for application/json ContentType.
 type PrepareRoundJSONRequestBody = PrepareRoundRequest
