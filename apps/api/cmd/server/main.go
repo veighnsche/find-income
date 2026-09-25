@@ -92,6 +92,7 @@ func runWithContext(ctx context.Context, args []string) error {
 	var packSources agency.PackSourceLoader
 	var interviewSources agency.PackSourceLoader
 	var interviewFocus agency.InterviewFocusEvaluator
+	var prepService *materialprep.Service
 	if jevConfig.Enabled {
 		decisions = jevservice.Service{Store: database, Client: jevClient}
 		options.AnswerMatcher = jevservice.Service{Store: database, Client: jevClient}
@@ -128,7 +129,7 @@ func runWithContext(ctx context.Context, args []string) error {
 			} else {
 				drafter = &materialprep.StandardDrafter{Runner: factory}
 			}
-			options.Materials = &materialprep.Service{Store: database,
+			materials := &materialprep.Service{Store: database,
 				Career: func() ([]applicationpacks.Source, []byte, error) {
 					return applicationpacks.LoadApprovedCareerSources(root, []string{"cv-vince-liem.typ", "cv-vince-liem.md", "github-evidence-review.md"})
 				},
@@ -137,6 +138,8 @@ func runWithContext(ctx context.Context, args []string) error {
 				Render: applicationpacks.Renderer{TypstPath: typst,
 					PrivateTempDir: filepath.Join(dataDir, "material-prep-tmp"), Timeout: 10 * time.Second},
 			}
+			options.Materials = materials
+			prepService = materials
 		}
 	}
 	worker := &agency.Engine{Store: database, Runtime: runtime, Decisions: decisions, PackSources: packSources, InterviewSources: interviewSources, InterviewFocus: interviewFocus, Context: ctx}
@@ -148,7 +151,12 @@ func runWithContext(ctx context.Context, args []string) error {
 	}
 	options.Codex = runtime
 	options.Rounds = &rounds.Service{Store: database, Readiness: worker, Canceller: runtime, Reconciler: runtime, Worker: worker}
-	wireResearch(database, runtime, &options, dataDir, jevClient, jevConfig.Enabled)
+	if stack := wireResearch(database, runtime, &options, dataDir, jevClient, jevConfig.Enabled); stack != nil && prepService != nil {
+		// Discovery-saved roles carry no opportunity text; the capture
+		// reader lets preparation describe the role from the verified
+		// vacancy bytes the check read. It opens stored bytes only.
+		prepService.Captures = stack.Captures
+	}
 	options.Delivery = &deliveryservice.Service{Store: database, Advisor: worker, From: os.Getenv("JOBSEEK_SMTP_FROM")}
 	if address := os.Getenv("JOBSEEK_SMTP_ADDRESS"); address != "" && os.Getenv("JOBSEEK_SMTP_FROM") != "" &&
 		os.Getenv("JOBSEEK_SMTP_SERVER_NAME") != "" && os.Getenv("JOBSEEK_SMTP_HELLO_NAME") != "" &&
@@ -233,10 +241,10 @@ func privateDataDir() (string, error) {
 // closed) instead of half-built. Executor binary paths are environment-driven
 // with no machine defaults; empty paths fail those kinds closed at dispatch.
 // PermitLoopback is test-only and never set here.
-func wireResearch(database *store.Store, runtime *codexservice.Lazy, options *httpapi.Options, dataDir string, jevClient *jev.Client, jevEnabled bool) {
+func wireResearch(database *store.Store, runtime *codexservice.Lazy, options *httpapi.Options, dataDir string, jevClient *jev.Client, jevEnabled bool) *researchwire.Stack {
 	if !jevEnabled {
 		log.Print("research unavailable: TYPESAFE_API_KEY is not set")
-		return
+		return nil
 	}
 	artifactRoot := os.Getenv("JOBSEEK_ARTIFACT_ROOT")
 	if artifactRoot == "" {
@@ -253,7 +261,7 @@ func wireResearch(database *store.Store, runtime *codexservice.Lazy, options *ht
 	})
 	if err != nil {
 		log.Printf("research unavailable: %v", err)
-		return
+		return nil
 	}
 	options.Research = stack.Research
 	options.ResearchControl = stack.Supervisor
@@ -261,6 +269,7 @@ func wireResearch(database *store.Store, runtime *codexservice.Lazy, options *ht
 	go sweepResearchLeases(stack)
 	log.Printf("research wired: artifacts=%s agent=%s", artifactRoot, stack.AgentID)
 	wireMuse(database, options, dataDir, stack)
+	return stack
 }
 
 // wireMuse composes the discovery slice behind the research stack: session

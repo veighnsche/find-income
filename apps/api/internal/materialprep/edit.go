@@ -47,6 +47,7 @@ type revisionPins struct {
 	company          store.Company
 	profile          store.Preferences
 	workflowRevision int64
+	description      string
 }
 
 // loadRevisionPins loads the expected base version plus the latest checked
@@ -94,9 +95,13 @@ func (s *Service) loadRevisionPins(ctx context.Context, opportunityID string, ex
 	}
 	questions := append([]store.CheckQuestionView(nil), status.Check.Questions...)
 	sort.Slice(questions, func(i, j int) bool { return questions[i].Ordinal < questions[j].Ordinal })
+	description, err := s.roleDescription(ctx, opportunity, status.Check.Vacancy.CaptureIDs)
+	if err != nil {
+		return out, err
+	}
 	out = revisionPins{base: base, check: *status.Check, questions: questions,
 		opportunity: opportunity, company: company, profile: profile,
-		workflowRevision: workflow.Revision}
+		workflowRevision: workflow.Revision, description: description}
 	return out, nil
 }
 
@@ -110,7 +115,7 @@ func revisionRole(p revisionPins) applicationpacks.Role {
 	return applicationpacks.Role{OpportunityID: p.opportunity.ID,
 		OpportunityRevision: p.opportunity.Revision, ProfileRevision: p.profile.Version,
 		Title: p.opportunity.Title, Company: p.company.Name, SourceURL: p.opportunity.SourceURL,
-		Description: p.opportunity.OriginalText, Destination: destination}
+		Description: p.description, Destination: destination}
 }
 
 // roleFocusLine is the deterministic role focus citing the saved role

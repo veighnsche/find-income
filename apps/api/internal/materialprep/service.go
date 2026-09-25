@@ -5,12 +5,14 @@
 // Typst-renders the pack, and commits through
 // store.PrepareOpportunityMaterials.
 //
-// The service performs no research, capture, fetch, or send of any kind. It
-// holds no capability for employer contact: its only outbound dependencies
-// are the injected Career, Draft, Relevance, and Render collaborators plus
-// the store. Pin verification (check, answers, workflow, opportunity) always
+// The service performs no research, fetch, or send of any kind. It holds
+// no capability for employer contact: its only outbound dependencies are
+// the injected Career, Draft, Relevance, and Render collaborators plus the
+// store. Pin verification (check, answers, workflow, opportunity) always
 // precedes any Standard spend, and zero required+unset questions means zero
-// Standard call.
+// Standard call. The optional Captures reader opens only already-stored
+// immutable vacancy capture bytes for the pack role description; it
+// performs no retrieval.
 package materialprep
 
 import (
@@ -20,10 +22,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/applicationpacks"
+	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
@@ -141,6 +145,10 @@ type Service struct {
 	Draft     Drafter
 	Relevance RelevanceAssessor
 	Render    PackRenderer
+	// Captures opens already-stored vacancy capture bytes when the saved
+	// opportunity carries no text (discovery-saved roles). Nil keeps the
+	// previous behavior: undescribed roles fail at pack validation.
+	Captures researchcontract.CaptureReader
 }
 
 // materialAnswerEntry pins one ordinal question in the manifest material
@@ -232,11 +240,12 @@ type pinned struct {
 	opportunity store.Opportunity
 	company     store.Company
 	profile     store.Preferences
+	description string
 }
 
 // verifyPins loads the pinned check, saved answers, workflow, opportunity,
 // company, and profile, failing with ErrNotFound/ErrConflict before any
-// Codex, Jev, or render spend. The store re-verifies every pin at commit;
+// Standard, Jev, or render spend. The store re-verifies every pin at commit;
 // these reads only fail fast.
 func (s *Service) verifyPins(ctx context.Context, opportunityID, expectedCheckID, expectedQuestionSet string, expectedWorkflowRevision int64) (pinned, error) {
 	var out pinned
@@ -291,8 +300,13 @@ func (s *Service) verifyPins(ctx context.Context, opportunityID, expectedCheckID
 	if err != nil {
 		return out, err
 	}
+	description, err := s.roleDescription(ctx, opportunity, check.Vacancy.CaptureIDs)
+	if err != nil {
+		return out, err
+	}
 	out = pinned{check: check, values: make(map[string]store.QuestionAnswerValue, len(answers.Values)),
-		workflow: workflow, opportunity: opportunity, company: company, profile: profile}
+		workflow: workflow, opportunity: opportunity, company: company, profile: profile,
+		description: description}
 	for _, value := range answers.Values {
 		out.values[value.QuestionID] = value
 	}
@@ -350,6 +364,41 @@ func (s *Service) savedAnswerContext(ctx context.Context) ([]SavedAnswerFact, er
 // roleSource snapshots the saved role record as an exact approved source so
 // role-specific pack lines cite pinned bytes. The body is composed of saved
 // fields only, fixed before use, and its sha travels in SourceShas.
+// maxRoleDescriptionBytes mirrors the pack Role.Description bound. Longer
+// vacancy bytes fail closed instead of truncating the role record.
+const maxRoleDescriptionBytes = 30000
+
+// roleDescription resolves the pack role description: the saved
+// opportunity text when present, else the check's first vacancy capture
+// bytes verbatim (discovery-saved roles carry no opportunity text; the
+// capture is the same verified bytes the check read). A nil Captures
+// reader or no capture ids leaves the role undescribed and pack
+// validation fails honestly, as before.
+func (s *Service) roleDescription(ctx context.Context, opportunity store.Opportunity, captureIDs []string) (string, error) {
+	if strings.TrimSpace(opportunity.OriginalText) != "" {
+		return opportunity.OriginalText, nil
+	}
+	if s == nil || s.Captures == nil || len(captureIDs) == 0 {
+		return "", nil
+	}
+	_, reader, err := s.Captures.OpenCapture(ctx, captureIDs[0])
+	if err != nil {
+		return "", fmt.Errorf("materialprep: open vacancy capture: %w", err)
+	}
+	defer reader.Close()
+	raw, err := io.ReadAll(io.LimitReader(reader, maxRoleDescriptionBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("materialprep: read vacancy capture: %w", err)
+	}
+	if len(raw) > maxRoleDescriptionBytes {
+		return "", fmt.Errorf("%w: vacancy capture exceeds the role description bound", store.ErrInvalid)
+	}
+	if strings.TrimSpace(string(raw)) == "" {
+		return "", nil
+	}
+	return string(raw), nil
+}
+
 func roleSource(opportunity store.Opportunity, company store.Company) applicationpacks.Source {
 	var body strings.Builder
 	body.WriteString("Saved role record.\nTitle: ")
@@ -515,7 +564,7 @@ func buildInput(p pinned, sources []applicationpacks.Source, template []byte, dr
 		Role: applicationpacks.Role{OpportunityID: p.opportunity.ID,
 			OpportunityRevision: p.opportunity.Revision, ProfileRevision: p.profile.Version,
 			Title: p.opportunity.Title, Company: p.company.Name, SourceURL: p.opportunity.SourceURL,
-			Description: p.opportunity.OriginalText, Destination: destination},
+			Description: p.description, Destination: destination},
 		Sources: all,
 		Draft: applicationpacks.Draft{Focus: focus, Cover: []applicationpacks.Line{cover},
 			Answers: packAnswers, MaterialUnknowns: unknowns},

@@ -274,6 +274,22 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	artifactRoot := os.Getenv("JOBSEEK_ARTIFACT_ROOT")
+	if artifactRoot == "" {
+		artifactRoot = filepath.Join(dataDir, "research-artifacts")
+	}
+	stack, err := researchwire.Wire(database, researchwire.Config{
+		ArtifactRoot:         artifactRoot,
+		ScratchRoot:          os.Getenv("JOBSEEK_RESEARCH_SCRATCH_ROOT"),
+		ChromePath:           os.Getenv("JOBSEEK_RESEARCH_CHROME_PATH"),
+		ExpectedChromeSHA256: os.Getenv("JOBSEEK_RESEARCH_CHROME_SHA256"),
+		PythonPath:           os.Getenv("JOBSEEK_RESEARCH_PYTHON_PATH"),
+		SandboxBinary:        os.Getenv("JOBSEEK_RESEARCH_SANDBOX_BINARY"),
+		JevProvider:          jevClient,
+	})
+	if err != nil {
+		return fmt.Errorf("wire research: %w", err)
+	}
 	bounds := musecode.DefaultBounds()
 	bounds.MaxWallClock = 10 * time.Minute
 	bounds.MaxModelSteps = 10
@@ -293,6 +309,7 @@ func run() error {
 			return applicationpacks.LoadApprovedCareerSources(careerRoot, careerFiles)
 		},
 		Draft:     &materialprep.StandardDrafter{Runner: factory},
+		Captures:  stack.Captures,
 		Relevance: materialprep.JevRelevance{Evaluator: jevClient},
 		Render: applicationpacks.Renderer{TypstPath: typstPath,
 			PrivateTempDir: filepath.Join(dataDir, "material-prep-tmp"), Timeout: 10 * time.Second},
@@ -309,8 +326,42 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("role workflow: %w", err)
 	}
-	fmt.Printf("e13: pins check=%s set=%.12s workflow=%d\n",
-		status.Check.ID, status.Check.QuestionSetSHA256, workflow.Revision)
+	// The Answer stage with an empty approved-answer catalog is
+	// vacuous: no saved answer exists to match, so every question is
+	// unset and the editable boxes stay blank for the owner. Advance
+	// through answering to answered on that recorded basis instead of
+	// spending Jev calls to prove the deterministic outcome. Owner
+	// edits remain possible; the E13 review covers the boxes.
+	if workflow.Stage == store.RoleStageChecked {
+		digest, err := database.AnswerCatalogDigest(ctx)
+		if err != nil {
+			return fmt.Errorf("answer catalog digest: %w", err)
+		}
+		empty, err := database.ListSavedAnswers(ctx, store.SavedAnswerListOptions{Limit: 1})
+		if err != nil {
+			return fmt.Errorf("list saved answers: %w", err)
+		}
+		if len(empty.Items) != 0 {
+			return fmt.Errorf("refusing vacuous advance: %d saved answers exist (catalog %s)",
+				len(empty.Items), digest)
+		}
+		fmt.Println("e13: answer catalog empty; advancing checked->answering->answered (no matches possible)")
+		if workflow, err = database.AdvanceRoleWorkflow(ctx, opportunityID, workflow.Revision,
+			store.RoleStageAnswering, ""); err != nil {
+			return fmt.Errorf("advance to answering: %w", err)
+		}
+		if workflow, err = database.AdvanceRoleWorkflow(ctx, opportunityID, workflow.Revision,
+			store.RoleStageAnswered, ""); err != nil {
+			return fmt.Errorf("advance to answered: %w", err)
+		}
+	}
+	switch workflow.Stage {
+	case store.RoleStageAnswered, store.RoleStagePreparing, store.RoleStagePrepared:
+	default:
+		return fmt.Errorf("role stage is %q; refusing the run", workflow.Stage)
+	}
+	fmt.Printf("e13: pins check=%s set=%.12s workflow=%d stage=%s\n",
+		status.Check.ID, status.Check.QuestionSetSHA256, workflow.Revision, workflow.Stage)
 	view, replayed, err := service.PrepareOpportunityMaterials(ctx, actor, opportunityID,
 		requestKey, status.Check.ID, status.Check.QuestionSetSHA256, workflow.Revision)
 	if err != nil {
