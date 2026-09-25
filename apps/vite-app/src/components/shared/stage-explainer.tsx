@@ -21,7 +21,7 @@ const COPY: Record<
   prepare: {
     title: "Putting your application together",
     body: "I'll turn your answers into a clear application, tailor your CV, and write a short message if needed. If you left a required answer blank, it can be drafted from verified facts. Optional answers can stay blank.",
-    note: "Nothing goes to an employer until you review it and choose to send.",
+    note: "Nothing leaves this app. You copy the saved materials and apply manually from Handoff.",
   },
 }
 

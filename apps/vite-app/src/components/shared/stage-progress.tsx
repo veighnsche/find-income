@@ -11,8 +11,8 @@ export const SEVEN_STAGES = [
   { id: "select", label: "Select jobs" },
   { id: "check", label: "Check job details" },
   { id: "answer", label: "Answer questions" },
-  { id: "prepare", label: "Prepare applications" },
-  { id: "review", label: "Review & send" },
+  { id: "prepare", label: "Prepare materials" },
+  { id: "handoff", label: "Handoff" },
 ] as const;
 
 export type StageState = "complete" | "upcoming" | "blocked";

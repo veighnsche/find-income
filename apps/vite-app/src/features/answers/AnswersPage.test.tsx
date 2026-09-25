@@ -773,7 +773,7 @@ describe("answers journey flow", () => {
 
     expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
     const continuation = screen.getByRole("link", {
-      name: "Prepare applications",
+      name: "Prepare materials",
     })
     expect(continuation.getAttribute("href")).toBe("#/jobs/job-1/prepare")
     for (const call of calls) {

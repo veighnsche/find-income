@@ -55,14 +55,6 @@ export type EvidencePage = components["schemas"]["EvidencePage"]
 export type QualificationHistoryPage =
   components["schemas"]["QualificationHistoryPage"]
 export type OfferOptionSet = components["schemas"]["OfferOptionSet"]
-export type DeliveryCapability = components["schemas"]["DeliveryCapability"]
-export type PrepareDeliveryReviewRequest =
-  components["schemas"]["PrepareDeliveryReviewRequest"]
-export type DeliveryReview = components["schemas"]["DeliveryReview"]
-export type DeliveryItem = components["schemas"]["DeliveryItem"]
-export type DeliverySendResult = components["schemas"]["DeliverySendResult"]
-export type DeliveryReconciliation =
-  components["schemas"]["DeliveryReconciliation"]
 export type PrepareInterviewRequest =
   components["schemas"]["PrepareInterviewRequest"]
 export type DebriefInterviewRequest =
@@ -332,87 +324,6 @@ export function getLatestCompletedSavedRound(
 ): Promise<Round | null> {
   return request<Round | null>("/rounds/latest-completed?outcome=all", {
     signal,
-  })
-}
-
-export function getDeliveryCapability(
-  signal?: AbortSignal
-): Promise<DeliveryCapability> {
-  return request<DeliveryCapability>("/delivery/capability", { signal })
-}
-
-export function prepareDeliveryReview(
-  input: PrepareDeliveryReviewRequest,
-  csrfToken: string
-): Promise<DeliveryReview> {
-  return request<DeliveryReview>("/delivery/reviews", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
-    body: JSON.stringify(input),
-  })
-}
-
-export function getDeliveryReview(
-  id: string,
-  signal?: AbortSignal
-): Promise<DeliveryReview> {
-  return request<DeliveryReview>(
-    `/delivery/reviews/${encodeURIComponent(id)}`,
-    { signal }
-  )
-}
-
-export function approveDeliveryReview(
-  id: string,
-  materialSha256: string,
-  csrfToken: string
-): Promise<DeliveryReview> {
-  return request<DeliveryReview>(
-    `/delivery/reviews/${encodeURIComponent(id)}/approve`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRF-Token": csrfToken,
-      },
-      body: JSON.stringify({ materialSha256 }),
-    }
-  )
-}
-
-export function sendDeliveryReview(
-  id: string,
-  csrfToken: string
-): Promise<DeliverySendResult> {
-  return request<DeliverySendResult>(
-    `/delivery/reviews/${encodeURIComponent(id)}/send`,
-    {
-      method: "POST",
-      headers: { "X-CSRF-Token": csrfToken },
-    }
-  )
-}
-
-export function reconcileDeliveryReview(
-  id: string,
-  csrfToken: string
-): Promise<DeliveryReconciliation> {
-  return request<DeliveryReconciliation>(
-    `/delivery/reviews/${encodeURIComponent(id)}/reconcile`,
-    {
-      method: "POST",
-      headers: { "X-CSRF-Token": csrfToken },
-    }
-  )
-}
-
-export function closeDeliveryReview(
-  id: string,
-  csrfToken: string
-): Promise<Round> {
-  return request<Round>(`/delivery/reviews/${encodeURIComponent(id)}/close`, {
-    method: "POST",
-    headers: { "X-CSRF-Token": csrfToken },
   })
 }
 

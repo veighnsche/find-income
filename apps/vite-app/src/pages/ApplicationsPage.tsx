@@ -12,7 +12,6 @@ import {
   ErrorBlock,
   LoadingBlock,
 } from "@/components/shared"
-import { AttemptHistory } from "@/features/attempts"
 import { ApplicationContinue } from "@/pages/application-continue"
 import { formatDate } from "@/pages/format"
 import { RoleStageSection, stageStatusText } from "@/pages/role-stages"
@@ -31,7 +30,6 @@ function continueHref(workflow: RoleWorkflowState): string {
     case "prepared":
       return `#/jobs/${id}/prepare`
     case "reviewing":
-      return `#/applications/${id}/review`
     case "sent":
       return `#/applications/${id}`
     case "selected":
@@ -119,7 +117,7 @@ function ApplicationsList() {
                   href={`#/applications/${encodeURIComponent(workflow.opportunityId)}`}
                   className="mt-1 inline-block text-xs text-muted-foreground underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
-                  Saved packs and send history
+                  Saved materials and handoff
                 </a>
               </li>
             )
@@ -150,12 +148,6 @@ function ApplicationDetail({ jobId }: { jobId: string }) {
         >
           Back to Applications
         </a>
-        <a
-          href={`#/applications/${encodeURIComponent(jobId)}/review`}
-          className="text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          Review application
-        </a>
       </p>
 
       {opportunity.status === "loading" ? (
@@ -174,7 +166,7 @@ function ApplicationDetail({ jobId }: { jobId: string }) {
               : opportunity.data.opportunity.title}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Current work, saved packs and send history for this role.
+            Current work, saved materials and manual handoff for this role.
           </p>
         </div>
       )}
@@ -230,22 +222,6 @@ function ApplicationDetail({ jobId }: { jobId: string }) {
               ))}
             </ol>
           )}
-        </div>
-      </section>
-
-      <section aria-labelledby="application-attempts-heading">
-        <h2
-          id="application-attempts-heading"
-          className="font-heading text-lg font-medium"
-        >
-          Attempted submissions
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          The exact attempted material and actual service result for each
-          send, unchanged by newer material versions.
-        </p>
-        <div className="mt-3">
-          <AttemptHistory jobId={jobId} />
         </div>
       </section>
 

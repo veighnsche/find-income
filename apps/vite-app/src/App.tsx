@@ -18,10 +18,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRoute, type Route } from "@/routes/useRoute"
 import { AnswersPage } from "@/features/answers"
-import { AttemptOutcomeView } from "@/features/attempts"
 import { CheckPage } from "@/features/check"
 import { PreparePage } from "@/features/prepare"
-import { ReviewPage } from "@/features/review/ReviewPage"
 import { ApplicationsPage } from "@/pages/ApplicationsPage"
 import { JobDetailPage } from "@/pages/JobDetailPage"
 import { JobsPage } from "@/pages/JobsPage"
@@ -105,10 +103,7 @@ function Shell() {
             id: "applications",
             label: "Applications",
             href: "#/applications",
-            active:
-              route.page === "applications" ||
-              route.page === "review" ||
-              route.page === "attempt",
+            active: route.page === "applications",
           },
         ]}
       />
@@ -140,10 +135,6 @@ function RoutePage({
       )
     case "applications":
       return <ApplicationsPage jobId={route.jobId} />
-    case "review":
-      return <ReviewPage jobId={route.jobId} />
-    case "attempt":
-      return <AttemptOutcomeView jobId={route.jobId} reviewId={route.reviewId} />
     case "check":
       return <CheckPage jobId={route.jobId} />
     case "answers":

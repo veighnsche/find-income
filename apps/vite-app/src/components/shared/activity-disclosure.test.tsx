@@ -66,7 +66,7 @@ describe("ActivityDisclosure", () => {
     const html = renderToStaticMarkup(
       <ActivityDisclosure
         actor="owner"
-        phase="Review & send"
+        phase="Handoff"
         status="Nothing recorded"
         entries={[]}
         defaultOpen

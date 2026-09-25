@@ -23,13 +23,13 @@ describe("StageExplainer", () => {
     expect(screen.getByText(/no language model/i)).toBeDefined()
   })
 
-  it("explains the prepare stage with review-before-send", () => {
+  it("explains the prepare stage with manual handoff", () => {
     render(<StageExplainer stage="prepare" />)
     expect(
       screen.getByRole("heading", { name: "Putting your application together" })
     ).toBeDefined()
     expect(
-      screen.getByText(/until you review it and choose to send/i)
+      screen.getByText(/copy the saved materials and apply manually/i)
     ).toBeDefined()
   })
 })

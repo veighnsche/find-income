@@ -438,14 +438,14 @@ function PrepareContinuation({ jobId }: { jobId: string }) {
         <Button
           render={
             <a href={`#/jobs/${encodeURIComponent(jobId)}/prepare`}>
-              Prepare applications
+              Prepare materials
             </a>
           }
         />
       </div>
       <p className="text-xs wrap-break-word text-muted-foreground">
-        Nothing is sent now. You review the completed application before
-        sending.
+        Nothing leaves this app. You keep the saved answers and apply
+        manually from the Handoff page.
       </p>
     </section>
   )

@@ -8,8 +8,6 @@ export type Route =
   | { page: "answers"; jobId: string }
   | { page: "prepare"; jobId: string }
   | { page: "applications"; jobId: string | null }
-  | { page: "review"; jobId: string }
-  | { page: "attempt"; jobId: string; reviewId: string }
   | { page: "not-found"; hash: string }
 
 function decodeSegment(segment: string): string {
@@ -32,13 +30,9 @@ export function parseHash(hash: string): Route {
   if (first === undefined || rest.length > 0)
     return { page: "not-found", hash: hash || "#/" }
   if (fourth !== undefined) {
-    if (first === "applications" && second !== undefined && third === "attempts")
-      return { page: "attempt", jobId: second, reviewId: fourth }
     return { page: "not-found", hash: hash || "#/" }
   }
   if (third !== undefined) {
-    if (first === "applications" && second !== undefined && third === "review")
-      return { page: "review", jobId: second }
     if (first === "jobs" && second !== undefined && third === "check")
       return { page: "check", jobId: second }
     if (first === "jobs" && second !== undefined && third === "answers")
@@ -83,10 +77,6 @@ export function routeToHash(route: Route): string {
       return route.jobId === null
         ? "#/applications"
         : `#/applications/${encodeURIComponent(route.jobId)}`
-    case "review":
-      return `#/applications/${encodeURIComponent(route.jobId)}/review`
-    case "attempt":
-      return `#/applications/${encodeURIComponent(route.jobId)}/attempts/${encodeURIComponent(route.reviewId)}`
     case "check":
       return `#/jobs/${encodeURIComponent(route.jobId)}/check`
     case "answers":

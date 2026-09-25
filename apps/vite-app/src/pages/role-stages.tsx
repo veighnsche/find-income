@@ -22,7 +22,7 @@ import { useRead, type ReadResult } from "@/pages/useRead"
  * prepared | reviewing | sent | blocked. The dashboard renders those ten
  * states on the fixed seven-step journey (Your goals → Find jobs →
  * Select jobs → Check job details → Answer questions → Prepare
- * applications → Review & send). Steps before the active step render as
+ * materials → Handoff). Steps before the active step render as
  * complete, steps after it as upcoming; steps are progress markers, not
  * compulsory visits, so nothing here navigates or gates any section.
  *
@@ -33,16 +33,16 @@ import { useRead, type ReadResult } from "@/pages/useRead"
  * | checked    | Check job details | … + Select jobs             |
  * | answering  | Answer questions  | … + Check job details       |
  * | answered   | Answer questions  | … + Check job details       |
- * | preparing  | Prepare applications | … + Answer questions     |
- * | prepared   | Prepare applications | … + Answer questions     |
- * | reviewing  | Review & send     | … + Prepare applications    |
+ * | preparing  | Prepare materials | … + Answer questions        |
+ * | prepared   | Prepare materials | … + Answer questions        |
+ * | reviewing  | Handoff           | … + Prepare materials       |
  * | sent       | none (all seven complete) | all seven           |
  * | blocked    | none (unknown origin) | none marked            |
  *
  * Past-tense role stages (checked, answered, prepared) rest on their
  * journey step as current: the phase is recorded but the next phase has
  * not started, so claiming the next step would invent progress. `sent`
- * completes the journey, so no step stays current. `blocked` carries a
+ * is a legacy terminal state and completes the journey visually. `blocked` carries a
  * free-text reason but no prior stage (the server reaches it from
  * checking or preparing), so the indicator marks nothing and the reason
  * is shown as text instead of guessing a step. Roles without a selected
@@ -60,7 +60,7 @@ const JOURNEY_INDEX: Record<string, number> = {
   check: 3,
   answer: 4,
   prepare: 5,
-  review: 6,
+  handoff: 6,
 }
 
 const ROLE_TO_JOURNEY: Record<string, string> = {
@@ -71,7 +71,7 @@ const ROLE_TO_JOURNEY: Record<string, string> = {
   answered: "answer",
   preparing: "prepare",
   prepared: "prepare",
-  reviewing: "review",
+  reviewing: "handoff",
 }
 
 export function journeyViewFor(stage: RoleStage): {
@@ -110,7 +110,8 @@ export function journeyLabelFor(stage: RoleStage): string | null {
 }
 
 export function stageStatusText(workflow: RoleWorkflowState): string {
-  if (workflow.stage === "sent") return "Sent — all seven stages complete."
+  if (workflow.stage === "sent")
+    return "Saved for handoff — all seven stages complete."
   if (workflow.stage === "blocked") {
     const reason = workflow.blockedReason ?? ""
     return reason === ""

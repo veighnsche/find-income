@@ -19,9 +19,9 @@ const ACTIVE_JOURNEY: Record<Stage, string | null> = {
   checked: "Check job details",
   answering: "Answer questions",
   answered: "Answer questions",
-  preparing: "Prepare applications",
-  prepared: "Prepare applications",
-  reviewing: "Review & send",
+  preparing: "Prepare materials",
+  prepared: "Prepare materials",
+  reviewing: "Handoff",
   sent: null,
   blocked: null,
 }
@@ -57,7 +57,7 @@ describe("role-stage mapping", () => {
       ["answered", "answer"],
       ["preparing", "prepare"],
       ["prepared", "prepare"],
-      ["reviewing", "review"],
+      ["reviewing", "handoff"],
       ["sent", null],
       ["blocked", null],
     ]
@@ -131,7 +131,9 @@ describe.each(Object.entries(ACTIVE_JOURNEY))(
       if (journey === null) {
         if (stage === "sent") {
           expect(
-            await screen.findByText("Sent — all seven stages complete.")
+            await screen.findByText(
+              "Saved for handoff — all seven stages complete."
+            )
           ).toBeDefined()
           await waitFor(() =>
             expect(
@@ -284,11 +286,9 @@ describe("reload persistence and record independence", () => {
     window.location.hash = "#/jobs/job-2"
     const first = render(<App />)
     expect(
-      await screen.findByText("Current stage: Review & send (reviewing)")
+      await screen.findByText("Current stage: Handoff (reviewing)")
     ).toBeDefined()
-    await waitFor(() =>
-      expect(currentStepLabel()).toContain("Review & send")
-    )
+    await waitFor(() => expect(currentStepLabel()).toContain("Handoff"))
     first.unmount()
     cleanup()
 
@@ -296,11 +296,9 @@ describe("reload persistence and record independence", () => {
     window.location.hash = "#/jobs/job-2"
     render(<App />)
     expect(
-      await screen.findByText("Current stage: Review & send (reviewing)")
+      await screen.findByText("Current stage: Handoff (reviewing)")
     ).toBeDefined()
-    await waitFor(() =>
-      expect(currentStepLabel()).toContain("Review & send")
-    )
+    await waitFor(() => expect(currentStepLabel()).toContain("Handoff"))
   })
 
   it("keeps two records independent across list and detail", async () => {
@@ -330,11 +328,11 @@ describe("reload persistence and record independence", () => {
     go("#/jobs/job-2")
     expect(
       await screen.findByText(
-        "Current stage: Prepare applications (prepared)"
+        "Current stage: Prepare materials (prepared)"
       )
     ).toBeDefined()
     await waitFor(() =>
-      expect(currentStepLabel()).toContain("Prepare applications")
+      expect(currentStepLabel()).toContain("Prepare materials")
     )
   })
 

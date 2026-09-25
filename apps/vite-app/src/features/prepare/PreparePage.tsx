@@ -77,7 +77,7 @@ export function PreparePage({
 
       <div>
         <h1 className="font-heading text-2xl font-semibold wrap-break-word">
-          Prepare applications
+          Prepare materials
         </h1>
         <p className="mt-1 text-sm wrap-break-word text-muted-foreground">
           {title} · opening this page only reads saved state; preparing,
@@ -711,8 +711,8 @@ function DirectEditSection({
       <h2 className="text-base font-semibold wrap-break-word">Direct edit</h2>
       <p className="text-sm wrap-break-word text-muted-foreground">
         Replace the complete material text exactly as typed. Saving uses no
-        model, creates v{current.version + 1}, and invalidates any earlier
-        review; the new version needs a fresh review before sending.
+        model, creates v{current.version + 1}, and supersedes any earlier
+        saved version; use the new version for handoff.
       </p>
       {pack.status === "loading" ? (
         <LoadingBlock label="Loading current rendering…" />
@@ -832,7 +832,7 @@ function RewriteSection({
       </h2>
       <p className="text-sm wrap-break-word text-muted-foreground">
         Run one explicit rewrite turn over v{current.version}. The result is a
-        new reviewable version; this page never rewrites on its own, and the
+        new inspectable version; this page never rewrites on its own, and the
         instruction below is the only guidance the turn receives beyond the
         saved facts.
       </p>
@@ -894,18 +894,18 @@ function AdvanceSection({
     return (
       <p className="text-sm wrap-break-word text-muted-foreground">
         {current.readiness.ready
-          ? "This version is outdated, so review waits for a fresh prepare."
-          : "This version is held: every required item needs an answer before review."}
+          ? "This version is outdated, so handoff waits for a fresh prepare."
+          : "This version is held: every required item needs an answer before handoff."}
       </p>
     )
   }
   return (
     <p>
       <a
-        href={`#/applications/${encodeURIComponent(jobId)}/review`}
+        href={`#/applications/${encodeURIComponent(jobId)}`}
         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium whitespace-nowrap text-primary-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
-        Continue to review v{current.version}
+        Open handoff for v{current.version}
       </a>
     </p>
   )

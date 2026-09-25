@@ -459,13 +459,13 @@ describe("prepare page reads", () => {
     ).toBeDefined()
     expect(await screen.findByText("Focus line.")).toBeDefined()
     expect(await screen.findByText("I work remotely.")).toBeDefined()
-    const review = (await screen.findByText(
-      "Continue to review v1"
+    const handoff = (await screen.findByText(
+      "Open handoff for v1"
     )) as HTMLAnchorElement
-    expect(review.getAttribute("href")).toBe("#/applications/job-1/review")
+    expect(handoff.getAttribute("href")).toBe("#/applications/job-1")
   })
 
-  it("keeps held versions visibly held with no review link", async () => {
+  it("keeps held versions visibly held with no handoff link", async () => {
     stubPrepareFetch(
       preparedOptions({
         materials: {
@@ -493,10 +493,10 @@ describe("prepare page reads", () => {
     ).toBeDefined()
     expect(
       await screen.findByText(
-        "This version is held: every required item needs an answer before review."
+        "This version is held: every required item needs an answer before handoff."
       )
     ).toBeDefined()
-    expect(screen.queryByText(/Continue to review/)).toBeNull()
+    expect(screen.queryByText(/Open handoff for/)).toBeNull()
   })
 
   it("offers re-prepare for outdated versions and marks the stale base", async () => {
@@ -517,7 +517,7 @@ describe("prepare page reads", () => {
     ).toBeDefined()
     expect(await screen.findByText("Version 1")).toBeDefined()
     expect(await screen.findByText("Outdated")).toBeDefined()
-    expect(screen.queryByText(/Continue to review/)).toBeNull()
+    expect(screen.queryByText(/Open handoff for/)).toBeNull()
   })
 })
 
