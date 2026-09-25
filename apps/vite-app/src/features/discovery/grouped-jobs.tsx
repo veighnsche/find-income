@@ -5,7 +5,6 @@ import {
   getResearchCapture,
   getRoleWorkflowOrNull,
   listRoleWorkflows,
-  getSearchBrief,
   isUnauthenticated,
   listOpportunities,
   listRunFindings,
@@ -15,7 +14,6 @@ import {
   type OpportunityView,
   type OwnerDecision,
   type RoleWorkflowState,
-  type SearchBriefView,
 } from "@/api/client"
 import { useSession } from "@/api/session"
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/shared"
@@ -26,6 +24,7 @@ import {
 } from "@/features/discovery/check-chosen-jobs"
 import { discoveryRunStorageKey } from "@/features/discovery/discovery-section"
 import { newIdempotencyKey } from "@/features/discovery/research-controls"
+import { useOwnerContext } from "@/features/owner-context/useOwnerContext"
 import { compactStageLabel } from "@/pages/role-stages"
 
 export const jevGroupOrder: ReadonlyArray<FindingEntry["group"]> = [
@@ -95,8 +94,6 @@ interface TrackedFinding {
 
 interface GroupedJobsData {
   runId: string | null
-  brief: SearchBriefView | null
-  briefError: string | null
   runFindingsError: string | null
   findingFailures: number
   opportunities: OpportunityView[]
@@ -349,11 +346,13 @@ function JobCard({
 // listRunFindings pages that run's latest-per-opportunity findings and roles
 // missing from the run fall back to per-role getOpportunityFinding; without
 // a tracked run every role resolves through getOpportunityFinding (404 means
-// not yet classified). Loading is GET-only, explanation expansion re-reads
-// nothing, and selecting a role POSTs only an owner decision — never a
-// check.
+// not yet classified). Saved brief/catalog identity comes from the single
+// useOwnerContext read for this surface. Loading is GET-only, explanation
+// expansion re-reads nothing, stale findings are labeled and retained, and
+// selecting a role POSTs only an owner decision — never a check.
 export function GroupedJobs() {
   const { session, loseSession } = useSession()
+  const owner = useOwnerContext()
   const [attempt, setAttempt] = useState(0)
   const [load, setLoad] = useState<LoadState>({ kind: "loading" })
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
@@ -377,19 +376,6 @@ export function GroupedJobs() {
           )
             break
           cursor = result.nextCursor
-        }
-
-        let brief: SearchBriefView | null = null
-        let briefError: string | null = null
-        try {
-          brief = await getSearchBrief(signal)
-        } catch (cause) {
-          if (signal.aborted) return
-          if (isUnauthenticated(cause)) {
-            loseSession()
-            return
-          }
-          briefError = requestMessage(cause)
         }
 
         const findings = new Map<string, TrackedFinding>()
@@ -505,8 +491,6 @@ export function GroupedJobs() {
           kind: "ready",
           data: {
             runId,
-            brief,
-            briefError,
             runFindingsError,
             findingFailures,
             opportunities,
@@ -690,17 +674,40 @@ export function GroupedJobs() {
             {`Tracked research run: ${data.runId}`}
           </p>
         )}
-        {data.brief === null ? (
+        {owner.contextState === "loading" ? (
           <p className="mt-1 text-xs wrap-break-word text-muted-foreground">
-            {data.briefError === null
-              ? "Search brief versions unavailable."
-              : `Search brief versions unavailable: ${data.briefError}`}
+            Loading saved search context…
+          </p>
+        ) : owner.context === null ? (
+          <div className="mt-1 flex min-w-0 flex-col gap-1">
+            <p className="text-xs wrap-break-word text-muted-foreground">
+              {`Search brief versions unavailable: ${owner.contextError ?? "The request could not be completed."} Saved findings below are unaffected.`}
+            </p>
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={owner.retryContext}
+              >
+                Retry saved context
+              </Button>
+            </div>
+          </div>
+        ) : owner.context.rubricVersion === null ? (
+          <p className="mt-1 text-xs wrap-break-word text-muted-foreground">
+            {`No saved search brief yet — the first Find jobs run authors one from profile v${owner.context.profileVersion}.`}
           </p>
         ) : (
           <p className="mt-1 text-xs wrap-break-word text-muted-foreground">
-            {`Search brief: profile v${data.brief.profileVersion} · rubric ${data.brief.rubricVersion}${data.brief.catalogVersion === undefined ? "" : ` · catalog ${data.brief.catalogVersion}`}`}
+            {`Search brief: profile v${owner.context.profileVersion} · rubric ${owner.context.rubricVersion}${owner.context.catalogVersion === null ? "" : ` · catalog ${owner.context.catalogVersion}`}`}
           </p>
         )}
+        {owner.context !== null && owner.context.briefStale ? (
+          <p className="mt-1 text-xs wrap-break-word text-muted-foreground">
+            {`The saved brief is behind profile v${owner.context.profileVersion}; findings below keep their saved basis until the next Find jobs run.`}
+          </p>
+        ) : null}
         {data.runFindingsError === null ? null : (
           <p role="alert" className="mt-1 text-xs wrap-break-word text-destructive">
             {`Could not page the tracked run's findings (${data.runFindingsError}); showing per-role latest findings instead.`}

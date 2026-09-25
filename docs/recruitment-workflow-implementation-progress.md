@@ -15,7 +15,7 @@ Plan: `docs/recruitment-workflow-implementation-plan.md`. Only the coordinator u
 | RW-A2 | A | complete | worker-rw-a2 (Sol-High) + coordinator fix | 2 new verify test files, researchservice.go 1-line pin, discovery.go gofmt | RW-A1 | f24501d. All criteria PASS; race fix applied+built; suites green | — | RW-C2 |
 | RW-B1 | B | complete | worker-rw-b1 (Sol-High) | useOwnerContext.* + SearchPage + shell.test.tsx | RW-A1 | 35a7e60. Saved requirements + contextual corrections live; coordinator-verified in 222/222 full suite | — | RW-B2, RW-C2 |
 | RW-C1 | C | complete | worker-rw-c1 (Sol-High) | saved-brief.*, discovery-section.* | RW-A1 | be388a0. Saved brief foregrounded; coordinator-verified in 222/222 | Server version pinning deferred to RW-A2/C2 | RW-C2 |
-| RW-C2 | C(+B) | in_progress | worker-rw-c2 (Sol-High) | saved-brief.*, discovery-section.*, grouped-jobs.* | RW-A2, RW-B1, RW-C1 | — | — | — |
+| RW-C2 | C(+B) | complete | worker-rw-c2 (Sol-High) | discovery saved-brief/section/grouped-jobs.* | RW-A2, RW-B1, RW-C1 | Single useOwnerContext per surface, Change-my-search focus wiring, first-run authorship, stale retention, zero-call preserved; coordinator-verified 236/236 | — | RW-E2 |
 | RW-D1 | D | complete | worker-rw-d123 (Sol-Medium) + coordinator fix | docs/rw-runtime-readiness.md, wire.go, main.go, sandbox_config_test.go | RW-A0, RW-D0 | 5bfe275. BLOCKED (valid): fail-closed paths verified, sandbox-binary env plumbed+tested; live proof impossible — host unselected (owner) | Host selection (owner); install/keys | — |
 | RW-D2 | D | complete | worker-rw-d123 (Sol-Medium) | docs/rw-runtime-readiness.md | RW-A0, RW-D0 | BLOCKED (valid): materials gating/one-shot/render verified from code; live proof impossible — runner+model/effort, career root, Typst uninstalled | Host selection (owner); install/keys | — |
 | RW-D3 | D | complete | worker-rw-d123 (Sol-Medium) | docs/rw-runtime-readiness.md | RW-A0, RW-D0 | BLOCKED (valid): 6-var SMTP gating + digest binding verified; isolation is operational (sink+route+review), no code-level sink restriction; sink unprovisioned | Sink provisioning; 6 vars; RW-G4 procedure | — |
@@ -27,7 +27,7 @@ Plan: `docs/recruitment-workflow-implementation-plan.md`. Only the coordinator u
 | RW-B2 | B | complete | worker-rw-b2 (Sol-High) | CheckPage.*, AnswersPage.* | RW-A3, RW-B1 | 94b812d. Answer entry checked-only, source linkage, zero-LLM boundary test; 31/31 | — | RW-E3 |
 | RW-E3 | E | pending | — | — | RW-B2, RW-C2, RW-E0 | — | — | — |
 | RW-G2 | E+A/B/D | pending | — | — | RW-G1, RW-E3 | — | — | — |
-| RW-A4 | A | complete | worker-rw-a4 (Sol-High) | 2 new prepsend test files | RW-A3 | All safeguards PASS, no production fix; coordinator-verified new tests green | — | RW-C3, RW-E4 |
+| RW-A4 | A | complete | worker-rw-a4 (Sol-High) | 2 new prepsend test files | RW-A3 | 2a4e222. All safeguards PASS, no production fix; new tests green | — | RW-C3, RW-E4 |
 | RW-C3 | C | pending | — | — | RW-A4, RW-C2 | — | — | — |
 | RW-E4 | E | pending | — | — | RW-A4, RW-C3, RW-E0 | — | — | — |
 | RW-P2 | E/coord+D | pending | — | — | RW-G2, RW-D2, RW-E4 | — | — | — |

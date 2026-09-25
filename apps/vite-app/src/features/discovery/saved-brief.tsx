@@ -1,40 +1,8 @@
-import {
-  getPreferences,
-  getSearchBrief,
-  RequestError,
-  type Preferences,
-  type SearchBriefView,
-} from "@/api/client"
+import type { Preferences } from "@/api/client"
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/shared"
 import { Button } from "@/components/ui/button"
+import type { EffectiveSavedContext } from "@/features/owner-context/useOwnerContext"
 import { formatCents } from "@/pages/format"
-import { useRead, type ReadResult } from "@/pages/useRead"
-
-// SavedBriefData is the effective saved search basis for discovery: the
-// current saved profile plus the server-derived brief for it. A null brief
-// is the honest pre-first-save state (GET /research/brief 404s), not an
-// error. All reads here are GET-only; nothing commissions work.
-export interface SavedBriefData {
-  preferences: Preferences
-  brief: SearchBriefView | null
-}
-
-export type SavedBriefRead = ReadResult<SavedBriefData>
-
-async function loadSavedBrief(signal: AbortSignal): Promise<SavedBriefData> {
-  const [preferences, brief] = await Promise.all([
-    getPreferences(signal),
-    getSearchBrief(signal).catch((cause: unknown) => {
-      if (cause instanceof RequestError && cause.status === 404) return null
-      throw cause
-    }),
-  ])
-  return { preferences, brief }
-}
-
-export function useSavedBrief(): SavedBriefRead {
-  return useRead("discovery:saved-brief", loadSavedBrief)
-}
 
 // summarizeSavedBriefTerms renders the concise owner-visible terms of the
 // saved profile. Pure formatting over saved values; no inference.
@@ -65,99 +33,109 @@ export function summarizeSavedBriefTerms(preferences: Preferences): string {
   ].join(" · ")
 }
 
-export interface SavedBriefReadiness {
-  ready: boolean
-  reason: string | null
+// changeSearchCorrectionBoxId is the Lane B correction textarea on My search.
+// Change-my-search links route to #/search and then move focus here so the
+// owner lands in the correction flow, not at the top of a long page.
+export const changeSearchCorrectionBoxId = "change-search-text"
+
+function focusCorrectionBox(remaining: number): void {
+  const target = document.getElementById(changeSearchCorrectionBoxId)
+  if (target !== null) {
+    if (typeof target.scrollIntoView === "function")
+      target.scrollIntoView({ block: "nearest" })
+    const focusable = target as HTMLElement
+    if (typeof focusable.focus === "function")
+      focusable.focus({ preventScroll: true })
+    return
+  }
+  if (remaining > 0)
+    window.setTimeout(() => focusCorrectionBox(remaining - 1), 50)
 }
 
-// savedBriefReadiness is the Find jobs gate: the run basis must be a loaded,
-// fresh saved brief. A missing reason catalog is a normal pre-first-run
-// state and never blocks.
-export function savedBriefReadiness(read: SavedBriefRead): SavedBriefReadiness {
-  if (read.status === "loading")
-    return { ready: false, reason: "Loading the saved search brief…" }
-  if (read.status === "error")
-    return {
-      ready: false,
-      reason: "The saved search brief could not be loaded. Fix the error above first.",
-    }
-  const { preferences, brief } = read.data
-  if (brief === null)
-    return {
-      ready: false,
-      reason: "No saved search brief yet. Save your search before starting a run.",
-    }
-  if (brief.profileVersion !== preferences.version)
-    return {
-      ready: false,
-      reason: `The saved brief (profile v${brief.profileVersion}) is behind profile v${preferences.version}. Refresh before starting a run.`,
-    }
-  return { ready: true, reason: null }
+function ChangeSearchLink({ href }: { href: string }) {
+  return (
+    <p className="text-sm">
+      <a
+        className="underline underline-offset-4"
+        href={href}
+        onClick={() => {
+          // Plain-anchor navigation still applies; the deferred focus lands
+          // the owner in Lane B's correction box once the route renders.
+          window.setTimeout(() => focusCorrectionBox(10), 0)
+        }}
+      >
+        Change my search
+      </a>
+    </p>
+  )
 }
 
 export interface SavedBriefPanelProps {
-  read: SavedBriefRead
+  context: EffectiveSavedContext | null
+  contextState: "loading" | "ready" | "error"
+  contextError: string | null
+  retryContext: () => void
   // Profile version the visible run was commissioned against, when a run is
-  // shown. Compared honestly against the current saved brief.
+  // shown. Compared honestly against the current saved context.
   runBriefProfileVersion?: number | null
   changeSearchHref?: string
 }
 
-// SavedBriefPanel renders the saved search basis: version identity, concise
-// terms, catalog state and staleness. It never commissions work. Lane B owns
-// the correction flow behind the Change my search link; RW-C2 wires it.
+// SavedBriefPanel renders the saved search basis from Lane B's saved context:
+// version identity, concise terms, catalog state and staleness. It performs no
+// reads of its own; the parent owns the single useOwnerContext instance per
+// surface and passes the slice down. It never commissions work.
 export function SavedBriefPanel({
-  read,
+  context,
+  contextState,
+  contextError,
+  retryContext,
   runBriefProfileVersion = null,
   changeSearchHref = "#/search",
 }: SavedBriefPanelProps) {
-  if (read.status === "loading") {
+  if (contextState === "loading" || (contextState === "ready" && context === null)) {
     return <LoadingBlock label="Loading saved search brief…" />
   }
-  if (read.status === "error") {
+  if (contextState === "error" || context === null) {
     return (
       <ErrorBlock
         title="Could not load the saved search brief"
-        message={read.error}
-        onRetry={read.retry}
+        message={contextError ?? "The request could not be completed."}
+        onRetry={retryContext}
       />
     )
   }
 
-  const { preferences, brief } = read.data
-  if (brief === null) {
+  if (context.rubricVersion === null) {
     return (
       <div className="flex min-w-0 flex-col gap-3 rounded-2xl border bg-card px-4 py-4">
         <EmptyBlock
           title="No saved search brief yet"
-          description={`Profile v${preferences.version} is saved, but the server has no search brief for it yet. Save your search before starting a run.`}
+          description={`Profile v${context.profileVersion} is saved, but the server has no search brief for it yet. The first Find jobs run authors one.`}
         />
-        <p className="text-sm">
-          <a className="underline underline-offset-4" href={changeSearchHref}>
-            Change my search
-          </a>
-        </p>
+        <ChangeSearchLink href={changeSearchHref} />
       </div>
     )
   }
 
-  const stale = brief.profileVersion !== preferences.version
-  const shownRequirements = brief.requirements.slice(0, 3)
-  const hiddenCount = brief.requirements.length - shownRequirements.length
+  const shownRequirements = context.requirements.slice(0, 3)
+  const hiddenCount = context.requirements.length - shownRequirements.length
 
   return (
     <div className="flex min-w-0 flex-col gap-2 rounded-2xl border bg-card px-4 py-4">
       <h3 className="font-heading text-base font-medium">Saved search brief</h3>
       <p className="text-sm wrap-break-word">
-        Profile v{brief.profileVersion} · {brief.rubricVersion}
+        Profile v{context.profileVersion} · {context.rubricVersion}
       </p>
-      <p className="text-xs text-muted-foreground wrap-break-word">
-        {brief.rubricSource}
-      </p>
+      {context.rubricSource === null ? null : (
+        <p className="text-xs text-muted-foreground wrap-break-word">
+          {context.rubricSource}
+        </p>
+      )}
       <p className="text-sm text-muted-foreground wrap-break-word">
-        {summarizeSavedBriefTerms(preferences)}
+        {summarizeSavedBriefTerms(context.preferences)}
       </p>
-      {brief.requirements.length === 0 ? (
+      {context.requirements.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No role criteria in this brief.
         </p>
@@ -175,28 +153,28 @@ export function SavedBriefPanel({
           ) : null}
         </ul>
       )}
-      {brief.catalogVersion === undefined ? (
+      {context.catalogVersion === null ? (
         <p className="text-xs text-muted-foreground">
           No reason catalog yet — the first Find jobs run authors one for this
           brief version.
         </p>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Reason catalog {brief.catalogVersion} ready.
+          Reason catalog {context.catalogVersion} ready.
         </p>
       )}
-      {stale ? (
+      {context.briefStale ? (
         <div className="flex min-w-0 flex-col gap-2">
           <p role="alert" className="text-sm wrap-break-word text-destructive">
-            The saved brief (profile v{brief.profileVersion}) is behind profile
-            v{preferences.version}. Refresh before starting a run.
+            The saved brief is behind profile v{context.profileVersion}.
+            Refresh before starting a run.
           </p>
           <div>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={read.retry}
+              onClick={retryContext}
             >
               Refresh saved brief
             </Button>
@@ -204,17 +182,13 @@ export function SavedBriefPanel({
         </div>
       ) : null}
       {runBriefProfileVersion !== null &&
-      runBriefProfileVersion !== brief.profileVersion ? (
+      runBriefProfileVersion !== context.profileVersion ? (
         <p className="text-xs text-muted-foreground wrap-break-word">
           The run below used brief profile v{runBriefProfileVersion}; the saved
-          brief is now profile v{brief.profileVersion}.
+          brief is now profile v{context.profileVersion}.
         </p>
       ) : null}
-      <p className="text-sm">
-        <a className="underline underline-offset-4" href={changeSearchHref}>
-          Change my search
-        </a>
-      </p>
+      <ChangeSearchLink href={changeSearchHref} />
     </div>
   )
 }

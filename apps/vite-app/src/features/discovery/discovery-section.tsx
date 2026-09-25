@@ -32,11 +32,8 @@ import {
 } from "@/features/discovery/research-controls"
 import { RunActivityFeed } from "@/features/discovery/run-activity-feed"
 import { RunReportView } from "@/features/discovery/run-report-view"
-import {
-  savedBriefReadiness,
-  SavedBriefPanel,
-  useSavedBrief,
-} from "@/features/discovery/saved-brief"
+import { SavedBriefPanel } from "@/features/discovery/saved-brief"
+import { useOwnerContext } from "@/features/owner-context/useOwnerContext"
 
 export const discoveryRunStorageKey = "jobseek.research-run-id"
 export const discoveryPollIntervalMs = 5000
@@ -118,7 +115,10 @@ export function DiscoverySection() {
   const [reportError, setReportError] = useState<string | null>(null)
   const [captureUrls, setCaptureUrls] = useState<Record<string, string>>({})
   const [noteText, setNoteText] = useState("")
-  const savedBrief = useSavedBrief()
+  // Single saved-context read for this surface: Lane B's hook supplies the
+  // effective profile/brief/catalog identity plus the correction-aware Find
+  // jobs gate. Mount and navigation only issue GETs.
+  const owner = useOwnerContext()
   const [steerText, setSteerText] = useState("")
   const [steerAck, setSteerAck] = useState<SteeringMessage | null>(null)
   const [busy, setBusy] = useState(false)
@@ -254,16 +254,17 @@ export function DiscoverySection() {
   const csrfToken = session.csrfToken
 
   async function commission(kind: "start" | "find-more") {
-    // Find jobs commissions only against the loaded, fresh saved brief. The
-    // button is disabled otherwise; this guard covers programmatic clicks.
-    if (kind === "start" && !savedBriefReadiness(savedBrief).ready) return
+    // Find jobs commissions only against the loaded, fresh saved context,
+    // including while a correction is still saving. The button is disabled
+    // otherwise; this guard covers programmatic clicks.
+    if (kind === "start" && !owner.discoveryReady) return
     setBusy(true)
     setActionError(null)
     try {
       const note = kind === "start" ? noteText.trim() : ""
       const basis =
-        savedBrief.status === "ready" && savedBrief.data.brief !== null
-          ? `v${savedBrief.data.brief.profileVersion}`
+        owner.context !== null
+          ? `v${owner.context.profileVersion}`
           : "unpinned"
       const intent = `${kind}:${basis}:${note}`
       const pending = commissionKeyRef.current
@@ -376,9 +377,11 @@ export function DiscoverySection() {
 
   const terminal =
     run !== null && (run.state === "completed" || run.state === "failed")
-  const readiness = savedBriefReadiness(savedBrief)
-  const briefBasis =
-    savedBrief.status === "ready" ? savedBrief.data.brief : null
+  const readiness = {
+    ready: owner.discoveryReady,
+    reason: owner.discoveryBlockedReason,
+  }
+  const briefBasis = owner.context
 
   return (
     <section
@@ -400,7 +403,10 @@ export function DiscoverySection() {
       </div>
 
       <SavedBriefPanel
-        read={savedBrief}
+        context={owner.context}
+        contextState={owner.contextState}
+        contextError={owner.contextError}
+        retryContext={owner.retryContext}
         runBriefProfileVersion={run?.briefVersion.profileVersion ?? null}
       />
 
@@ -416,8 +422,9 @@ export function DiscoverySection() {
           </p>
           {readiness.ready && briefBasis !== null ? (
             <p className="text-sm wrap-break-word">
-              Searches with profile v{briefBasis.profileVersion} (
-              {briefBasis.rubricVersion}).
+              {briefBasis.rubricVersion === null
+                ? `Searches with profile v${briefBasis.profileVersion} — the first run authors the search brief.`
+                : `Searches with profile v${briefBasis.profileVersion} (${briefBasis.rubricVersion}).`}
             </p>
           ) : (
             <p className="text-sm text-muted-foreground wrap-break-word">
@@ -544,8 +551,8 @@ export function DiscoverySection() {
       ) : null}
 
       <UnsupportedBlock
-        title="Run history and brief rewrite are not available yet"
-        message="The API keeps one run per id and exposes no run list, so only the latest pass is kept here. Changing the search in plain language is not connected either: steering messages go to the current run only and never rewrite the saved brief."
+        title="Run history is not available yet"
+        message="The API keeps one run per id and exposes no run list, so only the latest pass is kept here. Earlier findings stay saved per role. Change my search above routes to the correction flow on My search; steering messages go to the current run only and never rewrite the saved brief."
       />
     </section>
   )

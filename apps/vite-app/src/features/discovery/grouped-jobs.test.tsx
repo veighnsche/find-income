@@ -11,6 +11,7 @@ import type {
   FindingEntry,
   OpportunityView,
   OwnerDecision,
+  Preferences,
   ResearchCaptureView,
   RoleWorkflowState,
   SearchBriefView,
@@ -224,14 +225,31 @@ function workflowFixture(id: string): RoleWorkflowState {
   }
 }
 
+const groupedPreferencesFixture: Preferences = {
+  version: 3,
+  preferredLocation: "Berlin",
+  allowRemote: true,
+  allowHybrid: false,
+  targetHours: "32",
+  minMonthlyBaseCents: 450000,
+  salaryCurrency: "EUR",
+  timezone: "Europe/Berlin",
+  roleCriteria: [],
+}
+
 interface StubOptions {
   existingDecisions?: Record<string, OwnerDecision>
   decisionConflict?: boolean
+  preferences?: Preferences
+  // null serves a 404 (no saved brief yet); "error" serves a 500.
+  brief?: SearchBriefView | null | "error"
+  failBriefAttempts?: number
 }
 
 function stubGroupedFetch(options: StubOptions = {}): { calls: FetchCall[] } {
   const calls: FetchCall[] = []
   const selected = new Set<string>(["job-rec"])
+  let briefAttempts = 0
   const fetchMock = vi.fn(
     async (input: string | URL | Request, init?: RequestInit) => {
       const url =
@@ -253,8 +271,25 @@ function stubGroupedFetch(options: StubOptions = {}): { calls: FetchCall[] } {
         return jsonResponse(200, sessionFixture)
       if (path === "/api/v1/opportunities" && method === "GET")
         return jsonResponse(200, { items: jobsFixture })
-      if (path === "/api/v1/research/brief" && method === "GET")
-        return jsonResponse(200, briefFixture)
+      if (path === "/api/v1/preferences" && method === "GET")
+        return jsonResponse(
+          200,
+          options.preferences ?? groupedPreferencesFixture
+        )
+      if (path === "/api/v1/research/brief" && method === "GET") {
+        briefAttempts += 1
+        if (
+          options.failBriefAttempts !== undefined &&
+          briefAttempts <= options.failBriefAttempts
+        )
+          return jsonResponse(500, { error: { message: "Brief down." } })
+        const brief = options.brief === undefined ? briefFixture : options.brief
+        if (brief === "error")
+          return jsonResponse(500, { error: { message: "Brief down." } })
+        if (brief === null)
+          return jsonResponse(404, { error: { message: "No brief." } })
+        return jsonResponse(200, brief)
+      }
       if (path === "/api/v1/workflow/roles" && method === "GET")
         return jsonResponse(200, {
           items: [...selected].map((id) => workflowFixture(id)),
@@ -550,6 +585,90 @@ describe("GroupedJobs", () => {
       screen.getAllByText("Brief profile v3 · rubric rubric-1 · catalog cat-7")
     ).toHaveLength(5)
     await screen.findByText("Tracked research run: run-7")
+  })
+
+  it("reads the saved context once per surface", async () => {
+    window.localStorage.setItem("jobseek.research-run-id", "run-7")
+    const { calls } = stubGroupedFetch()
+    renderJobs()
+
+    await screen.findByText("Not yet classified (1)")
+    await screen.findByText(
+      "Search brief: profile v3 · rubric rubric-1 · catalog cat-7"
+    )
+    expect(
+      calls.filter(
+        (call) => call.method === "GET" && call.url === "/api/v1/preferences"
+      )
+    ).toHaveLength(1)
+    expect(
+      calls.filter(
+        (call) =>
+          call.method === "GET" && call.url === "/api/v1/research/brief"
+      )
+    ).toHaveLength(1)
+  })
+
+  it("retains and labels stale findings after the brief moves on", async () => {
+    window.localStorage.setItem("jobseek.research-run-id", "run-7")
+    stubGroupedFetch({
+      preferences: { ...groupedPreferencesFixture, version: 5 },
+      brief: {
+        ...briefFixture,
+        profileVersion: 4,
+        rubricVersion: "rubric-2",
+        catalogVersion: "cat-8",
+      },
+    })
+    renderJobs()
+
+    await screen.findByText("Recommended (1)")
+    // Every saved group still renders: nothing is erased by the version move.
+    await screen.findByText("Could be recommended (1)")
+    await screen.findByText("Probably not recommended (1)")
+    await screen.findByText("Not recommended (1)")
+    await screen.findByText("Unknown — exceptional, needs a basis (1)")
+    await screen.findByText("Not yet classified (1)")
+    // Stale findings keep their saved basis labels.
+    screen.getByText("Stale — opportunity_revised")
+    screen.getByText("Stale — brief_changed,catalog_changed")
+    expect(
+      screen.getAllByText("Brief profile v3 · rubric rubric-1 · catalog cat-7")
+    ).toHaveLength(5)
+    // The header shows the current identity plus the stale-brief note.
+    await screen.findByText(
+      "Search brief: profile v5 · rubric rubric-2 · catalog cat-8"
+    )
+    await screen.findByText(
+      "The saved brief is behind profile v5; findings below keep their saved basis until the next Find jobs run."
+    )
+  })
+
+  it("shows an honest empty state when no brief exists yet", async () => {
+    window.localStorage.setItem("jobseek.research-run-id", "run-7")
+    stubGroupedFetch({ brief: null })
+    renderJobs()
+
+    await screen.findByText(
+      "No saved search brief yet — the first Find jobs run authors one from profile v3."
+    )
+    await screen.findByText("Recommended (1)")
+    await screen.findByText("Unknown — exceptional, needs a basis (1)")
+  })
+
+  it("keeps saved findings visible when the context read fails, with a retry", async () => {
+    window.localStorage.setItem("jobseek.research-run-id", "run-7")
+    stubGroupedFetch({ failBriefAttempts: 1 })
+    renderJobs()
+
+    await screen.findByText(/Search brief versions unavailable: /)
+    await screen.findByText("Recommended (1)")
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Retry saved context" })
+    )
+    await screen.findByText(
+      "Search brief: profile v3 · rubric rubric-1 · catalog cat-7"
+    )
   })
 
   it("falls back to per-opportunity findings without a tracked run", async () => {

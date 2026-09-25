@@ -13,6 +13,7 @@ import type {
   ResearchCaptureView,
   ResearchReportView,
   ResearchRunView,
+  Round,
   SearchBriefView,
   SteeringMessage,
 } from "@/api/client"
@@ -174,6 +175,7 @@ interface StubOptions {
   preferences?: Preferences
   // null serves a 404 (no saved brief yet); "error" serves a 500.
   brief?: SearchBriefView | null | "error"
+  round?: Round
 }
 
 function stubResearchFetch(options: StubOptions = {}): {
@@ -235,6 +237,9 @@ function stubResearchFetch(options: StubOptions = {}): {
       const roundMatch = path.match(/^\/api\/v1\/rounds\/([^/]+)\/(stop|resume)$/)
       if (roundMatch !== null && method === "POST")
         return jsonResponse(200, { ok: true })
+      const roundRead = path.match(/^\/api\/v1\/rounds\/([^/]+)$/)
+      if (roundRead?.[1] !== undefined && method === "GET" && options.round !== undefined)
+        return jsonResponse(200, options.round)
       return jsonResponse(404, { error: { message: "Not found." } })
     }
   )
@@ -460,16 +465,12 @@ describe("DiscoverySection", () => {
     ).toBeNull()
   })
 
-  it("blocks Find jobs without a saved brief and commissions nothing", async () => {
-    const { calls } = stubResearchFetch({ brief: null })
+  it("reads the saved context once per surface and commissions nothing", async () => {
+    const { calls } = stubResearchFetch()
     renderSection()
 
-    await screen.findByText("No saved search brief yet")
-    const findJobs = (await screen.findByRole("button", {
-      name: "Find jobs",
-    })) as HTMLButtonElement
-    expect(findJobs.disabled).toBe(true)
-    fireEvent.click(findJobs)
+    await screen.findByText("Saved search brief")
+    await screen.findByText(/Searches with profile v3/)
     await waitFor(() =>
       expect(
         calls.some((call) => call.url === "/api/v1/research/brief")
@@ -477,9 +478,36 @@ describe("DiscoverySection", () => {
     )
     expect(
       calls.filter(
-        (call) => call.method === "POST" && call.url === "/api/v1/research/runs"
+        (call) => call.method === "GET" && call.url === "/api/v1/preferences"
       )
-    ).toEqual([])
+    ).toHaveLength(1)
+    expect(
+      calls.filter(
+        (call) => call.method === "GET" && call.url === "/api/v1/research/brief"
+      )
+    ).toHaveLength(1)
+    expect(calls.filter((call) => call.method === "POST")).toEqual([])
+  })
+
+  it("lets the first Find jobs run author the brief when none exists yet", async () => {
+    const { calls } = stubResearchFetch({ brief: null })
+    renderSection()
+
+    await screen.findByText("No saved search brief yet")
+    await screen.findByText(
+      "Searches with profile v3 — the first run authors the search brief."
+    )
+    const findJobs = (await screen.findByRole("button", {
+      name: "Find jobs",
+    })) as HTMLButtonElement
+    expect(findJobs.disabled).toBe(false)
+    fireEvent.click(findJobs)
+    await screen.findByText("Running — research is underway.")
+    const posts = calls.filter(
+      (call) => call.method === "POST" && call.url === "/api/v1/research/runs"
+    )
+    expect(posts).toHaveLength(1)
+    expect(JSON.parse(posts[0]?.body ?? "{}")).not.toHaveProperty("briefText")
   })
 
   it("blocks Find jobs when the brief is stale", async () => {
@@ -490,12 +518,52 @@ describe("DiscoverySection", () => {
     renderSection()
 
     const alert = await screen.findByRole("alert")
-    expect(alert.textContent).toContain("behind profile v4")
+    expect(alert.textContent).toContain(
+      "The saved brief is behind profile v4."
+    )
+    await screen.findByText(
+      "The search brief is behind profile version 4. Reload the saved context before finding jobs."
+    )
     const findJobs = (await screen.findByRole("button", {
       name: "Find jobs",
     })) as HTMLButtonElement
     expect(findJobs.disabled).toBe(true)
+    fireEvent.click(findJobs)
     await screen.findByRole("button", { name: "Refresh saved brief" })
+  })
+
+  it("blocks Find jobs while a correction is still saving", async () => {
+    window.localStorage.setItem(
+      "jobseek.owner-context-pending",
+      JSON.stringify({
+        roundId: "round-9",
+        requestKey: "profile-correction-v3-deadbeef",
+        baseVersion: 3,
+        targetText: "Prefer Amsterdam.",
+      })
+    )
+    const { calls } = stubResearchFetch({
+      round: {
+        id: "round-9",
+        requestKey: "profile-correction-v3-deadbeef",
+        state: "running",
+        profileVersion: 3,
+        originalProfileVersion: 3,
+      } as Round,
+    })
+    renderSection()
+
+    await screen.findByText(/Saving your change \(running\)…/)
+    const findJobs = (await screen.findByRole("button", {
+      name: "Find jobs",
+    })) as HTMLButtonElement
+    expect(findJobs.disabled).toBe(true)
+    fireEvent.click(findJobs)
+    expect(
+      calls.filter(
+        (call) => call.method === "POST" && call.url === "/api/v1/research/runs"
+      )
+    ).toEqual([])
   })
 
   it("blocks Find jobs when the brief read fails", async () => {
