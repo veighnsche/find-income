@@ -1,107 +1,88 @@
-# RW-E1 · Bounded first live exercise (staged canary) — reviewable plan
+# RW-E1 · Bounded first live exercise — planning proposal
 
-25 September 2026 · Lane E with D · Depends on RW-G0 (satisfied) · Worker: worker-rw-e1 (Sol-Medium)
-Planning only. No paid call has occurred; this document authorizes none. Live execution needs RW-D1 readiness + RW-P1 authorization.
+25 September 2026 · Planning only
 
-Sources: [RW plan](recruitment-workflow-implementation-plan.md) (RW-E1 box, RW-G1/G2 scenarios), `/tmp/rw-d0-handoff.md` (runtime constraints), `/tmp/rw-e0-handoff.md` (evidence format + gate scenarios), `/tmp/rw-a0-handoff.md` (supported paths), `/tmp/rw-b0-handoff.md` (owner-context boundary). No secret values appear here; env names only.
+**This plan authorizes no live work or spend.** No Muse Code/model call, Jev call, live retrieval exercise, deployment, or employer contact is approved here. A later owner authorization requires a concrete operation and cost proposal under [RW-P1](rw-p1-authorization.md), after implementation and no-spend readiness checks.
 
-## 1. Scope and non-goals
+**Runtime direction (25 September 2026):** The owner selected the locally installed Muse Code CLI on their MacBook as the first generative runtime, using Muse Spark 1.3 Contributor for the public vacancy-discovery loop and Muse Spark 1.3 Standard only for grounded application preparation and an explicit owner-requested rewrite, through their subscription. The owner reports about 50 hours/week of practical Contributor coding capacity versus about one hour/week on Standard in their account. Minimize Standard calls through evidence reuse, deterministic logic and Jev choices. They do not use a pay-as-you-go API key for this CLI usage. Codex and OpenRouter are deferred alternatives and are not a prerequisite or first-run dropdown choice. Jev remains separate. Meta terms §6.2 forbid submitting personal, sensitive, or confidential data to Contributor. Verify the Contributor subscription lane without a model call before discovery and Standard entitlement separately before later Prepare work; an auth check only safeguards against accidental API-key override and must not challenge the owner's statement or inspect secrets. No live call is authorized.
 
-Staged path, in journey order: contextual correction → known-current-vacancy discovery → saved classification/reasons → selected-role checks + answer matching. Materials/preparation, rendering, delivery, and any send are out of scope (RW-P2/RW-G3/G4). No code changes are part of this exercise.
+Sources: [recruitment workflow plan](recruitment-workflow-implementation-plan.md), [RW runtime-readiness record](rw-runtime-readiness.md), and [RW-P1 authorization record](rw-p1-authorization.md). No secret values or private documents were inspected.
 
-This plan does NOT hard-code a production source universe. It names one owner-nominated verification anchor (a known-current vacancy URL, §3) so the canary has a falsifiable target, and bounds (max pages, max roles, stop conditions, §6). Within those bounds Codex still chooses live sources, queries, public APIs, and company career pages freely. The anchor is a check, not a constant: Codex may reach it by any route it chooses, and any additional listings it collects through its own discovery are legitimate canary evidence.
+## 1. Purpose and boundaries
 
-## 2. Valid owner facts (only these may be used)
+One future adaptive Contributor search should target about 30–45 minutes, save public source evidence/results at checkpoints, and stop at the proposed 45-minute limit. If no suitable vacancy appears, report covered sources and gaps without fabricating jobs, extending or repeating automatically; RW-G1 stays open. This future canary should prove a useful slice of the agency: the owner can correct saved work requirements, find real jobs using live retrieval, see persisted Jev classifications and reasons, choose any role, and explicitly start deeper checks for chosen jobs only. It must prove saved state and actual work across reloads, not just render an optimistic UI.
 
-Per RW-B0: the only versioned, readable, correctable owner-context store is `Preferences` (seed: Amsterdam, 32h, EUR 4500 floor, 3 criteria; exactly one profile, id `current`).
+The first path invokes the actual locally installed Muse Code CLI on the owner's MacBook. Use Contributor via the same CLI for the entire vacancy-discovery loop: source/query selection, generalized role/region/skill searches, public APIs/career pages/web retrieval and saving public vacancy evidence. These inputs must contain no owner-identifying/private facts. Use Jev for personalized per-job classification and saved reason selection. Standard is reserved for Prepare applications: grounded required-answer, tailored CV and message drafting, or an explicit owner-requested rewrite. General reason choices may be authored once per brief by Contributor from non-identifying criteria; Jev binds the real private requirements and selects saved reasons. No Standard call occurs in correction, discovery, classification, chosen-job checks or Answer. Codex and OpenRouter are deferred alternatives; no dropdown or integration is a prerequisite. The implementation must verify Muse's supported programmatic session interface, process supervision, cancellation, persistence, usage visibility and narrowly scoped session MCP tools before any authorized operation. Official Muse docs document `muse serve` and its stable session protocol; session-scoped MCP configuration requires the `sessionMcp` capability. The docs do not establish a per-invocation MCP flag for `muse exec`, so do not assume that command can call recruitment tools. Never extract subscription credentials or proxy direct API calls to bypass the installed harness. Jev (TypeSafe AI) remains separate for supported classification and Choice/Score work; deterministic code handles known facts; an app-controlled retrieval executor gathers public evidence.
 
-- Allowed: the current saved `Preferences` row + version; the owner's verbatim correction text filed during the exercise; `SearchBriefView.facts` labeled as preference-derived search facts (location/remote/hours/pay/timezone), never as CV/experience facts.
-- Allowed for answer matching only: existing owner-approved `SavedAnswer` versions, if any exist at exercise time; otherwise the honest outcome is `none_fits` (no invented answers).
-- Career-root documents (`JOBSEEK_APPROVED_CAREER_ROOT`): opaque to the UI today (RW-B0 Q1 open). The exercise may record presence/absence only ("career folder connected, N documents" or "not connected"); it must not quote CV facts from disk into briefs, reasons, or answers.
-- Forbidden: invented employer questions, invented per-job reasons, invented profile facts, hand-seeded search terms presented as Codex discovery.
+Use Jev for per-job classification, saved reason selection and owner-approved answer matching; use deterministic code and saved evidence wherever sufficient to conserve Standard capacity. No recommended result is researched further automatically. Choosing a role records the owner's decision; only the explicit **Check chosen jobs** action starts deeper checks. Check job details uses Contributor to retrieve actual public employer questions and prepare generic question categories without private owner context. Answer consumes the saved questions; Jev matches an owner-approved answer or `no_fitting_answer`, and deterministic code prefills an editable box or leaves it blank. Answer makes zero Contributor, Standard or other generative calls. Preparation and sending are later, separately scoped work. No employer contact occurs.
 
-## 3. Staged sequence with concrete sources and evidence refs
+An optional known-current-vacancy recall anchor may test whether free discovery finds a known posting. It must not be sent as a required URL or query, or restrict source choice. Without an anchor, the canary cannot claim recall of a particular known vacancy. Keep the no-result scenario separate.
 
-Prerequisite: RW-D1 proves readiness (§8) and RW-P1 records owner authorization (§6) before stage 1 starts.
+## 2. Owner evidence boundaries
 
-- Stage 1 — contextual correction. Starting state: saved brief wrong or empty (owner-confirmed). Owner files one natural-language correction via `Change my search` → `POST /api/v1/rounds/process-input` (`targetKind:"profile"`, `targetId:"current"`, `expectedRevision:<vN>`). Expected: round completes, `GET /preferences` reads back version vN+1, status strip shows pending→saved. Evidence refs: owner-instruction id, round id, profile vN→vN+1.
-- Stage 2 — known-current-vacancy discovery. Owner nominates at RW-P1 time exactly one currently-open vacancy URL (company career page preferred; public board posting acceptable) plus a one-line description of why it should match or not match the corrected brief. Operator records the nomination verbatim; Codex is NOT told the URL as a fetch target — it receives only the saved brief and discovers freely within the bounds of §6. Success: the anchor vacancy is genuinely collected from its real source during the bounded run and persisted as a finding. Evidence refs: run id, brief `rubricVersion`/`rubricSource`, reason-catalog version (authored once for this brief version), finding id(s) with source URL + route + artifact receipt.
-- Stage 3 — saved classification/reasons. Jev classifies collected listings against the once-per-version catalog and selects supported saved reason text; explanation opens later with zero new calls. Evidence refs: finding→group assignments, selected reason ids + verbatim text, catalog version pin, reload + zero-call explanation-open observation.
-- Stage 4 — selected-role checks + answer matching. Owner selects 1–2 roles (at least one must be a role with real employer questions if the canary is to prove the positive path; a no-question vacancy proves only the no-question case per RW-G2). Explicit `Check chosen jobs` action only; then Answer-stage Jev matching against approved answers + `none_fits`, with editable boxes left for the owner. Evidence refs: decision record + revisions, check records + question provenance (source URL/route per question), match-run id, answer revisions (or honest blanks/`none_fits`).
+Use profile/search preferences only when the owner has reviewed or supplied them; retain their version and provenance. Seed defaults are not verified personal facts. The owner may make one contextual correction, which must be visibly saved before the next search uses it. Use saved facts and choices with deterministic versioning; if entirely new private free-text/CV meaning cannot be represented, record a scoped intake capability gap for owner review without routing it to Standard outside Prepare or blocking public discovery. Use only existing owner-approved saved answers. If none fits, Jev returns `no_fitting_answer` and the answer stays blank. Do not open or quote private career documents during discovery. Do not invent owner facts, employer questions, listing evidence, or classification reasons.
 
-## 4. Economical models and effort per operation (proposal)
+## 3. Proposed staged path
 
-`JOBSEEK_CODEX_MODEL`/`JOBSEEK_CODEX_EFFORT` are owner-selected at RW-D1/RW-P1 from actually-available values; this plan proposes starting at the lowest effort that completes each operation, escalating at most once per operation before stopping (see §6):
+These stages describe evidence, not compulsory extra page visits. No stage runs until the local Contributor subscription lane, public-only tool boundary and Jev/retrieval limits are ready and the concrete exercise is authorized. Standard is outside this first exercise and is reserved for Prepare applications.
 
-| Operation | Engine | Effort guidance | Bounded usage estimate |
-|---|---|---|---|
-| Correction round (`preferences.correct`) | Codex, 1 turn (server-enforced limits: ≤7 requests, ≤3 items, ≤8 tools, 1 turn) | Lowest available effort | 1 round, ≤1 turn |
-| Reason-catalog authoring (once per brief version) | Codex/LLM, 1 authoring call | Lowest effort that yields a usable rubric | 1 call |
-| Discovery collection | Codex retrieval (browser/exec within sandbox) | Lowest effort; bounded pages below | ≤6 page fetches, ≤2 distinct sources, ≤10 persisted findings |
-| Per-listing classification + reason selection | Jev Choice (batched where supported) | n/a (classifier) | ≤10 listings in ≤3 batched calls |
-| Selected-role checks (1–2 roles) | Codex retrieval, reuse of run evidence | Lowest effort; no re-collection of already-saved pages | ≤2 roles, ≤3 fetches each |
-| Answer matching | Jev Choice among saved answers + `no-fitting-answer` | n/a (classifier) | 1 call per question batch, ≤3 calls |
-| Explanation open, navigation, reload, readback | Neither (deterministic reads) | — | 0 model calls (asserted, §5) |
+1. **Correct requirements.** Start from an owner-confirmed wrong, empty, or outdated brief. Save one contextual correction through the supported versioned authority path, then read back the effective profile/search-brief version. The current `POST /api/v1/rounds/process-input` dispatches via the Codex runner; it is not proof Muse is wired. Use saved facts and choices plus deterministic versioning, preserving owner authority, revision checks, replay safety and readback. If entirely new private free-text/CV correction cannot be represented, record a scoped intake gap and seek owner review; never silently call Standard in this stage or block public discovery.
+2. **Find jobs from the saved brief.** The owner presses **Find jobs** explicitly. Muse Contributor as the recruitment-agent role chooses sources, generalized role/region/skill queries, public APIs and career pages; the app executes retrieval through a verified boundary. Do not include the owner's identity or private profile/requirements in its prompts or MCP results. Jev classifies results against the saved personalized criteria and chooses supported saved reasons. If a reason catalog needs LLM authoring, Contributor may write general positive, negative and missing-information choices once per brief version using non-identifying role/region/skill criteria. Bind the owner’s private requirements locally/Jev and reuse the saved catalog; never send private Jev inputs/results to Contributor or weaken the requirements. Do not generate per-job or on-open explanations. Persist source receipts, versions and provider usage; accept an honest no-result outcome.
+3. **Explain saved classifications.** Jev assigns Recommended, Could be recommended, Probably not recommended, or Not recommended and selects supported reason IDs. Unknown remains exceptional and needs unusable evidence as its basis; an isolated missing detail does not automatically make a job Unknown. Reopening “Why this job,” returning to the list and reloading saved results reuse reason text without any Muse or Jev call.
+4. **Select and check.** Choosing any result records a decision only. After **Check chosen jobs**, the bounded executor reuses captures and retrieves necessary missing detail for selected roles only. Muse Contributor may extract and organize public vacancy, route, required-document and **actual** employer-question evidence for selected roles only. It may prepare generic question categories from those public questions for later Jev choice. Keep chosen-role checks public-only in Contributor; private owner data and Jev results stay server-side. Reuse captures and keep calls bounded. If a proposed check needs private-context generation, record that gap without calling Standard in this stage. It must not invent questions or unsupported facts. Save provenance for each consequential claim; block only the affected role when evidence or route is unavailable.
+5. **Match saved answers.** Answer consumes the actual employer questions and generic categories saved during Check job details. Jev chooses among relevant saved owner-approved answers plus `no_fitting_answer`. Deterministic code places a match in an editable box or leaves it blank; the owner may change it. Confirm answer state survives reload. Answer makes zero Contributor, Standard or other generative calls and no retrieval calls.
 
-Totals for the ceiling math: ≤2 Codex authoring/correction turns + ≤12 Codex retrieval fetches + ≤6 Jev Choice calls + 0 calls for reads.
+## 4. Bounded usage method (proposal, no operation approved)
 
-## 5. Per-action call-tracing plan (Codex / Jev / neither)
+The earlier fixed Codex-turn and percentage-headroom estimate is superseded. The first exercise uses Contributor through the installed Muse Code CLI for public discovery and, only after explicit selection, selected-job public evidence; Standard is reserved for later application preparation. The owner reports about 50 practical hours/week on Contributor versus one on Standard, so reuse existing evidence and Jev assessments and use deterministic logic to minimize Standard calls. Published per-token API prices are not the billing basis the owner reports for this CLI route. Keep subscription allowance and pay-as-you-go API rates distinct. Standard API rate is $1.25/M input and $4.25/M output; Contributor API rate is $0.10/M input and $0.20/M output. Contributor's lower rates do not override its data-use restriction or establish subscription billing. Confirm the Contributor subscription lane without a model call. Confirm Standard entitlement only before later Prepare work. Codex/OpenRouter remain future alternatives, not current prerequisites.
 
-Observed from server logs/traces/doubles and persisted records, never from UI text alone (RW-E0 §2 format):
+Before asking for authorization, implementation/runtime owners must show the Contributor public-only request/data graph, no-fallback proof, session isolation, and observable usage method. Propose enforceable bounds for:
 
-| Owner-visible action | Expected engine | Trace source |
-|---|---|---|
-| File correction | Codex (1 `process_input` round) | Round record (id, state, `operations: preferences.correct`), `codex/status` usage delta |
-| Read back saved brief / reload | Neither | `GET /preferences` version, `GET /research/brief` — assert zero non-auth POST |
-| Press Find jobs | Codex (commission 1 run) | Run id, journal/activity entries, artifact receipts per fetch |
-| Catalog authoring | Codex/LLM once | Catalog version + `rubricSource` pin to brief version |
-| Classification + reasons | Jev only | Match/classification records, finding→reason pins |
-| Open explanation | Neither | Assert zero fetch/model call on open (repeat per RW-E0) |
-| Select roles | Neither (guarded decision POST only) | Decision record; assert zero check/match traffic |
-| Check chosen jobs | Codex retrieval (selected roles only) | Check records per role; assert unselected roles untouched |
-| Answer matching / prefill | Jev only | Match-run record; assert zero Codex/LLM calls |
-| Edit answer (exact save / blank) | Neither | Byte-exact answer revision + version guard |
+- **Muse Code:** verify the subscription route and actual usage/capacity indicators without a model call; preserve the owner's report that Contributor delivers about 50 practical hours/week versus about one hour/week on Standard. Confirm the subscription credential lane and no accidental API-key override without a model call. Keep owner-private data and private Jev inputs/results out of Contributor prompts, MCP returns and session history. Set a maximum model-step/turn count, elapsed time, one exercise with no automatic repeat, Stop/cancel behavior and subscription usage readback if observable; unknown usage stays unknown. Standard has zero calls in this exercise. Do not convert published API token rates into a subscription cost estimate.
+- **Future alternatives only:** if Codex or OpenRouter is proposed in a later phase, prepare separate runtime-specific usage and cost bounds then; neither is part of the first Muse operation.
+- **Retrieval:** requests/fetches, pages, response bytes, time and concurrency, with a receipt per attempt. The prior 12-fetch ceiling may remain a provisional upper bound; propose a lower one when sufficient.
+- **Jev:** maximum Choice/Score calls, candidates per batch and verified usage/cost. The prior six-call count may remain a provisional upper bound; batch independent questions where supported.
+- **Combined bounds:** state enforceable model steps/turns, elapsed time, retrieval/Jev requests, bytes and cancellation limits for one exercise. Muse CLI subscription use has no meaningful per-run dollar meter here; never present a dollar hard stop for it. Any separately billed Jev, retrieval or other service needs its own verified cost/limit and explicit owner authorization. Keep unknown usage unknown.
 
-Any deviation (e.g. a Codex call during Answer, a model call on explanation open, check traffic after selection alone) is recorded as a failure-criterion hit and keeps RW-G1/RW-G2 open.
+Codex/OpenRouter configuration is deferred and does not establish Muse readiness. This planning task made no provider call or spend.
 
-## 6. Proposed spend ceiling, estimate math, and stop conditions
+Stop when an enforced model-step/turn, elapsed-time, fetch/byte or separately billed service limit cannot be maintained or is reached. If subscription usage readback is unavailable, record it as unknown and continue only within enforceable step/time bounds. Also stop if Jev or retrieval fails, the anchor is closed/unusable, or an invented fact/question/reason appears. Save partial evidence and report the blocker; do not increase limits, silently switch provider, or retry an uncertain request.
 
-No spend limit is invented here: the ceiling below is a PROPOSAL for the owner to approve, amend, or reject at RW-P1. Unit prices are unverified (no paid call has ever run); the binding ceiling is therefore dual — operation counts AND currency, whichever is hit first.
+## 5. Call and evidence trace
 
-- Proposed operation ceiling: 2 Codex authoring/correction turns + 12 Codex retrieval fetches + 6 Jev Choice calls, exactly the §4 totals. Any operation beyond these counts requires a fresh authorization; it is not covered.
-- Proposed currency ceiling (to be confirmed): owner sets $C at RW-P1 after seeing current unit prices. Estimate math for the owner: `ceiling $C ≥ (2 × p_codex_turn) + (12 × p_retrieval_fetch) + (6 × p_jev_choice) + 20% headroom`, where each `p_` is the current list price the operator looks up at RW-P1 time. If the computed estimate exceeds the owner's $C, shrink the bounds (fewer fetches/roles) rather than exceeding $C.
-- Suggested $C starting figure for discussion only (not authorized): $25. If the RW-P1 price lookup shows the §4 totals cost more than $25, the owner either raises $C or narrows the exercise; the plan makes no assumption.
-- Stop conditions (any one halts the exercise immediately, with partial evidence retained): operation or currency ceiling reached; anchor vacancy unreachable or closed (record as blocked, do not substitute silently); `Unknown` rate indicating input/classification failure (per RW-G1 S3: mass-Unknown is investigated, never accepted); any invented question/reason/fact detected; any ceiling-exceeding retry requested; owner says stop.
+Record actual runtime/tier/data traces, persisted entities and owner-visible behavior. Interface labels alone do not prove what ran.
 
-## 7. Expected persisted versions
+| Owner action | Expected work | Evidence |
+| --- | --- | --- |
+| Save contextual correction | Saved facts/choices and deterministic versioning; unsupported private free text becomes an intake gap | Owner instruction, saved version/readback, zero Standard calls |
+| Read brief/preferences | No model, Jev or retrieval call | Read trace and zero-call assertion |
+| Press Find jobs | Contributor freely chooses public sources/queries and gathers vacancy evidence; Jev classifies with saved reasons | Public-only Contributor trace, source receipts, Jev usage, saved findings and zero Standard calls |
+| Open saved reason | No call | Persisted reason text and zero-call assertion |
+| Select a job | Decision write only | Decision/revision; zero deeper check traffic |
+| Start Check chosen jobs | Contributor retrieves public employer details/questions only for selected roles | Selected IDs; fetch receipts; source-linked questions; provider/usage trace; saved per-role check; unselected roles untouched |
+| Answer questions | Jev selects a saved owner-approved answer or `no_fitting_answer`; deterministic prefill/save from questions already saved by Check job details | Match record/usage; exact editable answer or blank after reload; zero Contributor, Standard, generative and retrieval calls |
 
-After a successful exercise, all of the following exist and survive reload, and the RW-G1 record names each id:
+Every model call in this first exercise must use Contributor through the installed Muse CLI for public-only inputs. Standard is application-preparation-only and has zero calls here. Never send private data to Contributor or silently fall back to Codex, OpenRouter, or API-key billing. Wrong runtime, missing provenance, lost results, over-limit usage, selection-triggered checks, fabricated facts or calls on read/open keep the gate open.
 
-profile vN (pre-correction) → profile vN+1 (post-correction readback); brief `rubricVersion`/`rubricSource` pinned to vN+1; reason-catalog version authored once for that brief version; research run id (+ journal); finding ids (including the anchor) with source URLs, groups, and reason pins; decision record (selected roles + revisions); check records per selected role with question provenance; answer-match run id + answer revisions incl. honest blanks/`none_fits`.
+## 6. Host and service readiness
 
-## 8. Prerequisites mapped to RW-D1 / RW-P1
+Do not ask the owner to choose an app host or runner VM before a technical recommendation exists. The owner’s MacBook is the chosen app and Muse CLI host; local retrieval containment remains unverified. Recommend a local-app/runtime topology that invokes the installed Muse CLI, scopes per-session MCP permissions, reaches approved public sources, enforces usage limits and persists state. Jev remains a separate service. Contributor handles public vacancy discovery and selected-job public checks; Standard is reserved for application preparation. Codex/OpenRouter runtime requirements are deferred.
 
-Nothing in §3 runs until every RW-D1 item is proved (no-spend) and RW-P1 is recorded:
+Retrieval may need an isolated worker or container separate from either model provider. Determine its placement from documented network, filesystem, process, cancellation, observation and capture needs; do not assume a second VM or existing sandbox. Verify browser/API retrieval, source capture, time/byte limits, stopping and recovery without paid model calls. If safe retrieval is not ready, keep the live gate blocked.
 
-| Need | Proved by | Blocker today (RW-D0) |
-|---|---|---|
-| Host selected (app host + separate runner VM) | Owner decision, recorded by coordinator | Owner placement pending (`infra` vs `linux`) |
-| App installed (API+Caddy+TLS, `api.env`) | RW-D1 install + `GET /health` | Nothing installed on either host |
-| Isolated runner + containment proof; `JOBSEEK_CODEX_ISOLATION_VERIFIED=true` only after accept steps | RW-D1 accept probes + owner ChatGPT sign-in | No containment proven anywhere |
-| Jev key (`TYPESAFE_API_KEY`) present | RW-D1 log-line + no-spend answer-match probe | Unverifiable until host selected |
-| Codex model/effort available values chosen | Owner selection at RW-D1/RW-P1 | Unverifiable; §4 guidance is a proposal |
-| Retrieval backends (pinned shell, python, sandbox wrapper, artifact/scratch roots) + `wireResearch` sandbox-binary wiring fix | RW-D1 install + fix (D lane) | Wiring gap: `JOBSEEK_RESEARCH_SANDBOX_BINARY` unread; Linux wrapper unused |
-| Same instance serves UI/API paths under test | RW-D1 wiring check | No live instance |
-| Spend ceiling $C + anchor nomination + valid owner evidence recorded | RW-P1 authorization record | Awaits this plan's review |
+Verify installed Muse 1.3.0 session/runtime, Contributor subscription lane, no-fallback routing, Jev, retrieval and evidence storage without printing secrets. Standard entitlement belongs to later preparation readiness. Verify that Contributor inputs/returns exclude private owner data and that Standard has zero calls in this exercise. Career-root/Typst and safe test mail are later preparation/send prerequisites only. Readiness does not authorize spend. The MacBook host and installed Muse version are observed; model entitlement, subscription route, local retrieval containment and live service status remain unverified.
 
-Elapsed time and the RW-D0 audit are not authorization and not readiness.
+## 7. Evidence outcomes
 
-## 9. Honest no-result scenario (separate)
+- **Fixture-verified:** deterministic doubles prove UI behavior and error states; not live integration.
+- **Live-integrated:** actual Muse Contributor use stayed within the public-only data boundary with zero Standard calls, genuine retrieval and Jev ran within approved model-step/time and separately billed service limits, and source-linked findings/classifications persisted with available usage recorded and unavailable usage marked unknown.
+- **Owner-walked-through:** the owner changed saved requirements, found results, understood reasons, chose a role and explicitly started its check without repeating known goals or hitting generic operator controls.
+- **Blocked/partial:** identify the exact provider, configuration, retrieval, Jev, evidence, usage, or authorization blocker. Do not report success.
 
-Scenario N1 — deterministic empty run. Setup: a discovery run against fixtures/doubles that return zero usable listings (or a no-spend blocked-setup state: runner/Jev absent). Expected UI: plain "no results" or "unavailable / needs setup" state; never a fake search or silent success. Per-action trace: commission attempt → honest 503/blocked or empty finding set; zero persisted findings; no classification calls. Evidence class: FIXTURE-VERIFIED (deterministic doubles), recorded in its own RW-G1 §2 block — never under live-integrated. If the live §3 run itself returns zero usable listings, that is recorded separately as LIVE-INTEGRATED with its run id and investigated (input failure vs genuinely empty market), not merged with N1.
+A fixture empty result proves the empty UI only. A live run returning no findings proves service activity only after actual retrieval is traced; investigate saved brief, queries, source responses and Jev status before claiming a market no-result. A failure before retrieval is “unavailable,” not “no matching jobs.”
 
-## 10. Done-when check (RW-E1)
+## 8. Authorization and completion
 
-- [x] Plan covers correction → anchor discovery → saved classification/reasons → checks/answer matching with concrete sources and evidence refs (§3), valid owner facts (§2), economical models/effort with usage estimates (§4), proposed ceiling + estimate math + stop conditions (§6), per-action call tracing (§5), expected persisted versions (§7), separate no-result scenario with evidence class stated (§9), and RW-D1/RW-P1 prerequisites (§8).
-- [x] Plan explicitly does not hard-code a production source universe (§1); Codex still chooses live sources within the staged bounds.
-- [x] Zero paid calls, zero sends, zero secret values, no code changes.
+The exercise remains unauthorized. Future execution requires verified Muse tier routing, a concrete Contributor step/time bound and observable subscription usage, if available, bounded retrieval and Jev limits, separate verified limits for any billed Jev/retrieval service, safe runtime readiness, valid owner-approved evidence, and explicit authorization for that exact scope. Authorization does not cover material drafting/rewrite or sending; those require separate review and a controlled test destination.
+
+RW-G1 remains open until the requirements-to-results path actually runs through Contributor and Jev and its evidence is recorded. Fixture suites, a completed checklist, a mentioned key name or successful plan review cannot close it.
