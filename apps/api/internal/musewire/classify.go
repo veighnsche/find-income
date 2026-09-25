@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
 	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
@@ -36,6 +37,40 @@ type VacancyClassification struct {
 // fixtures may substitute a fake.
 type Classifier interface {
 	ClassifyVacancy(ctx context.Context, in VacancyClassification) (store.Finding, error)
+}
+
+// BoundClassifier caps judged vacancies for one commission: the first Max
+// vacancies reach the inner classifier, the rest fail closed as honest
+// gaps so a separately billed Jev budget is never exceeded silently.
+type BoundClassifier struct {
+	Inner Classifier
+	Max   int
+
+	mu   sync.Mutex
+	used int
+}
+
+func (c *BoundClassifier) ClassifyVacancy(ctx context.Context, in VacancyClassification) (store.Finding, error) {
+	if c == nil || c.Inner == nil || c.Max <= 0 {
+		return store.Finding{}, errors.New("musewire: bounded classifier needs an inner classifier and a positive bound")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.used >= c.Max {
+		return store.Finding{}, fmt.Errorf("musewire: Jev judgment bound of %d reached; vacancy %q left unclassified", c.Max, in.Vacancy.VacancyRef)
+	}
+	c.used++
+	return c.Inner.ClassifyVacancy(ctx, in)
+}
+
+// Used reports judged vacancies so far.
+func (c *BoundClassifier) Used() int {
+	if c == nil {
+		return 0
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.used
 }
 
 // StoreClassifier binds saved vacancies to opportunities, assesses them
