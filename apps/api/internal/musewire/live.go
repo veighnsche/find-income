@@ -80,6 +80,8 @@ func discoveryPrompt(criteria musecode.PublicCriteria) string {
 	if len(criteria.SkillKeywords) > 0 {
 		fmt.Fprintf(&b, "- skills: %s\n", strings.Join(criteria.SkillKeywords, ", "))
 	}
+	b.WriteString("public_search and public_fetch take full public https:// URLs only, never bare keywords: ")
+	b.WriteString("use job-board search pages, company career pages, public API endpoints, or search-engine result URLs you construct. ")
 	b.WriteString("Rules: at most 12 public_search/public_fetch calls total; save every real vacancy you verify with public_save_vacancy before moving on; ")
 	b.WriteString("every saved field must come from captured evidence; never invent vacancies, employers, questions, or reasons; ")
 	b.WriteString("when the evidence is thin, save what you verified and report coverage and gaps honestly. ")

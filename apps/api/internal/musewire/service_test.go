@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/veighnsche/find-income-dashboard/api/internal/identity"
@@ -535,6 +536,51 @@ func TestConnectedDiscoverySavesSourcedClassifiedVacancies(t *testing.T) {
 	if _, err := fix.service.CommissionDiscovery(ctx, "run-1",
 		musecode.PublicCriteria{}, fix.profile, "criteria-v9-deadbeefcafe"); !errors.Is(err, store.ErrRoundIdempotencyConflict) {
 		t.Fatalf("different-brief replay err = %v, want idempotency conflict", err)
+	}
+}
+
+func TestCommissionDiscoveryScopesResearchDispatch(t *testing.T) {
+	ctx := context.Background()
+	transport := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
+	fix := newConnectedFixture(t, transport, nil)
+	done := make(chan error, 1)
+	go func() {
+		_, err := fix.service.CommissionDiscovery(ctx, "run-scope",
+			musecode.PublicCriteria{RoleKeywords: []string{"support"}}, fix.profile, fix.rubric)
+		done <- err
+	}()
+	<-transport.started
+	// Mid-run, exactly when live retrieval dispatches: the commissioned
+	// round must grant research.dispatch at generation 1.
+	round, err := fix.db.RoundByRequest(ctx, fixtureActor, "muse:run-scope")
+	if err != nil {
+		t.Fatal(err)
+	}
+	have := map[string]bool{}
+	for _, op := range round.Scope.Operations {
+		have[op] = true
+	}
+	for _, op := range []string{store.RoundResearchSearch, store.RoundResearchFetch, store.RoundResearchAPI} {
+		if !have[op] {
+			t.Errorf("round scope %v misses %s", round.Scope.Operations, op)
+		}
+	}
+	for _, op := range []string{store.RoundResearchBrowse, store.RoundResearchExec} {
+		if have[op] {
+			t.Errorf("round scope %v grants %s", round.Scope.Operations, op)
+		}
+	}
+	err = fix.db.ResearchWrite(ctx, func(db store.ResearchDB) error {
+		_, err := store.CheckRoundAuthorityTx(ctx, db, round.ID, 1,
+			researchcontract.PermissionResearchDispatch, fixtureActor, time.Now())
+		return err
+	})
+	if err != nil {
+		t.Fatalf("research.dispatch against the commissioned round: %v", err)
+	}
+	close(transport.proceed)
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
 

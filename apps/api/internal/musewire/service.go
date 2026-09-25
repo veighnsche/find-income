@@ -177,8 +177,13 @@ func (s *Service) CommissionDiscovery(ctx context.Context, runRef string, criter
 		RequestKey: "muse:" + runRef, Intent: CommissionIntent, Outcome: "pending",
 		ProfileVersion: profileVersion,
 		Scope: store.RoundScope{
-			Operations: []string{"muse_discover", "muse_classify", store.RoundJevRequest, store.RoundJevAssess},
-			Resources:  []string{store.ResearchAuthorityResource},
+			// research.search/fetch/api let the production executor
+			// dispatch the run's public retrieval; browse and exec
+			// stay out (no pinned browser; model-executed code is
+			// outside the discovery boundary).
+			Operations: []string{"muse_discover", "muse_classify", store.RoundJevRequest, store.RoundJevAssess,
+				store.RoundResearchSearch, store.RoundResearchFetch, store.RoundResearchAPI},
+			Resources: []string{store.ResearchAuthorityResource},
 		},
 		Limits: store.RoundAllowance{
 			Requests: int64(s.bounds.MaxToolCalls), Items: 1000,
