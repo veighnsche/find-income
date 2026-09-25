@@ -206,7 +206,7 @@ func (f fixtureBriefs) CurrentBrief(context.Context, string) (int64, string, err
 }
 
 func fixtureFacts() musecode.Facts {
-	return musecode.Facts{CLIPath: "/fixture/muse", CLIReportVersion: "1.3.0",
+	return musecode.Facts{CLIPath: "/fixture/muse", CLIReportVersion: "1.4.0",
 		EffectiveModel: "fixture-model", SubscriptionLaneProved: true,
 		SessionProtocolProved: true, WorkspaceIsolatedProved: true}
 }

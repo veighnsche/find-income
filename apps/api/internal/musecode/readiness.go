@@ -58,7 +58,7 @@ func Check(tier Tier, facts Facts) Status {
 }
 
 // versionMatchesPin accepts the pinned release with any local build suffix
-// (for example 1.3.0-R3401.1) and rejects everything else.
+// (for example 1.4.0-R4161.1) and rejects everything else.
 func versionMatchesPin(reported string) bool {
 	if reported == PinnedCLIVersion {
 		return true

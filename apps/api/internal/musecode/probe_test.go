@@ -9,8 +9,8 @@ import (
 
 func TestParseVersionLine(t *testing.T) {
 	cases := map[string]string{
-		"Muse Code 1.3.0 (1.3.0-R3401.1)\n": "1.3.0",
-		"Muse Code 1.3.0":                   "1.3.0",
+		"Muse Code 1.4.0 (1.4.0-R4161.1)\n": "1.4.0",
+		"Muse Code 1.4.0":                   "1.4.0",
 		"":                                  "",
 		"codex 1.0\n":                       "",
 		"Muse":                              "",
@@ -36,13 +36,13 @@ func TestProbeLocalFactsNeverCallsAModel(t *testing.T) {
 	// proves parsing without touching the real CLI.
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "muse")
-	script := "#!/bin/sh\necho 'Muse Code 1.3.0 (fixture)'\n"
+	script := "#!/bin/sh\necho 'Muse Code 1.4.0 (fixture)'\n"
 	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	facts := ProbeLocalFacts(bin)
-	if facts.CLIPath != bin || facts.CLIReportVersion != "1.3.0" {
-		t.Fatalf("facts = %+v, want path + 1.3.0", facts)
+	if facts.CLIPath != bin || facts.CLIReportVersion != "1.4.0" {
+		t.Fatalf("facts = %+v, want path + 1.4.0", facts)
 	}
 	if facts.SubscriptionLaneProved || facts.SessionProtocolProved || facts.WorkspaceIsolatedProved {
 		t.Fatalf("facts = %+v, want nothing proved", facts)

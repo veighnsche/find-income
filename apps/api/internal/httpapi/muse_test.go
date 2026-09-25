@@ -54,7 +54,7 @@ func museWiredHarness(t *testing.T, facts musecode.Facts) *harness {
 }
 
 func readyFacts() musecode.Facts {
-	return musecode.Facts{CLIPath: "/fixture/muse", CLIReportVersion: "1.3.0",
+	return musecode.Facts{CLIPath: "/fixture/muse", CLIReportVersion: "1.4.0",
 		EffectiveModel: "fixture-model", SubscriptionLaneProved: true,
 		SessionProtocolProved: true, WorkspaceIsolatedProved: true}
 }
@@ -100,7 +100,7 @@ func TestMuseReadinessHonesty(t *testing.T) {
 		t.Fatalf("ready readiness = %d %+v, want ready", response.Code, ready)
 	}
 
-	lane := museWiredHarness(t, musecode.Facts{CLIPath: "/fixture/muse", CLIReportVersion: "1.3.0"})
+	lane := museWiredHarness(t, musecode.Facts{CLIPath: "/fixture/muse", CLIReportVersion: "1.4.0"})
 	cookie, _ = lane.login()
 	response = lane.request("GET", "/api/v1/muse/readiness?tier=standard", "", cookie, "", "", "")
 	var blocked struct {

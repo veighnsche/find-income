@@ -5,13 +5,14 @@
 package musecode
 
 // PinnedCLIVersion is the only CLI release this contract targets. The owner
-// selected the installed Muse Code 1.3.0 on their MacBook; any other version
-// fails readiness closed until the pin is deliberately moved.
-const PinnedCLIVersion = "1.3.0"
+// authorized the re-pin from 1.3.0 to the installed Muse Code 1.4.0 on
+// their MacBook (E11 proposal decision D1, 25 September 2026); any other
+// version fails readiness closed until the pin is deliberately moved.
+const PinnedCLIVersion = "1.4.0"
 
 // ObservedCLIFullVersion records the exact local build string seen via
-// `muse --version` (metadata only, no model call): 1.3.0-R3401.1.
-const ObservedCLIFullVersion = "1.3.0-R3401.1"
+// `muse --version` (metadata only, no model call): 1.4.0-R4161.1.
+const ObservedCLIFullVersion = "1.4.0-R4161.1"
 
 // SessionTransport pins how recruitment sessions reach the CLI. Verified from
 // installed `--help` output: `muse serve` hosts MSP sessions over stdio with
@@ -21,7 +22,9 @@ const SessionTransport = "muse serve stdio MSP session host"
 
 // SessionMCPNegotiation names the per-session MCP scoping the supervisor must
 // establish before any input: initialize with sessionMcp and a narrow
-// config.mcpServers. Unverified against the installed CLI; E02/E10 prove it.
+// config.mcpServers. E10 observed sessionMcp as a grantable client
+// capability in the installed 1.4.0 schema export; live negotiation is
+// proven at E11 prerequisite P3.
 const SessionMCPNegotiation = "initialize sessionMcp + config.mcpServers"
 
 // Tier selects which model route a session may use. Contributor sessions are

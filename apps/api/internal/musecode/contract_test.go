@@ -92,7 +92,8 @@ func TestCheckFailsClosedWithoutAICall(t *testing.T) {
 		{"no CLI path", TierContributor, Facts{}, CodeNotConfigured},
 		{"empty version", TierContributor, Facts{CLIPath: "/x"}, CodeVersionMismatch},
 		{"wrong version", TierContributor, Facts{CLIPath: "/x", CLIReportVersion: "1.2.0"}, CodeVersionMismatch},
-		{"lane unverified", TierContributor, Facts{CLIPath: "/x", CLIReportVersion: "1.3.0"}, CodeLaneUnverified},
+		{"superseded pin", TierContributor, Facts{CLIPath: "/x", CLIReportVersion: "1.3.0"}, CodeVersionMismatch},
+		{"lane unverified", TierContributor, Facts{CLIPath: "/x", CLIReportVersion: "1.4.0"}, CodeLaneUnverified},
 		{"protocol unverified", TierContributor, func() Facts {
 			f := readyFacts()
 			f.SessionProtocolProved = false
@@ -115,7 +116,7 @@ func TestCheckFailsClosedWithoutAICall(t *testing.T) {
 			t.Errorf("%s ready facts: got %+v, want available", tier, status)
 		}
 	}
-	for _, version := range []string{"1.3.0", "1.3.0-R3401.1", "1.3.0+local"} {
+	for _, version := range []string{"1.4.0", "1.4.0-R4161.1", "1.4.0+local"} {
 		facts := readyFacts()
 		facts.CLIReportVersion = version
 		if status := Check(TierContributor, facts); !status.Available {
