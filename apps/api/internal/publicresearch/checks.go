@@ -68,6 +68,16 @@ const (
 	RoleBlocked RoleCheckOutcome = "blocked"
 )
 
+// QuestionSource pins one saved question to its verbatim capture span:
+// the bytes text[Start:End] of capture CaptureID equal the saved
+// question's prompt exactly, with Start >= 0 and End > Start.
+type QuestionSource struct {
+	QuestionRef string `json:"question_ref"`
+	CaptureID   string `json:"capture_id"`
+	Start       int    `json:"start"`
+	End         int    `json:"end"`
+}
+
 // RoleCheck is the evidence chain for one selected role.
 type RoleCheck struct {
 	VacancyRef    string                    `json:"vacancy_ref"`
@@ -76,8 +86,18 @@ type RoleCheck struct {
 	CaptureIDs    []string                  `json:"capture_ids"`
 	ReceiptIDs    []string                  `json:"receipt_ids"`
 	Questions     []musecode.PublicQuestion `json:"questions"`
-	BlockReason   string                    `json:"block_reason,omitempty"`
-	Detail        string                    `json:"detail,omitempty"`
+	Sources       []QuestionSource          `json:"question_sources"`
+	// BlockReason names why this role alone blocked; empty when checked.
+	// Vocabulary for M's mapping: "unknown_vacancy" (selected ref was
+	// never saved), "missing_route" (no public detail route, fetch
+	// returned no capture, or the fetched capture could not be opened),
+	// "fetch_error" (detail fetch failed outside the contract),
+	// "save_error" (question save failed or returned no question), or a
+	// passthrough researchcontract outcome code ("not_found",
+	// "budget_exhausted", "rate_limited", ...) from a refused fetch or a
+	// failed question save. Detail carries the human-readable cause.
+	BlockReason string `json:"block_reason,omitempty"`
+	Detail      string `json:"detail,omitempty"`
 }
 
 // CheckReport is the terminal record of one explicit check action.
@@ -177,7 +197,7 @@ func (c *CheckService) Check(ctx context.Context, sel Selection) (CheckReport, e
 // checkOne checks a single selected role: reuse the saved capture when it
 // resolves, otherwise fetch the actual public detail page.
 func (c *CheckService) checkOne(ctx context.Context, ref string) RoleCheck {
-	role := RoleCheck{VacancyRef: ref, Outcome: RoleChecked, CaptureIDs: []string{}, ReceiptIDs: []string{}, Questions: []musecode.PublicQuestion{}}
+	role := RoleCheck{VacancyRef: ref, Outcome: RoleChecked, CaptureIDs: []string{}, ReceiptIDs: []string{}, Questions: []musecode.PublicQuestion{}, Sources: []QuestionSource{}}
 	vac, ok := c.lookupVacancy(ref)
 	if !ok {
 		role.Outcome = RoleBlocked
@@ -239,7 +259,7 @@ func (c *CheckService) fetchDetail(ctx context.Context, vac musecode.PublicVacan
 	blocked := func(reason, detail string) (string, string, string, *RoleCheck) {
 		return "", "", "", &RoleCheck{
 			VacancyRef: vac.VacancyRef, Outcome: RoleBlocked,
-			CaptureIDs: []string{}, ReceiptIDs: []string{}, Questions: []musecode.PublicQuestion{},
+			CaptureIDs: []string{}, ReceiptIDs: []string{}, Questions: []musecode.PublicQuestion{}, Sources: []QuestionSource{},
 			BlockReason: reason, Detail: detail,
 		}
 	}
@@ -320,6 +340,16 @@ func (c *CheckService) saveVerbatim(ctx context.Context, vac musecode.PublicVaca
 			return role
 		}
 		role.Questions = append(role.Questions, saved)
+		captureID := ""
+		if n := len(role.CaptureIDs); n > 0 {
+			captureID = role.CaptureIDs[n-1]
+		}
+		if at := strings.Index(text, prompt.Text); at >= 0 {
+			role.Sources = append(role.Sources, QuestionSource{
+				QuestionRef: saved.QuestionRef, CaptureID: captureID,
+				Start: at, End: at + len(prompt.Text),
+			})
+		}
 	}
 	return role
 }
