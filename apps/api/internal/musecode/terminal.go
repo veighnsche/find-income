@@ -32,6 +32,7 @@ type TerminalResult struct {
 	RunRef    string
 	Tier      Tier
 	Outcome   Outcome
+	Detail    string
 	SavedRefs []string
 	Usage     Usage
 	EndedAt   time.Time
@@ -54,5 +55,6 @@ type Cursor struct {
 	Tier             Tier
 	LastSavedReceipt string
 	SavedCount       int
+	SavedRefs        []string
 	UpdatedAt        time.Time
 }
