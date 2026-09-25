@@ -604,3 +604,48 @@ func TestProcessInputSourceDeadlineExpiresAndRetainsUncertainRead(t *testing.T) 
 	}
 	t.Fatal("deadline did not terminalize blocked source read")
 }
+
+func TestProcessInputHTTPReadbackConfirmsSavedCorrection(t *testing.T) {
+	h := newRecordHTTP(t)
+	h.server.Close()
+	engine := &agency.Engine{Store: h.db, Runtime: &inputFixtureRuntime{db: h.db}, Decisions: inputFixtureDecisions{}, Context: context.Background()}
+	h.server = httptest.NewServer(NewHandler(h.db, h.service, Options{AllowedOrigins: []string{origin}, Rounds: &rounds.Service{Store: h.db, Readiness: engine, Worker: engine}}))
+	h.client = h.server.Client()
+	t.Cleanup(h.server.Close)
+	h.login()
+	ctx := context.Background()
+	profile, err := h.db.CurrentPreferences(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := fmt.Sprintf(`{"requestKey":"profile-readback","targetKind":"profile","targetId":"current","expectedRevision":%d,"text":"My preferred location is Ghent."}`, profile.Version)
+	status, body := h.owner(http.MethodPost, "/rounds/process-input", request)
+	requireStatus(t, status, http.StatusCreated, body)
+	roundID := decodeObject(t, body)["round"].(map[string]any)["id"].(string)
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		status, body = h.owner(http.MethodGet, "/rounds/"+roundID)
+		requireStatus(t, status, http.StatusOK, body)
+		state := decodeObject(t, body)["state"].(string)
+		if state == string(store.RoundCompleted) {
+			break
+		}
+		if state == string(store.RoundFailed) || state == "cancelled" || time.Now().After(deadline) {
+			t.Fatalf("correction round did not complete: %s", body)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	status, body = h.owner(http.MethodGet, "/preferences")
+	requireStatus(t, status, http.StatusOK, body)
+	readback := decodeObject(t, body)
+	if readback["version"].(float64) != float64(profile.Version+1) || readback["preferredLocation"].(string) != "Ghent" {
+		t.Fatalf("saved readback mismatch: %s", body)
+	}
+
+	invalid := fmt.Sprintf(`{"requestKey":"profile-bad-target","targetKind":"profile","targetId":"other","expectedRevision":%d,"text":"Typo target."}`, profile.Version+1)
+	status, body = h.owner(http.MethodPost, "/rounds/process-input", invalid)
+	requireStatus(t, status, http.StatusBadRequest, body)
+	unknown := fmt.Sprintf(`{"requestKey":"profile-bad-kind","targetKind":"wish","targetId":"current","expectedRevision":%d,"text":"Unknown kind."}`, profile.Version+1)
+	status, body = h.owner(http.MethodPost, "/rounds/process-input", unknown)
+	requireStatus(t, status, http.StatusBadRequest, body)
+}

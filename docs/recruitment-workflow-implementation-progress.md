@@ -10,20 +10,20 @@ Plan: `docs/recruitment-workflow-implementation-plan.md`. Only the coordinator u
 | RW-B0 | B | complete | worker-rw-b0 (Sol-Medium) | (read-only) | — | /tmp/rw-b0-handoff.md: Preferences-only versioned context; useOwnerContext interface proposal; 6 Lane-A questions open | — | — |
 | RW-D0 | D | complete | worker-rw-d0 (Sol-Medium) | (read-only) | — | /tmp/rw-d0-handoff.md: 10-row table; host unselected (owner blocker); sandbox-binary wiring gap; no paid calls/secrets | — | — |
 | RW-E0 | E | complete | worker-rw-e0 (Sol-Medium) | (read-only) | — | /tmp/rw-e0-handoff.md: stage→test map, 4-class evidence format, per-gate scenarios incl. owner-met regression | — | — |
-| RW-G0 | A+D/E | complete | coordinator | this ledger | RW-A0, RW-B0, RW-D0, RW-E0 | Diagnosis accepted: behavior gaps (SearchPage correction, saved-brief Find jobs) → RW-A1/B1/C1; config gaps (host/keys/runner) block live gates only; live services NOT marked ready | Host selection (owner) blocks RW-D1/G1+ | RW-A1, RW-A3, RW-D1–D3, RW-E1 |
-| RW-A1 | A | pending | — | — | RW-A0, RW-B0 | — | — | — |
+| RW-G0 | A+D/E | complete | coordinator | this ledger | RW-A0, RW-B0, RW-D0, RW-E0 | e5cc228 Wave-0 checkpoint. Diagnosis accepted: behavior gaps → RW-A1/B1/C1; config gaps block live gates only; live services NOT marked ready | Host selection (owner) blocks RW-D1/G1+ | RW-A1, RW-A3, RW-D1–D3, RW-E1 |
+| RW-A1 | A | complete | coordinator | process_input_test.go, docs/rw-a1-correction-contract.md | RW-A0, RW-B0 | No production fix needed (validation airtight); new HTTP readback test; contract answers all 6 B0 questions (no workPattern enum, criteria in roleCriteria[], numeric bounds) | — | RW-B1, RW-C1 |
 | RW-A2 | A | pending | — | — | RW-A1 | — | — | — |
 | RW-B1 | B | pending | — | — | RW-A1 | — | — | — |
 | RW-C1 | C | pending | — | — | RW-A1 | — | — | — |
 | RW-C2 | C(+B) | pending | — | — | RW-A2, RW-B1, RW-C1 | — | — | — |
-| RW-D1 | D | pending | — | — | RW-A0, RW-D0 | — | — | — |
-| RW-D2 | D | pending | — | — | RW-A0, RW-D0 | — | — | — |
-| RW-D3 | D | pending | — | — | RW-A0, RW-D0 | — | — | — |
-| RW-E1 | E(+D) | pending | — | — | RW-G0 | — | — | — |
+| RW-D1 | D | in_progress | worker-rw-d123 (Sol-Medium) | cmd/server/main.go (sandbox fix only) + readiness doc | RW-A0, RW-D0 | — | — | — |
+| RW-D2 | D | in_progress | worker-rw-d123 (Sol-Medium) | (same worker) | RW-A0, RW-D0 | — | — | — |
+| RW-D3 | D | in_progress | worker-rw-d123 (Sol-Medium) | (same worker) | RW-A0, RW-D0 | — | — | — |
+| RW-E1 | E(+D) | in_progress | worker-rw-e1 (Sol-Medium) | docs/rw-e1-live-exercise.md (new) | RW-G0 | — | — | — |
 | RW-P1 | E/coord | pending | — | — | RW-E1 | — | — | — |
 | RW-E2 | E | pending | — | — | RW-C2, RW-E0 | — | — | — |
 | RW-G1 | E+A/C/D | pending | — | — | RW-E2, RW-D1, RW-P1 | — | — | — |
-| RW-A3 | A | pending | — | — | RW-A0 | — | — | — |
+| RW-A3 | A | in_progress | worker-rw-a3 (Sol-High) | new *_verify_test.go only | RW-A0 | — | — | — |
 | RW-B2 | B | pending | — | — | RW-A3, RW-B1 | — | — | — |
 | RW-E3 | E | pending | — | — | RW-B2, RW-C2, RW-E0 | — | — | — |
 | RW-G2 | E+A/B/D | pending | — | — | RW-G1, RW-E3 | — | — | — |
