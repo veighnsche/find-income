@@ -20,14 +20,14 @@ Plan: `docs/recruitment-workflow-implementation-plan.md`. Only the coordinator u
 | RW-D2 | D | complete | worker-rw-d123 (Sol-Medium) | docs/rw-runtime-readiness.md | RW-A0, RW-D0 | BLOCKED (valid): materials gating/one-shot/render verified from code; live proof impossible — runner+model/effort, career root, Typst uninstalled | Host selection (owner); install/keys | — |
 | RW-D3 | D | complete | worker-rw-d123 (Sol-Medium) | docs/rw-runtime-readiness.md | RW-A0, RW-D0 | BLOCKED (valid): 6-var SMTP gating + digest binding verified; isolation is operational (sink+route+review), no code-level sink restriction; sink unprovisioned | Sink provisioning; 6 vars; RW-G4 procedure | — |
 | RW-E1 | E(+D) | complete | worker-rw-e1 (Sol-Medium) | docs/rw-e1-live-exercise.md (new) | RW-G0 | ca9ebce. Staged-canary plan: correction→anchor discovery→classification→checks; op ceiling 2+12+6, owner-set $C (no invented limit), tracing table, versions, no-result scenario; no paid calls/secrets | — | RW-P1 |
-| RW-P1 | E/coord | complete | worker-rw-p1 (Sol-Medium) | docs/rw-p1-authorization.md (new) | RW-E1 | Authorization MISSING (no reuse; evidence refs); owner request recorded: plan approval, $C, anchor, model/effort, host, evidence inventory | 6 owner decisions pending | RW-G1 |
+| RW-P1 | E/coord | complete | worker-rw-p1 (Sol-Medium) | docs/rw-p1-authorization.md (new) | RW-E1 | Authorization MISSING (no reuse; evidence refs); owner request recorded: plan approval, $C, anchor, model/effort, host, evidence inventory | f55f958. 6 owner decisions pending | RW-G1 |
 | RW-E2 | E | pending | — | — | RW-C2, RW-E0 | — | — | — |
 | RW-G1 | E+A/C/D | pending | — | — | RW-E2, RW-D1, RW-P1 | — | — | — |
 | RW-A3 | A | complete | worker-rw-a3 (Sol-High) | 3 new chain test files | RW-A0 | a079d1c. All criteria PASS, no production fix; coordinator-verified new tests green; zero-LLM Answer path proved | — | RW-B2 |
 | RW-B2 | B | complete | worker-rw-b2 (Sol-High) | CheckPage.*, AnswersPage.* | RW-A3, RW-B1 | 94b812d. Answer entry checked-only, source linkage, zero-LLM boundary test; 31/31 | — | RW-E3 |
 | RW-E3 | E | pending | — | — | RW-B2, RW-C2, RW-E0 | — | — | — |
 | RW-G2 | E+A/B/D | pending | — | — | RW-G1, RW-E3 | — | — | — |
-| RW-A4 | A | in_progress | worker-rw-a4 (Sol-High) | new *_verify_test.go only | RW-A3 | — | — | — |
+| RW-A4 | A | complete | worker-rw-a4 (Sol-High) | 2 new prepsend test files | RW-A3 | All safeguards PASS, no production fix; coordinator-verified new tests green | — | RW-C3, RW-E4 |
 | RW-C3 | C | pending | — | — | RW-A4, RW-C2 | — | — | — |
 | RW-E4 | E | pending | — | — | RW-A4, RW-C3, RW-E0 | — | — | — |
 | RW-P2 | E/coord+D | pending | — | — | RW-G2, RW-D2, RW-E4 | — | — | — |
