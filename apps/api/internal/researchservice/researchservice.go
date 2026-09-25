@@ -96,7 +96,7 @@ func (s *Service) CommissionResearch(ctx context.Context, in httpapi.CommissionR
 			MaxTurns: int64(in.Allowance.MaxTurns), MaxConcurrent: int64(in.Allowance.MaxConcurrent)}
 	}
 	commission := rounds.CommissionInput{Actor: in.Actor, BriefText: in.BriefText,
-		AgentID: s.agent, RubricVersion: brief.RubricVersion, RubricSource: brief.Source,
+		AgentID: s.agent, ProfileVersion: brief.ProfileVersion, RubricVersion: brief.RubricVersion, RubricSource: brief.Source,
 		Allowance: allow, IdempotencyKey: key, CorrectionsRef: in.CorrectionsRef}
 	out, err := s.sup.Commission(ctx, commission)
 	if err != nil && out.RunID != "" {

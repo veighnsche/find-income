@@ -160,7 +160,7 @@ func (h *Handler) getOpportunityFinding(w http.ResponseWriter, r *http.Request) 
 func findingEntryView(f store.Finding) generated.FindingEntry {
 	view := generated.FindingEntry{
 		AssessmentId: f.AssessmentID, CatalogVersion: f.CatalogVersion,
-		Group: generated.FindingEntryGroup(f.Group),
+		Group:         generated.FindingEntryGroup(f.Group),
 		OpportunityId: f.OpportunityID, OpportunityRevision: f.OpportunityRevision,
 		ProfileVersion: f.ProfileVersion, RubricVersion: f.RubricVersion,
 		Stale: f.Stale,
@@ -169,7 +169,7 @@ func findingEntryView(f store.Finding) generated.FindingEntry {
 	for _, reason := range f.Reasons {
 		view.Reasons = append(view.Reasons, generated.FindingReason{
 			Detail: reason.Detail, JevSupport: float32(reason.JevSupport),
-			Kind: generated.FindingReasonKind(reason.Kind),
+			Kind:  generated.FindingReasonKind(reason.Kind),
 			Label: reason.Label, ReasonId: reason.ReasonID,
 		})
 	}
