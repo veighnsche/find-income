@@ -111,6 +111,18 @@ func TestWrongTierInputAndPinMismatchFailClosed(t *testing.T) {
 		testSpec(t, TierStandard, DefaultBounds()), PublicInput{}, facts); err == nil {
 		t.Error("contributor input admitted to standard session")
 	}
+	if _, err := supervisor.StartRun(context.Background(), "run-tier-std",
+		testSpec(t, TierContributor, DefaultBounds()), StandardInput{Purpose: "draft"}, facts); err == nil {
+		t.Error("standard input admitted to contributor session")
+	}
+	admitted, err := supervisor.StartRun(context.Background(), "run-tier-ok",
+		testSpec(t, TierStandard, DefaultBounds()), StandardInput{Purpose: "draft"}, facts)
+	if err != nil {
+		t.Fatalf("standard input rejected by standard session: %v", err)
+	}
+	if admitted.Tier != TierStandard {
+		t.Errorf("admission = %+v, want standard tier", admitted)
+	}
 	drifted := facts
 	drifted.EffectiveModel = "other-model"
 	if _, err := supervisor.StartRun(context.Background(), "run-drift",

@@ -38,8 +38,7 @@ type EventSink interface {
 	Emit(Event)
 }
 
-// SessionInput marks which tier an input belongs to. Only PublicInput
-// exists until E09 adds the Standard preparation input.
+// SessionInput marks which tier an input belongs to.
 type SessionInput interface {
 	inputTier() Tier
 }
@@ -51,6 +50,19 @@ type PublicInput struct {
 }
 
 func (PublicInput) inputTier() Tier { return TierContributor }
+
+// StandardInput carries verified owner facts and preparation targets into a
+// private Standard session. Only preparation flows construct it, and only
+// from verified facts; grounding and citation validation stay with the
+// preparation adapter (E09).
+type StandardInput struct {
+	Purpose   string
+	BundleRef string
+	Context   map[string]string
+	Targets   []string
+}
+
+func (StandardInput) inputTier() Tier { return TierStandard }
 
 // Transport conducts one local CLI session to transport-terminal state.
 // Production implementations speak to `muse serve`; tests replay scripts.
