@@ -740,3 +740,44 @@ describe("answers page model-call boundary", () => {
     expect(unexpectedPosts(calls)).toHaveLength(0)
   })
 })
+
+describe("answers journey flow", () => {
+  it("explains the answer stage above the boxes", async () => {
+    stubAnswersFetch(answeredOptions())
+    renderAnswersPage("job-1")
+
+    expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
+    expect(
+      screen.getByRole("heading", { name: "Answer the employer's questions" })
+    ).toBeDefined()
+  })
+
+  it("records the Jev match outcome per question", async () => {
+    stubAnswersFetch(answeredOptions())
+    renderAnswersPage("job-1")
+
+    expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
+    expect(screen.getByText("1 suggestion ready")).toBeDefined()
+    fireEvent.click(
+      screen.getByRole("button", { name: /Answer questions/ })
+    )
+    expect(
+      await screen.findByText(/a saved answer matched and was placed/)
+    ).toBeDefined()
+    expect(screen.getByText(/no saved answer fit/)).toBeDefined()
+  })
+
+  it("continues to preparation without commissioning anything", async () => {
+    const { calls } = stubAnswersFetch(answeredOptions())
+    renderAnswersPage("job-1")
+
+    expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
+    const continuation = screen.getByRole("link", {
+      name: "Prepare applications",
+    })
+    expect(continuation.getAttribute("href")).toBe("#/jobs/job-1/prepare")
+    for (const call of calls) {
+      expect(call.method).toBe("GET")
+    }
+  })
+})

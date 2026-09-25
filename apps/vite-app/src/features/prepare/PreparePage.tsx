@@ -11,6 +11,7 @@ import {
   type RoleWorkflowState,
 } from "@/api/client"
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/shared"
+import { StageExplainer } from "@/components/shared/stage-explainer"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -83,6 +84,8 @@ export function PreparePage({
           editing and rewriting each need an explicit click.
         </p>
       </div>
+
+      <StageExplainer stage="prepare" />
 
       {standard !== undefined && standard !== null ? (
         <MuseReadinessPanel

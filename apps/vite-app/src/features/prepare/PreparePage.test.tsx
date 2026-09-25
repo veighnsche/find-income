@@ -399,6 +399,9 @@ describe("prepare page reads", () => {
     renderPreparePage("job-1")
 
     expect(await screen.findByText("Version 1")).toBeDefined()
+    expect(
+      screen.getByRole("heading", { name: "Putting your application together" })
+    ).toBeDefined()
     expect(calls.length).toBeGreaterThan(0)
     for (const call of calls) {
       expect(call.method).toBe("GET")

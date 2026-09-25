@@ -15,6 +15,7 @@ import {
   ErrorBlock,
   LoadingBlock,
 } from "@/components/shared"
+import { StageExplainer } from "@/components/shared/stage-explainer"
 import { Button } from "@/components/ui/button"
 import { CheckActivityFeed } from "@/features/check/check-activity-feed"
 import { useCheckStart } from "@/features/check/useCheckStart"
@@ -70,6 +71,8 @@ export function CheckPage({
           solely from the explicit action below.
         </p>
       </div>
+
+      <StageExplainer stage="check" />
 
       {opportunity.status === "loading" ? (
         <LoadingBlock label="Loading job details…" />

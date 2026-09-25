@@ -384,6 +384,9 @@ describe("check page states", () => {
 
     expect(await screen.findByText("Saved vacancy")).toBeDefined()
     expect(
+      screen.getByRole("heading", { name: "Checking the jobs you chose" })
+    ).toBeDefined()
+    expect(
       await screen.findByText("Why do you want this role?")
     ).toBeDefined()
     expect(await screen.findByText("CV · required")).toBeDefined()

@@ -12,6 +12,11 @@ import {
   type QuestionAnswerValue,
 } from "@/api/client"
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/shared"
+import {
+  ActivityDisclosure,
+  type ActivityEntry,
+} from "@/components/shared/activity-disclosure"
+import { StageExplainer } from "@/components/shared/stage-explainer"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -66,6 +71,8 @@ export function AnswersPage({ jobId }: { jobId: string }) {
           saved explicitly, exactly as typed.
         </p>
       </div>
+
+      <StageExplainer stage="answer" />
 
       {opportunity.status === "loading" ? (
         <LoadingBlock label="Loading job details…" />
@@ -334,6 +341,11 @@ function AnswersList({
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <MatchBanner match={match} checkId={detail.id} />
+      <AnswerActivityFeed
+        questions={detail.questions}
+        match={match}
+        checkId={detail.id}
+      />
       {detail.questions.map((question, index) => (
         <AnswerCard
           key={question.id}
@@ -348,7 +360,94 @@ function AnswersList({
           saved={savedByQuestion.get(question.id) ?? null}
         />
       ))}
+      <PrepareContinuation jobId={jobId} />
     </div>
+  )
+}
+
+// AnswerActivityFeed is the Jev match record for this check: which
+// questions got a placed suggestion and which boxes start blank. It reads
+// the saved match view only and selects nothing.
+function AnswerActivityFeed({
+  questions,
+  match,
+  checkId,
+}: {
+  questions: CheckDetail["questions"]
+  match: AnswerMatchView | null
+  checkId: string
+}) {
+  const current = match !== null && match.checkId === checkId
+  const outdated = match !== null && match.status === "outdated"
+  const entries: ActivityEntry[] = []
+  if (current && !outdated) {
+    questions.forEach((question, index) => {
+      const entry = matchEntryFor(match, checkId, question.id)
+      entries.push({
+        id: question.id,
+        kind: "result",
+        text:
+          entry === null
+            ? `Question ${index + 1}: no match recorded; the box starts blank.`
+            : entry.choice.noneFits === true
+              ? `Question ${index + 1}: no saved answer fit, so the box starts blank.`
+              : `Question ${index + 1}: a saved answer matched and was placed in the editable box.`,
+      })
+    })
+  }
+  const placed = entries.filter((entry) =>
+    entry.text.includes("was placed")
+  ).length
+  const status =
+    !current || match === null
+      ? "No matches saved"
+      : outdated
+        ? "Matches outdated"
+        : placed === 0
+          ? "No saved answer fit"
+          : `${placed} ${placed === 1 ? "suggestion" : "suggestions"} ready`
+  return (
+    <ActivityDisclosure
+      actor="jev"
+      phase="Answer questions"
+      status={status}
+      entries={entries}
+      emptyText={
+        current && !outdated
+          ? "No questions recorded for this check."
+          : "No usable matches for this check."
+      }
+    />
+  )
+}
+
+// PrepareContinuation routes answered-or-blank boxes to preparation. It
+// navigates only: preparation itself starts from its own explicit action,
+// so this page stays GET-only apart from per-box saves.
+function PrepareContinuation({ jobId }: { jobId: string }) {
+  return (
+    <section
+      aria-label="Continue to preparation"
+      className="flex min-w-0 flex-col gap-3 rounded-xl border border-border p-4"
+    >
+      <p className="text-sm wrap-break-word">
+        Leave a box blank if you want it drafted during Prepare. Personal
+        facts are never guessed, and optional questions can stay blank.
+      </p>
+      <div>
+        <Button
+          render={
+            <a href={`#/jobs/${encodeURIComponent(jobId)}/prepare`}>
+              Prepare applications
+            </a>
+          }
+        />
+      </div>
+      <p className="text-xs wrap-break-word text-muted-foreground">
+        Nothing is sent now. You review the completed application before
+        sending.
+      </p>
+    </section>
   )
 }
 
