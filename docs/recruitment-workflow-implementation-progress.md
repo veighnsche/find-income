@@ -22,14 +22,14 @@ Plan: `docs/recruitment-workflow-implementation-plan.md`. Only the coordinator u
 | RW-E1 | E(+D) | complete | worker-rw-e1 (Sol-Medium) | docs/rw-e1-live-exercise.md (new) | RW-G0 | ca9ebce. Staged-canary plan: correction→anchor discovery→classification→checks; op ceiling 2+12+6, owner-set $C (no invented limit), tracing table, versions, no-result scenario; no paid calls/secrets | — | RW-P1 |
 | RW-P1 | E/coord | complete | worker-rw-p1 (Sol-Medium) | docs/rw-p1-authorization.md (new) | RW-E1 | Authorization MISSING (no reuse; evidence refs); owner request recorded: plan approval, $C, anchor, model/effort, host, evidence inventory | f55f958. 6 owner decisions pending | RW-G1 |
 | RW-E2 | E | complete | worker-rw-e2 (Sol-High) | rw-discovery-smoke.mjs + e2e:rw-discovery | RW-C2, RW-E0 | 0af873f. 14 scenarios incl. regression; wired smoke green | — | RW-G1 |
-| RW-G1 | E+A/C/D | pending | — | — | RW-E2, RW-D1, RW-P1 | — | — | — |
+| RW-G1 | E+A/C/D | blocked | coordinator | (assessment only) | RW-E2 ✓, RW-D1 blocked, RW-P1 missing | Deterministic preconditions green (rw-discovery smoke, suites); live exercise NOT run — no host, no authorization, no anchor. Gate stays open | Owner: host, RW-P1 decisions (6) | RW-G2 |
 | RW-A3 | A | complete | worker-rw-a3 (Sol-High) | 3 new chain test files | RW-A0 | a079d1c. All criteria PASS, no production fix; coordinator-verified new tests green; zero-LLM Answer path proved | — | RW-B2 |
 | RW-B2 | B | complete | worker-rw-b2 (Sol-High) | CheckPage.*, AnswersPage.* | RW-A3, RW-B1 | 94b812d. Answer entry checked-only, source linkage, zero-LLM boundary test; 31/31 | — | RW-E3 |
 | RW-E3 | E | complete | worker-rw-e3 (Sol-High) | rw-checks-smoke.mjs + e2e:rw-checks | RW-B2, RW-C2, RW-E0 | 2e90d1b. Fixture-verified: selection-quiet, guard, 9/9 span-traced, zero-LLM; wired smoke green | — | RW-G2 |
 | RW-G2 | E+A/B/D | pending | — | — | RW-G1, RW-E3 | — | — | — |
 | RW-A4 | A | complete | worker-rw-a4 (Sol-High) | 2 new prepsend test files | RW-A3 | 2a4e222. All safeguards PASS, no production fix; new tests green | — | RW-C3, RW-E4 |
 | RW-C3 | C | complete | worker-rw-c3 (Sol-High) | review ReviewAuthorization/Page/SendReview.* | RW-A4, RW-C2 | 17ae389. Stale/recovery/gating/capability/provenance/links; 244/244 | Local-index history limit (no list endpoint) | RW-E4 |
-| RW-E4 | E | complete | worker-rw-e4 (Sol-High) | rw-delivery-smoke.mjs + e2e:rw-delivery | RW-A4, RW-C3, RW-E0 | Fixture-verified: prepare/versioning, held gating, stale/tampered honesty, capability modes, send guards, frozen snapshots; coordinator ran wired smoke green | — | RW-P2, RW-G3, RW-G4 |
+| RW-E4 | E | complete | worker-rw-e4 (Sol-High) | rw-delivery-smoke.mjs + e2e:rw-delivery | RW-A4, RW-C3, RW-E0 | e38367e. Fixture-verified: prepare/versioning, gating, honesty, guards, snapshots; wired smoke green | — | RW-P2, RW-G3, RW-G4 |
 | RW-P2 | E/coord+D | pending | — | — | RW-G2, RW-D2, RW-E4 | — | — | — |
 | RW-G3 | E+A/C/D | pending | — | — | RW-P2 | — | — | — |
 | RW-G4 | E+A/C/D | pending | — | — | RW-G3, RW-D3, RW-E4 | — | — | — |
