@@ -1,11 +1,17 @@
 package musewire
 
-// Live MSP transport for the E11 first discovery run. It conducts one
-// Contributor session against the installed `muse serve` host over NDJSON
-// JSON-RPC, connects the run's in-process public tool server through a
-// per-run localhost streamable-HTTP MCP endpoint, and folds host view
-// events into supervisor events. Standard inputs are refused: this
-// transport is discovery-only.
+// Live exec transport for the E11 first discovery run. It conducts one
+// Contributor turn through `muse exec --json`, connecting the run's
+// in-process public tool server through a per-run localhost
+// streamable-HTTP MCP endpoint declared in an isolated XDG config home.
+// The owner's settings are never mutated. Standard inputs are refused:
+// this transport is discovery-only.
+//
+// Why exec and not serve: the installed 1.4.0 serve host grants the
+// sessionMcp capability but rejects every session/start carrying
+// config.mcpServers with session_mcp_base_unavailable, with or without
+// a settings-file MCP base. Exec is the documented headless path with
+// native --max-model-steps, --json events and settings-file MCP.
 
 import (
 	"bufio"
@@ -18,17 +24,20 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
 	"github.com/veighnsche/find-income-dashboard/api/internal/publicresearch"
 )
 
-// mcpServerName is the sessionMcp server key for the run's public tools.
+// mcpServerName is the MCP server key for the run's public tools.
 const mcpServerName = "find-income-public"
 
 // e11FetchBound caps public_search/public_fetch tool calls for one run.
@@ -43,164 +52,16 @@ type LiveTransport struct {
 	ProviderID string
 	Servers    func(runRef string) (*publicresearch.Server, bool)
 	Trace      io.Writer
+	// Provider selects the model backend. Production uses "meta"; the
+	// echo provider exists for zero-spend plumbing fixtures.
+	Provider string
+	// ValidationPrompt replaces the discovery prompt for harness-only
+	// validation turns. Production leaves it empty; any non-empty value
+	// is recorded in the trace.
+	ValidationPrompt string
 }
 
 var _ musecode.Transport = (*LiveTransport)(nil)
-
-type mspFrame struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id,omitempty"`
-	Method  string          `json:"method,omitempty"`
-	Params  json.RawMessage `json:"params,omitempty"`
-	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *mspError       `json:"error,omitempty"`
-}
-
-type mspError struct {
-	Code    int             `json:"code"`
-	Message string          `json:"message"`
-	Data    json.RawMessage `json:"data,omitempty"`
-}
-
-func (e *mspError) Error() string { return fmt.Sprintf("msp %d: %s", e.Code, e.Message) }
-
-type mspClient struct {
-	stdin   io.WriteCloser
-	writeMu sync.Mutex
-	nextID  int64
-	pending map[string]chan mspFrame
-	mu      sync.Mutex
-	notify  chan mspFrame
-	done    chan struct{}
-	trace   *traceWriter
-}
-
-func newMSPClient(stdin io.WriteCloser, trace *traceWriter) *mspClient {
-	return &mspClient{stdin: stdin, pending: map[string]chan mspFrame{},
-		notify: make(chan mspFrame, 256), done: make(chan struct{}), trace: trace}
-}
-
-func (c *mspClient) serve(stdout io.Reader) {
-	defer close(c.done)
-	reader := bufio.NewReader(stdout)
-	for {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			return
-		}
-		if len(line) > 64<<20 {
-			return
-		}
-		if len(strings.TrimSpace(string(line))) == 0 {
-			continue
-		}
-		c.trace.hostLine(line)
-		var frame mspFrame
-		if err := json.Unmarshal(line, &frame); err != nil {
-			continue
-		}
-		if len(frame.ID) != 0 {
-			c.mu.Lock()
-			ch := c.pending[string(frame.ID)]
-			delete(c.pending, string(frame.ID))
-			c.mu.Unlock()
-			if ch != nil {
-				ch <- frame
-			}
-			continue
-		}
-		select {
-		case c.notify <- frame:
-		default:
-		}
-	}
-}
-
-func (c *mspClient) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
-	c.writeMu.Lock()
-	c.nextID++
-	frame := map[string]any{"jsonrpc": "2.0", "id": c.nextID, "method": method}
-	if params != nil {
-		frame["params"] = params
-	}
-	body, err := json.Marshal(frame)
-	if err != nil {
-		c.writeMu.Unlock()
-		return nil, err
-	}
-	ch := make(chan mspFrame, 1)
-	c.mu.Lock()
-	c.pending[fmt.Sprintf("%d", c.nextID)] = ch
-	c.mu.Unlock()
-	c.trace.clientLine(body)
-	if _, err := c.stdin.Write(append(body, '\n')); err != nil {
-		c.writeMu.Unlock()
-		return nil, err
-	}
-	c.writeMu.Unlock()
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-c.done:
-		return nil, musecode.ErrDisconnected
-	case frame := <-ch:
-		if frame.Error != nil {
-			return nil, frame.Error
-		}
-		return frame.Result, nil
-	}
-}
-
-func (c *mspClient) notifyOne(method string) error {
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
-	body, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": method})
-	if err != nil {
-		return err
-	}
-	c.trace.clientLine(body)
-	_, err = c.stdin.Write(append(body, '\n'))
-	return err
-}
-
-type traceWriter struct {
-	mu sync.Mutex
-	w  io.Writer
-}
-
-func (t *traceWriter) line(dir string, raw []byte) {
-	if t == nil || t.w == nil {
-		return
-	}
-	out := raw
-	if len(out) > 1<<20 {
-		out = append(append([]byte(nil), out[:1<<20]...), []byte("\n<truncated>\n")...)
-	}
-	entry, _ := json.Marshal(map[string]string{"dir": dir, "at": time.Now().UTC().Format(time.RFC3339Nano),
-		"frame": strings.TrimSpace(string(out))})
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.w.Write(append(entry, '\n'))
-}
-
-func (t *traceWriter) hostLine(raw []byte)   { t.line("host->client", raw) }
-func (t *traceWriter) clientLine(raw []byte) { t.line("client->host", raw) }
-func (t *traceWriter) note(format string, args ...any) {
-	t.line("note", []byte(fmt.Sprintf(format, args...)))
-}
-
-func uuidv7() string {
-	var b [16]byte
-	now := uint64(time.Now().UnixMilli())
-	b[0], b[1], b[2], b[3], b[4], b[5] = byte(now>>40), byte(now>>32), byte(now>>24), byte(now>>16), byte(now>>8), byte(now)
-	if _, err := rand.Read(b[6:]); err != nil {
-		panic("musewire: no randomness for command id")
-	}
-	b[6] = b[6]&0x0f | 0x70
-	b[8] = b[8]&0x3f | 0x80
-	hexed := hex.EncodeToString(b[:])
-	return hexed[:8] + "-" + hexed[8:12] + "-" + hexed[12:16] + "-" + hexed[16:20] + "-" + hexed[20:]
-}
 
 // discoveryPrompt renders generalized criteria plus operating rules. It
 // carries no owner identity, profile facts, or private requirements.
@@ -208,7 +69,7 @@ func discoveryPrompt(criteria musecode.PublicCriteria) string {
 	var b strings.Builder
 	b.WriteString("You are the vacancy-discovery researcher for a personal job search. ")
 	b.WriteString("Use ONLY these MCP tools: public_search, public_fetch, public_save_vacancy, public_save_question, public_list_saved. ")
-	b.WriteString("Never use any other tool, skill, shell, or background work. ")
+	b.WriteString("Never use any other tool, skill, shell, memory, subagent, or background work. ")
 	b.WriteString("Freely choose public sources, queries, public APIs and company career pages for this generalized brief:\n")
 	if len(criteria.RoleKeywords) > 0 {
 		fmt.Fprintf(&b, "- roles: %s\n", strings.Join(criteria.RoleKeywords, ", "))
@@ -226,8 +87,8 @@ func discoveryPrompt(criteria musecode.PublicCriteria) string {
 	return b.String()
 }
 
-// mapToolName strips the sessionMcp namespace wrapper. Anything that does
-// not resolve to a bare name keeps its verbatim form so the supervisor
+// mapToolName strips an MCP namespace wrapper. Anything that does not
+// resolve to a bare name keeps its verbatim form so the supervisor
 // fails the run closed.
 func mapToolName(name string) string {
 	if musecode.ContributorToolAllowed(name) {
@@ -236,7 +97,63 @@ func mapToolName(name string) string {
 	if parts := strings.Split(name, "__"); len(parts) == 3 && parts[0] == "mcp" && parts[1] == mcpServerName {
 		return parts[2]
 	}
+	if rest, ok := strings.CutPrefix(name, mcpServerName+"."); ok {
+		return rest
+	}
+	if rest, ok := strings.CutPrefix(name, mcpServerName+"/"); ok {
+		return rest
+	}
 	return name
+}
+
+type traceWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (t *traceWriter) event(entry any) {
+	if t == nil || t.w == nil {
+		return
+	}
+	raw, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+	if len(raw) > 1<<20 {
+		raw = append(append([]byte(nil), raw[:1<<20]...), []byte(`"<truncated>"`)...)
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.w.Write(append(raw, '\n'))
+}
+
+func (t *traceWriter) hostLine(line []byte) {
+	t.event(map[string]any{"dir": "host->client", "at": time.Now().UTC().Format(time.RFC3339Nano),
+		"line": strings.TrimSpace(string(line))})
+}
+
+func (t *traceWriter) note(format string, args ...any) {
+	t.event(map[string]any{"dir": "note", "at": time.Now().UTC().Format(time.RFC3339Nano),
+		"line": fmt.Sprintf(format, args...)})
+}
+
+// execEvent is one --json JSONL record. Only the fields the folder reads
+// are decoded; the trace keeps every raw line.
+type execEvent struct {
+	PayloadType string `json:"payload_type"`
+	Payload     struct {
+		Kind     string `json:"kind"`
+		Terminal string `json:"terminal"`
+		Text     string `json:"text"`
+		Reason   string `json:"reason"`
+		TaskID   string `json:"task_id"`
+		TaskKind string `json:"task_kind"`
+		Event    struct {
+			Kind     string `json:"kind"`
+			TaskKind string `json:"task_kind"`
+			Reason   string `json:"reason"`
+		} `json:"event"`
+	} `json:"payload"`
 }
 
 // Run conducts one Contributor discovery turn to transport-terminal state.
@@ -251,6 +168,10 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 	if t.CLIPath == "" || t.ModelID == "" || t.ProviderID == "" || t.Servers == nil {
 		return errors.New("musewire: live transport needs CLI path, model, provider and run servers")
 	}
+	provider := t.Provider
+	if provider == "" {
+		provider = "meta"
+	}
 	runRef := path.Base(spec.Workspace)
 	if !validRunRef(runRef) {
 		return fmt.Errorf("musewire: workspace %q names no run", spec.Workspace)
@@ -260,7 +181,7 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 		return fmt.Errorf("musewire: no live tool server for run %q", runRef)
 	}
 	trace := &traceWriter{w: t.Trace}
-	trace.note("run %s workspace %s model %s provider %s", runRef, spec.Workspace, t.ModelID, t.ProviderID)
+	trace.note("run %s workspace %s model %s provider %s backend %s", runRef, spec.Workspace, t.ModelID, t.ProviderID, provider)
 
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -283,18 +204,52 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 	httpServer := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	defer httpServer.Close()
 	go httpServer.Serve(listener)
-	mcpURL := "http://" + listener.Addr().String() + "/mcp"
-	trace.note("mcp endpoint %s token %s...", mcpURL, token[:8])
+	addr, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		return errors.New("musewire: loopback listener has no TCP port")
+	}
+	trace.note("mcp endpoint http://127.0.0.1:%d/mcp token %s...", addr.Port, token[:8])
 
-	// Plain Command, not CommandContext: Stop and wall-clock expiry must
-	// deliver turn/cancel gracefully before the deferred cleanup below
-	// reaps the host. Killing here would strand the cancel and the
-	// usage-after read.
-	cmd := exec.Command(t.CLIPath, "serve", "--disable-shell", "--disable-write")
-	stdin, err := cmd.StdinPipe()
+	home, err := writeExecHome(spec.Workspace, addr.Port, token)
 	if err != nil {
 		return err
 	}
+	prompt := discoveryPrompt(public.Criteria)
+	if t.ValidationPrompt != "" {
+		prompt = t.ValidationPrompt
+		trace.note("validation prompt override active")
+	}
+	promptFile := filepath.Join(spec.Workspace, "prompt.txt")
+	if err := os.WriteFile(promptFile, []byte(prompt), 0o600); err != nil {
+		return err
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	maxSteps := spec.Bounds.MaxModelSteps
+	if maxSteps > 100 {
+		maxSteps = 100
+	}
+	args := []string{"exec", "--json", "--prompt-file", promptFile,
+		"--provider", provider}
+	if provider == "meta" {
+		args = append(args, "--model", t.ModelID, "--reasoning-effort", "max")
+	}
+	args = append(args,
+		"--max-model-steps", fmt.Sprintf("%d", maxSteps),
+		"--max-tool-output-bytes", fmt.Sprintf("%d", spec.Bounds.MaxBytesPerOp),
+		"--workspace", spec.Workspace,
+		"--approval-mode", "never",
+		"--disable-shell", "--disable-write", "--disable-web-tools",
+		"--no-foreign-personal-context")
+	cmd := exec.Command(t.CLIPath, args...)
+	cmd.Dir = spec.Workspace
+	cmd.Env = append(os.Environ(),
+		"XDG_CONFIG_HOME="+filepath.Join(home, "config"),
+		"XDG_DATA_HOME="+filepath.Join(home, "data"),
+		"MUSE_AUTH_PATH="+filepath.Join(homeDir, ".config", "muse", "auth.json"),
+	)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -305,7 +260,7 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 	}
 	go func() {
 		slurp, _ := io.ReadAll(stderr)
-		if len(slurp) > 0 {
+		if len(strings.TrimSpace(string(slurp))) > 0 {
 			trace.note("host stderr: %s", strings.TrimSpace(string(slurp)))
 		}
 	}()
@@ -314,253 +269,161 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 	}
 	waited := make(chan error, 1)
 	go func() { waited <- cmd.Wait() }()
-	defer func() {
-		stdin.Close()
+	var stopMu sync.Mutex
+	stopped := false
+	var waitErr error
+	stop := func() error {
+		stopMu.Lock()
+		defer stopMu.Unlock()
+		if stopped {
+			return waitErr
+		}
+		stopped = true
 		select {
-		case <-waited:
-		case <-time.After(10 * time.Second):
-			cmd.Process.Kill()
-			<-waited
+		case waitErr = <-waited:
+		default:
+			_ = cmd.Process.Signal(syscall.SIGTERM)
+			select {
+			case waitErr = <-waited:
+			case <-time.After(30 * time.Second):
+				_ = cmd.Process.Kill()
+				waitErr = <-waited
+			}
 		}
-	}()
+		return waitErr
+	}
+	defer stop()
 
-	client := newMSPClient(stdin, trace)
-	go client.serve(stdout)
-	rpcCtx, cancelRPC := context.WithTimeout(ctx, 60*time.Second)
-	initRaw, err := client.call(rpcCtx, "initialize", map[string]any{
-		"clientInfo":   map[string]any{"name": "find_income_e11", "version": "0.1.0"},
-		"capabilities": map[string]any{"requestedCapabilities": []string{"sessionMcp"}}})
-	cancelRPC()
-	if err != nil {
-		return fmt.Errorf("musewire: initialize: %w", err)
-	}
-	var initialized struct {
-		Granted []string `json:"grantedCapabilities"`
-		Server  struct {
-			Name    string `json:"name"`
-			Version string `json:"version"`
-		} `json:"serverInfo"`
-	}
-	if err := json.Unmarshal(initRaw, &initialized); err != nil {
-		return err
-	}
-	granted := false
-	for _, cap := range initialized.Granted {
-		if cap == "sessionMcp" {
-			granted = true
-		}
-	}
-	if !granted {
-		return errors.New("musewire: host did not grant sessionMcp")
-	}
-	trace.note("host %s %s granted sessionMcp", initialized.Server.Name, initialized.Server.Version)
-	if err := client.notifyOne("initialized"); err != nil {
-		return err
-	}
-	rpcCtx, cancelRPC = context.WithTimeout(ctx, 60*time.Second)
-	modelRaw, err := client.call(rpcCtx, "model/list", nil)
-	cancelRPC()
-	if err != nil {
-		return fmt.Errorf("musewire: model/list: %w", err)
-	}
-	trace.note("catalog: %s", compactJSON(modelRaw, 2000))
-
-	sessCtx, cancelSess := context.WithTimeout(ctx, 120*time.Second)
-	startRaw, err := client.call(sessCtx, "session/start", map[string]any{
-		"commandId": uuidv7(), "modelId": t.ModelID, "providerId": t.ProviderID,
-		"workspaceRoot": spec.Workspace,
-		"config": map[string]any{"mcpServers": map[string]any{mcpServerName: map[string]any{
-			"transport": "streamableHttp", "url": mcpURL, "mode": "required",
-			"headers": map[string]any{"Authorization": "Bearer " + token}}}},
-	})
-	cancelSess()
-	if err != nil {
-		return fmt.Errorf("musewire: session/start: %w", err)
-	}
-	var started struct {
-		Session struct {
-			SessionID  string `json:"sessionId"`
-			ModelID    string `json:"modelId"`
-			ProviderID string `json:"providerId"`
-		} `json:"session"`
-	}
-	if err := json.Unmarshal(startRaw, &started); err != nil {
-		return err
-	}
-	if started.Session.SessionID == "" {
-		return errors.New("musewire: session/start returned no session id")
-	}
-	if started.Session.ModelID != t.ModelID || started.Session.ProviderID != t.ProviderID {
-		return fmt.Errorf("musewire: session route %s/%s != pinned %s/%s",
-			started.Session.ProviderID, started.Session.ModelID, t.ProviderID, t.ModelID)
-	}
-	trace.note("session %s route %s/%s", started.Session.SessionID, started.Session.ProviderID, started.Session.ModelID)
-	sessionID := started.Session.SessionID
-
-	usageCtx, cancelUsage := context.WithTimeout(ctx, 30*time.Second)
-	usageBefore, err := client.call(usageCtx, "usage/read", nil)
-	cancelUsage()
-	if err != nil {
-		trace.note("usage/read before failed: %v", err)
-	} else {
-		trace.note("usage before: %s", compactJSON(usageBefore, 1000))
-	}
-
-	turnID, err := t.startTurn(ctx, client, sessionID, discoveryPrompt(public.Criteria))
-	if err != nil {
-		return err
-	}
 	emitted := map[string]bool{}
-	terminal, runErr := t.followTurn(ctx, client, sessionID, turnID, server, sink, trace, emitted)
-	usageCtx, cancelUsage = context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-	usageAfter, err := client.call(usageCtx, "usage/read", nil)
-	cancelUsage()
-	if err != nil {
-		trace.note("usage/read after failed: %v", err)
-	} else {
-		trace.note("usage after: %s", compactJSON(usageAfter, 1000))
+	fetch := 0
+	finished := false
+	terminal := ""
+	detail := ""
+	reader := bufio.NewReader(stdout)
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			stop()
+			return ctx.Err()
+		default:
+		}
+		line, err := reader.ReadBytes('\n')
+		if len(line) > 0 {
+			trace.hostLine(line)
+			kind, tool, step, done, terr := foldExecLine(line)
+			switch {
+			case terr != "":
+				detail = terr
+				stop()
+				break loop
+			case step:
+				sink.Emit(musecode.Event{Kind: musecode.EventModelStep})
+			case kind == "toolCall":
+				mapped := mapToolName(tool)
+				trace.note("tool call %q -> %q", tool, mapped)
+				sink.Emit(musecode.Event{Kind: musecode.EventToolCall, Tool: mapped})
+				if mapped == publicresearch.ToolSearch || mapped == publicresearch.ToolFetch {
+					fetch++
+					if fetch > e11FetchBound {
+						detail = fmt.Sprintf("retrieval fetch bound %d exceeded", e11FetchBound)
+						stop()
+						break loop
+					}
+				}
+			case kind == "toolResult":
+				sink.Emit(musecode.Event{Kind: musecode.EventToolResult, Tool: mapToolName(tool)})
+				emitNewSaves(server, sink, emitted)
+			case kind == "forbidden":
+				detail = "forbidden item kind " + tool
+				stop()
+				break loop
+			case done:
+				terminal = kind
+				finished = true
+				break loop
+			}
+		}
+		if err != nil {
+			break
+		}
 	}
-	t.emitNewSaves(server, sink, emitted)
-	if runErr != nil {
+	emitNewSaves(server, sink, emitted)
+	if err := stop(); err != nil && terminal == "" {
+		detail = "host exit: " + err.Error()
+	}
+	if detail != "" {
+		runErr := errors.New("musewire: " + detail)
 		sink.Emit(musecode.Event{Kind: musecode.EventFailed, Detail: runErr.Error()})
 		return runErr
 	}
-	trace.note("turn %s terminal %s", turnID, terminal)
-	if terminal != "completed" {
-		err := fmt.Errorf("musewire: turn %s ended %s", turnID, terminal)
-		sink.Emit(musecode.Event{Kind: musecode.EventFailed, Detail: err.Error()})
-		return err
+	if !finished || terminal != "completed" {
+		runErr := fmt.Errorf("musewire: turn ended %q without completion", terminal)
+		sink.Emit(musecode.Event{Kind: musecode.EventFailed, Detail: runErr.Error()})
+		return runErr
 	}
 	sink.Emit(musecode.Event{Kind: musecode.EventFinished})
 	return nil
 }
 
-func (t *LiveTransport) startTurn(ctx context.Context, client *mspClient, sessionID, prompt string) (string, error) {
-	rpcCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
-	raw, err := client.call(rpcCtx, "turn/start", map[string]any{
-		"commandId": uuidv7(), "sessionId": sessionID,
-		"input": []any{map[string]any{"type": "text", "text": prompt}}})
-	if err != nil {
-		return "", fmt.Errorf("musewire: turn/start: %w", err)
+// foldExecLine maps one --json line to a supervisor observation. It
+// returns the mapped kind (toolCall, toolResult, forbidden, or a run
+// terminal), the verbatim tool/task name, whether a model step
+// completed, whether the run reached terminal state, and a fatal
+// detail. Unknown lines are ignored: the trace keeps them and the
+// terminal event decides the outcome.
+func foldExecLine(line []byte) (kind, tool string, step, done bool, fatal string) {
+	trimmed := strings.TrimSpace(string(line))
+	if !strings.HasPrefix(trimmed, "{") {
+		return "", "", false, false, ""
 	}
-	var started struct {
-		TurnID      string `json:"turnId"`
-		Disposition string `json:"disposition"`
+	var event execEvent
+	if err := json.Unmarshal([]byte(trimmed), &event); err != nil {
+		return "", "", false, false, ""
 	}
-	if err := json.Unmarshal(raw, &started); err != nil {
-		return "", err
+	switch event.PayloadType {
+	case "run.terminal.completed", "run.terminal.failed", "run.terminal.cancelled":
+		terminal := strings.TrimPrefix(event.PayloadType, "run.terminal.")
+		if event.Payload.Terminal != "" {
+			terminal = event.Payload.Terminal
+		}
+		return terminal, "", false, true, ""
+	case "task.lifecycle.completed", "task.lifecycle.failed":
+		taskKind := event.Payload.TaskKind
+		if taskKind == "" {
+			taskKind = event.Payload.Event.TaskKind
+		}
+		if name, ok := strings.CutPrefix(taskKind, "model."); ok && name != "" {
+			return "", "", true, false, ""
+		}
+		if name, ok := strings.CutPrefix(taskKind, "tool."); ok && name != "" {
+			return "toolResult", name, false, false, ""
+		}
+		if taskKind == "subagent" || strings.HasPrefix(taskKind, "subagent.") ||
+			taskKind == "workflow" || strings.HasPrefix(taskKind, "workflow.") {
+			return "forbidden", taskKind, false, false, ""
+		}
+		if event.PayloadType == "task.lifecycle.failed" && taskKind != "" &&
+			!strings.HasPrefix(taskKind, "reminder.") {
+			return "", "", false, false, "task failed: " + taskKind + ": " + event.Payload.Event.Reason
+		}
+	case "task.lifecycle.started", "task.lifecycle.scheduled":
+		taskKind := event.Payload.TaskKind
+		if taskKind == "" {
+			taskKind = event.Payload.Event.TaskKind
+		}
+		if name, ok := strings.CutPrefix(taskKind, "tool."); ok && name != "" {
+			return "toolCall", name, false, false, ""
+		}
+		if taskKind == "subagent" || strings.HasPrefix(taskKind, "subagent.") ||
+			taskKind == "workflow" || strings.HasPrefix(taskKind, "workflow.") {
+			return "forbidden", taskKind, false, false, ""
+		}
 	}
-	if started.TurnID == "" || started.Disposition != "started" {
-		return "", fmt.Errorf("musewire: turn admission = %+v, want started", started)
-	}
-	return started.TurnID, nil
+	return "", "", false, false, ""
 }
 
-type liveFollower struct {
-	fetch  int
-	turnID string
-}
-
-func (t *LiveTransport) followTurn(ctx context.Context, client *mspClient, sessionID, turnID string,
-	server *publicresearch.Server, sink musecode.EventSink, trace *traceWriter, emitted map[string]bool) (string, error) {
-	f := &liveFollower{turnID: turnID}
-	cancelTurn := func(reason string) {
-		trace.note("cancel turn %s: %s", turnID, reason)
-		cancelCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-		defer cancel()
-		if _, err := client.call(cancelCtx, "turn/cancel", map[string]any{
-			"commandId": uuidv7(), "sessionId": sessionID, "turnId": turnID}); err != nil {
-			trace.note("turn/cancel failed: %v", err)
-		}
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			cancelTurn(ctx.Err().Error())
-			return "", ctx.Err()
-		case frame, ok := <-client.notify:
-			if !ok {
-				return "", musecode.ErrDisconnected
-			}
-			terminal, done, err := t.handleNotification(ctx, client, sessionID, server, sink, trace, f, emitted, frame, cancelTurn)
-			if err != nil {
-				return "", err
-			}
-			if done {
-				return terminal, nil
-			}
-		}
-	}
-}
-
-func (t *LiveTransport) handleNotification(ctx context.Context, client *mspClient, sessionID string,
-	server *publicresearch.Server, sink musecode.EventSink, trace *traceWriter,
-	f *liveFollower, emitted map[string]bool, frame mspFrame, cancelTurn func(string)) (string, bool, error) {
-	switch frame.Method {
-	case "session/tokenUsage":
-		sink.Emit(musecode.Event{Kind: musecode.EventModelStep})
-	case "item/started", "item/updated", "item/completed":
-		var params struct {
-			Item struct {
-				Kind   string `json:"kind"`
-				Tool   string `json:"tool"`
-				Status string `json:"status"`
-				Text   string `json:"text"`
-			} `json:"item"`
-			SessionID string `json:"sessionId"`
-		}
-		if err := json.Unmarshal(frame.Params, &params); err != nil {
-			return "", false, err
-		}
-		if params.SessionID != "" && params.SessionID != sessionID {
-			return "", false, nil
-		}
-		switch params.Item.Kind {
-		case "toolCall":
-			mapped := mapToolName(params.Item.Tool)
-			if frame.Method == "item/started" {
-				trace.note("tool call %q -> %q", params.Item.Tool, mapped)
-				sink.Emit(musecode.Event{Kind: musecode.EventToolCall, Tool: mapped})
-				if mapped == publicresearch.ToolSearch || mapped == publicresearch.ToolFetch {
-					f.fetch++
-					if f.fetch > e11FetchBound {
-						cancelTurn("retrieval fetch bound exceeded")
-						return "", false, fmt.Errorf("musewire: retrieval fetch bound %d exceeded", e11FetchBound)
-					}
-				}
-			} else if frame.Method == "item/completed" {
-				sink.Emit(musecode.Event{Kind: musecode.EventToolResult, Tool: mapped})
-				t.emitNewSaves(server, sink, emitted)
-			}
-		case "subagent", "workflow", "userShell":
-			cancelTurn("forbidden item kind " + params.Item.Kind)
-			return "", false, fmt.Errorf("musewire: forbidden item kind %s", params.Item.Kind)
-		}
-	case "approval/requested", "userInput/requested":
-		cancelTurn("headless run cannot satisfy " + frame.Method)
-		return "", false, fmt.Errorf("musewire: %s needs an operator; run fails closed", frame.Method)
-	case "turn/completed":
-		var params struct {
-			TurnID   string `json:"turnId"`
-			Terminal string `json:"terminal"`
-			Reason   string `json:"reason"`
-		}
-		if err := json.Unmarshal(frame.Params, &params); err != nil {
-			return "", false, err
-		}
-		if params.TurnID != f.turnID {
-			return "", false, nil
-		}
-		trace.note("turn completed terminal=%s reason=%s", params.Terminal, params.Reason)
-		return params.Terminal, true, nil
-	case "view/gap":
-		trace.note("view gap observed; continuing on durable terminals")
-	}
-	return "", false, nil
-}
-
-func (t *LiveTransport) emitNewSaves(server *publicresearch.Server, sink musecode.EventSink, emitted map[string]bool) {
+func emitNewSaves(server *publicresearch.Server, sink musecode.EventSink, emitted map[string]bool) {
 	for _, ref := range append(append([]string(nil), server.SavedVacancyRefs()...), server.SavedQuestionRefs()...) {
 		if emitted[ref] {
 			continue
@@ -570,10 +433,40 @@ func (t *LiveTransport) emitNewSaves(server *publicresearch.Server, sink musecod
 	}
 }
 
-func compactJSON(raw json.RawMessage, limit int) string {
-	text := strings.TrimSpace(string(raw))
-	if len(text) > limit {
-		return text[:limit] + "<truncated>"
+// writeExecHome builds an isolated XDG home under the run workspace: a
+// config home whose settings declare only the run MCP server with the
+// concrete loopback URL and bearer token rendered in, and an empty data
+// home. The owner's configuration is never touched. Values are rendered
+// literally because observed 1.4.0 hosts do not interpolate ${VAR} in
+// this block (a ${VAR} URL yields zero connection attempts).
+func writeExecHome(workspace string, port int, token string) (string, error) {
+	home := filepath.Join(workspace, "mushome")
+	configDir := filepath.Join(home, "config", "muse")
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		return "", err
 	}
-	return text
+	if err := os.MkdirAll(filepath.Join(home, "data"), 0o700); err != nil {
+		return "", err
+	}
+	settings := map[string]any{
+		"schema_version":   1,
+		"model":            "muse-spark-1.3-contributor",
+		"reasoning_effort": "max",
+		"mcp_servers": map[string]any{
+			mcpServerName: map[string]any{
+				"transport": "streamable_http",
+				"url":       fmt.Sprintf("http://127.0.0.1:%d/mcp", port),
+				"headers":   map[string]any{"Authorization": "Bearer " + token},
+				"mode":      "required",
+			},
+		},
+	}
+	raw, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "settings.json"), raw, 0o600); err != nil {
+		return "", err
+	}
+	return home, nil
 }

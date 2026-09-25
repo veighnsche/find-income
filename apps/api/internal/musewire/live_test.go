@@ -1,19 +1,18 @@
 package musewire
 
-// Provider-disabled protocol fixtures for the live MSP transport. A fake
-// `muse serve` host (this test binary re-executed through a shim script)
-// speaks scripted NDJSON MSP: no model, no network beyond localhost, no
-// credentials. The happy path proves handshake, session route pinning,
-// bearer-gated MCP endpoint wiring, namespaced tool mapping and terminal
-// folding; the fence path proves a non-allowlisted tool fails the run.
+// Fixtures for the live exec transport. Parser and mapping checks run
+// ungated on synthetic lines. TestLiveTransportEchoPlumbing drives the
+// real installed CLI with the deterministic echo provider: zero model
+// spend, zero credentials, localhost MCP only. It runs only with
+// E11_ECHO=1. TestLiveTransportValidationTurn drives one trivial turn
+// on the Contributor lane and runs only with E11_VALIDATE=1.
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -44,22 +43,6 @@ func liveFixtureServer(t *testing.T) *publicresearch.Server {
 	return server
 }
 
-// fakeHostShim writes an executable `muse` shim that re-executes this test
-// binary as the fake host, ignoring the serve arguments.
-func fakeHostShim(t *testing.T, mode, record string) string {
-	t.Helper()
-	dir := t.TempDir()
-	shim := filepath.Join(dir, "muse")
-	script := "#!/bin/sh\nexec \"$TESTBIN\" -test.run=TestHelperHost -- \"$@\"\n"
-	if err := os.WriteFile(shim, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("TESTBIN", os.Args[0])
-	t.Setenv("GO_TEST_HELPER_MODE", mode)
-	t.Setenv("GO_TEST_HELPER_RECORD", record)
-	return shim
-}
-
 type collectSink struct {
 	mu     sync.Mutex
 	events []musecode.Event
@@ -81,103 +64,86 @@ func (s *collectSink) kinds() []musecode.EventKind {
 	return kinds
 }
 
-type memoryCursors struct {
-	mu      sync.Mutex
-	cursors map[string]musecode.Cursor
-}
-
-func (m *memoryCursors) SaveCursor(_ context.Context, cursor musecode.Cursor) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.cursors == nil {
-		m.cursors = map[string]musecode.Cursor{}
+func TestFoldExecLine(t *testing.T) {
+	line := func(payloadType, payload string) string {
+		return fmt.Sprintf(`{"payload_type":%q,"payload":%s}`, payloadType, payload)
 	}
-	m.cursors[cursor.RunRef] = cursor
-	return nil
-}
-
-func (m *memoryCursors) LoadCursor(_ context.Context, runRef string) (musecode.Cursor, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	cursor, ok := m.cursors[runRef]
-	if !ok {
-		return musecode.Cursor{}, fmt.Errorf("no cursor")
+	cases := []struct {
+		name       string
+		line       string
+		kind, tool string
+		step, done bool
+		fatal      bool
+	}{
+		{"terminal completed", line("run.terminal.completed", `{"kind":"run_terminal","terminal":"completed"}`), "completed", "", false, true, false},
+		{"terminal failed", line("run.terminal.failed", `{"kind":"run_terminal","terminal":"failed","reason":"boom"}`), "failed", "", false, true, false},
+		{"model step", line("task.lifecycle.completed", `{"task_id":"a","task_kind":"model.response","event":{"kind":"completed"}}`), "", "", true, false, false},
+		{"tool started", line("task.lifecycle.started", `{"task_id":"a","task_kind":"tool.public_list_saved","event":{"kind":"started"}}`), "toolCall", "public_list_saved", false, false, false},
+		{"tool completed", line("task.lifecycle.completed", `{"task_id":"a","task_kind":"tool.public_list_saved","event":{"kind":"completed"}}`), "toolResult", "public_list_saved", false, false, false},
+		{"subagent forbidden", line("task.lifecycle.started", `{"task_id":"a","task_kind":"subagent.spawn","event":{"kind":"started"}}`), "forbidden", "subagent.spawn", false, false, false},
+		{"failed tool is a result", line("task.lifecycle.failed", `{"task_id":"a","task_kind":"tool.public_search","event":{"kind":"failed","reason":"denied"}}`), "toolResult", "public_search", false, false, false},
+		{"failed session task fatal", line("task.lifecycle.failed", `{"task_id":"a","task_kind":"session.init","event":{"kind":"failed","reason":"auth"}}`), "", "", false, false, true},
+		{"reminder failure ignored", line("task.lifecycle.failed", `{"task_id":"a","task_kind":"reminder.agent.x","event":{"kind":"failed","reason":"y"}}`), "", "", false, false, false},
+		{"output delta ignored", line("run.output.delta", `{"kind":"run_output_delta","text":"hi"}`), "", "", false, false, false},
+		{"non-JSON ignored", "muse: workspace root: /tmp", "", "", false, false, false},
 	}
-	return cursor, nil
-}
-
-func liveReadyFacts() musecode.Facts {
-	return musecode.Facts{CLIPath: "/fixture/muse", CLIReportVersion: "1.4.0",
-		EffectiveModel: "fixture-model", SubscriptionLaneProved: true,
-		SessionProtocolProved: true, WorkspaceIsolatedProved: true}
-}
-
-func TestLiveTransportHappyPath(t *testing.T) {
-	record := filepath.Join(t.TempDir(), "record.json")
-	shim := fakeHostShim(t, "happy", record)
-	workspace := filepath.Join(t.TempDir(), "ws", "run-live-happy")
-	server := liveFixtureServer(t)
-	var trace strings.Builder
-	transport := &LiveTransport{CLIPath: shim, ModelID: "fixture-model", ProviderID: "meta",
-		Servers: func(runRef string) (*publicresearch.Server, bool) {
-			if runRef != "run-live-happy" {
-				return nil, false
-			}
-			return server, true
-		}, Trace: &trace}
-	sink := &collectSink{}
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
-	err := transport.Run(ctx, musecode.SessionSpec{Tier: musecode.TierContributor,
-		Workspace: workspace, Public: true, Bounds: liveFixtureBounds()},
-		musecode.PublicInput{Criteria: musecode.PublicCriteria{RoleKeywords: []string{"support"}}},
-		musecode.Cursor{}, sink)
-	if err != nil {
-		t.Fatalf("run: %v\ntrace:\n%s", err, trace.String())
-	}
-	kinds := sink.kinds()
-	joined := fmt.Sprintf("%v", kinds)
-	for _, want := range []musecode.EventKind{musecode.EventModelStep, musecode.EventToolCall,
-		musecode.EventToolResult, musecode.EventFinished} {
-		found := false
-		for _, kind := range kinds {
-			if kind == want {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("events %s miss %s", joined, want)
+	for _, tc := range cases {
+		kind, tool, step, done, fatal := foldExecLine([]byte(tc.line))
+		if kind != tc.kind || tool != tc.tool || step != tc.step || done != tc.done || (fatal != "") != tc.fatal {
+			t.Errorf("%s: got kind=%q tool=%q step=%v done=%v fatal=%q", tc.name, kind, tool, step, done, fatal)
 		}
 	}
-	for _, event := range sink.events {
-		if event.Kind == musecode.EventToolCall && event.Tool != publicresearch.ToolListSaved {
-			t.Errorf("tool call = %q, want mapped %q", event.Tool, publicresearch.ToolListSaved)
+}
+
+func TestMapToolName(t *testing.T) {
+	for in, want := range map[string]string{
+		"public_search":                          "public_search",
+		"mcp__find-income-public__public_fetch":  "public_fetch",
+		"find-income-public.public_save_vacancy": "public_save_vacancy",
+		"shell":                                  "shell",
+		"mcp__other__public_search":              "mcp__other__public_search",
+	} {
+		if got := mapToolName(in); got != want {
+			t.Errorf("map %q = %q, want %q", in, got, want)
 		}
 	}
-	if !strings.Contains(trace.String(), "run-live-happy") || !strings.Contains(trace.String(), "turn") {
-		t.Errorf("trace misses run/turn records:\n%s", trace.String())
-	}
-	raw, err := os.ReadFile(record)
+}
+
+func TestWriteExecHomeIsolated(t *testing.T) {
+	workspace := t.TempDir()
+	home, err := writeExecHome(workspace, 18231, "token-fixture")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var recorded struct {
-		URL            string   `json:"url"`
-		Mode           string   `json:"mode"`
-		Transport      string   `json:"transport"`
-		HasAuthHeader  bool     `json:"has_auth_header"`
-		UnauthRejected bool     `json:"unauth_rejected"`
-		AuthPassedGate bool     `json:"auth_passed_gate"`
-		Tools          []string `json:"tools"`
-	}
-	if err := json.Unmarshal(raw, &recorded); err != nil {
+	raw, err := os.ReadFile(filepath.Join(home, "config", "muse", "settings.json"))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(recorded.URL, "http://127.0.0.1:") || recorded.Transport != "streamableHttp" || recorded.Mode != "required" {
-		t.Errorf("mcp endpoint = %+v, want loopback streamableHttp required", recorded)
+	var settings struct {
+		Model      string `json:"model"`
+		MCPServers map[string]struct {
+			Transport string            `json:"transport"`
+			URL       string            `json:"url"`
+			Headers   map[string]string `json:"headers"`
+			Mode      string            `json:"mode"`
+		} `json:"mcp_servers"`
 	}
-	if !recorded.HasAuthHeader || !recorded.UnauthRejected || !recorded.AuthPassedGate {
-		t.Errorf("mcp auth record = %+v, want bearer gate both ways", recorded)
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := settings.MCPServers[mcpServerName]
+	if !ok || entry.Transport != "streamable_http" || entry.Mode != "required" {
+		t.Fatalf("settings = %s, want required streamable server", raw)
+	}
+	if entry.URL != "http://127.0.0.1:18231/mcp" || entry.Headers["Authorization"] != "Bearer token-fixture" {
+		t.Fatalf("settings = %s, want rendered loopback URL and bearer token", raw)
+	}
+	if len(settings.MCPServers) != 1 {
+		t.Fatalf("settings declare %d servers, want exactly 1", len(settings.MCPServers))
+	}
+	info, err := os.Stat(filepath.Join(home, "config", "muse", "settings.json"))
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("settings perms = %v, want 0600", info)
 	}
 }
 
@@ -191,139 +157,103 @@ func TestLiveTransportRefusesStandard(t *testing.T) {
 	}
 }
 
-func TestLiveTransportFencesForeignTool(t *testing.T) {
-	record := filepath.Join(t.TempDir(), "record.json")
-	shim := fakeHostShim(t, "fence-shell", record)
-	workspace := filepath.Join(t.TempDir(), "ws", "run-live-fence")
+func TestLiveTransportEchoPlumbing(t *testing.T) {
+	if os.Getenv("E11_ECHO") != "1" {
+		t.Skip("echo plumbing only with E11_ECHO=1")
+	}
+	cli, err := exec.LookPath("muse")
+	if err != nil {
+		t.Skip("muse CLI not on PATH")
+	}
+	workspace := filepath.Join(t.TempDir(), "ws", "run-live-echo")
+	if err := os.MkdirAll(workspace, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	server := liveFixtureServer(t)
 	var trace strings.Builder
-	transport := &LiveTransport{CLIPath: shim, ModelID: "fixture-model", ProviderID: "meta",
-		Servers: func(string) (*publicresearch.Server, bool) { return server, true }, Trace: &trace}
-	validate := func(ref string) error { return nil }
-	supervisor := musecode.NewSupervisor(transport, &memoryCursors{}, validate, "fixture-model")
-	status := musecode.Status{Tier: musecode.TierContributor, Available: true, Code: musecode.CodeReady}
-	spec, err := musecode.NewSession(status, workspace, liveFixtureBounds(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	transport := &LiveTransport{CLIPath: cli, ModelID: "muse-spark-1.3-contributor",
+		ProviderID: "meta", Provider: "echo",
+		Servers: func(string) (*publicresearch.Server, bool) { return server, true },
+		Trace:   &trace}
+	sink := &collectSink{}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	if _, err := supervisor.StartRun(ctx, "run-live-fence", spec,
+	if err := transport.Run(ctx, musecode.SessionSpec{Tier: musecode.TierContributor,
+		Workspace: workspace, Public: true, Bounds: liveFixtureBounds()},
 		musecode.PublicInput{Criteria: musecode.PublicCriteria{RoleKeywords: []string{"support"}}},
-		liveReadyFacts()); err != nil {
-		t.Fatal(err)
+		musecode.Cursor{}, sink); err != nil {
+		t.Fatalf("echo run: %v", err)
 	}
-	terminal, ok := supervisor.Result("run-live-fence")
-	if !ok {
-		t.Fatal("no terminal result")
+	found := false
+	for _, event := range sink.kinds() {
+		if event == musecode.EventFinished {
+			found = true
+		}
 	}
-	if terminal.Outcome != musecode.OutcomeFailed || !strings.Contains(terminal.Detail, "not allowlisted") {
-		t.Fatalf("terminal = %+v, want failed/not-allowlisted", terminal)
+	if !found {
+		t.Errorf("no finished event; kinds=%v", sink.kinds())
+	}
+	if !strings.Contains(trace.String(), "run.terminal.completed") {
+		t.Errorf("trace misses terminal completion")
 	}
 }
 
-// TestHelperHost is re-executed as the fake `muse serve` process. It is
-// never run as a real test; the name only routes the helper flag.
-func TestHelperHost(t *testing.T) {
-	if os.Getenv("GO_TEST_HELPER_MODE") == "" {
-		t.Skip("helper only")
+// TestLiveTransportValidationTurn drives one trivial turn against the real
+// installed CLI. It runs only with E11_VALIDATE=1, costs one minimal turn
+// on the Contributor subscription lane, performs zero retrieval, and
+// exists to prove MCP negotiation, tool-name mapping and the approval
+// default before the E11 discovery run.
+func TestLiveTransportValidationTurn(t *testing.T) {
+	if os.Getenv("E11_VALIDATE") != "1" {
+		t.Skip("live validation only with E11_VALIDATE=1")
 	}
-	mode := os.Getenv("GO_TEST_HELPER_MODE")
-	recordPath := os.Getenv("GO_TEST_HELPER_RECORD")
-	stdin := bufio.NewReader(os.Stdin)
-	stdout := bufio.NewWriter(os.Stdout)
-	defer stdout.Flush()
-	emit := func(frame any) {
-		raw, _ := json.Marshal(frame)
-		stdout.Write(raw)
-		stdout.Write([]byte("\n"))
-		stdout.Flush()
+	cli, err := exec.LookPath("muse")
+	if err != nil {
+		t.Fatal(err)
 	}
-	toolName := "mcp__find-income-public__public_list_saved"
-	if mode == "fence-shell" {
-		toolName = "shell"
+	workspace := filepath.Join(t.TempDir(), "ws", "run-live-validate")
+	if err := os.MkdirAll(workspace, 0o700); err != nil {
+		t.Fatal(err)
 	}
-	for {
-		line, err := stdin.ReadBytes('\n')
-		if err != nil {
-			return
-		}
-		var frame struct {
-			ID     json.RawMessage `json:"id"`
-			Method string          `json:"method"`
-			Params json.RawMessage `json:"params"`
-		}
-		if err := json.Unmarshal(line, &frame); err != nil {
-			continue
-		}
-		if frame.Method == "" || frame.Method == "initialized" {
-			continue
-		}
-		var id any
-		_ = json.Unmarshal(frame.ID, &id)
-		reply := func(result any) {
-			emit(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
-		}
-		switch frame.Method {
-		case "initialize":
-			reply(map[string]any{"grantedCapabilities": []string{"sessionMcp"},
-				"serverInfo": map[string]any{"name": "muse", "version": "1.4.0"}})
-		case "model/list":
-			reply(map[string]any{"models": []any{}})
-		case "session/start":
-			var params struct {
-				ModelID    string `json:"modelId"`
-				ProviderID string `json:"providerId"`
-				Config     struct {
-					MCPServers map[string]struct {
-						Transport string            `json:"transport"`
-						URL       string            `json:"url"`
-						Mode      string            `json:"mode"`
-						Headers   map[string]string `json:"headers"`
-					} `json:"mcpServers"`
-				} `json:"config"`
+	server := liveFixtureServer(t)
+	traceFile, err := os.Create(filepath.Join(t.TempDir(), "validate-trace.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer traceFile.Close()
+	t.Logf("trace: %s", traceFile.Name())
+	transport := &LiveTransport{CLIPath: cli, ModelID: "muse-spark-1.3-contributor",
+		ProviderID: "meta",
+		Servers:    func(string) (*publicresearch.Server, bool) { return server, true },
+		Trace:      traceFile,
+		ValidationPrompt: "Call public_list_saved exactly once with no arguments, then reply with the single word done. " +
+			"Use no other tool, skill, shell, memory, subagent, or background work."}
+	sink := &collectSink{}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	if err := transport.Run(ctx, musecode.SessionSpec{Tier: musecode.TierContributor,
+		Workspace: workspace, Public: true, Bounds: liveFixtureBounds()},
+		musecode.PublicInput{Criteria: musecode.PublicCriteria{RoleKeywords: []string{"support"}}},
+		musecode.Cursor{}, sink); err != nil {
+		t.Fatalf("validation turn: %v", err)
+	}
+	calls := 0
+	finished := false
+	for _, event := range sink.events {
+		switch event.Kind {
+		case musecode.EventToolCall:
+			calls++
+			if event.Tool != publicresearch.ToolListSaved {
+				t.Errorf("tool call = %q, want %q", event.Tool, publicresearch.ToolListSaved)
 			}
-			_ = json.Unmarshal(frame.Params, &params)
-			endpoint := params.Config.MCPServers["find-income-public"]
-			record := map[string]any{"url": endpoint.URL, "mode": endpoint.Mode,
-				"transport":       endpoint.Transport,
-				"has_auth_header": endpoint.Headers["Authorization"] != ""}
-			unauth, err := http.Post(endpoint.URL, "application/json", strings.NewReader(`{}`))
-			if err == nil {
-				record["unauth_rejected"] = unauth.StatusCode == http.StatusForbidden
-				unauth.Body.Close()
-			}
-			req, _ := http.NewRequest(http.MethodPost, endpoint.URL, strings.NewReader(`{}`))
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", endpoint.Headers["Authorization"])
-			authed, err := http.DefaultClient.Do(req)
-			if err == nil {
-				record["auth_passed_gate"] = authed.StatusCode != http.StatusForbidden
-				authed.Body.Close()
-			}
-			raw, _ := json.Marshal(record)
-			_ = os.WriteFile(recordPath, raw, 0o600)
-			reply(map[string]any{"session": map[string]any{"sessionId": "sess-1",
-				"modelId": params.ModelID, "providerId": params.ProviderID}})
-		case "usage/read":
-			reply(map[string]any{})
-		case "turn/start":
-			reply(map[string]any{"turnId": "turn-1", "disposition": "started",
-				"startedNewTurn": true, "status": "accepted", "commandId": "x"})
-			emit(map[string]any{"jsonrpc": "2.0", "method": "session/tokenUsage", "params": map[string]any{}})
-			emit(map[string]any{"jsonrpc": "2.0", "method": "item/started", "params": map[string]any{
-				"sessionId": "sess-1", "viewCursor": "1",
-				"item": map[string]any{"kind": "toolCall", "tool": toolName, "status": "inProgress"}}})
-			emit(map[string]any{"jsonrpc": "2.0", "method": "item/completed", "params": map[string]any{
-				"sessionId": "sess-1", "viewCursor": "2",
-				"item": map[string]any{"kind": "toolCall", "tool": toolName, "status": "completed"}}})
-			emit(map[string]any{"jsonrpc": "2.0", "method": "turn/completed", "params": map[string]any{
-				"sessionId": "sess-1", "turnId": "turn-1", "terminal": "completed", "viewCursor": "3"}})
-		case "turn/cancel":
-			reply(map[string]any{"status": "accepted"})
-		default:
-			emit(map[string]any{"jsonrpc": "2.0", "id": id,
-				"error": map[string]any{"code": -32601, "message": "unknown method"}})
+		case musecode.EventFinished:
+			finished = true
 		}
+	}
+	if calls != 1 {
+		t.Errorf("tool calls = %d, want exactly 1", calls)
+	}
+	if !finished {
+		t.Error("no finished event")
 	}
 }
