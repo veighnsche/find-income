@@ -231,6 +231,7 @@ func wireResearch(database *store.Store, runtime *codexservice.Lazy, options *ht
 		ChromePath:           os.Getenv("JOBSEEK_RESEARCH_CHROME_PATH"),
 		ExpectedChromeSHA256: os.Getenv("JOBSEEK_RESEARCH_CHROME_SHA256"),
 		PythonPath:           os.Getenv("JOBSEEK_RESEARCH_PYTHON_PATH"),
+		SandboxBinary:        os.Getenv("JOBSEEK_RESEARCH_SANDBOX_BINARY"),
 		JevProvider:          jevClient,
 	})
 	if err != nil {

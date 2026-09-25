@@ -44,6 +44,7 @@ type Config struct {
 	ChromePath           string
 	ExpectedChromeSHA256 string
 	PythonPath           string
+	SandboxBinary        string
 	AgentID              string
 	PermitLoopback       bool
 	JevProvider          jevassess.Provider
@@ -130,6 +131,7 @@ func Wire(db *store.Store, cfg Config) (*Stack, error) {
 		ChromePath:           cfg.ChromePath,
 		ExpectedChromeSHA256: cfg.ExpectedChromeSHA256,
 		PythonPath:           cfg.PythonPath,
+		SandboxBinary:        cfg.SandboxBinary,
 		ScratchRoot:          scratch,
 		PermitLoopback:       cfg.PermitLoopback,
 	})
