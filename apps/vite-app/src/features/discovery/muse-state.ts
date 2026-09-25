@@ -1,25 +1,28 @@
-// E06 INTEGRATION INTERFACE — M implements the real client to match this file.
+// E06 INTEGRATION INTERFACE — live client published by M against this file.
 //
-// Until E06 publishes the real HTTP/client surface, the recruitment journey UI
-// builds against this narrow view-model with fixture data (zero network/model
-// calls). At E06, M keeps these exact type names, states, codes and outcomes
-// and swaps the fixture source for live reads:
+// Type names, states, codes and outcomes below are frozen. The journey reads
+// the view-model through useMuseState: production pages pass "live" for real
+// GET reads (readiness per tier + commission count; zero POSTs), while an
+// explicit fixture scenario keeps deterministic data for tests.
 //
-//   M MUST PROVIDE (per tier: contributor, standard):
+//   LIVE SURFACE (per tier: contributor, standard):
 //   - GET readiness -> MuseReadiness { state, code, detail, tier }
 //     Codes mirror musecode.Check exactly: muse_ready, muse_not_configured,
 //     muse_version_mismatch, muse_lane_unverified, muse_protocol_unverified,
-//     muse_workspace_unverified. No other codes; unknown fails closed.
+//     muse_workspace_unverified. Unknown codes fail closed to unavailable.
 //   - GET run checkpoints -> RunCheckpoint[] (durable cursors/receipts only)
 //   - GET run report -> MuseRunReport | null (partial/no-result safe)
 //   - commissionedCalls: count of owner-explicit commissions this session
 //
-//   M MUST PRESERVE:
+// Run checkpoints/report stay empty until run selection arrives with the
+// first authorized commission (E11): there is no run to show yet, and the
+// hook never invents one.
+//
+//   PRESERVED INVARIANTS:
 //   - Page load and passive reads commission NOTHING (no POST/session input).
 //   - readinessStateFor mapping below (ready/unavailable/needs-setup).
 //   - MuseOutcome values: completed/stopped/failed/crashed/expired.
-//   - useMuseState signature: (scenario?: MuseFixtureScenario) => MuseJourneyState.
-//     M may ignore the scenario argument once live; fixtures remain for tests.
+//   - Fixture scenarios keep byte-identical deterministic data for tests.
 //
 // Owner-facing rules: surface real readiness per tier, saved checkpoints,
 // partial/no-result reports and one clear next action. A blocked tier disables
@@ -27,7 +30,13 @@
 // Standard readiness gates Prepare drafting only; exact owner edits, Answer
 // prefill display and Review/send never need a model call.
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
+
+import {
+  getMuseCommissions,
+  getMuseReadiness,
+  type MuseReadiness as ApiReadiness,
+} from "../../api/client"
 
 // MuseTier mirrors musecode.Tier: contributor sessions are public-only,
 // standard sessions are private preparation-only.
@@ -260,13 +269,115 @@ export function fixtureMuseState(
   }
 }
 
-// useMuseState is the fixture hook the journey builds against until E06.
-// It performs zero network/model calls on every render; M replaces the body
-// with live GET reads behind this same signature.
-export function useMuseState(
-  scenario: MuseFixtureScenario = "ready"
-): MuseJourneyState {
-  return useMemo(() => fixtureMuseState(scenario), [scenario])
+// MuseScenario selects the hook source: "live" reads the real API with GETs
+// only, while an explicit fixture scenario keeps deterministic test data.
+export type MuseScenario = MuseFixtureScenario | "live"
+
+// LiveMuseReads is one successful live read round: per-tier readiness plus
+// the owner-explicit commission count. Checkpoints/report need a selected
+// run, which arrives with the first authorized commission (E11).
+export interface LiveMuseReads {
+  contributor: ApiReadiness
+  standard: ApiReadiness
+  commissionedCalls: number
+}
+
+// liveJourneyFromReads maps one live read round onto the frozen view-model.
+// Unknown readiness codes fail closed to unavailable; the code echo stays
+// verbatim so the owner sees what the API actually reported.
+export function liveJourneyFromReads(reads: LiveMuseReads): MuseJourneyState {
+  const view = (api: ApiReadiness, tier: MuseTier): MuseReadiness => ({
+    state: readinessStateFor(api.code),
+    code: api.code as MuseReadinessCode,
+    detail: api.detail,
+    tier,
+  })
+  return {
+    contributor: view(reads.contributor, "contributor"),
+    standard: view(reads.standard, "standard"),
+    checkpoints: [],
+    report: null,
+    commissionedCalls: reads.commissionedCalls,
+  }
+}
+
+function loadingJourney(): MuseJourneyState {
+  return {
+    contributor: readinessFor(
+      "contributor",
+      "muse_not_configured",
+      "Reading local Muse readiness…"
+    ),
+    standard: readinessFor(
+      "standard",
+      "muse_not_configured",
+      "Reading local Muse readiness…"
+    ),
+    checkpoints: [],
+    report: null,
+    commissionedCalls: 0,
+  }
+}
+
+function unreachableJourney(detail: string): MuseJourneyState {
+  return {
+    contributor: readinessFor(
+      "contributor",
+      "muse_not_configured",
+      `Could not reach the API: ${detail}`
+    ),
+    standard: readinessFor(
+      "standard",
+      "muse_not_configured",
+      `Could not reach the API: ${detail}`
+    ),
+    checkpoints: [],
+    report: null,
+    commissionedCalls: 0,
+  }
+}
+
+// useMuseState serves the journey view-model. Production pages pass "live"
+// for real GET reads (readiness per tier + commission count; zero POSTs, so
+// passive reads commission nothing). An explicit fixture scenario returns
+// deterministic data with zero network calls. The hook never throws: read
+// failures surface as needs-setup states carrying the real detail.
+export function useMuseState(scenario: MuseScenario = "ready"): MuseJourneyState {
+  const fixture = useMemo(
+    () => fixtureMuseState(scenario === "live" ? "ready" : scenario),
+    [scenario]
+  )
+  const [live, setLive] = useState<MuseJourneyState>(loadingJourney)
+  useEffect(() => {
+    if (scenario !== "live") return
+    const controller = new AbortController()
+    let cancelled = false
+    const load = async () => {
+      try {
+        const [contributor, standard, commissionedCalls] = await Promise.all([
+          getMuseReadiness("contributor", controller.signal),
+          getMuseReadiness("standard", controller.signal),
+          getMuseCommissions(controller.signal),
+        ])
+        if (!cancelled) {
+          setLive(
+            liveJourneyFromReads({ contributor, standard, commissionedCalls })
+          )
+        }
+      } catch (cause) {
+        if (cancelled || controller.signal.aborted) return
+        const detail =
+          cause instanceof Error ? cause.message : "Unknown read failure."
+        if (!cancelled) setLive(unreachableJourney(detail))
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [scenario])
+  return scenario === "live" ? live : fixture
 }
 
 // describeReadiness renders one truthful owner-facing readiness line.

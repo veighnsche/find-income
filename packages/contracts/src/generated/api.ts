@@ -1056,6 +1056,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/muse/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read local Muse session readiness for one tier
+         * @description Owner session required. Reports the frozen musecode readiness verdict without commissioning any session input. Unknown tiers fail closed.
+         */
+        get: operations["getMuseReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/muse/checkpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read durable run checkpoints for one Muse run
+         * @description Owner session required. Serves durable cursor and terminal rows only; reading never commissions work.
+         */
+        get: operations["getMuseCheckpoints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/muse/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the honest terminal report for one Muse run
+         * @description Owner session required. Serves the durable terminal row plus finding-derived coverage; reading never commissions work.
+         */
+        get: operations["getMuseReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/muse/commissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the owner-explicit Muse commission count
+         * @description Owner session required. Counts admitted session commissions only; reads never increment it.
+         */
+        get: operations["getMuseCommissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runtime-status": {
         parameters: {
             query?: never;
@@ -2963,6 +3043,43 @@ export interface components {
             /** Format: uri */
             verificationUrl: string;
             userCode: string;
+        };
+        MuseReadiness: {
+            /** @enum {string} */
+            state: "ready" | "unavailable" | "needs-setup";
+            /** @description Frozen musecode readiness code. */
+            code: string;
+            detail: string;
+            /** @enum {string} */
+            tier: "contributor" | "standard";
+        };
+        MuseRunCheckpoint: {
+            runRef: string;
+            /** @enum {string} */
+            tier: "contributor" | "standard";
+            savedCount: number;
+            lastSavedReceipt: string;
+            savedRefs: string[];
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        MuseRunReport: {
+            runRef: string;
+            /** @enum {string} */
+            tier: "contributor" | "standard";
+            /** @enum {string} */
+            outcome: "completed" | "stopped" | "failed" | "crashed" | "expired";
+            detail: string;
+            savedRefs: string[];
+            /** @description Distinct source hosts behind saved findings. */
+            searched: string[];
+            /** @description Capture ids cited by more than one finding. */
+            reused: string[];
+            gaps: string[];
+            nextAction: string;
+        };
+        MuseCommissions: {
+            count: number;
         };
         RuntimeStatus: {
             ingestionAvailable: boolean;
@@ -5802,6 +5919,105 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getMuseReadiness: {
+        parameters: {
+            query: {
+                tier: "contributor" | "standard";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tier readiness verdict */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MuseReadiness"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getMuseCheckpoints: {
+        parameters: {
+            query: {
+                runRef: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run checkpoints, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MuseRunCheckpoint"][];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getMuseReport: {
+        parameters: {
+            query: {
+                runRef: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Terminal run report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MuseRunReport"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getMuseCommissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Commission count */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MuseCommissions"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getRuntimeStatus: {

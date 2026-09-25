@@ -858,6 +858,23 @@ export async function startFixture() {
           ingestionAvailable: false,
           organisationAvailable: false,
         });
+      if (path === '/api/v1/muse/readiness' && req.method === 'GET') {
+        const tier = url.searchParams.get('tier');
+        if (tier !== 'contributor' && tier !== 'standard')
+          return sendJson(res, 400, { error: { message: 'Tier must be contributor or standard.' } });
+        return sendJson(res, 200, {
+          state: 'ready',
+          code: 'muse_ready',
+          detail: `muse ${tier} session may be admitted`,
+          tier,
+        });
+      }
+      if (path === '/api/v1/muse/checkpoints' && req.method === 'GET')
+        return sendJson(res, 200, []);
+      if (path === '/api/v1/muse/report' && req.method === 'GET')
+        return sendJson(res, 404, { error: { message: 'Muse run not found.' } });
+      if (path === '/api/v1/muse/commissions' && req.method === 'GET')
+        return sendJson(res, 200, { count: 0 });
       if (path === '/api/v1/organisation/categories') return sendJson(res, 200, { categories: [] });
       if (path === '/api/v1/organisation/summaries') return sendJson(res, 200, { items: [] });
       if (path === `/api/v1/opportunities/${opportunity.id}/organisation`)

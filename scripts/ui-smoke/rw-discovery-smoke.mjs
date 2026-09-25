@@ -319,6 +319,23 @@ async function startFixture() {
       if (path === '/api/v1/preferences') return sendJson(res, 200, currentPrefs());
       if (path === '/api/v1/runtime-status')
         return sendJson(res, 200, { ingestionAvailable: false, organisationAvailable: false });
+      if (path === '/api/v1/muse/readiness' && req.method === 'GET') {
+        const tier = url.searchParams.get('tier');
+        if (tier !== 'contributor' && tier !== 'standard')
+          return sendJson(res, 400, { error: { message: 'Tier must be contributor or standard.' } });
+        return sendJson(res, 200, {
+          state: 'ready',
+          code: 'muse_ready',
+          detail: `muse ${tier} session may be admitted`,
+          tier,
+        });
+      }
+      if (path === '/api/v1/muse/checkpoints' && req.method === 'GET')
+        return sendJson(res, 200, []);
+      if (path === '/api/v1/muse/report' && req.method === 'GET')
+        return sendJson(res, 404, { error: { message: 'Muse run not found.' } });
+      if (path === '/api/v1/muse/commissions' && req.method === 'GET')
+        return sendJson(res, 200, { count: 0 });
       if (path === '/api/v1/research/brief') {
         if (state.briefFails) return error(res, 500);
         return sendJson(res, 200, currentBrief());

@@ -12,7 +12,7 @@ export function JobsPage() {
         </p>
       </div>
 
-      <GroupedJobs />
+      <GroupedJobs museScenario="live" />
     </div>
   )
 }

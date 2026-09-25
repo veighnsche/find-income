@@ -30,6 +30,8 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/materialprep"
+	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
+	"github.com/veighnsche/find-income-dashboard/api/internal/musewire"
 	"github.com/veighnsche/find-income-dashboard/api/internal/researchwire"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
@@ -243,6 +245,31 @@ func wireResearch(database *store.Store, runtime *codexservice.Lazy, options *ht
 	runtime.SetResearchWiring(stack.Toolchain, stack.Supervisor)
 	go sweepResearchLeases(stack)
 	log.Printf("research wired: artifacts=%s agent=%s", artifactRoot, stack.AgentID)
+	wireMuse(database, options, dataDir, stack)
+}
+
+// wireMuse composes the discovery slice behind the research stack: session
+// supervision, public tools and Jev classification with durable run records.
+// The session transport stays provider-disabled until the E11-authorized live
+// run, so commissions fail closed while readiness and run reads stay honest.
+func wireMuse(database *store.Store, options *httpapi.Options, dataDir string, stack *researchwire.Stack) {
+	bin := os.Getenv("JOBSEEK_MUSE_BIN")
+	if bin == "" {
+		bin = "muse"
+	}
+	service, err := musewire.NewService(musewire.Deps{
+		Facts: musecode.ProbeLocalFacts(bin), Bounds: musecode.DefaultBounds(),
+		Transport: musecode.UnavailableTransport{}, Cursors: musewire.StoreCursors{DB: database},
+		DB: database, Actor: researchwire.OwnerActor(),
+		Executor: stack.Executor, Captures: stack.Captures, Assessor: stack.Assessor,
+		Workspaces: filepath.Join(dataDir, "muse-sessions"),
+	})
+	if err != nil {
+		log.Printf("muse unavailable: %v", err)
+		return
+	}
+	options.Muse = service
+	log.Printf("muse wired: cli=%s", bin)
 }
 
 func sweepResearchLeases(stack *researchwire.Stack) {

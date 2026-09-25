@@ -16,6 +16,7 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/deliveryservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
+	"github.com/veighnsche/find-income-dashboard/api/internal/musewire"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
@@ -32,6 +33,7 @@ type Options struct {
 	ResearchControl       ResearchRunControl
 	AnswerMatcher         AnswerMatcher
 	Materials             MaterialPreparer
+	Muse                  *musewire.Service
 }
 
 type CodexControl interface {
@@ -55,6 +57,7 @@ type Handler struct {
 	researchControl       ResearchRunControl
 	answerMatcher         AnswerMatcher
 	materials             MaterialPreparer
+	muse                  *musewire.Service
 	limiter               *loginLimiter
 }
 
@@ -68,6 +71,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 		researchControl: options.ResearchControl,
 		answerMatcher:   options.AnswerMatcher,
 		materials:       options.Materials,
+		muse:            options.Muse,
 		limiter:         newLoginLimiter()}
 	for _, origin := range options.AllowedOrigins {
 		h.origins[origin] = true
@@ -111,6 +115,10 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("POST /api/v1/owner-instructions", h.addOwnerInstruction)
 	mux.HandleFunc("POST /api/v1/owner-instructions/{id}/revoke", h.revokeOwnerInstruction)
 	mux.HandleFunc("GET /api/v1/runtime-status", h.runtimeStatus)
+	mux.HandleFunc("GET /api/v1/muse/readiness", h.museReadiness)
+	mux.HandleFunc("GET /api/v1/muse/checkpoints", h.museCheckpoints)
+	mux.HandleFunc("GET /api/v1/muse/report", h.museReport)
+	mux.HandleFunc("GET /api/v1/muse/commissions", h.museCommissions)
 	mux.HandleFunc("GET /api/v1/codex/status", h.codexStatus)
 	mux.HandleFunc("POST /api/v1/codex/connect", h.codexConnect)
 	mux.HandleFunc("POST /api/v1/codex/connect/cancel", h.codexCancelConnect)

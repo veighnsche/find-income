@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   describeReadiness,
   fixtureMuseState,
+  liveJourneyFromReads,
   nextActionFor,
   readinessFor,
   readinessStateFor,
@@ -135,5 +136,55 @@ describe("nextActionFor", () => {
       "Check chosen jobs"
     )
     expect(nextActionFor(fixtureMuseState("ready"))).toContain("Find jobs")
+  })
+})
+
+describe("liveJourneyFromReads", () => {
+  it("maps live readiness onto the frozen view-model", () => {
+    const state = liveJourneyFromReads({
+      contributor: {
+        state: "ready",
+        code: "muse_ready",
+        detail: "session may be admitted",
+        tier: "contributor",
+      },
+      standard: {
+        state: "unavailable",
+        code: "muse_lane_unverified",
+        detail: "lane not proved",
+        tier: "standard",
+      },
+      commissionedCalls: 2,
+    })
+    expect(state.contributor).toEqual({
+      state: "ready",
+      code: "muse_ready",
+      detail: "session may be admitted",
+      tier: "contributor",
+    })
+    expect(state.standard.state).toBe("unavailable")
+    expect(state.commissionedCalls).toBe(2)
+    expect(state.checkpoints).toEqual([])
+    expect(state.report).toBeNull()
+  })
+
+  it("fails unknown codes closed while echoing them verbatim", () => {
+    const state = liveJourneyFromReads({
+      contributor: {
+        state: "ready",
+        code: "muse_future_code",
+        detail: "a newer server",
+        tier: "contributor",
+      },
+      standard: {
+        state: "ready",
+        code: "muse_ready",
+        detail: "ok",
+        tier: "standard",
+      },
+      commissionedCalls: 0,
+    })
+    expect(state.contributor.state).toBe("unavailable")
+    expect(state.contributor.code).toBe("muse_future_code")
   })
 })

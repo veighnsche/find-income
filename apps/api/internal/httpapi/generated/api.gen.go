@@ -955,6 +955,108 @@ func (e MaterialVersionProvenanceOrigin) Valid() bool {
 	}
 }
 
+// Defines values for MuseReadinessState.
+const (
+	MuseReadinessStateNeedsSetup  MuseReadinessState = "needs-setup"
+	MuseReadinessStateReady       MuseReadinessState = "ready"
+	MuseReadinessStateUnavailable MuseReadinessState = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the MuseReadinessState enum.
+func (e MuseReadinessState) Valid() bool {
+	switch e {
+	case MuseReadinessStateNeedsSetup:
+		return true
+	case MuseReadinessStateReady:
+		return true
+	case MuseReadinessStateUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MuseReadinessTier.
+const (
+	MuseReadinessTierContributor MuseReadinessTier = "contributor"
+	MuseReadinessTierStandard    MuseReadinessTier = "standard"
+)
+
+// Valid indicates whether the value is a known member of the MuseReadinessTier enum.
+func (e MuseReadinessTier) Valid() bool {
+	switch e {
+	case MuseReadinessTierContributor:
+		return true
+	case MuseReadinessTierStandard:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MuseRunCheckpointTier.
+const (
+	MuseRunCheckpointTierContributor MuseRunCheckpointTier = "contributor"
+	MuseRunCheckpointTierStandard    MuseRunCheckpointTier = "standard"
+)
+
+// Valid indicates whether the value is a known member of the MuseRunCheckpointTier enum.
+func (e MuseRunCheckpointTier) Valid() bool {
+	switch e {
+	case MuseRunCheckpointTierContributor:
+		return true
+	case MuseRunCheckpointTierStandard:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MuseRunReportOutcome.
+const (
+	MuseRunReportOutcomeCompleted MuseRunReportOutcome = "completed"
+	MuseRunReportOutcomeCrashed   MuseRunReportOutcome = "crashed"
+	MuseRunReportOutcomeExpired   MuseRunReportOutcome = "expired"
+	MuseRunReportOutcomeFailed    MuseRunReportOutcome = "failed"
+	MuseRunReportOutcomeStopped   MuseRunReportOutcome = "stopped"
+)
+
+// Valid indicates whether the value is a known member of the MuseRunReportOutcome enum.
+func (e MuseRunReportOutcome) Valid() bool {
+	switch e {
+	case MuseRunReportOutcomeCompleted:
+		return true
+	case MuseRunReportOutcomeCrashed:
+		return true
+	case MuseRunReportOutcomeExpired:
+		return true
+	case MuseRunReportOutcomeFailed:
+		return true
+	case MuseRunReportOutcomeStopped:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MuseRunReportTier.
+const (
+	MuseRunReportTierContributor MuseRunReportTier = "contributor"
+	MuseRunReportTierStandard    MuseRunReportTier = "standard"
+)
+
+// Valid indicates whether the value is a known member of the MuseRunReportTier enum.
+func (e MuseRunReportTier) Valid() bool {
+	switch e {
+	case MuseRunReportTierContributor:
+		return true
+	case MuseRunReportTierStandard:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OfferComparisonOfferEngagement.
 const (
 	OfferComparisonOfferEngagementEmployment OfferComparisonOfferEngagement = "employment"
@@ -2563,6 +2665,24 @@ func (e ListRecordChangesParamsEntityKind) Valid() bool {
 	}
 }
 
+// Defines values for GetMuseReadinessParamsTier.
+const (
+	GetMuseReadinessParamsTierContributor GetMuseReadinessParamsTier = "contributor"
+	GetMuseReadinessParamsTierStandard    GetMuseReadinessParamsTier = "standard"
+)
+
+// Valid indicates whether the value is a known member of the GetMuseReadinessParamsTier enum.
+func (e GetMuseReadinessParamsTier) Valid() bool {
+	switch e {
+	case GetMuseReadinessParamsTierContributor:
+		return true
+	case GetMuseReadinessParamsTierStandard:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListOpportunitiesParamsKind.
 const (
 	ListOpportunitiesParamsKindEmployment ListOpportunitiesParamsKind = "employment"
@@ -3820,6 +3940,62 @@ type MaterialVersion struct {
 
 // MaterialVersionProvenanceOrigin defines model for MaterialVersion.Provenance.Origin.
 type MaterialVersionProvenanceOrigin string
+
+// MuseCommissions defines model for MuseCommissions.
+type MuseCommissions struct {
+	Count int `json:"count"`
+}
+
+// MuseReadiness defines model for MuseReadiness.
+type MuseReadiness struct {
+	// Code Frozen musecode readiness code.
+	Code   string             `json:"code"`
+	Detail string             `json:"detail"`
+	State  MuseReadinessState `json:"state"`
+	Tier   MuseReadinessTier  `json:"tier"`
+}
+
+// MuseReadinessState defines model for MuseReadiness.State.
+type MuseReadinessState string
+
+// MuseReadinessTier defines model for MuseReadiness.Tier.
+type MuseReadinessTier string
+
+// MuseRunCheckpoint defines model for MuseRunCheckpoint.
+type MuseRunCheckpoint struct {
+	LastSavedReceipt string                `json:"lastSavedReceipt"`
+	RunRef           string                `json:"runRef"`
+	SavedCount       int                   `json:"savedCount"`
+	SavedRefs        []string              `json:"savedRefs"`
+	Tier             MuseRunCheckpointTier `json:"tier"`
+	UpdatedAt        time.Time             `json:"updatedAt"`
+}
+
+// MuseRunCheckpointTier defines model for MuseRunCheckpoint.Tier.
+type MuseRunCheckpointTier string
+
+// MuseRunReport defines model for MuseRunReport.
+type MuseRunReport struct {
+	Detail     string               `json:"detail"`
+	Gaps       []string             `json:"gaps"`
+	NextAction string               `json:"nextAction"`
+	Outcome    MuseRunReportOutcome `json:"outcome"`
+
+	// Reused Capture ids cited by more than one finding.
+	Reused    []string `json:"reused"`
+	RunRef    string   `json:"runRef"`
+	SavedRefs []string `json:"savedRefs"`
+
+	// Searched Distinct source hosts behind saved findings.
+	Searched []string          `json:"searched"`
+	Tier     MuseRunReportTier `json:"tier"`
+}
+
+// MuseRunReportOutcome defines model for MuseRunReport.Outcome.
+type MuseRunReportOutcome string
+
+// MuseRunReportTier defines model for MuseRunReport.Tier.
+type MuseRunReportTier string
 
 // OfferCitation defines model for OfferCitation.
 type OfferCitation struct {
@@ -5525,6 +5701,24 @@ type ListCompaniesParams struct {
 type ListIngestionsParams struct {
 	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetMuseCheckpointsParams defines parameters for GetMuseCheckpoints.
+type GetMuseCheckpointsParams struct {
+	RunRef string `form:"runRef" json:"runRef"`
+}
+
+// GetMuseReadinessParams defines parameters for GetMuseReadiness.
+type GetMuseReadinessParams struct {
+	Tier GetMuseReadinessParamsTier `form:"tier" json:"tier"`
+}
+
+// GetMuseReadinessParamsTier defines parameters for GetMuseReadiness.
+type GetMuseReadinessParamsTier string
+
+// GetMuseReportParams defines parameters for GetMuseReport.
+type GetMuseReportParams struct {
+	RunRef string `form:"runRef" json:"runRef"`
 }
 
 // ListOpportunitiesParams defines parameters for ListOpportunities.

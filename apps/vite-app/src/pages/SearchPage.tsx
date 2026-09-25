@@ -487,7 +487,7 @@ export function SearchPage() {
         </>
       )}
 
-      <DiscoverySection />
+      <DiscoverySection museScenario="live" />
     </div>
   )
 }

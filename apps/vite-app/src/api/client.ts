@@ -36,6 +36,10 @@ export type IngestionPage = components["schemas"]["IngestionPage"]
 export type RuntimeStatus = components["schemas"]["RuntimeStatus"]
 export type CodexStatus = components["schemas"]["CodexStatus"]
 export type CodexConnection = components["schemas"]["CodexConnection"]
+export type MuseReadiness = components["schemas"]["MuseReadiness"]
+export type MuseRunCheckpoint = components["schemas"]["MuseRunCheckpoint"]
+export type MuseRunReport = components["schemas"]["MuseRunReport"]
+export type MuseCommissions = components["schemas"]["MuseCommissions"]
 export type OrganisationCategory = components["schemas"]["OrganisationCategory"]
 export type OrganisationView = components["schemas"]["OrganisationView"]
 export type OrganisationSummary = components["schemas"]["OrganisationSummary"]
@@ -1248,5 +1252,47 @@ export function getOpportunityMaterialVersion(
   return request<MaterialVersion>(
     `/opportunities/${encodeURIComponent(id)}/materials/versions/${version}`,
     { signal }
+  )
+}
+
+export type MuseTierParam = "contributor" | "standard"
+
+export function getMuseReadiness(
+  tier: MuseTierParam,
+  signal?: AbortSignal
+): Promise<MuseReadiness> {
+  const query = `?${new URLSearchParams({ tier })}`
+  return request<MuseReadiness>(`/muse/readiness${query}`, { signal })
+}
+
+export function getMuseCheckpoints(
+  runRef: string,
+  signal?: AbortSignal
+): Promise<MuseRunCheckpoint[]> {
+  const query = `?${new URLSearchParams({ runRef })}`
+  return request<MuseRunCheckpoint[]>(`/muse/checkpoints${query}`, {
+    signal,
+  }).catch((cause: unknown) => {
+    if (cause instanceof RequestError && cause.status === 404) return []
+    throw cause
+  })
+}
+
+export function getMuseReport(
+  runRef: string,
+  signal?: AbortSignal
+): Promise<MuseRunReport | null> {
+  const query = `?${new URLSearchParams({ runRef })}`
+  return request<MuseRunReport>(`/muse/report${query}`, { signal }).catch(
+    (cause: unknown) => {
+      if (cause instanceof RequestError && cause.status === 404) return null
+      throw cause
+    }
+  )
+}
+
+export function getMuseCommissions(signal?: AbortSignal): Promise<number> {
+  return request<MuseCommissions>("/muse/commissions", { signal }).then(
+    (page) => page.count
   )
 }

@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  type MuseFixtureScenario,
+  type MuseScenario,
   useMuseState,
 } from "@/features/discovery/muse-state"
 import {
@@ -106,15 +106,15 @@ interface PendingKey {
 // and navigation only read; every mutation needs an explicit owner action and
 // carries a stable idempotency key per distinct intent. Muse readiness,
 // checkpoints and the run report render from the muse-state view-model
-// (fixture until E06 wires the live client); commissions stay disabled while
-// the Contributor tier is not ready.
+// ("live" reads the real API; fixtures stay for tests); commissions stay
+// disabled while the Contributor tier is not ready.
 export function DiscoverySection({
   museScenario = "ready",
 }: {
-  museScenario?: MuseFixtureScenario
+  museScenario?: MuseScenario
 } = {}) {
   const { session, loseSession } = useSession()
-  // Fixture view-model: zero network/model calls on every render.
+  // Live reads on "live" (GETs only); fixtures otherwise.
   const muse = useMuseState(museScenario)
   const contributorReady = muse.contributor.state === "ready"
   const [runId, setRunId] = useState<string | null>(() =>

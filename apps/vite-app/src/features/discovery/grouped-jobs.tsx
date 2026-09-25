@@ -23,7 +23,7 @@ import {
   type ChosenRoleInput,
 } from "@/features/discovery/check-chosen-jobs"
 import {
-  type MuseFixtureScenario,
+  type MuseScenario,
   useMuseState,
 } from "@/features/discovery/muse-state"
 import { discoveryRunStorageKey } from "@/features/discovery/discovery-section"
@@ -355,11 +355,11 @@ function JobCard({
 // expansion re-reads nothing, stale findings are labeled and retained, and
 // selecting a role POSTs only an owner decision — never a check. The sticky
 // Check action receives the Contributor readiness from the muse-state
-// view-model (fixture until E06), so a blocked tier disables checks plainly.
+// view-model ("live" in production), so a blocked tier disables checks plainly.
 export function GroupedJobs({
   museScenario = "ready",
 }: {
-  museScenario?: MuseFixtureScenario
+  museScenario?: MuseScenario
 } = {}) {
   const { session, loseSession } = useSession()
   const owner = useOwnerContext()

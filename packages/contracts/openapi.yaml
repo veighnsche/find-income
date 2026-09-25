@@ -1059,6 +1059,82 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /muse/readiness:
+    get:
+      operationId: getMuseReadiness
+      summary: Read local Muse session readiness for one tier
+      description: Owner session required. Reports the frozen musecode readiness verdict without commissioning any session input. Unknown tiers fail closed.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: tier
+          in: query
+          required: true
+          schema: { type: string, enum: [contributor, standard] }
+      responses:
+        '200':
+          description: Tier readiness verdict
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MuseReadiness' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /muse/checkpoints:
+    get:
+      operationId: getMuseCheckpoints
+      summary: Read durable run checkpoints for one Muse run
+      description: Owner session required. Serves durable cursor and terminal rows only; reading never commissions work.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: runRef
+          in: query
+          required: true
+          schema: { type: string, maxLength: 100 }
+      responses:
+        '200':
+          description: Run checkpoints, oldest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/MuseRunCheckpoint' } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /muse/report:
+    get:
+      operationId: getMuseReport
+      summary: Read the honest terminal report for one Muse run
+      description: Owner session required. Serves the durable terminal row plus finding-derived coverage; reading never commissions work.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: runRef
+          in: query
+          required: true
+          schema: { type: string, maxLength: 100 }
+      responses:
+        '200':
+          description: Terminal run report
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MuseRunReport' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /muse/commissions:
+    get:
+      operationId: getMuseCommissions
+      summary: Read the owner-explicit Muse commission count
+      description: Owner session required. Counts admitted session commissions only; reads never increment it.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Commission count
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MuseCommissions' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /runtime-status:
     get:
       operationId: getRuntimeStatus
@@ -3365,6 +3441,52 @@ components:
         loginId: { type: string }
         verificationUrl: { type: string, format: uri }
         userCode: { type: string }
+    MuseReadiness:
+      type: object
+      required: [state, code, detail, tier]
+      properties:
+        state: { type: string, enum: [ready, unavailable, needs-setup] }
+        code: { type: string, description: Frozen musecode readiness code. }
+        detail: { type: string }
+        tier: { type: string, enum: [contributor, standard] }
+    MuseRunCheckpoint:
+      type: object
+      required: [runRef, tier, savedCount, lastSavedReceipt, savedRefs, updatedAt]
+      properties:
+        runRef: { type: string }
+        tier: { type: string, enum: [contributor, standard] }
+        savedCount: { type: integer, minimum: 0 }
+        lastSavedReceipt: { type: string }
+        savedRefs: { type: array, items: { type: string } }
+        updatedAt: { type: string, format: date-time }
+    MuseRunReport:
+      type: object
+      required: [runRef, tier, outcome, detail, savedRefs, searched, reused, gaps, nextAction]
+      properties:
+        runRef: { type: string }
+        tier: { type: string, enum: [contributor, standard] }
+        outcome: { type: string, enum: [completed, stopped, failed, crashed, expired] }
+        detail: { type: string }
+        savedRefs: { type: array, items: { type: string } }
+        searched:
+          {
+            type: array,
+            items: { type: string },
+            description: Distinct source hosts behind saved findings.,
+          }
+        reused:
+          {
+            type: array,
+            items: { type: string },
+            description: Capture ids cited by more than one finding.,
+          }
+        gaps: { type: array, items: { type: string } }
+        nextAction: { type: string }
+    MuseCommissions:
+      type: object
+      required: [count]
+      properties:
+        count: { type: integer, minimum: 0 }
     RuntimeStatus:
       type: object
       required: [ingestionAvailable, organisationAvailable]

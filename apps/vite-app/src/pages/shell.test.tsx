@@ -157,6 +157,8 @@ describe("read-only shell", () => {
     expect(calls.length).toBeGreaterThan(0)
     for (const call of calls) {
       expect(call.method).toBe("GET")
+      // The muse commission count is a GET-only read, not a commission.
+      if (call.url === "/api/v1/muse/commissions") continue
       expect(call.url).not.toMatch(
         /\/commission|\/prepare|\/process-input|\/connect/
       )
