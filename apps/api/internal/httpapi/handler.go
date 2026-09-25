@@ -118,7 +118,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/organisation/categories", h.organisationCategories)
 	mux.HandleFunc("PUT /api/v1/organisation/categories", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/organisation/summaries", h.organisationSummaries)
-	mux.HandleFunc("PUT /api/v1/preferences", h.unsupportedRecruitmentMutation)
+	mux.HandleFunc("PUT /api/v1/preferences", h.updatePreferences)
 	mux.HandleFunc("GET /api/v1/agent-credentials", h.listAgents)
 	mux.HandleFunc("POST /api/v1/agent-credentials", h.createAgent)
 	mux.HandleFunc("POST /api/v1/agent-credentials/{id}/revoke", h.revokeAgent)

@@ -26,6 +26,9 @@ export type OwnerInstruction = components["schemas"]["OwnerInstruction"]
 export type OwnerDecision = components["schemas"]["OwnerDecision"]
 export type OwnerDecisionInput = components["schemas"]["OwnerDecisionInput"]
 export type Preferences = components["schemas"]["PreferencesResponse"]
+export type UpdatePreferencesRequest =
+  components["schemas"]["UpdatePreferencesRequest"]
+export type PreferencesMutation = components["schemas"]["PreferencesMutation"]
 export type Company = components["schemas"]["Company"]
 export type CompanyPage = components["schemas"]["CompanyPage"]
 export type Opportunity = components["schemas"]["Opportunity"]
@@ -144,6 +147,17 @@ export function logout(csrfToken: string): Promise<void> {
 
 export function getPreferences(signal?: AbortSignal): Promise<Preferences> {
   return request<Preferences>("/preferences", { signal })
+}
+
+export function updatePreferences(
+  input: UpdatePreferencesRequest,
+  csrfToken: string
+): Promise<PreferencesMutation> {
+  return request<PreferencesMutation>("/preferences", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+    body: JSON.stringify(input),
+  })
 }
 
 export function getRuntimeStatus(signal?: AbortSignal): Promise<RuntimeStatus> {

@@ -579,7 +579,11 @@ export interface paths {
          * @description Bearer credentials require the preferences:read scope.
          */
         get: operations["getPreferences"];
-        put?: never;
+        /**
+         * Save the owner's deterministic wants/do-not-wants profile
+         * @description Complete profile write with expected-version fencing; sourced experience stays in evidence and owner sources, never in this profile.
+         */
+        put: operations["updatePreferences"];
         post?: never;
         delete?: never;
         options?: never;
@@ -4410,6 +4414,34 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    updatePreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePreferencesRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved profile with change record */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferencesMutation"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
         };
     };
     listAgentCredentials: {

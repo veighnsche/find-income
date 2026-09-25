@@ -569,6 +569,28 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+    put:
+      operationId: updatePreferences
+      summary: Save the owner's deterministic wants/do-not-wants profile
+      description: Complete profile write with expected-version fencing; sourced experience stays in evidence and owner sources, never in this profile.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePreferencesRequest'
+      responses:
+        '200':
+          description: Saved profile with change record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesMutation'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /agent-credentials:
     get:
       operationId: listAgentCredentials
