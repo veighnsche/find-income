@@ -146,7 +146,8 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/application-packs/{id}/pdf", h.applicationPackPDF)
 	mux.HandleFunc("GET /api/v1/application-packs/{id}/source.zip", h.applicationPackSourceArchive)
 	// No delivery routes: this app never emails, submits, attaches, or
-	// autofills on an employer site. Handoff is manual and owner-driven.	mux.HandleFunc("PATCH /api/v1/opportunities/{id}", h.unsupportedRecruitmentMutation)
+	// autofills on an employer site. Handoff is manual and owner-driven.
+	mux.HandleFunc("PATCH /api/v1/opportunities/{id}", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/archive", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/actions", h.listActions)
 	mux.HandleFunc("POST /api/v1/actions", h.unsupportedRecruitmentMutation)
