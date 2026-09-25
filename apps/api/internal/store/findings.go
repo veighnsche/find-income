@@ -435,8 +435,20 @@ func (s *Store) SaveFinding(ctx context.Context, in FindingSaveInput) (Finding, 
 	}
 	links := make([]FindingEvidenceLink, 0, len(in.EvidenceLinks))
 	for _, link := range in.EvidenceLinks {
+		// Evidence captures resolve by retrieval id or content sha256,
+		// matching the capture reader: production receipts bind the
+		// content sha while fixtures bind row ids.
 		if _, err := GetSourceCapture(ctx, s.db, link.CaptureID); err != nil {
-			return Finding{}, fmt.Errorf("%w: unknown evidence capture %q", ErrInvalid, link.CaptureID)
+			if !errors.Is(err, ErrNotFound) {
+				return Finding{}, err
+			}
+			rows, listErr := ListSourceCapturesByContent(ctx, s.db, link.CaptureID)
+			if listErr != nil {
+				return Finding{}, listErr
+			}
+			if len(rows) == 0 {
+				return Finding{}, fmt.Errorf("%w: unknown evidence capture %q", ErrInvalid, link.CaptureID)
+			}
 		}
 		links = append(links, FindingEvidenceLink{CaptureID: link.CaptureID,
 			SpanStart: link.SpanStart, SpanEnd: link.SpanEnd, ExcerptSHA256: link.ExcerptSHA256})

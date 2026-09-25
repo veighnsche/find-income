@@ -418,6 +418,23 @@ func TestFindingReasonCatalogBinding(t *testing.T) {
 	})
 }
 
+func TestFindingEvidenceAcceptsContentSHA(t *testing.T) {
+	ctx := context.Background()
+	s := openResearchTestDB(t)
+	fix := seedFindingBase(t, s)
+	in := findingSaveInput(fix)
+	// Production receipts bind the content sha256, not the retrieval row
+	// id; both forms must validate.
+	in.EvidenceLinks[0].CaptureID = fix.capture.ContentSHA256
+	saved, err := s.SaveFinding(ctx, in)
+	if err != nil {
+		t.Fatalf("sha-form evidence: %v", err)
+	}
+	if len(saved.EvidenceLinks) != 1 || saved.EvidenceLinks[0].CaptureID != fix.capture.ContentSHA256 {
+		t.Fatalf("links = %+v, want the sha-form link stored as given", saved.EvidenceLinks)
+	}
+}
+
 func TestFindingEvidenceValidation(t *testing.T) {
 	cases := map[string]func(*FindingSaveInput){
 		"no links": func(in *FindingSaveInput) { in.EvidenceLinks = nil },
