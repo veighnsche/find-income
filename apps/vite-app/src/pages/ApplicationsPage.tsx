@@ -3,6 +3,8 @@ import {
   getOwnerOpportunityDecision,
   listApplicationPacks,
   listOpportunities,
+  listRoleWorkflows,
+  type RoleWorkflowState,
 } from "@/api/client"
 import { ActivityDisclosure } from "@/components/shared/activity-disclosure"
 import {
@@ -11,8 +13,32 @@ import {
   LoadingBlock,
 } from "@/components/shared"
 import { AttemptHistory } from "@/features/attempts"
+import { ApplicationContinue } from "@/pages/application-continue"
 import { formatDate } from "@/pages/format"
+import { RoleStageSection, stageStatusText } from "@/pages/role-stages"
 import { useRead } from "@/pages/useRead"
+
+function continueHref(workflow: RoleWorkflowState): string {
+  const id = encodeURIComponent(workflow.opportunityId)
+  switch (workflow.stage) {
+    case "checking":
+    case "checked":
+      return `#/jobs/${id}/check`
+    case "answering":
+    case "answered":
+      return `#/jobs/${id}/answers`
+    case "preparing":
+    case "prepared":
+      return `#/jobs/${id}/prepare`
+    case "reviewing":
+      return `#/applications/${id}/review`
+    case "sent":
+      return `#/applications/${id}`
+    case "selected":
+    case "blocked":
+      return `#/jobs/${id}`
+  }
+}
 
 export function ApplicationsPage({ jobId }: { jobId: string | null }) {
   if (jobId === null) return <ApplicationsList />
@@ -20,53 +46,81 @@ export function ApplicationsPage({ jobId }: { jobId: string | null }) {
 }
 
 function ApplicationsList() {
+  const workflows = useRead("applications:workflows", (signal) =>
+    listRoleWorkflows(signal)
+  )
   const opportunities = useRead("applications:list", (signal) =>
     listOpportunities("", signal)
   )
+
+  const titles =
+    opportunities.status === "ready"
+      ? new Map(
+          opportunities.data.items.map((view) => [
+            view.opportunity.id,
+            view.opportunity.title,
+          ])
+        )
+      : null
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <div>
         <h1 className="font-heading text-2xl font-semibold">Applications</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Saved application packs, one page per role. Choose a role to see
-          its packs.
+          Your chosen roles and their current work. Open a role to continue
+          its stage or review its saved history.
         </p>
       </div>
 
-      {opportunities.status === "loading" ? (
+      {workflows.status === "loading" || opportunities.status === "loading" ? (
         <LoadingBlock label="Loading applications…" />
-      ) : opportunities.status === "error" ? (
+      ) : workflows.status === "error" || opportunities.status === "error" ? (
         <ErrorBlock
           title="Could not load applications"
-          message={opportunities.error}
-          onRetry={opportunities.retry}
+          message={
+            workflows.status === "error"
+              ? workflows.error
+              : opportunities.status === "error"
+                ? opportunities.error
+                : ""
+          }
+          onRetry={() => {
+            workflows.retry()
+            opportunities.retry()
+          }}
         />
-      ) : opportunities.data.items.length === 0 ? (
+      ) : workflows.data.length === 0 ? (
         <EmptyBlock
-          title="No roles tracked yet"
-          description="The server returned an empty opportunity list."
+          title="No chosen roles yet"
+          description="Choose a job to start its application work."
         />
       ) : (
         <ol className="flex min-w-0 flex-col gap-2">
-          {opportunities.data.items.map((view) => {
-            const job = view.opportunity
+          {workflows.data.map((workflow) => {
+            const title = titles?.get(workflow.opportunityId)
             return (
               <li
-                key={job.id}
+                key={workflow.opportunityId}
                 className="rounded-xl border bg-card px-3 py-2.5"
               >
                 <a
-                  href={`#/applications/${encodeURIComponent(job.id)}`}
+                  href={continueHref(workflow)}
                   className="text-sm font-medium underline-offset-4 outline-none wrap-break-word hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
-                  {job.title === "" ? "(untitled role)" : job.title}
+                  {title === undefined || title === ""
+                    ? workflow.opportunityId
+                    : title}
                 </a>
                 <p className="mt-1 text-xs text-muted-foreground wrap-break-word">
-                  {job.kind}
-                  {job.locationText === "" ? "" : ` · ${job.locationText}`}
-                  {job.archivedAt === undefined ? "" : " · archived"}
+                  {stageStatusText(workflow)}
                 </p>
+                <a
+                  href={`#/applications/${encodeURIComponent(workflow.opportunityId)}`}
+                  className="mt-1 inline-block text-xs text-muted-foreground underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  Saved packs and send history
+                </a>
               </li>
             )
           })}
@@ -120,10 +174,14 @@ function ApplicationDetail({ jobId }: { jobId: string }) {
               : opportunity.data.opportunity.title}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Saved application packs for this role.
+            Current work, saved packs and send history for this role.
           </p>
         </div>
       )}
+
+      <RoleStageSection jobId={jobId} />
+
+      <ApplicationContinue jobId={jobId} />
 
       <section aria-labelledby="application-packs-heading">
         <h2
