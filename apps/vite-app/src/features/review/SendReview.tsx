@@ -1,10 +1,12 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   RequestError,
+  getDeliveryCapability,
   getDeliveryReview,
   isUnauthenticated,
   reconcileDeliveryReview,
   sendDeliveryReview,
+  type DeliveryCapability,
   type DeliveryItem,
   type DeliveryReview,
   type Round,
@@ -96,6 +98,24 @@ export function SendReview({
     () => readSendRequested() === review.id
   )
   const sendInFlight = useRef(false)
+  // Delivery capability is advisory only: a failed read fails open and the
+  // send POST itself stays the enforcement point (its 503 path already
+  // reports "nothing was sent"). Only an explicit submissionAvailable:false
+  // hides the send action.
+  const [capability, setCapability] = useState<DeliveryCapability | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    getDeliveryCapability(controller.signal).then(
+      (loaded) => {
+        if (!controller.signal.aborted) setCapability(loaded)
+      },
+      () => {
+        // Fail open: no banner, send stays offered, server decides.
+      }
+    )
+    return () => controller.abort()
+  }, [])
 
   const csrfToken = session === undefined || session === null ? null : session.csrfToken
   const approved = isApproved(review)
@@ -104,8 +124,15 @@ export function SendReview({
     items.length > 0 && items.every((item) => item.current && item.state === "prepared")
   const attempted = items.some((item) => item.state !== "prepared")
   const anyUncertain = items.some((item) => item.state === "uncertain")
+  const sendingUnavailable = capability !== null && !capability.submissionAvailable
+  const receiptLookupUnsupported = capability !== null && !capability.receiptLookup
   const canSend =
-    approved && allPrepared && !mustRefreshFirst && busy === null && csrfToken !== null
+    approved &&
+    allPrepared &&
+    !mustRefreshFirst &&
+    !sendingUnavailable &&
+    busy === null &&
+    csrfToken !== null
 
   async function runSend() {
     if (busy !== null || sendInFlight.current) return
@@ -252,7 +279,17 @@ export function SendReview({
         })}
       </ul>
 
-      {allPrepared && !mustRefreshFirst && (
+      {sendingUnavailable ? (
+        <ErrorBlock
+          title="Sending unavailable"
+          message={
+            capability?.reason === undefined || capability.reason === ""
+              ? "The server reports no sender is configured. Nothing can be sent from this review."
+              : `The server reports sending is unavailable: ${capability.reason}`
+          }
+        />
+      ) : null}
+      {allPrepared && !mustRefreshFirst && !sendingUnavailable && (
         <div>
           <Button type="button" onClick={() => void runSend()} disabled={!canSend}>
             {busy === "send" ? "Sending…" : "Send approved review"}
@@ -294,6 +331,9 @@ export function SendReview({
           </div>
           <p className="text-muted-foreground text-xs">
             Read-only: reports what the mail adapter can verify without resending.
+            {receiptLookupUnsupported
+              ? " Receipt lookup is not supported on this server, so verification may report unsupported."
+              : ""}
           </p>
         </div>
       )}

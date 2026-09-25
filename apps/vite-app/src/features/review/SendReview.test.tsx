@@ -8,6 +8,7 @@ import { sessionFixture } from "@/pages/fixtures"
 import { SendReview, sendOutcomeText } from "@/features/review/SendReview"
 import { listAttemptReviews } from "@/features/attempts"
 import type {
+  DeliveryCapability,
   DeliveryItem,
   DeliveryReconciliation,
   DeliveryReview,
@@ -78,6 +79,7 @@ interface StubHooks {
   onSend?: (url: string) => Promise<Response>
   latestReview?: () => DeliveryReview
   reconcile?: () => DeliveryReconciliation
+  capability?: () => DeliveryCapability
 }
 
 function stubFetch(hooks: StubHooks = {}): { calls: FetchCall[] } {
@@ -89,6 +91,11 @@ function stubFetch(hooks: StubHooks = {}): { calls: FetchCall[] } {
     calls.push({ url, method })
     const path = new URL(url, "http://localhost").pathname
     if (path === "/api/v1/auth/session") return jsonResponse(200, sessionFixture)
+    if (path === "/api/v1/delivery/capability") {
+      if (hooks.capability === undefined)
+        return jsonResponse(404, { error: { message: "Not found." } })
+      return jsonResponse(200, hooks.capability())
+    }
     const send = path.match(/^\/api\/v1\/delivery\/reviews\/([^/]+)\/send$/)
     if (send?.[1] !== undefined && method === "POST") {
       if (hooks.onSend !== undefined) return hooks.onSend(url)
@@ -315,6 +322,44 @@ it("shows no reconcile control when nothing is uncertain", async () => {
   )
   expect(await screen.findByText(/Accepted by the mail server/)).toBeDefined()
   expect(screen.queryByRole("button", { name: "Reconcile uncertain outcome" })).toBeNull()
+})
+
+it("hides the send action when the server reports sending unavailable", async () => {
+  const { calls } = stubFetch({
+    capability: () => ({
+      submissionAvailable: false,
+      receiptLookup: false,
+      reason: "no sender configured",
+    }),
+  })
+  renderSend(reviewFixture())
+  expect(await screen.findByText("Sending unavailable")).toBeDefined()
+  expect(screen.getByText(/no sender configured/)).toBeDefined()
+  expect(screen.queryByRole("button", { name: "Send approved review" })).toBeNull()
+  expect(calls.some((call) => call.method === "POST")).toBe(false)
+})
+
+it("fails open when the capability read fails", async () => {
+  const { calls } = stubFetch()
+  renderSend(reviewFixture())
+  expect(await screen.findByRole("button", { name: "Send approved review" })).toBeDefined()
+  expect(screen.queryByText("Sending unavailable")).toBeNull()
+  expect(
+    calls.some((call) => call.url.endsWith("/delivery/capability") && call.method === "GET")
+  ).toBe(true)
+})
+
+it("notes unsupported receipt lookup next to the reconcile control", async () => {
+  const uncertain = reviewFixture({
+    items: [itemFixture({ state: "uncertain", smtpStage: "data_write" })],
+  })
+  stubFetch({
+    capability: () => ({ submissionAvailable: true, receiptLookup: false }),
+    latestReview: () => uncertain,
+  })
+  renderSend(uncertain)
+  expect(await screen.findByRole("button", { name: "Reconcile uncertain outcome" })).toBeDefined()
+  expect(screen.getByText(/Receipt lookup is not supported/)).toBeDefined()
 })
 
 it("records the attempt index and links the outcome view after a send", async () => {

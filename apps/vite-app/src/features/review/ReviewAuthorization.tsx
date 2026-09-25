@@ -32,15 +32,33 @@ function requestMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : "The request could not be completed."
 }
 
+function notReadyMessage(materialStatus: string | null): string {
+  switch (materialStatus) {
+    case "outdated":
+      return "This version is outdated. Re-prepare on the Prepare page, then return here to authorize the fresh version."
+    case "not_prepared":
+      return "No material version is prepared yet. Prepare on the Prepare page first, then return here."
+    case "preparing":
+      return "Preparation is still running. Reload once it completes, then authorize the new version here."
+    case "held":
+    default:
+      return "Resolve the held or missing required items above. The service rejects held material even if review is requested."
+  }
+}
+
 export function ReviewAuthorization({
   packId,
   materialReady,
   materialVersion,
+  materialStatus = null,
+  prepareHref = null,
   onReviewChange,
 }: {
   packId: string | null
   materialReady: boolean
   materialVersion: number | null
+  materialStatus?: string | null
+  prepareHref?: string | null
   onReviewChange?: (review: DeliveryReview) => void
 }) {
   const { session, loseSession } = useSession()
@@ -59,14 +77,27 @@ export function ReviewAuthorization({
   }
   if (!materialReady) {
     return (
-      <UnsupportedBlock
-        title="Materials not ready"
-        message="Resolve the held or missing required items above. The service rejects held material even if review is requested."
-      />
+      <div className="mt-2 flex min-w-0 flex-col gap-2">
+        <UnsupportedBlock
+          title="Materials not ready"
+          message={notReadyMessage(materialStatus)}
+        />
+        {prepareHref === null ? null : (
+          <p>
+            <a
+              href={prepareHref}
+              className="text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              Open Prepare applications
+            </a>
+          </p>
+        )}
+      </div>
     )
   }
 
   const csrfToken = session === undefined || session === null ? null : session.csrfToken
+  const staleItems = review === null ? [] : review.items.filter((item) => !item.current)
 
   async function runPrepare() {
     if (busy !== null || csrfToken === null) return
@@ -162,10 +193,37 @@ export function ReviewAuthorization({
             ))}
           </ul>
           {review.approvedAt === undefined || review.approvedAt === null ? (
-            <div className="mt-2">
-              <Button type="button" onClick={() => void runApprove()} disabled={busy !== null || csrfToken === null}>
-                {busy === "approve" ? "Approving…" : "Approve this review"}
-              </Button>
+            <div className="mt-2 flex min-w-0 flex-col gap-2">
+              {staleItems.length > 0 ? (
+                <p role="status" className="text-muted-foreground text-xs">
+                  {staleItems.length} of {review.items.length}{" "}
+                  {review.items.length === 1 ? "item is" : "items are"} stale
+                  {staleItems.every(
+                    (item) => item.blockingReason === staleItems[0]?.blockingReason
+                  ) && staleItems[0]?.blockingReason !== undefined
+                    ? ` (${staleItems[0].blockingReason})`
+                    : ""}
+                  . Approving is disabled; prepare a fresh review for the current
+                  version instead.
+                </p>
+              ) : null}
+              <div className="flex min-w-0 flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() => void runApprove()}
+                  disabled={busy !== null || csrfToken === null || staleItems.length > 0}
+                >
+                  {busy === "approve" ? "Approving…" : "Approve this review"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void runPrepare()}
+                  disabled={busy !== null || csrfToken === null}
+                >
+                  {busy === "prepare" ? "Preparing fresh review…" : "Prepare fresh review"}
+                </Button>
+              </div>
             </div>
           ) : (
             <EmptyBlock

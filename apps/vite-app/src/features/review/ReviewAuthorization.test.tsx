@@ -46,7 +46,13 @@ function reviewFixture(overrides: Partial<DeliveryReview> = {}): DeliveryReview 
   } as DeliveryReview
 }
 
-function stubFetch(options: { prepareStatus?: number; approveStatus?: number } = {}): {
+function stubFetch(
+  options: {
+    prepareStatus?: number
+    approveStatus?: number
+    prepareReview?: () => DeliveryReview
+  } = {}
+): {
   calls: FetchCall[]
 } {
   const calls: FetchCall[] = []
@@ -60,7 +66,7 @@ function stubFetch(options: { prepareStatus?: number; approveStatus?: number } =
     if (path === "/api/v1/delivery/reviews" && method === "POST") {
       const status = options.prepareStatus ?? 201
       if (status !== 201) return jsonResponse(status, { error: { message: "refused" } })
-      return jsonResponse(201, reviewFixture())
+      return jsonResponse(201, options.prepareReview?.() ?? reviewFixture())
     }
     const approve = path.match(/^\/api\/v1\/delivery\/reviews\/([^/]+)\/approve$/)
     if (approve?.[1] !== undefined && method === "POST") {
@@ -82,7 +88,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function renderAuthorization(props: { packId: string | null; materialReady: boolean; materialVersion: number | null }) {
+function renderAuthorization(props: {
+  packId: string | null
+  materialReady: boolean
+  materialVersion: number | null
+  materialStatus?: string | null
+  prepareHref?: string | null
+}) {
   return render(
     <SessionProvider>
       <ReviewAuthorization {...props} />
@@ -144,4 +156,75 @@ it("blocks authorization without a pack or with unready material", async () => {
   await waitFor(() =>
     expect(screen.queryByText("Materials not ready")).not.toBeNull()
   )
+})
+
+it("names the right next action for outdated versus held material", async () => {
+  stubFetch()
+  const first = renderAuthorization({
+    packId: "pack-7",
+    materialReady: false,
+    materialVersion: 2,
+    materialStatus: "outdated",
+    prepareHref: "#/jobs/job-1/prepare",
+  })
+  expect(await screen.findByText(/Re-prepare on the Prepare page/)).toBeDefined()
+  const link = screen.getByRole("link", { name: "Open Prepare applications" })
+  expect(link.getAttribute("href")).toBe("#/jobs/job-1/prepare")
+  first.unmount()
+  renderAuthorization({
+    packId: "pack-7",
+    materialReady: false,
+    materialVersion: 2,
+    materialStatus: "held",
+  })
+  await waitFor(() =>
+    expect(screen.queryByText(/held or missing required items/)).not.toBeNull()
+  )
+  expect(screen.queryByRole("link", { name: "Open Prepare applications" })).toBeNull()
+})
+
+it("disables approval when review items are stale and explains the block", async () => {
+  const user = userEvent.setup()
+  stubFetch({
+    prepareReview: () => {
+      const review = reviewFixture()
+      const first = review.items[0]
+      if (first === undefined) throw new Error("review fixture has no items")
+      return { ...review, items: [{ ...first, current: false, blockingReason: "superseded" }] }
+    },
+  })
+  renderAuthorization({ packId: "pack-7", materialReady: true, materialVersion: 2 })
+  await user.click(await screen.findByRole("button", { name: "Prepare review" }))
+  const approve = (await screen.findByRole("button", {
+    name: "Approve this review",
+  })) as HTMLButtonElement
+  expect(approve.disabled).toBe(true)
+  expect(await screen.findByText(/Approving is disabled/)).toBeDefined()
+  expect(screen.getAllByText(/superseded/)).toHaveLength(2)
+  expect(
+    screen.getByRole("button", { name: "Prepare fresh review" })
+  ).toBeDefined()
+})
+
+it("prepares a fresh review with a new key after an approve conflict", async () => {
+  const user = userEvent.setup()
+  const { calls } = stubFetch({ approveStatus: 409 })
+  renderAuthorization({ packId: "pack-7", materialReady: true, materialVersion: 2 })
+  await user.click(await screen.findByRole("button", { name: "Prepare review" }))
+  await user.click(await screen.findByRole("button", { name: "Approve this review" }))
+  expect(await screen.findByText(/changed after this review was prepared/)).toBeDefined()
+  await user.click(await screen.findByRole("button", { name: "Prepare fresh review" }))
+  await waitFor(() =>
+    expect(screen.queryByText(/changed after this review was prepared/)).toBeNull()
+  )
+  const prepares = calls.filter(
+    (call) => call.url.endsWith("/delivery/reviews") && call.method === "POST"
+  )
+  expect(prepares).toHaveLength(2)
+  const keys = prepares.map((call) => JSON.parse(call.body ?? "{}").requestKey)
+  expect(keys[0]).not.toBe(keys[1])
+  const approve = screen.getByRole("button", {
+    name: "Approve this review",
+  }) as HTMLButtonElement
+  expect(approve.disabled).toBe(false)
 })

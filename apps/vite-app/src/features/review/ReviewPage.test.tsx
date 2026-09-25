@@ -36,7 +36,9 @@ const packDetail = {
   },
 }
 
-function stubReview(overrides: { answers?: number; materials?: number } = {}) {
+function stubReview(
+  overrides: { answers?: number; materials?: number; materialsBody?: unknown } = {}
+) {
   const calls: string[] = []
   vi.stubGlobal(
     "fetch",
@@ -88,7 +90,9 @@ function stubReview(overrides: { answers?: number; materials?: number } = {}) {
                 },
               ],
             })
-      if (url.endsWith("/materials/current"))
+      if (url.endsWith("/materials/current")) {
+        if (overrides.materialsBody !== undefined)
+          return json(200, overrides.materialsBody)
         return overrides.materials === 503
           ? json(503, { error: { message: "unavailable" } })
           : json(200, {
@@ -108,6 +112,7 @@ function stubReview(overrides: { answers?: number; materials?: number } = {}) {
                 createdBy: { actorKind: "agent", actorId: "codex" },
               },
             })
+      }
       return json(404, { error: { message: "not found" } })
     })
   )
@@ -140,5 +145,37 @@ describe("ReviewPage", () => {
     )
     await waitFor(() => expect(screen.getByText("Answers not ready")).toBeTruthy())
     expect(screen.getByText("Materials not prepared")).toBeTruthy()
+  })
+
+  it("shows material provenance, readiness, and journey links", async () => {
+    stubReview()
+    render(
+      <SessionProvider>
+        <ReviewPage jobId="job-one" />
+      </SessionProvider>
+    )
+    await waitFor(() =>
+      expect(screen.getByText(/Prepared from verified facts/)).toBeTruthy()
+    )
+    expect(screen.getByText(/role r3/)).toBeTruthy()
+    expect(screen.getByText(/profile r7/)).toBeTruthy()
+    expect(screen.getByText("No source SHAs recorded.")).toBeTruthy()
+    const prepare = screen.getByRole("link", { name: "Back to prepare" })
+    expect(prepare.getAttribute("href")).toBe("#/jobs/job-one/prepare")
+    const attempts = screen.getByRole("link", { name: "Application attempts" })
+    expect(attempts.getAttribute("href")).toBe("#/applications/job-one")
+  })
+
+  it("names preparing as the next action when no version exists yet", async () => {
+    stubReview({ materialsBody: { status: "not_prepared" } })
+    render(
+      <SessionProvider>
+        <ReviewPage jobId="job-one" />
+      </SessionProvider>
+    )
+    await waitFor(() => expect(screen.getByText("No material version")).toBeTruthy())
+    expect(screen.getByText(/No material version is prepared yet/)).toBeTruthy()
+    const open = screen.getByRole("link", { name: "Open Prepare applications" })
+    expect(open.getAttribute("href")).toBe("#/jobs/job-one/prepare")
   })
 })

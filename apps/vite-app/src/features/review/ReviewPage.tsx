@@ -20,8 +20,19 @@ import {
 } from "@/components/shared"
 import { ReviewAuthorization } from "@/features/review/ReviewAuthorization"
 import { SendReview } from "@/features/review/SendReview"
-import type { DeliveryReview } from "@/api/client"
+import type { DeliveryReview, MaterialStatusView, MaterialVersion } from "@/api/client"
 import { formatDate } from "@/pages/format"
+
+function materialOriginLabel(origin: MaterialVersion["provenance"]["origin"]): string {
+  switch (origin) {
+    case "prepared":
+      return "Prepared from verified facts"
+    case "direct_edit":
+      return "Direct owner edit (no model)"
+    case "rewrite":
+      return "Explicit rewrite"
+  }
+}
 
 type Section<T> =
   | { status: "loading" }
@@ -98,6 +109,20 @@ export function ReviewPage({ jobId }: ReviewPageProps) {
 
   return (
     <div className="space-y-6">
+      <p className="flex min-w-0 flex-wrap gap-x-4 gap-y-1">
+        <a
+          href={`#/jobs/${encodeURIComponent(jobId)}/prepare`}
+          className="text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          Back to prepare
+        </a>
+        <a
+          href={`#/applications/${encodeURIComponent(jobId)}`}
+          className="text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          Application attempts
+        </a>
+      </p>
       <div>
         <h1 className="text-2xl font-semibold">Review application</h1>
         <p className="text-muted-foreground mt-1 text-sm">
@@ -182,21 +207,15 @@ export function ReviewPage({ jobId }: ReviewPageProps) {
           ) : (
             <ErrorBlock title="Materials unavailable" message={materials.message} />
           ))}
-        {materials.status === "ready" && materials.data.current && (
-          <div className="mt-2 rounded-md border p-3 text-sm">
-            <span className="font-medium">v{materials.data.current.version}</span>
-            <span className="text-muted-foreground">
-              {" "}
-              · {materials.data.status} ·{" "}
-              {materials.data.current.readiness.ready ? "ready" : "not ready"}
-            </span>
-            {materials.data.current.readiness.missingRequired.length > 0 && (
-              <span className="block text-xs">
-                missing: {materials.data.current.readiness.missingRequired.join(", ")}
-              </span>
-            )}
-          </div>
-        )}
+        {materials.status === "ready" &&
+          (materials.data.current === undefined || materials.data.current === null ? (
+            <EmptyBlock
+              title="No material version"
+              description="The server reports no current version for this status. Prepare applications to create one."
+            />
+          ) : (
+            <MaterialVersionDetail view={materials.data} current={materials.data.current} />
+          ))}
       </section>
 
       <section aria-label="Review state">
@@ -215,6 +234,8 @@ export function ReviewPage({ jobId }: ReviewPageProps) {
               materials.data.current.readiness.ready
             }
             materialVersion={materials.status === "ready" ? (materials.data.current?.version ?? null) : null}
+            materialStatus={materials.status === "ready" ? materials.data.status : null}
+            prepareHref={`#/jobs/${encodeURIComponent(jobId)}/prepare`}
           />
         )}
       </section>
@@ -238,6 +259,56 @@ export function ReviewPage({ jobId }: ReviewPageProps) {
           </p>
         )}
       </section>
+    </div>
+  )
+}
+
+function MaterialVersionDetail({
+  view,
+  current,
+}: {
+  view: MaterialStatusView
+  current: MaterialVersion
+}) {
+  const held = current.readiness.held.filter(
+    (id) => !current.readiness.missingRequired.includes(id)
+  )
+  return (
+    <div className="mt-2 space-y-2 rounded-md border p-3 text-sm">
+      <p>
+        <span className="font-medium">v{current.version}</span>
+        <span className="text-muted-foreground">
+          {" "}
+          · {view.status} · {current.readiness.ready ? "ready" : "not ready"}
+        </span>
+      </p>
+      <p className="text-muted-foreground text-xs">
+        {materialOriginLabel(current.provenance.origin)}
+        {current.provenance.origin === "rewrite" &&
+        current.provenance.rewriteOf !== undefined
+          ? ` of v${current.provenance.rewriteOf}`
+          : ""}
+        {" · "}
+        {formatDate(current.createdAt)} by {current.createdBy.actorId} (
+        {current.createdBy.actorKind})
+      </p>
+      <p className="text-muted-foreground text-xs">
+        role r{current.opportunityRevision} · profile r{current.profileRevision} ·
+        check {current.checkId} · pack {current.packId}
+      </p>
+      {current.readiness.missingRequired.length > 0 && (
+        <p className="text-xs">
+          missing: {current.readiness.missingRequired.join(", ")}
+        </p>
+      )}
+      {held.length > 0 && (
+        <p className="text-xs">held: {held.join(", ")}</p>
+      )}
+      <p className="text-muted-foreground text-xs">
+        {current.provenance.sourceShas.length === 0
+          ? "No source SHAs recorded."
+          : `${current.provenance.sourceShas.length} source ${current.provenance.sourceShas.length === 1 ? "SHA" : "SHAs"}: ${current.provenance.sourceShas.join(", ")}`}
+      </p>
     </div>
   )
 }
