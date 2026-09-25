@@ -677,7 +677,7 @@ async function run() {
     );
     assert.equal(bindApproves.length, 1);
     assert.deepEqual(bindApproves[0].payload, { materialSha256: 'matsha-job-bind-v2' });
-    await page.getByText('pack-job-bind-2').waitFor();
+    await page.getByText('pack-job-bind-2').first().waitFor();
     await page.getByText('hiring-job-bind@example.invalid').first().waitFor();
     const bindRead = await fetchJson(page, `/api/v1/delivery/reviews/${bindReview}`, 'GET');
     assert.equal(bindRead.status, 200);

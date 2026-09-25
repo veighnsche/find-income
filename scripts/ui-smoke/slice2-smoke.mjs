@@ -607,9 +607,9 @@ async function run() {
     // My search: reading the profile and the idle discovery section starts
     // nothing.
     await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'My search' }).click();
-    await page.getByRole('heading', { name: 'My search' }).waitFor();
+    await page.getByRole('heading', { name: 'My search', exact: true }).waitFor();
     await page.getByText('Berlin').first().waitFor();
-    await page.getByRole('button', { name: 'Start research run' }).waitFor();
+    await page.getByRole('button', { name: 'Find jobs', exact: true }).waitFor();
     assert.equal(
       nonAuthPosts(fixture.state.requests).length,
       0,
@@ -617,8 +617,9 @@ async function run() {
     );
 
     // Start / stop / resume / refresh a run through the UI.
-    await page.getByLabel('Recruitment intent (optional)').fill('Remote backend roles');
-    await page.getByRole('button', { name: 'Start research run' }).click();
+    await page.getByText('Extra note for this run only (optional)').first().click();
+    await page.getByLabel('Extra note for this run only (optional)').fill('Remote backend roles');
+    await page.getByRole('button', { name: 'Find jobs', exact: true }).click();
     await page.getByText('Running — research is underway.').waitFor();
     await page.getByText('No classification recorded').waitFor();
     const trackedAfterStart = await page.evaluate(() =>
