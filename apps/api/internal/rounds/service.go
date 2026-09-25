@@ -119,14 +119,6 @@ func (s *Service) Start(ctx context.Context, actor store.Actor, input store.Star
 	if err != nil {
 		return r, true, err
 	}
-	if err := s.bindInterviewCommission(ctx, actor, r); err != nil {
-		failed, finishErr := s.Store.FinishRound(ctx, actor, r.ID, store.RoundFailed, "commission_binding_failed", "none", json.RawMessage(`{"code":"commission_binding_failed"}`))
-		return failed, true, errors.Join(err, finishErr)
-	}
-	if err := s.bindReplyCommission(ctx, actor, r); err != nil {
-		failed, finishErr := s.Store.FinishRound(ctx, actor, r.ID, store.RoundFailed, "commission_binding_failed", "none", json.RawMessage(`{"code":"commission_binding_failed"}`))
-		return failed, true, errors.Join(err, finishErr)
-	}
 	if err := s.Worker.LaunchRound(ctx, r); err != nil {
 		failed, finishErr := s.Store.FinishRound(ctx, actor, r.ID, store.RoundFailed, "worker_unavailable", "none", json.RawMessage(`{"code":"worker_unavailable"}`))
 		if finishErr != nil {
@@ -154,14 +146,6 @@ func (s *Service) ReplacePaused(ctx context.Context, actor store.Actor, pausedID
 	if err != nil {
 		return r, true, err
 	}
-	if err := s.bindInterviewCommission(ctx, actor, r); err != nil {
-		failed, finishErr := s.Store.FinishRound(ctx, actor, r.ID, store.RoundFailed, "commission_binding_failed", "none", json.RawMessage(`{"code":"commission_binding_failed"}`))
-		return failed, true, errors.Join(err, finishErr)
-	}
-	if err := s.bindReplyCommission(ctx, actor, r); err != nil {
-		failed, finishErr := s.Store.FinishRound(ctx, actor, r.ID, store.RoundFailed, "commission_binding_failed", "none", json.RawMessage(`{"code":"commission_binding_failed"}`))
-		return failed, true, errors.Join(err, finishErr)
-	}
 	if err := s.Worker.LaunchRound(ctx, r); err != nil {
 		failed, finishErr := s.Store.FinishRound(ctx, actor, r.ID, store.RoundFailed, "worker_unavailable", "none", json.RawMessage(`{"code":"worker_unavailable"}`))
 		if finishErr != nil {
@@ -170,49 +154,6 @@ func (s *Service) ReplacePaused(ctx context.Context, actor store.Actor, pausedID
 		return failed, true, errors.Join(ErrNotReady, err)
 	}
 	return r, true, nil
-}
-
-func (s *Service) bindInterviewCommission(ctx context.Context, actor store.Actor, r store.Round) error {
-	prefix, debrief := "interview:", false
-	switch r.Outcome {
-	case "interview_prepare":
-	case "interview_debrief":
-		prefix, debrief = "debrief:", true
-	default:
-		return nil
-	}
-	var id string
-	for _, ref := range r.Scope.InputRefs {
-		if len(ref) > len(prefix) && ref[:len(prefix)] == prefix {
-			if id != "" {
-				return store.ErrInvalid
-			}
-			id = ref[len(prefix):]
-		}
-	}
-	if id == "" {
-		return store.ErrInvalid
-	}
-	return s.Store.BindInterviewRound(ctx, actor, id, r.ID, debrief)
-}
-
-func (s *Service) bindReplyCommission(ctx context.Context, actor store.Actor, r store.Round) error {
-	if r.Outcome != "process_replies" {
-		return nil
-	}
-	var id string
-	for _, ref := range r.Scope.InputRefs {
-		if len(ref) > len("replies:") && ref[:len("replies:")] == "replies:" {
-			if id != "" {
-				return store.ErrInvalid
-			}
-			id = ref[len("replies:"):]
-		}
-	}
-	if id == "" {
-		return store.ErrInvalid
-	}
-	return s.Store.BindReplyRound(ctx, actor, id, r.ID)
 }
 
 // Stop commits the fence first. Cancellation is advisory and its result is

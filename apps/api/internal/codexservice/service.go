@@ -58,9 +58,8 @@ type Service struct {
 	sourceMu        sync.Mutex
 	sourceCalls     map[string]*sourceCall
 	linkFetch       func(context.Context, string, SourceLinkPage) (SourceLinksSnapshot, error)
-	packConfig      ApplicationPackRuntimeConfig
-	interviewConfig InterviewRuntimeConfig
-	runEventsMu     sync.Mutex
+	packConfig  ApplicationPackRuntimeConfig
+	runEventsMu sync.Mutex
 	runEvents       *RunEventSink
 	converse        conversationBounds
 	research        *ResearchToolchain

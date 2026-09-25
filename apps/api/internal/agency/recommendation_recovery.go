@@ -11,6 +11,26 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
+// RecoverLocalDispatch projects an exact captured Jev Choice before Resume.
+// It never calls a provider and never spends a reconciliation allowance.
+func (e *Engine) RecoverLocalDispatch(ctx context.Context, roundID, attemptID string, generation int64) (bool, bool, error) {
+	round, err := e.Store.Round(ctx, roundID)
+	if err != nil {
+		return false, false, err
+	}
+	attempt, err := e.Store.RoundAttempt(ctx, attemptID)
+	if err != nil {
+		return false, false, err
+	}
+	if round.Generation != generation || round.State != store.RoundPaused || attempt.RoundID != roundID {
+		return false, false, store.ErrFenced
+	}
+	if handled, resolved, err := e.recoverOutcomeRecommendation(ctx, round, attempt); handled || err != nil {
+		return handled, resolved, err
+	}
+	return false, false, nil
+}
+
 // recoverOutcomeRecommendation handles the known local Jev phase before an
 // outcome-specific reconciler can mistake it for remote Codex work.
 func (e *Engine) recoverOutcomeRecommendation(ctx context.Context, round store.Round, attempt store.RoundAttempt) (bool, bool, error) {

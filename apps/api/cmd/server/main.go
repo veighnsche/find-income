@@ -88,17 +88,10 @@ func runWithContext(ctx context.Context, args []string) error {
 	}
 	var decisions agency.Decisions
 	var packSources agency.PackSourceLoader
-	var interviewSources agency.PackSourceLoader
-	var interviewFocus agency.InterviewFocusEvaluator
 	var prepService *materialprep.Service
 	if jevConfig.Enabled {
 		decisions = jevservice.Service{Store: database, Client: jevClient}
 		options.AnswerMatcher = jevservice.Service{Store: database, Client: jevClient}
-		if root := os.Getenv("JOBSEEK_APPROVED_CAREER_ROOT"); root != "" {
-			interviewSources = &agency.LocalPackSources{ProjectRoot: root}
-			interviewFocus = jevservice.Service{Store: database, Client: jevClient}
-			runtime.SetInterviewConfig(codexservice.InterviewRuntimeConfig{ProjectRoot: root})
-		}
 		if root, typst := os.Getenv("JOBSEEK_APPROVED_CAREER_ROOT"), os.Getenv("JOBSEEK_TYPST_PATH"); root != "" && typst != "" {
 			packSources = &agency.LocalPackSources{ProjectRoot: root}
 			runtime.SetApplicationPackConfig(codexservice.ApplicationPackRuntimeConfig{ProjectRoot: root, TypstPath: typst, PrivateTempDir: filepath.Join(dataDir, "application-pack-tmp"), RenderTimeout: 20 * time.Second, Relevance: jevservice.Service{Store: database, Client: jevClient}})
@@ -140,13 +133,7 @@ func runWithContext(ctx context.Context, args []string) error {
 			prepService = materials
 		}
 	}
-	worker := &agency.Engine{Store: database, Runtime: runtime, Decisions: decisions, PackSources: packSources, InterviewSources: interviewSources, InterviewFocus: interviewFocus, Context: ctx}
-	if tradeoffs, ok := decisions.(jevservice.Service); ok {
-		worker.Tradeoffs = tradeoffs
-	}
-	if replyIntent, ok := decisions.(jevservice.Service); ok {
-		worker.ReplyIntent = replyIntent
-	}
+	worker := &agency.Engine{Store: database, Runtime: runtime, Decisions: decisions, PackSources: packSources, Context: ctx}
 	options.Codex = runtime
 	options.Rounds = &rounds.Service{Store: database, Readiness: worker, Canceller: runtime, Reconciler: runtime, Worker: worker}
 	if stack := wireResearch(database, runtime, &options, dataDir, jevClient, jevConfig.Enabled); stack != nil && prepService != nil {

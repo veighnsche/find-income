@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-
-	"github.com/veighnsche/find-income-dashboard/api/internal/offercomparison"
 )
 
 // Operation names and charges live in B-owned round_cost.go; this file keeps
@@ -29,19 +27,9 @@ type RoundMutationInput struct {
 	Preferences        *Preferences                    `json:"preferences,omitempty"`
 	OpportunityPatch   *OpportunityPatch               `json:"opportunityPatch,omitempty"`
 	ApplicationPack    *ApplicationPackMutationInput   `json:"applicationPack,omitempty"`
-	OfferComparison    *OfferComparisonMutationInput   `json:"offerComparison,omitempty"`
 	Relationship       *RelationshipMutationInput      `json:"relationship,omitempty"`
-	InterviewBrief     *InterviewBriefMutation         `json:"interviewBrief,omitempty"`
-	InterviewDebrief   *InterviewDebriefMutation       `json:"interviewDebrief,omitempty"`
-	ReplyUpdate        *ReplyUpdateMutation            `json:"replyUpdate,omitempty"`
-	ReplyDraft         *ReplyDraftMutation             `json:"replyDraft,omitempty"`
 	CheckSave          *CheckSaveInput                 `json:"checkSave,omitempty"`
 	Capability         string                          `json:"-"`
-}
-
-type OfferComparisonMutationInput struct {
-	IntakeID   string                     `json:"intakeId"`
-	Comparison offercomparison.Comparison `json:"comparison"`
 }
 
 type SourceOpportunityMutationInput struct {
@@ -85,34 +73,18 @@ func validRoundMutation(input RoundMutationInput) bool {
 		return false
 	}
 	if input.Operation != RoundPrepareApplicationPack && input.ApplicationPack != nil ||
-		input.Operation != RoundPrepareOfferComparison && input.OfferComparison != nil ||
 		input.Operation != RoundRelationshipCounterpartyCreate && input.Operation != RoundRelationshipEventCreate && input.Operation != RoundRelationshipRouteCreate && input.Operation != RoundRelationshipCorrect && input.Relationship != nil {
-		return false
-	}
-	if input.Operation != RoundInterviewBriefSave && input.InterviewBrief != nil || input.Operation != RoundInterviewDebriefSave && input.InterviewDebrief != nil {
-		return false
-	}
-	if input.Operation != RoundReplyUpdateSave && input.ReplyUpdate != nil || input.Operation != RoundReplyDraftSave && input.ReplyDraft != nil {
 		return false
 	}
 	if input.Operation != RoundCheckSave && input.CheckSave != nil {
 		return false
 	}
 	switch input.Operation {
-	case RoundInterviewBriefSave:
-		return input.InterviewBrief != nil && input.InterviewDebrief == nil && input.OwnerInstructionID == "" && input.ResourceID == "opportunity:"+input.InterviewBrief.OpportunityID && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.ApplicationPack == nil && input.Relationship == nil
-	case RoundInterviewDebriefSave:
-		return input.InterviewDebrief != nil && input.InterviewDebrief.DebriefID != "" && input.InterviewBrief == nil && input.OwnerInstructionID == "" && input.ResourceID == "interview:"+input.InterviewDebrief.InterviewID && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.ApplicationPack == nil && input.Relationship == nil
-	case RoundReplyUpdateSave:
-		return input.ReplyUpdate != nil && input.ReplyUpdate.ProcessingID != "" && input.ReplyUpdate.OpportunityID != "" && input.ReplyDraft == nil && input.InterviewBrief == nil && input.InterviewDebrief == nil && input.OwnerInstructionID == "" && input.ResourceID == "thread:"+input.ReplyUpdate.ThreadID && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.ApplicationPack == nil && input.Relationship == nil
-	case RoundReplyDraftSave:
-		return input.ReplyDraft != nil && input.ReplyDraft.ProcessingID != "" && len(input.ReplyDraft.DraftJSON) != 0 && input.ReplyUpdate == nil && input.InterviewBrief == nil && input.InterviewDebrief == nil && input.OwnerInstructionID == "" && input.ResourceID == "thread:"+input.ReplyDraft.ThreadID && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.ApplicationPack == nil && input.Relationship == nil
 	case RoundCheckSave:
 		return input.CheckSave != nil && input.CheckSave.OpportunityID != "" && input.CheckSave.CheckID != "" &&
 			input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil &&
-			input.OpportunityPatch == nil && input.ApplicationPack == nil && input.OfferComparison == nil &&
-			input.Relationship == nil && input.InterviewBrief == nil && input.InterviewDebrief == nil &&
-			input.ReplyUpdate == nil && input.ReplyDraft == nil && input.OwnerInstructionID == "" &&
+			input.OpportunityPatch == nil && input.ApplicationPack == nil &&
+			input.Relationship == nil && input.OwnerInstructionID == "" &&
 			input.ResourceID == "opportunity:"+input.CheckSave.OpportunityID
 	case RoundCreateCompany:
 		return input.Company != nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.ResourceID == "campaign:active"
@@ -128,9 +100,6 @@ func validRoundMutation(input RoundMutationInput) bool {
 		return input.ApplicationPack != nil && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil &&
 			(input.ApplicationPack.PriorPackID == "") == (input.OwnerInstructionID == "") &&
 			input.ResourceID == "opportunity:"+input.ApplicationPack.OpportunityID && input.ExpectedRevision == input.ApplicationPack.ExpectedOpportunityRevision
-	case RoundPrepareOfferComparison:
-		return input.OfferComparison != nil && input.ApplicationPack == nil && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.Relationship == nil &&
-			input.ResourceID == "offer_intake:"+input.OfferComparison.IntakeID && input.ExpectedRevision == 1
 	case RoundRelationshipCounterpartyCreate:
 		return input.Relationship != nil && input.Relationship.Counterparty != nil && presentRelationshipInput(*input.Relationship) == 1 && input.Relationship.Counterparty.ID == "" && input.Company == nil && input.Opportunity == nil && input.SourceOpportunity == nil && input.Preferences == nil && input.OpportunityPatch == nil && input.OwnerInstructionID == "" && input.ResourceID == "campaign:active"
 	case RoundRelationshipEventCreate:
@@ -445,15 +414,7 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 	var entityID, kind, auditID string
 	var revision int64
 	now := utcNow()
-	if input.Operation == RoundInterviewBriefSave {
-		entityID, kind, revision, err = writeInterviewBriefTx(ctx, tx, round, input.ExpectedRevision, *input.InterviewBrief)
-	} else if input.Operation == RoundInterviewDebriefSave {
-		entityID, kind, revision, err = writeInterviewDebriefTx(ctx, tx, round, *input.InterviewDebrief)
-	} else if input.Operation == RoundReplyUpdateSave {
-		entityID, kind, revision, err = writeReplyUpdateTx(ctx, tx, round, input.ExpectedRevision, *input.ReplyUpdate)
-	} else if input.Operation == RoundReplyDraftSave {
-		entityID, kind, revision, err = writeReplyDraftTx(ctx, tx, round, *input.ReplyDraft)
-	} else if input.Operation == RoundCheckSave {
+	if input.Operation == RoundCheckSave {
 		entityID, revision, err = writeCheckSaveTx(ctx, tx, actor, input.ExpectedRevision, *input.CheckSave)
 		kind = "job_check"
 	} else if input.Operation == RoundSaveSourceOpportunity {
@@ -462,9 +423,6 @@ func (s *Store) ApplyRoundMutation(ctx context.Context, actor Actor, roundID str
 	} else if input.Operation == RoundPrepareApplicationPack {
 		entityID, revision, err = createApplicationPackTx(ctx, tx, *input.ApplicationPack)
 		kind = "application_pack"
-	} else if input.Operation == RoundPrepareOfferComparison {
-		entityID, revision, err = createOfferComparisonTx(ctx, tx, round, *input.OfferComparison)
-		kind = "offer_comparison"
 	} else if input.Operation == RoundRelationshipCounterpartyCreate || input.Operation == RoundRelationshipEventCreate || input.Operation == RoundRelationshipRouteCreate || input.Operation == RoundRelationshipCorrect {
 		entityID, kind, revision, err = writeRelationshipTx(ctx, tx, input.Operation, input.ExpectedRevision, *input.Relationship)
 	} else if input.Operation == RoundCorrectPreferences {

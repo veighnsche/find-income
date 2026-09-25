@@ -18,7 +18,7 @@ import (
 // The research_run outcome additionally requires the concrete research
 // toolchain to be wired; until then it stays UNAVAILABLE.
 func (s *Service) CheckRound(ctx context.Context, outcome string) error {
-	if s == nil || ctx == nil || outcome != "prepare" && outcome != "process_input" && outcome != "compare_offers" && outcome != "interview_prepare" && outcome != "interview_debrief" && outcome != "process_replies" && outcome != "research_run" {
+	if s == nil || ctx == nil || outcome != "prepare" && outcome != "process_input" && outcome != "research_run" {
 		return ErrUnavailable
 	}
 	if outcome == "research_run" && s.researchReady() != nil {
@@ -27,14 +27,6 @@ func (s *Service) CheckRound(ctx context.Context, outcome string) error {
 	if outcome == "prepare" {
 		s.mu.Lock()
 		configured := s.packConfig.ProjectRoot != "" && s.packConfig.TypstPath != "" && s.packConfig.PrivateTempDir != ""
-		s.mu.Unlock()
-		if !configured {
-			return ErrUnavailable
-		}
-	}
-	if outcome == "interview_prepare" {
-		s.mu.Lock()
-		configured := s.interviewConfig.ProjectRoot != "" || s.interviewConfig.LoadSources != nil
 		s.mu.Unlock()
 		if !configured {
 			return ErrUnavailable

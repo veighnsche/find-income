@@ -293,7 +293,7 @@ func (h *Handler) roundMutation(w http.ResponseWriter, r *http.Request) {
 	if !decodeRecordJSON(w, r, &body) {
 		return
 	}
-	if body.Operation == store.RoundPrepareApplicationPack || body.ApplicationPack != nil || body.Operation == store.RoundInterviewBriefSave || body.Operation == store.RoundInterviewDebriefSave || body.InterviewBrief != nil || body.InterviewDebrief != nil {
+	if body.Operation == store.RoundPrepareApplicationPack || body.ApplicationPack != nil {
 		fail(w, http.StatusForbidden, generated.ApiErrorCodeForbidden, "Application packs require the commissioned preparation tool.")
 		return
 	}

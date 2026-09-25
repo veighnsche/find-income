@@ -12,7 +12,7 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-var requiredTools = []string{"round_context", "round_mutation", "round_evidence_correction", "source_links", "application_pack_prepare", "offer_comparison_prepare", "interview_prepare", "interview_debrief", "reply_update", "reply_draft"}
+var requiredTools = []string{"round_context", "round_mutation", "round_evidence_correction", "source_links", "application_pack_prepare"}
 var errTool = errors.New("Round tool input or authority is invalid; refresh round_context.")
 
 type roundContextArgs struct {
@@ -47,11 +47,6 @@ func (s *Service) newBridge() http.Handler {
 	registerTool(server, "round_evidence_correction", "Supersede one owner-selected evidence claim with an exact source quote and round authority.", s.roundEvidenceCorrectionTool)
 	registerTool(server, "source_links", "Inspect bounded public career links from a scoped company's saved website.", s.sourceLinksTool)
 	registerTool(server, "application_pack_prepare", "Prepare a private application pack from a current sourced opportunity after recorded relevance review.", s.applicationPackPrepareTool)
-	registerTool(server, "offer_comparison_prepare", "Save a cited offer comparison from the complete immutable owner-supplied offer texts in this round.", s.offerComparisonPrepareTool)
-	registerTool(server, "interview_prepare", "Save one sourced interview brief for its owner-commissioned interview; the agency evaluates focus after this turn settles.", s.interviewPrepareTool)
-	registerTool(server, "interview_debrief", "Save a cited owner-reported debrief for one commissioned interview; no messages or booking.", s.interviewDebriefTool)
-	registerTool(server, "reply_update", "Link one processed correspondence thread to its exact current opportunity; no messages or sends.", s.replyUpdateTool)
-	registerTool(server, "reply_draft", "Save one cited follow-up draft for a processed thread; drafts never send from this tool.", s.replyDraftTool)
 	if s.research != nil {
 		registerResearchTools(server, s)
 	}
@@ -94,11 +89,6 @@ func (s *Service) roundContextTool(ctx context.Context, args roundContextArgs) (
 			return nil, store.ErrFenced
 		}
 		resourceID = r.Scope.Resources[0]
-	case "compare_offers":
-		if len(r.Scope.Resources) != 2 || r.Scope.Resources[1] != "campaign:active" || !strings.HasPrefix(r.Scope.Resources[0], "offer_intake:") || len(r.Scope.Resources[0]) == len("offer_intake:") {
-			return nil, store.ErrFenced
-		}
-		resourceID = r.Scope.Resources[0]
 	case "process_input":
 		if len(r.Scope.Resources) == 0 || len(r.Scope.InputRefs) == 0 {
 			return nil, store.ErrFenced
@@ -106,22 +96,6 @@ func (s *Service) roundContextTool(ctx context.Context, args roundContextArgs) (
 		resourceID = r.Scope.Resources[0]
 		if !strings.HasPrefix(resourceID, "campaign:") && !strings.HasPrefix(resourceID, "profile:") &&
 			!strings.HasPrefix(resourceID, "opportunity:") && !strings.HasPrefix(resourceID, "evidence:") && !strings.HasPrefix(resourceID, "relationship:") {
-			return nil, store.ErrFenced
-		}
-	case "interview_prepare", "interview_debrief":
-		if len(r.Scope.Resources) != 2 || r.Scope.Resources[1] != "campaign:active" || len(r.Scope.InputRefs) == 0 {
-			return nil, store.ErrFenced
-		}
-		resourceID = r.Scope.Resources[0]
-		if r.Outcome == "interview_prepare" && !strings.HasPrefix(resourceID, "opportunity:") || r.Outcome == "interview_debrief" && !strings.HasPrefix(resourceID, "interview:") {
-			return nil, store.ErrFenced
-		}
-	case "process_replies":
-		if len(r.Scope.Resources) != 2 || r.Scope.Resources[1] != "campaign:active" || len(r.Scope.InputRefs) == 0 {
-			return nil, store.ErrFenced
-		}
-		resourceID = r.Scope.Resources[0]
-		if !strings.HasPrefix(resourceID, "thread:") || len(resourceID) == len("thread:") {
 			return nil, store.ErrFenced
 		}
 	default:
@@ -182,7 +156,7 @@ func scopeContains(items []string, value string) bool {
 }
 
 func (s *Service) roundMutationTool(ctx context.Context, args roundMutationArgs) (map[string]any, error) {
-	if args.Operation == store.RoundPrepareApplicationPack || args.ApplicationPack != nil || args.Operation == store.RoundInterviewBriefSave || args.Operation == store.RoundInterviewDebriefSave || args.InterviewBrief != nil || args.InterviewDebrief != nil {
+	if args.Operation == store.RoundPrepareApplicationPack || args.ApplicationPack != nil {
 		return nil, store.ErrFenced
 	}
 	authority, err := s.db.VerifyRoundToolCapability(ctx, args.Capability, args.RoundID)

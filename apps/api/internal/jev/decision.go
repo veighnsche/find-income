@@ -1,6 +1,7 @@
 package jev
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -148,7 +149,28 @@ func RecoverCapturedDecision(input DecisionInput, logical, response []byte, requ
 	if len(logical) == 0 || len(response) == 0 || requestedModel == "" {
 		return DecisionResult{}, &Error{Kind: ErrInvalidResponse}
 	}
-	return SelectDecision(context.Background(), capturedOfferEvaluator{logical: logical, response: response, model: requestedModel}, input)
+	return SelectDecision(context.Background(), capturedDecisionEvaluator{logical: logical, response: response, model: requestedModel}, input)
+}
+
+type capturedDecisionEvaluator struct {
+	logical  []byte
+	response []byte
+	model    string
+}
+
+func (c capturedDecisionEvaluator) Evaluate(_ context.Context, request Request) (Result, error) {
+	logical, err := json.Marshal(struct {
+		State     any                 `json:"state"`
+		Questions map[string]Question `json:"questions"`
+	}{request.State, request.Questions})
+	if err != nil || !bytes.Equal(logical, c.logical) {
+		return Result{}, &Error{Kind: ErrInvalidResponse}
+	}
+	result, err := parseResponse(c.response, request.Questions, c.model)
+	if err != nil {
+		return Result{}, &Error{Kind: ErrInvalidResponse}
+	}
+	return result, nil
 }
 
 func decisionRequest(canonical DecisionInput) Request {

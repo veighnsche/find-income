@@ -39,7 +39,7 @@ func recommendationOpportunityRevision(revision int64, decision store.OwnerDecis
 // unknown read is unavailable, while a proven changed snapshot is stale.
 func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, round store.Round) HomeRecommendationCurrentness {
 	verdict := HomeRecommendationCurrentness{Status: "unavailable", Code: "no_saved_recommendation", CheckedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-	if db == nil || ctx == nil || round.ID == "" || round.Outcome != "process_input" && round.Outcome != "prepare" && round.Outcome != "compare_offers" && round.Outcome != "interview_prepare" && round.Outcome != "interview_debrief" && round.Outcome != "process_replies" {
+	if db == nil || ctx == nil || round.ID == "" || round.Outcome != "process_input" && round.Outcome != "prepare" {
 		return verdict
 	}
 	var saved struct {
@@ -144,26 +144,6 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 		case "commissioned_outcome_facts":
 			if ref.ID != "round:"+round.ID || ref.Revision != outcomeFactsRevision(round.ID, outcomeFacts) {
 				verdict.Status, verdict.Code = "stale", "outcome_result_changed"
-				return verdict
-			}
-		case "saved_comparison_facts":
-			if round.Outcome != "compare_offers" || ref.ID != "comparison:"+outcomeFacts.ResultID {
-				verdict.Status, verdict.Code = "stale", "comparison_identity_changed"
-				return verdict
-			}
-			comparison, readErr := db.OfferComparisonForOwner(ctx, round.Actor, outcomeFacts.ResultID)
-			if readErr != nil {
-				verdict.Code = "comparison_read_unavailable"
-				return verdict
-			}
-			if !comparison.Current || comparison.RoundID != round.ID || comparison.TradeoffStatus != outcomeFacts.TradeoffStatus {
-				verdict.Status, verdict.Code = "stale", "comparison_changed"
-				return verdict
-			}
-			summary := comparisonRecommendationSummary(comparison, outcomeFacts.TradeoffStatus)
-			sum := sha256.Sum256([]byte(summary))
-			if ref.Revision != hex.EncodeToString(sum[:]) {
-				verdict.Status, verdict.Code = "stale", "comparison_changed"
 				return verdict
 			}
 		case "current_opportunity_state":

@@ -18,10 +18,9 @@ type Lazy struct {
 	service         *Service
 	err             error
 	closed          bool
-	packConfig      *ApplicationPackRuntimeConfig
-	interviewConfig *InterviewRuntimeConfig
-	researchTC      *ResearchToolchain
-	researchSup     *rounds.Supervisor
+	packConfig  *ApplicationPackRuntimeConfig
+	researchTC  *ResearchToolchain
+	researchSup *rounds.Supervisor
 }
 
 func NewLazy(ctx context.Context, db *store.Store) *Lazy { return &Lazy{ctx: ctx, db: db} }
@@ -31,14 +30,6 @@ func (l *Lazy) SetApplicationPackConfig(cfg ApplicationPackRuntimeConfig) {
 	defer l.mu.Unlock()
 	if !l.closed && l.service == nil {
 		l.packConfig = &cfg
-	}
-}
-
-func (l *Lazy) SetInterviewConfig(cfg InterviewRuntimeConfig) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if !l.closed && l.service == nil {
-		l.interviewConfig = &cfg
 	}
 }
 
@@ -93,9 +84,6 @@ func (l *Lazy) get() (*Service, error) {
 		l.service, l.err = NewFromEnvironment(l.ctx, l.db)
 		if l.err == nil && l.packConfig != nil {
 			_ = l.service.ConfigureApplicationPacks(*l.packConfig)
-		}
-		if l.err == nil && l.interviewConfig != nil {
-			_ = l.service.ConfigureInterviews(*l.interviewConfig)
 		}
 		if l.err == nil && (l.researchTC != nil || l.researchSup != nil) {
 			tc, sup := l.researchTC, l.researchSup

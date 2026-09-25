@@ -194,7 +194,7 @@ func TestResearchToolManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Tools) != 17 {
+	if len(result.Tools) != 12 {
 		t.Fatalf("tool count: %d", len(result.Tools))
 	}
 	seen := map[string]bool{}
@@ -246,7 +246,7 @@ func TestResearchToolsAbsentUntilWired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Tools) != 10 {
+	if len(result.Tools) != 5 {
 		t.Fatalf("unwired tool count: %d", len(result.Tools))
 	}
 	if err := svc.CheckRound(context.Background(), "research_run"); err != ErrUnavailable {

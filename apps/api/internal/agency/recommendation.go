@@ -107,37 +107,6 @@ func (e *Engine) checkRecommendationTarget(ctx context.Context, round store.Roun
 			return store.ErrConflict
 		}
 		return nil
-	case "review_comparison":
-		if target.Kind != "offer_comparison" || target.Revision != 1 {
-			return store.ErrConflict
-		}
-		comparison, err := e.Store.OfferComparisonForOwner(ctx, round.Actor, target.ID)
-		if err != nil || !comparison.Current || comparison.RoundID != round.ID || comparison.Comparison.InputSHA256 != target.ContentSHA256 {
-			return store.ErrConflict
-		}
-		return nil
-	case "review_interview":
-		if target.Kind != "interview" || target.ID == "" || target.UpdatedAt == "" {
-			return store.ErrConflict
-		}
-		interview, err := e.Store.Interview(ctx, target.ID)
-		if err != nil || !interview.Current || interview.RoundID != round.ID || interview.UpdatedAt != target.UpdatedAt || len(interview.Brief) == 0 {
-			return store.ErrConflict
-		}
-		return nil
-	case "review_debrief":
-		if target.Kind != "interview_debrief" || target.ID == "" || target.UpdatedAt == "" {
-			return store.ErrConflict
-		}
-		debrief, err := e.Store.InterviewDebrief(ctx, target.ID)
-		if err != nil || debrief.RoundID != round.ID || debrief.UpdatedAt != target.UpdatedAt || len(debrief.Debrief) == 0 {
-			return store.ErrConflict
-		}
-		interview, err := e.Store.Interview(ctx, debrief.InterviewID)
-		if err != nil || !interview.Current {
-			return store.ErrConflict
-		}
-		return nil
 	case "prepare", "review_pack":
 		opportunityID := target.ID
 		if choice.Action == "review_pack" {

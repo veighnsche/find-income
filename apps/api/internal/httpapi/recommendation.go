@@ -36,7 +36,7 @@ func (h *Handler) latestCompletedRound(w http.ResponseWriter, r *http.Request) {
 
 func latestCompletedOutcomeAllowed(outcome string) bool {
 	switch outcome {
-	case "all", "process_input", "prepare", "compare_offers", "interview_prepare", "interview_debrief", "process_replies":
+	case "all", "process_input", "prepare":
 		return true
 	default:
 		return false

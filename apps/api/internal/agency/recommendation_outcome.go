@@ -23,12 +23,8 @@ type outcomeRecommendationFacts struct {
 	Code            string `json:"code"`
 	ResultID        string `json:"resultId"`
 	ResultRevision  int64  `json:"resultRevision"`
-	ResultUpdatedAt string `json:"resultUpdatedAt,omitempty"`
-	FocusSaved      bool   `json:"focusSaved,omitempty"`
 	AppliedChanges  int    `json:"appliedChanges"`
 	UnresolvedCount int    `json:"unresolvedCount"`
-	TradeoffStatus  string `json:"tradeoffStatus"`
-	Intent          string `json:"intent,omitempty"`
 }
 
 func (f outcomeRecommendationFacts) useful() bool {
@@ -37,12 +33,6 @@ func (f outcomeRecommendationFacts) useful() bool {
 		return f.AppliedChanges > 0 || f.ResultID != "" && f.Code == "pack_ready"
 	case "prepare":
 		return f.ResultID != ""
-	case "compare_offers":
-		return f.ResultID != ""
-	case "interview_prepare", "interview_debrief":
-		return f.ResultID != "" && f.ResultUpdatedAt != ""
-	case "process_replies":
-		return f.ResultID != "" && f.Intent != ""
 	default:
 		return false
 	}
@@ -152,10 +142,7 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 		Capabilities: []jev.DecisionCapability{
 			{ID: "home_review_result", Description: "Review the saved result of this commissioned work."},
 			{ID: "home_prepare", Description: "Suggest owner-clicked preparation for one exact current owner-selected role."},
-			{ID: "home_review_pack", Description: "Review one exact current saved application pack without sending it."},
-			{ID: "home_review_comparison", Description: "Review the saved offer comparison without accepting an offer."},
-			{ID: "home_review_interview", Description: "Review the saved sourced interview brief without booking or messaging."},
-			{ID: "home_review_debrief", Description: "Review the saved owner-reported debrief without contacting anyone."},
+			{ID: "home_review_pack", Description: "Review one exact current saved application pack."},
 		}, Sources: profileSources,
 		RemainingAllowance: []jev.DecisionAllowance{{Operation: store.RoundJevRequest, Remaining: round.Limits.Requests - round.Used.Requests},
 			{Operation: store.RoundSaveSourceOpportunity, Remaining: round.Limits.Items - round.Used.Items},
@@ -181,39 +168,8 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 	baseRefs := append(append([]string{}, profileIDs...), resultID)
 
 	reviewReason := fmt.Sprintf("The %s round saved %d applied changes and %d unresolved items.", facts.Outcome, facts.AppliedChanges, facts.UnresolvedCount)
-	if facts.Outcome == "process_replies" {
-		processing, err := e.Store.ReplyProcessing(ctx, facts.ResultID)
-		if err != nil || processing.RoundID != round.ID || processing.Intent == "" || processing.Intent != facts.Intent {
-			return jev.DecisionInput{}, nil, refs, nil, store.ErrConflict
-		}
-		reviewReason = fmt.Sprintf("The thread reply was classified as %s; %d record updates and %d unresolved items are saved with a cited draft for review.", facts.Intent, facts.AppliedChanges, facts.UnresolvedCount)
-	}
 	add("review-result", "home_review_result", "Review this round's saved result and unresolved items.", "Open the completed round without creating work.", baseRefs,
 		recommendationChoice{Action: "review_result", Target: recommendationTarget{Kind: "round", ID: round.ID}, Reason: reviewReason})
-	if facts.Outcome == "compare_offers" {
-		comparison, err := e.Store.OfferComparisonForOwner(ctx, round.Actor, facts.ResultID)
-		pausedPending := round.State == store.RoundPaused && facts.TradeoffStatus == "pending" && comparison.TradeoffStatus == "uncertain"
-		if err != nil || !comparison.Current || comparison.RoundID != round.ID || comparison.TradeoffStatus != facts.TradeoffStatus && !pausedPending {
-			return jev.DecisionInput{}, nil, refs, nil, store.ErrConflict
-		}
-		summary := comparisonRecommendationSummary(comparison, facts.TradeoffStatus)
-		sum := sha256.Sum256([]byte(summary))
-		revision := hex.EncodeToString(sum[:])
-		id := "comparison:" + comparison.ID
-		input.Sources = append(input.Sources, jev.DecisionSource{ID: id, SourceRevision: revision, SourceKind: "saved_comparison_facts", Excerpt: summary})
-		refs = append(refs, recommendationSourceRef{ID: id, Kind: "saved_comparison_facts", Revision: revision})
-		add("review-comparison", "home_review_comparison", "Review exact cited comparison and unknown terms before any owner decision.", "Open saved comparison; no accept or contact authority.", append(append([]string{}, baseRefs...), id),
-			recommendationChoice{Action: "review_comparison", Target: recommendationTarget{Kind: "offer_comparison", ID: comparison.ID, Revision: 1, ContentSHA256: comparison.Comparison.InputSHA256}, Reason: "A current cited offer comparison is saved for owner review; no employer decision has been made."})
-	}
-	if facts.Outcome == "interview_prepare" || facts.Outcome == "interview_debrief" {
-		kind, action, capability := "interview", "review_interview", "home_review_interview"
-		if facts.Outcome == "interview_debrief" {
-			kind, action, capability = "interview_debrief", "review_debrief", "home_review_debrief"
-		}
-		add("review-"+facts.Outcome, capability, "Review the exact saved interview result and its stated unknown count.", "Open the saved record; no book, message, or send authority.", baseRefs,
-			recommendationChoice{Action: action, Target: recommendationTarget{Kind: kind, ID: facts.ResultID, UpdatedAt: facts.ResultUpdatedAt},
-				Reason: fmt.Sprintf("The %s commission saved a sourced result with %d stated unknowns; focus saved=%t.", facts.Outcome, facts.UnresolvedCount, facts.FocusSaved)})
-	}
 	page, err := e.Store.ListOpportunities(ctx, store.OpportunityListOptions{Limit: 100})
 	if err != nil || page.NextCursor != "" {
 		return jev.DecisionInput{}, nil, refs, nil, errDecisionContextTooLarge
@@ -286,11 +242,6 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 	return input, choices, refs, unavailable, nil
 }
 
-func comparisonRecommendationSummary(comparison store.SavedOfferComparison, tradeoffStatus string) string {
-	return fmt.Sprintf("saved offer comparison id=%s; current=%t; cited offers=%d; stated pay comparisons=%d; missing-term groups=%d; tradeoff status=%s",
-		comparison.ID, comparison.Current, len(comparison.Comparison.Input.Offers), len(comparison.Comparison.Pay), len(comparison.Comparison.Missing), tradeoffStatus)
-}
-
 // savedOutcomeRecommendationFacts reconstructs only the safe facts that were
 // supplied to Jev. It runs locally on reads and never dispatches a provider.
 func savedOutcomeRecommendationFacts(ctx context.Context, db *store.Store, round store.Round) (outcomeRecommendationFacts, error) {
@@ -317,55 +268,6 @@ func savedOutcomeRecommendationFacts(ctx context.Context, db *store.Store, round
 			return facts, store.ErrInvalid
 		}
 		facts.Code, facts.ResultID, facts.ResultRevision = pack.Code, pack.PackID, pack.Version
-	case "compare_offers":
-		var offer offerReport
-		if json.Unmarshal(round.Report, &offer) != nil {
-			return facts, store.ErrInvalid
-		}
-		facts.Code, facts.ResultID, facts.TradeoffStatus = offer.Code, offer.ComparisonID, offer.TradeoffStatus
-	case "interview_prepare":
-		var outcome interviewOutcome
-		if json.Unmarshal(round.Report, &outcome) != nil || !outcome.BriefSaved || outcome.InterviewID == "" {
-			return facts, store.ErrInvalid
-		}
-		interview, err := db.Interview(ctx, outcome.InterviewID)
-		if err != nil || !interview.Current || interview.RoundID != round.ID || len(interview.Brief) == 0 {
-			return facts, store.ErrConflict
-		}
-		facts.Code, facts.ResultID, facts.ResultUpdatedAt, facts.FocusSaved, facts.UnresolvedCount =
-			outcome.Code, outcome.InterviewID, interview.UpdatedAt, outcome.FocusSaved, len(outcome.Unknowns)
-	case "interview_debrief":
-		var outcome interviewOutcome
-		if json.Unmarshal(round.Report, &outcome) != nil || !outcome.BriefSaved || outcome.DebriefID == "" {
-			return facts, store.ErrInvalid
-		}
-		debrief, err := db.InterviewDebrief(ctx, outcome.DebriefID)
-		if err != nil || debrief.RoundID != round.ID || len(debrief.Debrief) == 0 {
-			return facts, store.ErrConflict
-		}
-		interview, err := db.Interview(ctx, debrief.InterviewID)
-		if err != nil || !interview.Current {
-			return facts, store.ErrConflict
-		}
-		facts.Code, facts.ResultID, facts.ResultUpdatedAt, facts.UnresolvedCount =
-			outcome.Code, outcome.DebriefID, debrief.UpdatedAt, len(outcome.Unknowns)
-	case "process_replies":
-		var outcome replyOutcome
-		if json.Unmarshal(round.Report, &outcome) != nil || outcome.ProcessingID == "" || !outcome.DraftSaved {
-			return facts, store.ErrInvalid
-		}
-		processing, err := db.ReplyProcessing(ctx, outcome.ProcessingID)
-		if err != nil || processing.RoundID != round.ID || processing.Intent == "" {
-			return facts, store.ErrConflict
-		}
-		facts.Code, facts.ResultID, facts.ResultUpdatedAt, facts.Intent, facts.UnresolvedCount =
-			outcome.Code, outcome.ProcessingID, processing.UpdatedAt, processing.Intent, len(outcome.Unknowns)
-		if outcome.UpdatesSaved {
-			facts.AppliedChanges++
-		}
-		if outcome.DraftSaved {
-			facts.AppliedChanges++
-		}
 	default:
 		return facts, store.ErrInvalid
 	}

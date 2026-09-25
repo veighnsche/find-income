@@ -116,52 +116,6 @@ func TestCapturedInputAdviceResumesLocallyWithoutAnotherCharge(t *testing.T) {
 	resumeCapturedAdvice(t, db, engine, paused, paused.Used, calls)
 }
 
-func TestCapturedOfferAdviceResumesLocallyWithoutAnotherCharge(t *testing.T) {
-	ctx := context.Background()
-	db, err := store.Open(ctx, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	owner := store.Actor{Kind: "administrator", ID: "offer-owner"}
-	intake, _, err := db.CreateOfferIntake(ctx, owner, "capture-offer", []string{"Fixture Labs makes an offer. Clarify weekly hours before deciding."}, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	profile, err := db.CurrentPreferences(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resource := "offer_intake:" + intake.ID
-	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "capture-offer", Intent: "Compare saved offers", Outcome: "compare_offers", ProfileVersion: profile.Version,
-		Scope:  store.RoundScope{InputRefs: []string{resource}, Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundPrepareOfferComparison, store.RoundJevRequest}, Delegates: []string{"codex-runner"}},
-		Limits: store.RoundAllowance{Requests: 5, Items: 1, Tools: 3, Turns: 1}, Deadline: time.Now().Add(time.Minute)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	round, err = db.ActivateRound(ctx, owner, round.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	runtime := &offerRuntimeFixture{db: db}
-	if _, err := runtime.ExecuteRoundTurn(ctx, store.Actor{Kind: "agent", ID: "codex-runner"}, round.ID, codexservice.RoundTurnInput{RequestKey: "compare:" + intake.ID, ResourceID: resource, Brief: "Compare", Evidence: "complete"}); err != nil {
-		t.Fatal(err)
-	}
-	comparison, err := db.OfferComparisonByRound(ctx, round.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	decisions, calls, closeServer := stoppingAdviceDecisions(t, db, "home_review_comparison")
-	defer closeServer()
-	engine := &Engine{Store: db, Runtime: runtime, Decisions: decisions}
-	_ = engine.computeOutcomeRecommendation(ctx, round, outcomeRecommendationFacts{Outcome: round.Outcome, Code: "comparison_saved", ResultID: comparison.ID, TradeoffStatus: comparison.TradeoffStatus})
-	paused, err := db.Round(ctx, round.ID)
-	if err != nil || paused.State != store.RoundPaused {
-		t.Fatalf("Jev response did not interrupt offer round: %+v %v", paused, err)
-	}
-	resumeCapturedAdvice(t, db, engine, paused, paused.Used, calls)
-}
-
 func TestMissingAdviceCaptureStaysPausedWithoutRemoteReconciliation(t *testing.T) {
 	ctx := context.Background()
 	db, round := outcomeAdviceRound(t, 2, true)
