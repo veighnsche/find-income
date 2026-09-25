@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { CheckActivityFeed } from "@/features/check/check-activity-feed"
 import { useCheckStart } from "@/features/check/useCheckStart"
+import type { MuseReadiness } from "@/features/discovery/muse-state"
 import { formatDate } from "@/pages/format"
 import { RoleStageIndicator } from "@/pages/role-stages"
 import { useRead } from "@/pages/useRead"
@@ -28,7 +29,15 @@ import { useRead } from "@/pages/useRead"
 // explicit start control, which posts the requestKey plus the expected
 // revisions observed from the reads below. All state is keyed by jobId and
 // the detail section remounts per role, so each role advances independently.
-export function CheckPage({ jobId }: { jobId: string }) {
+// An optional Contributor readiness disables the start control with the
+// blocking code when the tier is not ready.
+export function CheckPage({
+  jobId,
+  contributor,
+}: {
+  jobId: string
+  contributor?: MuseReadiness | null
+}) {
   const opportunity = useRead(`check:${jobId}:opportunity`, (signal) =>
     getOpportunity(jobId, signal)
   )
@@ -91,6 +100,7 @@ export function CheckPage({ jobId }: { jobId: string }) {
             jobId={jobId}
             opportunityRevision={opportunity.data.opportunity.revision}
             workflowRevision={workflow.data.revision}
+            contributor={contributor}
             onStarted={workflow.retry}
           />
         </>
@@ -103,11 +113,13 @@ function CheckDetailSection({
   jobId,
   opportunityRevision,
   workflowRevision,
+  contributor,
   onStarted,
 }: {
   jobId: string
   opportunityRevision: number
   workflowRevision: number
+  contributor?: MuseReadiness | null
   onStarted: () => void
 }) {
   const { loseSession } = useSession()
@@ -183,6 +195,7 @@ function CheckDetailSection({
         status={check.data}
         opportunityRevision={opportunityRevision}
         workflowRevision={workflowRevision}
+        contributor={contributor}
         onStarted={() => {
           refreshAll()
           onStarted()
@@ -226,6 +239,7 @@ function CheckStatusSection({
   status,
   opportunityRevision,
   workflowRevision,
+  contributor,
   onStarted,
   onRefresh,
 }: {
@@ -233,6 +247,7 @@ function CheckStatusSection({
   status: CheckStatusView
   opportunityRevision: number
   workflowRevision: number
+  contributor?: MuseReadiness | null
   onStarted: () => void
   onRefresh: () => void
 }) {
@@ -258,6 +273,7 @@ function CheckStatusSection({
             label="Start check"
             opportunityRevision={opportunityRevision}
             workflowRevision={workflowRevision}
+            contributor={contributor}
             onStarted={onStarted}
           />
         </section>
@@ -364,6 +380,7 @@ function CheckStatusSection({
             label="Retry check"
             opportunityRevision={opportunityRevision}
             workflowRevision={workflowRevision}
+            contributor={contributor}
             onStarted={onStarted}
           />
         </section>
@@ -392,6 +409,7 @@ function CheckStatusSection({
             label="Run a new check"
             opportunityRevision={opportunityRevision}
             workflowRevision={workflowRevision}
+            contributor={contributor}
             onStarted={onStarted}
           />
         </section>
@@ -404,12 +422,14 @@ function StartCheckControls({
   label,
   opportunityRevision,
   workflowRevision,
+  contributor,
   onStarted,
 }: {
   jobId: string
   label: string
   opportunityRevision: number
   workflowRevision: number
+  contributor?: MuseReadiness | null
   onStarted: () => void
 }) {
   const action = useCheckStart({
@@ -418,6 +438,10 @@ function StartCheckControls({
     workflowRevision,
     onStarted,
   })
+  const blocked =
+    contributor !== undefined &&
+    contributor !== null &&
+    contributor.state !== "ready"
   return (
     <div className="flex min-w-0 flex-col gap-3 rounded-2xl border bg-card px-4 py-4">
       <p className="text-sm text-muted-foreground">
@@ -425,10 +449,15 @@ function StartCheckControls({
         {workflowRevision}. The server replays an identical request instead of
         starting a duplicate check.
       </p>
+      {blocked && contributor !== undefined && contributor !== null ? (
+        <p className="text-sm wrap-break-word text-destructive" role="alert">
+          {`This check is blocked: Muse Contributor is ${contributor.state} (${contributor.code}) — ${contributor.detail}.`}
+        </p>
+      ) : null}
       <div>
         <Button
           type="button"
-          disabled={!action.canStart}
+          disabled={!action.canStart || blocked}
           onClick={action.start}
         >
           {action.starting ? "Starting…" : label}

@@ -22,6 +22,10 @@ import {
   CheckChosenJobs,
   type ChosenRoleInput,
 } from "@/features/discovery/check-chosen-jobs"
+import {
+  type MuseFixtureScenario,
+  useMuseState,
+} from "@/features/discovery/muse-state"
 import { discoveryRunStorageKey } from "@/features/discovery/discovery-section"
 import { newIdempotencyKey } from "@/features/discovery/research-controls"
 import { useOwnerContext } from "@/features/owner-context/useOwnerContext"
@@ -349,10 +353,17 @@ function JobCard({
 // not yet classified). Saved brief/catalog identity comes from the single
 // useOwnerContext read for this surface. Loading is GET-only, explanation
 // expansion re-reads nothing, stale findings are labeled and retained, and
-// selecting a role POSTs only an owner decision — never a check.
-export function GroupedJobs() {
+// selecting a role POSTs only an owner decision — never a check. The sticky
+// Check action receives the Contributor readiness from the muse-state
+// view-model (fixture until E06), so a blocked tier disables checks plainly.
+export function GroupedJobs({
+  museScenario = "ready",
+}: {
+  museScenario?: MuseFixtureScenario
+} = {}) {
   const { session, loseSession } = useSession()
   const owner = useOwnerContext()
+  const muse = useMuseState(museScenario)
   const [attempt, setAttempt] = useState(0)
   const [load, setLoad] = useState<LoadState>({ kind: "loading" })
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
@@ -771,7 +782,7 @@ export function GroupedJobs() {
         })
       )}
 
-      <CheckChosenJobs roles={chosenRoles} />
+      <CheckChosenJobs roles={chosenRoles} contributor={muse.contributor} />
     </section>
   )
 }

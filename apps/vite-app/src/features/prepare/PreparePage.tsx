@@ -14,6 +14,8 @@ import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import type { MuseReadiness } from "@/features/discovery/muse-state"
+import { MuseReadinessPanel } from "@/features/discovery/muse-panels"
 import {
   REWRITE_INSTRUCTION_RUNE_LIMIT,
   countBytes,
@@ -35,8 +37,15 @@ type CheckQuestion = CheckDetail["questions"][number]
 // edit, no rewrite. Each mutation is an explicit per-role button with pins
 // already observed from GET reads. All state is keyed by jobId and the
 // detail section remounts per role, so one role's preparation never touches
-// another's.
-export function PreparePage({ jobId }: { jobId: string }) {
+// another's. An optional Standard readiness surfaces the drafting tier state;
+// a blocked tier is shown plainly while exact owner edits stay available.
+export function PreparePage({
+  jobId,
+  standard,
+}: {
+  jobId: string
+  standard?: MuseReadiness | null
+}) {
   const opportunity = useRead(`prepare:${jobId}:opportunity`, (signal) =>
     getOpportunity(jobId, signal)
   )
@@ -74,6 +83,13 @@ export function PreparePage({ jobId }: { jobId: string }) {
           editing and rewriting each need an explicit click.
         </p>
       </div>
+
+      {standard !== undefined && standard !== null ? (
+        <MuseReadinessPanel
+          readiness={standard}
+          heading="Muse Standard readiness"
+        />
+      ) : null}
 
       {opportunity.status === "loading" ? (
         <LoadingBlock label="Loading job details…" />

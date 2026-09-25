@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import type { CheckStatusView } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { useCheckStart } from "@/features/check"
+import type { MuseReadiness } from "@/features/discovery/muse-state"
 
 export interface ChosenRoleInput {
   jobId: string
@@ -123,9 +124,21 @@ function ChosenRoleCheckRow({
 // bottom of long lists (sticky) and is keyboard reachable through native
 // buttons and links. An explicit click starts checks only for the chosen
 // (server-selected) roles passed in; rendering or selecting roles starts
-// nothing, and each role's blocked/pending outcome stays independent.
-export function CheckChosenJobs({ roles }: { roles: ChosenRoleInput[] }) {
+// nothing, and each role's blocked/pending outcome stays independent. When a
+// Contributor readiness is supplied and not ready, the action stays disabled
+// with the blocking code as the reason.
+export function CheckChosenJobs({
+  roles,
+  contributor,
+}: {
+  roles: ChosenRoleInput[]
+  contributor?: MuseReadiness | null
+}) {
   const [startEpoch, setStartEpoch] = useState(0)
+  const blocked =
+    contributor !== undefined &&
+    contributor !== null &&
+    contributor.state !== "ready"
 
   return (
     <section
@@ -136,7 +149,7 @@ export function CheckChosenJobs({ roles }: { roles: ChosenRoleInput[] }) {
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Button
             type="button"
-            disabled={roles.length === 0}
+            disabled={roles.length === 0 || blocked}
             onClick={() => setStartEpoch((value) => value + 1)}
           >
             {`Check chosen jobs (${roles.length})`}
@@ -146,6 +159,11 @@ export function CheckChosenJobs({ roles }: { roles: ChosenRoleInput[] }) {
           Starts checks only for the chosen roles below — one independent
           request per role. Selecting a role starts nothing.
         </p>
+        {blocked && contributor !== undefined && contributor !== null ? (
+          <p className="text-xs wrap-break-word text-destructive" role="alert">
+            {`Checks are blocked: Muse Contributor is ${contributor.state} (${contributor.code}) — ${contributor.detail}.`}
+          </p>
+        ) : null}
         {roles.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No chosen roles yet. Select a role above to enable checks.

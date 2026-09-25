@@ -25,6 +25,15 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
+  type MuseFixtureScenario,
+  useMuseState,
+} from "@/features/discovery/muse-state"
+import {
+  MuseCheckpointsPanel,
+  MuseReadinessPanel,
+  MuseReportPanel,
+} from "@/features/discovery/muse-panels"
+import {
   defaultResearchAllowance,
   isActiveRunState,
   newIdempotencyKey,
@@ -95,9 +104,19 @@ interface PendingKey {
 // DiscoverySection connects the Find jobs research run: explicit commission,
 // stop/resume/steer, journaled activity and the evidence-backed report. Mount
 // and navigation only read; every mutation needs an explicit owner action and
-// carries a stable idempotency key per distinct intent.
-export function DiscoverySection() {
+// carries a stable idempotency key per distinct intent. Muse readiness,
+// checkpoints and the run report render from the muse-state view-model
+// (fixture until E06 wires the live client); commissions stay disabled while
+// the Contributor tier is not ready.
+export function DiscoverySection({
+  museScenario = "ready",
+}: {
+  museScenario?: MuseFixtureScenario
+} = {}) {
   const { session, loseSession } = useSession()
+  // Fixture view-model: zero network/model calls on every render.
+  const muse = useMuseState(museScenario)
+  const contributorReady = muse.contributor.state === "ready"
   const [runId, setRunId] = useState<string | null>(() =>
     loadPersistedRunId(window.localStorage)
   )
@@ -254,10 +273,11 @@ export function DiscoverySection() {
   const csrfToken = session.csrfToken
 
   async function commission(kind: "start" | "find-more") {
-    // Find jobs commissions only against the loaded, fresh saved context,
-    // including while a correction is still saving. The button is disabled
-    // otherwise; this guard covers programmatic clicks.
+    // Find jobs commissions only against the loaded, fresh saved context with
+    // a ready Contributor tier, including while a correction is still saving.
+    // The button is disabled otherwise; this guard covers programmatic clicks.
     if (kind === "start" && !owner.discoveryReady) return
+    if (!contributorReady) return
     setBusy(true)
     setActionError(null)
     try {
@@ -402,6 +422,11 @@ export function DiscoverySection() {
         </p>
       </div>
 
+      <MuseReadinessPanel
+        readiness={muse.contributor}
+        heading="Muse Contributor readiness"
+      />
+
       <SavedBriefPanel
         context={owner.context}
         contextState={owner.contextState}
@@ -431,10 +456,15 @@ export function DiscoverySection() {
               {readiness.reason}
             </p>
           )}
+          {contributorReady ? null : (
+            <p className="text-sm wrap-break-word text-destructive" role="alert">
+              {`Find jobs is blocked: Muse Contributor is ${muse.contributor.state} (${muse.contributor.code}) — ${muse.contributor.detail}.`}
+            </p>
+          )}
           <div>
             <Button
               type="button"
-              disabled={busy || !readiness.ready}
+              disabled={busy || !readiness.ready || !contributorReady}
               onClick={() => void commission("start")}
             >
               {busy ? "Starting…" : "Find jobs"}
@@ -549,6 +579,9 @@ export function DiscoverySection() {
           ) : null}
         </>
       ) : null}
+
+      <MuseCheckpointsPanel checkpoints={muse.checkpoints} />
+      {muse.report !== null ? <MuseReportPanel report={muse.report} /> : null}
 
       <UnsupportedBlock
         title="Run history is not available yet"
