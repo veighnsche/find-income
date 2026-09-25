@@ -2,7 +2,6 @@ package materialprep
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,38 +9,18 @@ import (
 	"unicode/utf8"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/applicationpacks"
-	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-// Production grounded drafter (D4, legacy Codex path).
-// TODO E13 (M): remove this legacy Codex binding once main.go wires
-// StandardDrafter; the production path is standard.go. CodexDrafter
-// implements Drafter with one bounded one-shot Codex turn over verified
-// facts only: the required+unset employer questions, E3 answered texts,
-// owner-approved saved answers, pinned approved career sources, and profile
-// scalars.
-//
-// The collected model text is untrusted until validated here: scope-fenced
-// question ids, no duplicates, 1-8 cited lines per draft, exact excerpts
-// against the cited career source bodies, and the pack line bounds. The
-// service layer re-validates scope and the pack builder re-verifies
-// citation-exactness before anything is rendered or committed. Omitted
-// questions stay held; the drafter never invents facts to fill a gap.
-
-// OneShotTurn runs one bounded one-shot turn and returns its collected
-// agent texts. It is satisfied by *codexservice.OneShot; tests stub it.
-// TODO E13 (M): remove with the legacy CodexDrafter binding.
-type OneShotTurn interface {
-	Run(ctx context.Context, prompt string) (codexservice.OneShotResult, error)
-}
-
-// DraftInstructions is the trusted turn instructions for grounded drafting.
-// The coordinator wires it into the one-shot runner. It carries no facts,
-// prompts, or authority: only the drafting discipline.
-// TODO E13 (M): remove with the legacy CodexDrafter binding; M's Standard
-// runner hardcodes the equivalent discipline (see standard.go E13 seam).
-const DraftInstructions = `You draft employer-question answers from supplied verified facts only. Use only the facts in the prompt: never invent experience, dates, credentials, or availability, and never contact anyone or browse. Cite an exact approved-source excerpt for every line. Omit any question the facts cannot support.`
+// Shared draft validation for the Standard production path (standard.go):
+// scope-fenced question ids, no duplicates, 1-8 cited lines per draft,
+// exact excerpts against the cited career source bodies, and the pack
+// line bounds. The service layer re-validates scope and the pack builder
+// re-verifies citation-exactness before anything is rendered or committed.
+// Omitted questions stay held; the drafter never invents facts to fill
+// a gap. The verified-fact prompt (draftPrompt) carries saved state only:
+// no employer contact handles, credentials, or send authority exist in
+// the request envelope, so none can reach the turn.
 
 const (
 	// maxDraftQuestions mirrors the pack answer bound: more unset required
@@ -60,42 +39,10 @@ const (
 	maxDraftAnswerBytes = 2000
 )
 
-// CodexDrafter is the legacy Drafter kept for building until E13.
-// TODO E13 (M): remove once main.go wires StandardDrafter. Turns is
-// required; a nil runner reports ErrUnavailable so the HTTP layer stays
-// honestly 503.
-type CodexDrafter struct {
-	Turns OneShotTurn
-}
-
-var _ Drafter = (*CodexDrafter)(nil)
-
 // draftPayload is the exact accepted model output shape. Unknown fields are
 // rejected so smuggled content fails loudly instead of slipping through.
 type draftPayload struct {
 	Drafts []RequiredDraft `json:"drafts"`
-}
-
-// DraftRequiredAnswers drafts the required+unset questions in one bounded
-// turn. It returns a subset when the model omits unsupported questions
-// (they stay held) and an empty slice when nothing could be drafted.
-func (d *CodexDrafter) DraftRequiredAnswers(ctx context.Context, request DraftRequest) ([]RequiredDraft, error) {
-	if d == nil || d.Turns == nil {
-		return nil, ErrUnavailable
-	}
-	scope, err := draftScope(request)
-	if err != nil {
-		return nil, err
-	}
-	sources, err := draftSources(request.CareerSources)
-	if err != nil {
-		return nil, err
-	}
-	result, err := d.Turns.Run(ctx, draftPrompt(request))
-	if err != nil {
-		return nil, err
-	}
-	return checkModelDrafts(scope, sources, result.Messages)
 }
 
 // draftScope validates the required+unset set: non-blank unique ids and

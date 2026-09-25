@@ -103,15 +103,30 @@ func runWithContext(ctx context.Context, args []string) error {
 		if root, typst := os.Getenv("JOBSEEK_APPROVED_CAREER_ROOT"), os.Getenv("JOBSEEK_TYPST_PATH"); root != "" && typst != "" {
 			packSources = &agency.LocalPackSources{ProjectRoot: root}
 			runtime.SetApplicationPackConfig(codexservice.ApplicationPackRuntimeConfig{ProjectRoot: root, TypstPath: typst, PrivateTempDir: filepath.Join(dataDir, "application-pack-tmp"), RenderTimeout: 20 * time.Second, Relevance: jevservice.Service{Store: database, Client: jevClient}})
-			// Grounded preparation (D3/D4): live including required+unset
-			// drafting through one bounded one-shot turn. Without
-			// model/effort the drafter stays nil and drafting roles keep
-			// their honest 503 instead of invented drafts.
+			// Grounded preparation: required+unset drafting through one
+			// bounded private Standard turn per operation. Without a
+			// proved Standard lane the drafter stays nil and drafting
+			// roles keep their honest 503 instead of invented drafts.
 			var drafter materialprep.Drafter
-			if model, effort := os.Getenv("JOBSEEK_CODEX_MODEL"), os.Getenv("JOBSEEK_CODEX_EFFORT"); model != "" && effort != "" {
-				drafter = &materialprep.CodexDrafter{Turns: &codexservice.OneShot{
-					Dial: codexservice.DialOneShot, Instructions: materialprep.DraftInstructions,
-					Model: model, Effort: effort}}
+			museBin := os.Getenv("JOBSEEK_MUSE_BIN")
+			if museBin == "" {
+				museBin = "muse"
+			}
+			standardBounds := musecode.DefaultBounds()
+			standardBounds.MaxWallClock = 10 * time.Minute
+			standardBounds.MaxModelSteps = 10
+			standardBounds.MaxToolCalls = 5
+			standardBounds.MaxBytesPerOp = 1 << 20
+			standardBounds.MaxBytesTotal = 4 << 20
+			if factory, err := musewire.NewStandardRunnerFactory(musewire.StandardRunnerConfig{
+				CLIPath: museBin, ModelID: "muse-spark-1.3-standard", ProviderID: "meta",
+				Cursors: musewire.StoreCursors{DB: database},
+				Facts:   musecode.ProbeLocalFacts(museBin), Bounds: standardBounds,
+				Workspaces: filepath.Join(dataDir, "muse-sessions"),
+			}); err != nil {
+				log.Printf("standard drafting unavailable: %v", err)
+			} else {
+				drafter = &materialprep.StandardDrafter{Runner: factory}
 			}
 			options.Materials = &materialprep.Service{Store: database,
 				Career: func() ([]applicationpacks.Source, []byte, error) {

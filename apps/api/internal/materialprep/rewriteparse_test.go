@@ -8,7 +8,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/applicationpacks"
-	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
@@ -23,14 +22,6 @@ func (f *stubRewriteTurns) RunStandard(_ context.Context, input musecode.Standar
 	f.calls++
 	f.inputs = append(f.inputs, input)
 	return StandardResult{}, nil
-}
-
-// stubLegacyTurns is a recording legacy one-shot runner kept for the legacy
-// rewriteRunner test until E13.
-type stubLegacyTurns struct{}
-
-func (f *stubLegacyTurns) Run(_ context.Context, _ string) (codexservice.OneShotResult, error) {
-	return codexservice.OneShotResult{State: "completed"}, nil
 }
 
 // stubForeignDrafter implements Drafter without the shared Standard runner.
@@ -52,16 +43,10 @@ func TestRewriteRunnerCases(t *testing.T) {
 		"nil concrete":    nilDrafter,
 		"nil runner":      &StandardDrafter{},
 		"foreign drafter": stubForeignDrafter{},
-		"legacy drafter":  &CodexDrafter{Turns: &stubLegacyTurns{}},
 	} {
 		if _, err := standardRewriteRunner(draft); !errors.Is(err, ErrUnavailable) {
 			t.Fatalf("%s: %v", name, err)
 		}
-	}
-	// Legacy accessor still resolves the legacy binding until E13 removal.
-	legacy := &stubLegacyTurns{}
-	if got, err := rewriteRunner(&CodexDrafter{Turns: legacy}); err != nil || got == nil {
-		t.Fatalf("legacy runner: %v %v", got, err)
 	}
 }
 
@@ -231,7 +216,7 @@ func TestRewritePromptComposition(t *testing.T) {
 	profile := store.Preferences{PreferredLocation: "Amsterdam", SalaryCurrency: "EUR", Timezone: "Europe/Amsterdam"}
 	prompt := rewritePrompt("Tighten it.", questions, current, "Combined context.",
 		answered, nil, []applicationpacks.Source{{ID: "cv", Name: "CV", Body: "Go services.", Approved: true}}, profile)
-	for _, want := range []string{RewriteInstructions, "Tighten it.", "q-a", "q-b",
+	for _, want := range []string{"Tighten it.", "q-a", "q-b",
 		"Why this role?", "Current answer.", "Combined context.", "Go services.", "Amsterdam"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt lacks %q", want)

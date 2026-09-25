@@ -24,10 +24,9 @@ import (
 // performs no research, capture, fetch, contact, or send: the Standard input
 // carries saved state only.
 
-// RewriteInstructions is the trusted rewrite discipline, composed into the
-// rewrite prompt ahead of the owner instruction, current texts, and verified
-// facts. It carries no facts, prompts, or authority: only the rewrite rules.
-const RewriteInstructions = `Rewrite each listed employer-question answer according to the owner instruction, using only the verified facts in this prompt. Never invent experience, dates, credentials, or availability, and never contact anyone or browse. Every listed question id gets exactly one text; use the empty string for any question the facts cannot support.`
+// The trusted rewrite discipline is hardcoded in the Standard runner
+// (musewire); the rewrite prompt below carries the owner instruction,
+// current texts, and verified facts only.
 
 const (
 	// maxRewriteInstructionRunes bounds the owner rewrite instruction,
@@ -38,18 +37,6 @@ const (
 	// allowed (required questions left blank stay held).
 	maxRewriteTextBytes = 20000
 )
-
-// rewriteRunner is the legacy Codex shared-runner accessor kept for building
-// until E13.
-// TODO E13 (M): remove with the legacy CodexDrafter binding; rewrite uses
-// standardRewriteRunner (see standard.go).
-func rewriteRunner(draft Drafter) (OneShotTurn, error) {
-	drafter, ok := draft.(*CodexDrafter)
-	if !ok || drafter == nil || drafter.Turns == nil {
-		return nil, ErrUnavailable
-	}
-	return drafter.Turns, nil
-}
 
 // priorMaterialTexts carries the current per-question texts recovered for
 // one rewrite prompt: E3 answered values stay authoritative, the prior pack
@@ -105,14 +92,14 @@ func parsePriorMaterialTexts(manifest []byte, base store.MaterialVersionView) (p
 	return out, nil
 }
 
-// rewritePrompt assembles the rewrite prompt: trusted discipline, owner
-// instruction, current per-question texts, and verified facts. It carries
-// saved state only: no employer contact handles, credentials, or send
-// authority exist in the envelope, so none can reach the turn.
+// rewritePrompt assembles the rewrite prompt: owner instruction, current
+// per-question texts, and verified facts. The trusted discipline is
+// hardcoded in the Standard runner, not repeated here. It carries saved
+// state only: no employer contact handles, credentials, or send authority
+// exist in the envelope, so none can reach the turn.
 func rewritePrompt(instruction string, questions []store.CheckQuestionView, current map[string]string, combined string, answered []AnsweredFact, saved []SavedAnswerFact, career []applicationpacks.Source, profile store.Preferences) string {
 	var prompt strings.Builder
-	prompt.WriteString(RewriteInstructions)
-	prompt.WriteString("\n\nOwner instruction:\n")
+	prompt.WriteString("Owner instruction:\n")
 	if strings.TrimSpace(instruction) == "" {
 		prompt.WriteString("(none — improve clarity and completeness from the verified facts only)\n")
 	} else {

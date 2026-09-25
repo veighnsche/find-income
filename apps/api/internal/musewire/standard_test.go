@@ -30,6 +30,11 @@ func TestStandardPromptGuards(t *testing.T) {
 	if _, err := standardPrompt(musecode.StandardInput{Purpose: standardDraftPurpose}); err == nil {
 		t.Fatal("empty verified-fact prompt accepted")
 	}
+	oversize := musecode.StandardInput{Purpose: standardDraftPurpose,
+		Context: map[string]string{"prompt": strings.Repeat("f", maxStandardPromptBytes+1)}}
+	if _, err := standardPrompt(oversize); err == nil {
+		t.Fatal("oversize prompt accepted")
+	}
 	draft, err := standardPrompt(musecode.StandardInput{Purpose: standardDraftPurpose,
 		Context: map[string]string{"prompt": "VERIFIED-FACTS"}, Targets: []string{"q1"}})
 	if err != nil {

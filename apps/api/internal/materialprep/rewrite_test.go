@@ -148,8 +148,8 @@ func TestRewriteOpportunityMaterialsCommitsVersion(t *testing.T) {
 		t.Fatalf("rewrite Standard targets: %v", stdInput.Targets)
 	}
 	prompt := stubPrompt(stdInput)
-	if !strings.Contains(prompt, materialprep.RewriteInstructions) || !strings.Contains(prompt, instruction) {
-		t.Fatalf("rewrite prompt lacks discipline or instruction")
+	if !strings.Contains(prompt, instruction) {
+		t.Fatalf("rewrite prompt lacks instruction")
 	}
 	for _, question := range f.check.Questions {
 		if !strings.Contains(prompt, question.ID) || !strings.Contains(prompt, question.Text) {
@@ -261,11 +261,6 @@ func TestRewriteRequiresSharedStandardRunner(t *testing.T) {
 	f.svc.Draft = &materialprep.StandardDrafter{}
 	if _, _, err := f.svc.RewriteOpportunityMaterials(ctx, testOwner(), f.opportunity.ID, "rewrite-norunner-3", 1, "instruction"); !errors.Is(err, materialprep.ErrUnavailable) {
 		t.Fatalf("nil runner: %v", err)
-	}
-	// Legacy Codex drafters cannot supply Standard rewrite turns.
-	f.svc.Draft = &materialprep.CodexDrafter{}
-	if _, _, err := f.svc.RewriteOpportunityMaterials(ctx, testOwner(), f.opportunity.ID, "rewrite-norunner-4", 1, "instruction"); !errors.Is(err, materialprep.ErrUnavailable) {
-		t.Fatalf("legacy codex drafter: %v", err)
 	}
 	if f.render.calls != renderCalls {
 		t.Fatalf("unavailable rewrite rendered")

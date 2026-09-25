@@ -74,6 +74,11 @@ type StandardTransport struct {
 
 var _ musecode.Transport = (*StandardTransport)(nil)
 
+// maxStandardPromptBytes caps the verified-fact prompt of one Standard
+// turn. Oversize prompts are refused before any session starts so a
+// runaway prompt can never spend Standard budget.
+const maxStandardPromptBytes = 65536
+
 // standardPrompt renders the hardcoded discipline plus the verified-fact
 // prompt bytes. Targets scope logging only and are never expanded here.
 func standardPrompt(input musecode.StandardInput) (string, error) {
@@ -84,6 +89,10 @@ func standardPrompt(input musecode.StandardInput) (string, error) {
 	facts := strings.TrimSpace(input.Context["prompt"])
 	if facts == "" {
 		return "", errors.New("musewire: standard input carries no verified-fact prompt")
+	}
+	if len(facts) > maxStandardPromptBytes {
+		return "", fmt.Errorf("musewire: standard prompt is %d bytes, over the %d-byte turn budget",
+			len(facts), maxStandardPromptBytes)
 	}
 	return discipline + "\n\n" + facts, nil
 }

@@ -110,10 +110,24 @@ func TestStandardDrafterOutputValidation(t *testing.T) {
 		want     int
 	}{
 		"out of scope":      {[]string{`{"drafts":[{"questionId":"q-else","lines":[{"text":"x","citations":[{"sourceId":"cv","excerpt":"Six years of Go platform work"}]}]}]}`}, true, 0},
+		"duplicate":         {[]string{`{"drafts":[{"questionId":"q-go","lines":[{"text":"a","citations":[{"sourceId":"cv","excerpt":"Six years of Go platform work"}]}]},{"questionId":"q-go","lines":[{"text":"b","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]}]}]}`}, true, 0},
+		"no lines":          {[]string{`{"drafts":[{"questionId":"q-go","lines":[]}]}`}, true, 0},
+		"too many lines":    {[]string{`{"drafts":[{"questionId":"q-go","lines":[{"text":"a","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]},{"text":"b","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]},{"text":"c","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]},{"text":"d","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]},{"text":"e","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]},{"text":"f","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]},{"text":"g","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]},{"text":"h","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]},{"text":"i","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]}]}]}`}, true, 0},
+		"blank text":        {[]string{`{"drafts":[{"questionId":"q-go","lines":[{"text":"  ","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]}]}]}`}, true, 0},
+		"line too long":     {[]string{`{"drafts":[{"questionId":"q-go","lines":[{"text":"` + strings.Repeat("x", 1201) + `","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]}]}]}`}, true, 0},
+		"no citations":      {[]string{`{"drafts":[{"questionId":"q-go","lines":[{"text":"Claim.","citations":[]}]}]}`}, true, 0},
+		"unknown source":    {[]string{`{"drafts":[{"questionId":"q-go","lines":[{"text":"Claim.","citations":[{"sourceId":"blog","excerpt":"Claim"}]}]}]}`}, true, 0},
 		"inexact excerpt":   {[]string{`{"drafts":[{"questionId":"q-go","lines":[{"text":"Claim.","citations":[{"sourceId":"cv","excerpt":"ten years of Rust"}]}]}]}`}, true, 0},
+		"answer too long":   {[]string{`{"drafts":[{"questionId":"q-go","lines":[{"text":"` + strings.Repeat("y", 1100) + `","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]},{"text":"` + strings.Repeat("z", 1100) + `","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]}]}]}`}, true, 0},
 		"malformed":         {[]string{`{"drafts":[`}, true, 0},
+		"unknown field":     {[]string{`{"drafts":[{"questionId":"q-go","confidence":0.9,"lines":[{"text":"Claim.","citations":[{"sourceId":"cv","excerpt":"Led Acme migration"}]}]}]}`}, true, 0},
+		"trailing prose":    {[]string{`{"drafts":[]} hope this helps`}, true, 0},
+		"empty response":    {[]string{`   `}, true, 0},
+		"unclosed fence":    {[]string{"```json\n" + `{"drafts":[]}`}, true, 0},
+		"fenced json":       {[]string{"```json\n" + `{"drafts":[{"questionId":"q-go","lines":[{"text":"Shipped it.","citations":[{"sourceId":"github","excerpt":"Shipped queue worker handling 1M jobs daily"}]}]}]}` + "\n```"}, false, 1},
 		"subset omits held": {[]string{`{"drafts":[{"questionId":"q-go","lines":[{"text":"Shipped it.","citations":[{"sourceId":"github","excerpt":"Shipped queue worker handling 1M jobs daily"}]}]}]}`}, false, 1},
 		"empty drafts":      {[]string{`{"drafts":[]}`}, false, 0},
+		"null drafts":       {[]string{`{}`}, false, 0},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -133,6 +147,22 @@ func TestStandardDrafterOutputValidation(t *testing.T) {
 				t.Fatalf("drafts: %+v %v", drafts, err)
 			}
 		})
+	}
+}
+
+func TestStandardDrafterTruncatesLargeSources(t *testing.T) {
+	request := standardTestRequest()
+	request.CareerSources[0].Body += strings.Repeat(" padding fact.", 2000)
+	fake := &fakeStandardRunner{fn: func(musecode.StandardInput) ([]string, error) {
+		return []string{`{"drafts":[{"questionId":"q-go","lines":[{"text":"Six years.","citations":[{"sourceId":"cv","excerpt":"Six years of Go platform work"}]}]}]}`}, nil
+	}}
+	drafts, err := (&materialprep.StandardDrafter{Runner: fake}).DraftRequiredAnswers(context.Background(), request)
+	if err != nil || len(drafts) != 1 {
+		t.Fatalf("drafts: %+v %v", drafts, err)
+	}
+	prompt := fake.inputs[0].Context["prompt"]
+	if !strings.Contains(prompt, "[truncated to fit the turn budget]") {
+		t.Fatal("truncation not marked")
 	}
 }
 
