@@ -100,6 +100,8 @@ func (k runSink) Emit(event Event) {
 		}
 	case EventToolResult:
 		r.usage.BytesOut += event.BytesOut
+	case EventModelText:
+		r.usage.BytesOut += event.BytesOut
 	case EventSaved:
 		if event.SaveRef == "" {
 			fail("empty save ref")

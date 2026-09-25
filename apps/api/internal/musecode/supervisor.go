@@ -21,16 +21,23 @@ const (
 	EventSaved      EventKind = "saved"
 	EventFinished   EventKind = "finished"
 	EventFailed     EventKind = "failed"
+	// EventModelText carries one final model text from a private
+	// Standard turn (E13 text return path). Bytes are untrusted
+	// until the preparation adapter validates them.
+	EventModelText EventKind = "model_text"
 )
 
 // Event is a single transport observation. SaveRef carries an app-side save
 // handle that must pass validation before it counts as a saved result.
+// Text carries a final model text on EventModelText only; the transport
+// sets BytesOut to len(Text) so the byte bounds apply to it.
 type Event struct {
 	Kind     EventKind
 	Tool     string
 	BytesOut int64
 	SaveRef  string
 	Detail   string
+	Text     string
 }
 
 // EventSink receives transport events synchronously during Run.
