@@ -22,6 +22,8 @@ import {
   UnsupportedBlock,
 } from "@/components/shared"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   defaultResearchAllowance,
   isActiveRunState,
@@ -30,6 +32,11 @@ import {
 } from "@/features/discovery/research-controls"
 import { RunActivityFeed } from "@/features/discovery/run-activity-feed"
 import { RunReportView } from "@/features/discovery/run-report-view"
+import {
+  savedBriefReadiness,
+  SavedBriefPanel,
+  useSavedBrief,
+} from "@/features/discovery/saved-brief"
 
 export const discoveryRunStorageKey = "jobseek.research-run-id"
 export const discoveryPollIntervalMs = 5000
@@ -110,7 +117,8 @@ export function DiscoverySection() {
   const [reportLoading, setReportLoading] = useState(false)
   const [reportError, setReportError] = useState<string | null>(null)
   const [captureUrls, setCaptureUrls] = useState<Record<string, string>>({})
-  const [briefText, setBriefText] = useState("")
+  const [noteText, setNoteText] = useState("")
+  const savedBrief = useSavedBrief()
   const [steerText, setSteerText] = useState("")
   const [steerAck, setSteerAck] = useState<SteeringMessage | null>(null)
   const [busy, setBusy] = useState(false)
@@ -246,19 +254,27 @@ export function DiscoverySection() {
   const csrfToken = session.csrfToken
 
   async function commission(kind: "start" | "find-more") {
+    // Find jobs commissions only against the loaded, fresh saved brief. The
+    // button is disabled otherwise; this guard covers programmatic clicks.
+    if (kind === "start" && !savedBriefReadiness(savedBrief).ready) return
     setBusy(true)
     setActionError(null)
     try {
-      const brief = kind === "start" ? briefText.trim() : ""
+      const note = kind === "start" ? noteText.trim() : ""
+      const basis =
+        savedBrief.status === "ready" && savedBrief.data.brief !== null
+          ? `v${savedBrief.data.brief.profileVersion}`
+          : "unpinned"
+      const intent = `${kind}:${basis}:${note}`
       const pending = commissionKeyRef.current
       const idempotencyKey =
-        pending !== null && pending.intent === `${kind}:${brief}`
+        pending !== null && pending.intent === intent
           ? pending.key
           : newIdempotencyKey()
-      commissionKeyRef.current = { key: idempotencyKey, intent: `${kind}:${brief}` }
+      commissionKeyRef.current = { key: idempotencyKey, intent }
       const view = await commissionResearchRun(
         {
-          ...(brief === "" ? {} : { briefText: brief }),
+          ...(note === "" ? {} : { briefText: note }),
           allowance: defaultResearchAllowance,
           idempotencyKey,
         },
@@ -360,6 +376,9 @@ export function DiscoverySection() {
 
   const terminal =
     run !== null && (run.state === "completed" || run.state === "failed")
+  const readiness = savedBriefReadiness(savedBrief)
+  const briefBasis =
+    savedBrief.status === "ready" ? savedBrief.data.brief : null
 
   return (
     <section
@@ -380,25 +399,66 @@ export function DiscoverySection() {
         </p>
       </div>
 
+      <SavedBriefPanel
+        read={savedBrief}
+        runBriefProfileVersion={run?.briefVersion.profileVersion ?? null}
+      />
+
       {read.kind === "idle" ? (
-        <ResearchControls
-          run={null}
-          busy={busy}
-          actionError={actionError}
-          briefText={briefText}
-          onBriefTextChange={setBriefText}
-          steerText={steerText}
-          onSteerTextChange={setSteerText}
-          steerAck={steerAck}
-          onStart={() => void commission("start")}
-          onStop={() => void control("stop")}
-          onResume={() => void control("resume")}
-          onRefresh={() => {
-            if (runId !== null) void refresh(runId)
-          }}
-          onSteer={() => void steer()}
-          onFindMore={() => void commission("find-more")}
-        />
+        <div className="flex min-w-0 flex-col gap-3 rounded-2xl border bg-card px-4 py-4">
+          <h3 className="font-heading text-base font-medium">Find jobs</h3>
+          <p className="text-sm text-muted-foreground">
+            Codex chooses sources and queries from the saved search brief
+            above, then Jev classifies what was collected. The allowance is
+            finite: 15 minutes, 60 actions, 12 Jev assessments, 8 turns, at
+            most 2 concurrent operations. Nothing starts until the button below
+            is pressed.
+          </p>
+          {readiness.ready && briefBasis !== null ? (
+            <p className="text-sm wrap-break-word">
+              Searches with profile v{briefBasis.profileVersion} (
+              {briefBasis.rubricVersion}).
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground wrap-break-word">
+              {readiness.reason}
+            </p>
+          )}
+          <div>
+            <Button
+              type="button"
+              disabled={busy || !readiness.ready}
+              onClick={() => void commission("start")}
+            >
+              {busy ? "Starting…" : "Find jobs"}
+            </Button>
+          </div>
+          <details className="min-w-0">
+            <summary className="cursor-pointer text-sm text-muted-foreground">
+              Extra note for this run only (optional)
+            </summary>
+            <div className="mt-2 flex min-w-0 flex-col gap-2">
+              <Label htmlFor="discovery-note">
+                Extra note for this run only (optional)
+              </Label>
+              <Textarea
+                id="discovery-note"
+                rows={3}
+                maxLength={20000}
+                value={noteText}
+                onChange={(event) => setNoteText(event.target.value)}
+                placeholder="One-off context for this run — the saved brief stays the search basis."
+                disabled={busy}
+              />
+            </div>
+          </details>
+          {actionError !== null ? (
+            <ErrorBlock
+              title="Research action failed"
+              message={actionError}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {read.kind === "loading" ? (
@@ -438,8 +498,8 @@ export function DiscoverySection() {
             run={run}
             busy={busy}
             actionError={actionError}
-            briefText={briefText}
-            onBriefTextChange={setBriefText}
+            briefText={noteText}
+            onBriefTextChange={setNoteText}
             steerText={steerText}
             onSteerTextChange={setSteerText}
             steerAck={steerAck}

@@ -8,10 +8,12 @@ import {
   waitFor,
 } from "@testing-library/react"
 import type {
+  Preferences,
   ResearchActivityEvent,
   ResearchCaptureView,
   ResearchReportView,
   ResearchRunView,
+  SearchBriefView,
   SteeringMessage,
 } from "@/api/client"
 import { SessionProvider } from "@/api/session"
@@ -124,8 +126,54 @@ function reportFixture(runId: string): ResearchReportView {
   }
 }
 
+const discoveryPreferencesFixture: Preferences = {
+  version: 3,
+  preferredLocation: "Berlin",
+  allowRemote: true,
+  allowHybrid: false,
+  targetHours: "32",
+  minMonthlyBaseCents: 450000,
+  salaryCurrency: "EUR",
+  timezone: "Europe/Berlin",
+  roleCriteria: [
+    {
+      id: "criterion-1",
+      label: "Backend engineer",
+      description: "Server-side product work.",
+      kind: "role",
+      mode: "require",
+      definitionHash: "hash-1",
+    },
+  ],
+}
+
+function discoveryBriefFixture(
+  overrides: Partial<SearchBriefView> = {}
+): SearchBriefView {
+  return {
+    profileVersion: 3,
+    rubricVersion: "criteria-v3-abc123def456",
+    rubricSource: "preferences_versions:current:v3",
+    requirements: [
+      {
+        id: "criterion-1",
+        label: "Backend engineer",
+        description: "Server-side product work.",
+        kind: "role",
+        mode: "require",
+        definitionHash: "hash-1",
+      },
+    ],
+    facts: [{ key: "preferredLocation", value: "Berlin" }],
+    ...overrides,
+  }
+}
+
 interface StubOptions {
   runState?: ResearchRunView["state"]
+  preferences?: Preferences
+  // null serves a 404 (no saved brief yet); "error" serves a 500.
+  brief?: SearchBriefView | null | "error"
 }
 
 function stubResearchFetch(options: StubOptions = {}): {
@@ -152,6 +200,17 @@ function stubResearchFetch(options: StubOptions = {}): {
 
       if (path === "/api/v1/auth/session")
         return jsonResponse(200, sessionFixture)
+      if (path === "/api/v1/preferences" && method === "GET")
+        return jsonResponse(200, options.preferences ?? discoveryPreferencesFixture)
+      if (path === "/api/v1/research/brief" && method === "GET") {
+        const brief =
+          options.brief === undefined ? discoveryBriefFixture() : options.brief
+        if (brief === "error")
+          return jsonResponse(500, { error: { message: "Brief down." } })
+        if (brief === null)
+          return jsonResponse(404, { error: { message: "No brief." } })
+        return jsonResponse(200, brief)
+      }
       if (path === "/api/v1/research/runs" && method === "POST") {
         commissions += 1
         return jsonResponse(
@@ -191,16 +250,14 @@ function renderSection() {
   )
 }
 
-async function startRun(brief = "") {
-  if (brief !== "") {
-    const briefInput = await screen.findByLabelText(
-      "Recruitment intent (optional)"
+async function startRun(note = "") {
+  if (note !== "") {
+    const noteInput = await screen.findByLabelText(
+      "Extra note for this run only (optional)"
     )
-    fireEvent.change(briefInput, { target: { value: brief } })
+    fireEvent.change(noteInput, { target: { value: note } })
   }
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Start research run" })
-  )
+  fireEvent.click(await screen.findByRole("button", { name: "Find jobs" }))
   await screen.findByText("Running — research is underway.")
 }
 
@@ -219,10 +276,15 @@ describe("DiscoverySection", () => {
     const { calls } = stubResearchFetch()
     renderSection()
 
-    await screen.findByRole("button", { name: "Start research run" })
+    await screen.findByRole("button", { name: "Find jobs" })
     await waitFor(() =>
       expect(
         calls.some((call) => call.url === "/api/v1/auth/session")
+      ).toBe(true)
+    )
+    await waitFor(() =>
+      expect(
+        calls.some((call) => call.url === "/api/v1/research/brief")
       ).toBe(true)
     )
     expect(calls.length).toBeGreaterThan(0)
@@ -372,12 +434,109 @@ describe("DiscoverySection", () => {
     stubResearchFetch({ runState: "completed" })
     renderSection()
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Start research run" })
-    )
+    fireEvent.click(await screen.findByRole("button", { name: "Find jobs" }))
     await screen.findByText("Completed — outcomes and report are saved.")
     await screen.findByText('opportunity "Backend Engineer" (job-1 rev 2)')
     await screen.findByText("Searched 1 source")
     await screen.findByText("attempt a1: capture incomplete")
+  })
+
+  it("foregrounds the saved brief as the primary search basis", async () => {
+    stubResearchFetch()
+    renderSection()
+
+    await screen.findByText("Saved search brief")
+    await screen.findByText("Profile v3 · criteria-v3-abc123def456")
+    await screen.findByText(/Berlin · remote ok/)
+    await screen.findByText(/Searches with profile v3/)
+    const findJobs = (await screen.findByRole("button", {
+      name: "Find jobs",
+    })) as HTMLButtonElement
+    expect(findJobs.disabled).toBe(false)
+    // The generic prompt is demoted to a clearly-labeled secondary input.
+    await screen.findByLabelText("Extra note for this run only (optional)")
+    expect(
+      screen.queryByLabelText("Recruitment intent (optional)")
+    ).toBeNull()
+  })
+
+  it("blocks Find jobs without a saved brief and commissions nothing", async () => {
+    const { calls } = stubResearchFetch({ brief: null })
+    renderSection()
+
+    await screen.findByText("No saved search brief yet")
+    const findJobs = (await screen.findByRole("button", {
+      name: "Find jobs",
+    })) as HTMLButtonElement
+    expect(findJobs.disabled).toBe(true)
+    fireEvent.click(findJobs)
+    await waitFor(() =>
+      expect(
+        calls.some((call) => call.url === "/api/v1/research/brief")
+      ).toBe(true)
+    )
+    expect(
+      calls.filter(
+        (call) => call.method === "POST" && call.url === "/api/v1/research/runs"
+      )
+    ).toEqual([])
+  })
+
+  it("blocks Find jobs when the brief is stale", async () => {
+    stubResearchFetch({
+      preferences: { ...discoveryPreferencesFixture, version: 4 },
+      brief: discoveryBriefFixture({ profileVersion: 3 }),
+    })
+    renderSection()
+
+    const alert = await screen.findByRole("alert")
+    expect(alert.textContent).toContain("behind profile v4")
+    const findJobs = (await screen.findByRole("button", {
+      name: "Find jobs",
+    })) as HTMLButtonElement
+    expect(findJobs.disabled).toBe(true)
+    await screen.findByRole("button", { name: "Refresh saved brief" })
+  })
+
+  it("blocks Find jobs when the brief read fails", async () => {
+    stubResearchFetch({ brief: "error" })
+    renderSection()
+
+    await screen.findByText("Could not load the saved search brief")
+    const findJobs = (await screen.findByRole("button", {
+      name: "Find jobs",
+    })) as HTMLButtonElement
+    expect(findJobs.disabled).toBe(true)
+  })
+
+  it("omits briefText when the one-off note is empty", async () => {
+    const { calls } = stubResearchFetch()
+    renderSection()
+    await startRun()
+
+    const posts = calls.filter(
+      (call) => call.method === "POST" && call.url === "/api/v1/research/runs"
+    )
+    expect(posts).toHaveLength(1)
+    const payload = JSON.parse(posts[0]?.body ?? "{}") as Record<string, unknown>
+    expect(payload).not.toHaveProperty("briefText")
+    expect(payload["allowance"]).toEqual(allowanceFixture)
+  })
+
+  it("reports a run commissioned against an older brief", async () => {
+    stubResearchFetch({
+      preferences: { ...discoveryPreferencesFixture, version: 4 },
+      brief: discoveryBriefFixture({
+        profileVersion: 4,
+        rubricVersion: "criteria-v4-new",
+        rubricSource: "preferences_versions:current:v4",
+      }),
+    })
+    renderSection()
+    await startRun()
+
+    await screen.findByText(
+      "The run below used brief profile v3; the saved brief is now profile v4."
+    )
   })
 })
