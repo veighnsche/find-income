@@ -362,12 +362,12 @@ func run() error {
 	}
 	fmt.Printf("e13: pins check=%s set=%.12s workflow=%d stage=%s\n",
 		status.Check.ID, status.Check.QuestionSetSHA256, workflow.Revision, workflow.Stage)
-	view, replayed, err := service.PrepareOpportunityMaterials(ctx, actor, opportunityID,
+	view, created, err := service.PrepareOpportunityMaterials(ctx, actor, opportunityID,
 		requestKey, status.Check.ID, status.Check.QuestionSetSHA256, workflow.Revision)
 	if err != nil {
 		return fmt.Errorf("prepare: %w", err)
 	}
-	fmt.Printf("e13: materials %s (replayed=%v)\n", view.Status, replayed)
+	fmt.Printf("e13: materials %s (committed-new=%v)\n", view.Status, created)
 	if view.Current != nil {
 		fmt.Printf("e13: version=%d pack=%s\n", view.Current.Version, view.Current.PackID)
 	}
