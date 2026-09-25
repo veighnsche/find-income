@@ -1,3 +1,5 @@
+> **RETIRED 26 Sep 2026 — superseded by [product-vision.md](product-vision.md), [connected-prototype-ux-parity-tasks.md](connected-prototype-ux-parity-tasks.md) and [p0-retain-cut-ledger.md](p0-retain-cut-ledger.md). The seven-step manual-handoff scope removed application approval/sending, delivery, employer-site autofill, and downstream replies/interviews/offers. Kept for history only; do not implement from this document.**
+
 # Vite frontend implementation plan
 
 25 September 2026. This is the owner-authorized **early implementation plan** for the known job-search-to-send journey. It starts implementation before the later lifecycle and owner task observations are complete. It does not claim the entire recruitment service is designed or that the first connected prototype has been validated with real users.

@@ -6,9 +6,9 @@ An undeployed personal recruitment agency prototype using Go/SQLite, Vite+ and R
 
 The fixed-board discovery pipeline has been removed at the owner's instruction. There is no job-search implementation, discovery commission, board adapter, collector, candidate-staging funnel or discovery UI. The [owner report](docs/discovery-rapport-2026-09-24.md) records why it was rejected.
 
-The remaining app handles supplied sources and saved records: account and campaign information, companies/opportunities, contextual corrections, application packs, relationships, interview preparation, replies and offer comparisons. Codex operates records; Jev classifies supplied evidence. These capabilities retain their own execution and evidence controls. Startup and progress reads launch no recruitment work.
+The app follows the seven-step manual-handoff scope in [product-vision.md](docs/product-vision.md): deterministic goals forms, free Contributor discovery with Jev classification, persistent selection, deep selected-job checks, Jev-suggested editable answers, Standard-drafted materials, and a saved Handoff page with manual apply instructions. It never emails, submits, attaches, autofills, or otherwise contacts an employer. Application approval/sending, delivery, employer-site autofill, and downstream replies/interviews/offers were removed (see [p0-retain-cut-ledger.md](docs/p0-retain-cut-ledger.md)); older plans under `docs/` are kept for history only. Startup and progress reads launch no recruitment work.
 
-The autonomous-recruitment replacement is implemented through T28 and packaged as candidate `rc1-20260924-df808dd-a71533b0` ([manifest](/Users/vince/Projects/find-income/implementation-notes/autonomous-recruitment/T28-candidate/manifest.md), [verification note](/Users/vince/Projects/find-income/implementation-notes/autonomous-recruitment/T28-candidate/note.md)). Integrated fixture evidence covers the composed backend (T23), runtime failure/concurrency (T24), current-format restore (T25), identity/evidence outcomes (T26), and browser acceptance (T27); all gates re-verified green on the candidate revision (T28 logs). No live recruitment run has happened: host verification (T29), the live canary (T30), and the live audit (T31) are DEFERRED by owner decision on 2026-09-24 pending host selection. The [ordered task checklist](/Users/vince/Projects/find-income/dashboard/docs/autonomous-recruitment-tasks.md) records per-task evidence and the deferral notes; see [remaining work](docs/remaining-work.md) for the current boundary. The retired implementation schedule is no longer a plan for this app.
+No live recruitment run has happened. Earlier T-series packaging and host-verification notes are retired with the plans above; live Contributor/Standard behavior is verified separately from fixture behavior per [connected-prototype-ux-acceptance.md](docs/connected-prototype-ux-acceptance.md).
 
 ## Local setup
 
@@ -61,7 +61,7 @@ bun run test
 bun run build
 ```
 
-`bun run e2e:slice0` through `bun run e2e:slice5b` run the browser fixture gates (see `scripts/ui-smoke/README.md`); they do not establish live provider behavior. [Foundation notes](docs/foundation.md) describe the workspace/toolchain.
+`bun run e2e:slice0` through `bun run e2e:slice4` plus `e2e:rw-checks` and `e2e:rw-discovery` run the browser fixture gates; they do not establish live provider behavior. [Foundation notes](docs/foundation.md) describe the workspace/toolchain.
 
 ## Development handoffs
 

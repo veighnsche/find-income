@@ -1,3 +1,5 @@
+> **RETIRED 26 Sep 2026 — superseded by [product-vision.md](product-vision.md), [connected-prototype-ux-parity-tasks.md](connected-prototype-ux-parity-tasks.md) and [p0-retain-cut-ledger.md](p0-retain-cut-ledger.md). The seven-step manual-handoff scope removed application approval/sending, delivery, employer-site autofill, and downstream replies/interviews/offers. Kept for history only; do not implement from this document.**
+
 # Prompt to paste into the Muse implementer
 
 Copy the text below into the future Muse Spark 1.3 Contributor coding agent. This document itself dispatches nothing.

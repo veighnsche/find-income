@@ -1,3 +1,5 @@
+> **RETIRED 26 Sep 2026 — superseded by [product-vision.md](product-vision.md), [connected-prototype-ux-parity-tasks.md](connected-prototype-ux-parity-tasks.md) and [p0-retain-cut-ledger.md](p0-retain-cut-ledger.md). The seven-step manual-handoff scope removed application approval/sending, delivery, employer-site autofill, and downstream replies/interviews/offers. Kept for history only; do not implement from this document.**
+
 # Muse recruitment execution handoff
 
 Planning only · 25 September 2026. This list authorizes no implementation, model/Jev call, live retrieval, employer contact, deployment or spend. The [governing workflow plan](recruitment-workflow-implementation-plan.md) sets product behavior; this document orders the remaining work. The [progress ledger](recruitment-workflow-implementation-progress.md) records earlier fixture work, but its old Codex-host blockers and completed runtime-audit rows are historical, not proof of Muse readiness.

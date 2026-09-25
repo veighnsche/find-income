@@ -22,16 +22,14 @@ browser binary.
   answer calls.
 - `bun run e2e:slice4` — preparation: prepare flow, optional blanks, held
   missing-required, exact edit + 409 conflict + reload, explicit rewrite,
-  provenance/readiness across versions, approve-then-stale refused, zero
-  automatic employer contact.
-- `bun run e2e:slice5` — test-service delivery: exact version/recipient
-  binding, revoked/stale refused, single-POST repeated clicks, lost-response
-  recovery, partial/failure/uncertain honesty, read-only reconcile, snapshot
-  agreement, zero external requests.
-- `bun run e2e:slice5b` — connected review→send→outcome→history journeys for
-  uncertain and failed attempts, single send each.
+  provenance/readiness across versions, handoff link, zero automatic employer
+  contact.
+- `bun run e2e:rw-checks` — checked details/answers journey against the
+  shared research double.
+- `bun run e2e:rw-discovery` — discovery/selection journey against the
+  shared research double.
 
-Slices 0–1 share the synthetic API in `fixture.mjs`; slices 2–5b carry
+Slices 0–2 share the synthetic API in `fixture.mjs`; the other suites carry
 self-contained doubles importing only `browser.mjs`. All doubles use
 `.invalid` test domains; no suite contacts a live API, model runner,
 provider, account, or employer.

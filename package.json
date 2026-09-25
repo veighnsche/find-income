@@ -19,11 +19,8 @@
     "e2e:slice2": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/slice2-smoke.mjs",
     "e2e:slice3": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/slice3-smoke.mjs",
     "e2e:slice4": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/slice4-smoke.mjs",
-    "e2e:slice5": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/slice5-smoke.mjs",
-    "e2e:slice5b": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/slice5b-journey.mjs",
     "e2e:rw-checks": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/rw-checks-smoke.mjs",
-    "e2e:rw-discovery": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/rw-discovery-smoke.mjs",
-    "e2e:rw-delivery": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/rw-delivery-smoke.mjs"
+    "e2e:rw-discovery": "bun --filter @jobseek/vite-app build && node scripts/ui-smoke/rw-discovery-smoke.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.63.0",

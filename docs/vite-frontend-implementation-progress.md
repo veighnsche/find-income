@@ -1,3 +1,5 @@
+> **RETIRED 26 Sep 2026 — superseded by [product-vision.md](product-vision.md), [connected-prototype-ux-parity-tasks.md](connected-prototype-ux-parity-tasks.md) and [p0-retain-cut-ledger.md](p0-retain-cut-ledger.md). The seven-step manual-handoff scope removed application approval/sending, delivery, employer-site autofill, and downstream replies/interviews/offers. Kept for history only; do not implement from this document.**
+
 # Vite frontend implementation progress
 
 Coordinator ledger for `vite-frontend-implementation-plan.md`. Only the coordinator updates this file and the plan checkboxes.

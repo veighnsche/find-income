@@ -1,3 +1,5 @@
+> **RETIRED 26 Sep 2026 — superseded by [product-vision.md](product-vision.md), [connected-prototype-ux-parity-tasks.md](connected-prototype-ux-parity-tasks.md) and [p0-retain-cut-ledger.md](p0-retain-cut-ledger.md). The seven-step manual-handoff scope removed application approval/sending, delivery, employer-site autofill, and downstream replies/interviews/offers. Kept for history only; do not implement from this document.**
+
 # Autonomous recruitment: ordered implementation tasks
 
 Source: [implementation plan](/Users/vince/Projects/find-income/dashboard/docs/autonomous-recruitment-implementation-plan.md). Status: backlog only; every implementation task below starts unchecked. This schedule implements the plan without changing its product decisions.

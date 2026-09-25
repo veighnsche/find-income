@@ -1,3 +1,5 @@
+> **RETIRED 26 Sep 2026 — superseded by [product-vision.md](product-vision.md), [connected-prototype-ux-parity-tasks.md](connected-prototype-ux-parity-tasks.md) and [p0-retain-cut-ledger.md](p0-retain-cut-ledger.md). The seven-step manual-handoff scope removed application approval/sending, delivery, employer-site autofill, and downstream replies/interviews/offers. Kept for history only; do not implement from this document.**
+
 # Autonomous recruitment implementation plan
 
 Date: 24 September 2026. Status: ready for implementation planning handoff; no replacement functionality has been implemented by this document. Baseline: `df808dd`, after removal of the rejected discovery pipeline.

@@ -6,14 +6,13 @@ import { fileURLToPath } from 'node:url';
 import { launchSilentBrowser as launchBrowser } from './browser.mjs';
 
 // Slice 4 gate (G4): connected prepare -> exact edit -> explicit rewrite ->
-// review-authorize flow through the UI against a deterministic in-file API
+// handoff-link flow through the UI against a deterministic in-file API
 // double. Covers grounded drafting with optional blanks left blank,
-// missing-required held (no review link), exact-edit round-trip with v2
+// missing-required held (no handoff link), exact-edit round-trip with v2
 // adoption, a concurrent-revision 409 through the UI, reload persistence,
 // one explicit rewrite (never implicit), provenance/readiness surviving every
-// version change, zero automatic employer contact, and stale-approval reuse
-// refused after a post-approval edit. Nothing here is a live model run:
-// preparation, packs and reviews are canned double data; the handoff
+// version change, and zero automatic employer contact. Nothing here is a
+// live model run: preparation and packs are canned double data; the handoff
 // distinguishes this deterministic coverage from real-run evidence.
 const webDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../apps/vite-app/dist');
 const time = '2026-09-24T12:00:00Z';
@@ -394,7 +393,6 @@ async function startSlice4Fixture() {
     ]),
     materials: new Map([['job-held', { status: 'held', current: heldVersion }]]),
     packs: new Map([[heldPack.id, heldPack]]),
-    reviews: new Map(),
     requests: [],
   };
 
@@ -465,79 +463,6 @@ async function startSlice4Fixture() {
         const pack = state.packs.get(decodeURIComponent(packDetailMatch[1]));
         return pack === undefined ? error(res, 404) : sendJson(res, 200, pack);
       }
-      if (path === '/api/v1/delivery/reviews' && req.method === 'POST') {
-        const packIds = payload?.packIds;
-        if (
-          typeof payload?.requestKey !== 'string' ||
-          payload.requestKey === '' ||
-          !Array.isArray(packIds) ||
-          packIds.length !== 1 ||
-          typeof packIds[0] !== 'string'
-        )
-          return error(res, 400);
-        const pack = state.packs.get(packIds[0]);
-        if (pack === undefined) return error(res, 404);
-        const entry = state.materials.get(pack.opportunityId);
-        if (entry?.current === undefined || entry.status !== 'prepared' || !entry.current.readiness.ready)
-          return error(res, 400);
-        const id = `review-${state.reviews.size + 1}`;
-        const review = {
-          id,
-          materialSha256: matSha(pack.opportunityId, entry.current.version),
-          jobId: pack.opportunityId,
-          items: [
-            {
-              id: `item-${id}`,
-              reviewId: id,
-              packId: pack.id,
-              opportunityId: pack.opportunityId,
-              opportunityRevision: 2,
-              sourceSha256: 'role-sha-2',
-              profileRevision: 3,
-              packContentSha256: pack.contentSha256,
-              routeId: `route-${pack.opportunityId}`,
-              routeRevision: 1,
-              routeSha256: 'route-sha',
-              title: titles.get(pack.opportunityId) ?? pack.opportunityId,
-              companyName: 'Example Corp',
-              routeExcerpt: 'Apply through the portal.',
-              recipient: 'hiring@example.invalid',
-              sender: 'owner@example.invalid',
-              subject: 'Application',
-              body: 'Synthetic review body.',
-              attachmentSha256: 'attachment-sha',
-              mimeSha256: 'mime-sha',
-              messageId: `<${id}@example.invalid>`,
-              state: 'prepared',
-              current: true,
-            },
-          ],
-        };
-        state.reviews.set(id, review);
-        const { jobId: _jobId, ...wire } = review;
-        return sendJson(res, 201, wire);
-      }
-      const approveMatch = path.match(/^\/api\/v1\/delivery\/reviews\/([^/]+)\/approve$/);
-      if (approveMatch?.[1] !== undefined && req.method === 'POST') {
-        const review = state.reviews.get(decodeURIComponent(approveMatch[1]));
-        if (review === undefined) return error(res, 404);
-        if (payload?.materialSha256 !== review.materialSha256) return error(res, 409);
-        if (review.materialSha256 !== currentMatSha(review.jobId)) return error(res, 409);
-        review.approvedAt = time;
-        review.approvedSha256 = review.materialSha256;
-        const { jobId: _jobId, ...wire } = review;
-        return sendJson(res, 200, wire);
-      }
-      const sendMatch = path.match(/^\/api\/v1\/delivery\/reviews\/([^/]+)\/send$/);
-      if (sendMatch?.[1] !== undefined && req.method === 'POST') {
-        const review = state.reviews.get(decodeURIComponent(sendMatch[1]));
-        if (review === undefined) return error(res, 404);
-        if (review.approvedAt === undefined || review.approvedSha256 !== currentMatSha(review.jobId))
-          return error(res, 409);
-        return error(res, 500);
-      }
-      const reconcileMatch = path.match(/^\/api\/v1\/delivery\/reviews\/([^/]+)\/(reconcile|close)$/);
-      if (reconcileMatch?.[1] !== undefined && req.method === 'POST') return error(res, 501);
       const oppLeaf = path.match(/^\/api\/v1\/opportunities\/([^/]+)\/(decision|workflow|routes|application-packs)$/);
       if (oppLeaf?.[1] !== undefined && oppLeaf[2] !== undefined && req.method === 'GET') {
         const id = decodeURIComponent(oppLeaf[1]);
@@ -796,7 +721,7 @@ async function fetchJson(page, url, method, body) {
 
 // Provenance + readiness must survive every version change: same check pins,
 // revisions, source SHAs and Ready/Held badge on each new version, plus the
-// matching review-link state.
+// matching handoff-link state.
 async function expectVersionPanel(page, { version, originLabel, ready, checkId, setSha, packId }) {
   const panel = page.getByRole('region', { name: `Material version ${version}` });
   await panel.getByRole('heading', { name: `Version ${version}` }).waitFor();
@@ -810,11 +735,11 @@ async function expectVersionPanel(page, { version, originLabel, ready, checkId, 
   await panel.getByText('career-sha-1').waitFor();
   await panel.getByText('role-sha-2').waitFor();
   if (ready) {
-    const link = page.getByRole('link', { name: `Continue to review v${version}` });
+    const link = page.getByRole('link', { name: `Open handoff for v${version}` });
     await link.waitFor();
-    assert.equal(await link.getAttribute('href'), '#/applications/job-prep/review');
+    assert.equal(await link.getAttribute('href'), '#/applications/job-prep');
   } else {
-    assert.equal(await page.getByRole('link', { name: /Continue to review v/ }).count(), 0);
+    assert.equal(await page.getByRole('link', { name: /Open handoff for v/ }).count(), 0);
   }
 }
 
@@ -859,7 +784,7 @@ async function run() {
       'unselected prepare page must not touch material endpoints',
     );
 
-    // Missing-required held role: Held badge, missing item listed, no review
+    // Missing-required held role: Held badge, missing item listed, no handoff
     // link, mount commissions nothing.
     await page.goto(`${fixture.url}#/jobs/job-held/prepare`, { waitUntil: 'networkidle' });
     const heldPanel = page.getByRole('region', { name: 'Material version 1' });
@@ -868,8 +793,8 @@ async function run() {
     await page.getByText(/Held: 1 required item still needs an owner-known fact\./).waitFor();
     await page.getByRole('heading', { name: 'Unanswered required items' }).waitFor();
     await page.getByText(`Missing required: ${HELD_REQ_TEXT}`).waitFor();
-    await page.getByText('This version is held: every required item needs an answer before review.').waitFor();
-    assert.equal(await page.getByRole('link', { name: /Continue to review v/ }).count(), 0);
+    await page.getByText('This version is held: every required item needs an answer before handoff.').waitFor();
+    assert.equal(await page.getByRole('link', { name: /Open handoff for v/ }).count(), 0);
     await page.getByText(`1. ${HELD_REQ_TEXT}`).waitFor();
     await page.getByText('Unknown: On-call experience').waitFor();
     assert.equal(
@@ -1002,7 +927,7 @@ async function run() {
     assert.equal(await editBoxV3.inputValue(), 'Concurrent edit from elsewhere.');
 
     // Explicit rewrite: zero rewrite POSTs until the explicit click, then one
-    // new reviewable version carrying the verbatim instruction.
+    // new inspectable version carrying the verbatim instruction.
     const rewritePath = '/api/v1/opportunities/job-prep/materials/rewrite';
     assert.equal(
       fixture.state.requests.filter((item) => item.method === 'POST' && item.path === rewritePath).length,
@@ -1042,75 +967,21 @@ async function run() {
       packId: 'pack-job-prep-4',
     });
 
-    // Review + authorize the current version: explicit prepare then approve,
-    // with exact answers (including the optional blank) on display.
-    await page.goto(`${fixture.url}#/applications/job-prep/review`, { waitUntil: 'networkidle' });
-    await page.getByRole('heading', { name: 'Review application' }).waitFor();
-    await page.getByText(PREP_REQ_ANSWER).waitFor();
-    await page.getByText('left blank').waitFor();
-    await page.getByText('Authorization binds material v4 and its pack. A newer version needs a fresh review.').waitFor();
-    await page.getByRole('button', { name: 'Prepare review' }).click();
-    await page.getByText(/Review review-1/).waitFor();
-    await page.getByText('not approved').waitFor();
-    await page.getByRole('button', { name: 'Approve this review' }).click();
-    await page.getByText('Review approved').waitFor();
-    await page
-      .getByText('This authorization covers exactly the pack and digest above. Sending is a separate explicit step.')
-      .waitFor();
-    const reviewPrepares = fixture.state.requests.filter(
-      (item) => item.method === 'POST' && item.path === '/api/v1/delivery/reviews',
-    );
-    assert.equal(reviewPrepares.length, 1);
-    assert.deepEqual(reviewPrepares[0].payload, {
-      requestKey: reviewPrepares[0].payload.requestKey,
-      packIds: ['pack-job-prep-4'],
-    });
-    const approves = fixture.state.requests.filter(
-      (item) => item.method === 'POST' && item.path === '/api/v1/delivery/reviews/review-1/approve',
-    );
-    assert.equal(approves.length, 1);
-    assert.deepEqual(approves[0].payload, { materialSha256: 'matsha-job-prep-v4' });
+    // Handoff for the current version: the ready panel links to the saved
+    // application detail, where the owner applies manually.
+    await page.goto(`${fixture.url}#/applications/job-prep`, { waitUntil: 'networkidle' });
+    await page.getByRole('heading', { name: 'job-prep' }).waitFor();
 
-    // No employer contact happened on its own before the deliberate stale
-    // probes below: preparing, editing, rewriting, reloading, reviewing and
-    // approving commission no send/reconcile/round traffic.
+    // No employer contact happened on its own: preparing, editing,
+    // rewriting and reloading commission no send/reconcile/round traffic.
     assert.equal(
       employerContactRequests(fixture.state.requests).length,
       0,
       `no automatic employer contact allowed: ${JSON.stringify(employerContactRequests(fixture.state.requests))}`,
     );
 
-    // Stale approval reuse refused: approve-then-edit, then both a send
-    // attempt and an approve-again conflict against the moved version.
-    await page.goto(`${fixture.url}#/jobs/job-prep/prepare`, { waitUntil: 'networkidle' });
-    await page.getByRole('heading', { name: 'Version 4' }).waitFor();
-    const editBoxV4 = page.getByLabel('Material text (replaces v4 byte-exact)');
-    await page.getByRole('button', { name: 'Start from current rendering' }).click();
-    const seededV4 = await editBoxV4.inputValue();
-    assert.ok(seededV4.includes(instruction));
-    await editBoxV4.fill(`${seededV4} Post-approval owner tweak.`);
-    await page.getByRole('button', { name: 'Save exact edit' }).click();
-    await page.getByRole('heading', { name: 'Version 5' }).waitFor();
-    await expectVersionPanel(page, {
-      version: 5,
-      originLabel: 'Direct owner edit (no model)',
-      ready: true,
-      checkId: 'check-job-prep',
-      setSha: 'set-prep',
-      packId: 'pack-job-prep-5',
-    });
-    const staleSend = await fetchJson(page, '/api/v1/delivery/reviews/review-1/send', 'POST', {});
-    assert.equal(staleSend.status, 409);
-    const staleApprove = await fetchJson(page, '/api/v1/delivery/reviews/review-1/approve', 'POST', {
-      materialSha256: 'matsha-job-prep-v4',
-    });
-    assert.equal(staleApprove.status, 409);
-    await page.goto(`${fixture.url}#/applications/job-prep/review`, { waitUntil: 'networkidle' });
-    await page.getByText('Authorization binds material v5 and its pack. A newer version needs a fresh review.').waitFor();
-    await page.getByRole('button', { name: 'Prepare review' }).waitFor();
-
     // Final tallies: exactly one rewrite (the explicit click), one prepare,
-    // no other employer contact beyond the refused stale-send probe.
+    // zero employer contact.
     assert.equal(
       fixture.state.requests.filter((item) => item.method === 'POST' && item.path === rewritePath).length,
       1,
@@ -1120,14 +991,15 @@ async function run() {
       fixture.state.requests.filter((item) => item.method === 'POST' && item.path.endsWith('/materials/prepare')).length,
       1,
     );
-    const employerHits = employerContactRequests(fixture.state.requests);
-    assert.equal(employerHits.length, 1, `only the deliberate stale-send probe may touch employer paths: ${JSON.stringify(employerHits)}`);
-    assert.equal(employerHits[0].method, 'POST');
-    assert.equal(employerHits[0].path, '/api/v1/delivery/reviews/review-1/send');
+    assert.equal(
+      employerContactRequests(fixture.state.requests).length,
+      0,
+      `no employer contact allowed: ${JSON.stringify(employerContactRequests(fixture.state.requests))}`,
+    );
     assert.equal(pageErrors.length, 0, `page errors: ${pageErrors.join('; ')}`);
 
     console.log(
-      'slice4 smoke: prepare flow, optional blank, held missing-required, exact edit v2, 409 conflict, reload persistence, explicit rewrite v4, provenance/readiness across versions, approve then stale send/approve refused, zero automatic employer contact OK',
+      'slice4 smoke: prepare flow, optional blank, held missing-required, exact edit v2, 409 conflict, reload persistence, explicit rewrite v4, provenance/readiness across versions, handoff link, zero automatic employer contact OK',
     );
   } finally {
     const cleanup = await Promise.allSettled([browser?.close(), fixture?.close()]);
