@@ -392,9 +392,7 @@ loop:
 		}
 	}
 	emitNewSaves(server, sink, emitted)
-	if err := stop(); err != nil && terminal == "" {
-		detail = "host exit: " + err.Error()
-	}
+	detail = exitDetail(detail, terminal, stop())
 	if detail != "" {
 		runErr := errors.New("musewire: " + detail)
 		sink.Emit(musecode.Event{Kind: musecode.EventFailed, Detail: runErr.Error()})
@@ -479,6 +477,20 @@ func (f *execFolder) fold(line []byte) (kind, tool string, bytes int64, step, do
 func isForbiddenTask(taskKind string) bool {
 	return taskKind == "subagent" || strings.HasPrefix(taskKind, "subagent.") ||
 		taskKind == "workflow" || strings.HasPrefix(taskKind, "workflow.")
+}
+
+// exitDetail decides the recorded detail after the event loop. An
+// already-recorded fatal detail (fetch bound, forbidden item, route
+// drift) always wins over the host's wait status: stopping the host to
+// enforce a bound must not mask the bound itself.
+func exitDetail(recorded, terminal string, waitErr error) string {
+	if recorded != "" {
+		return recorded
+	}
+	if terminal == "" && waitErr != nil {
+		return "host exit: " + waitErr.Error()
+	}
+	return recorded
 }
 
 func emitNewSaves(server *publicresearch.Server, sink musecode.EventSink, emitted map[string]bool) {

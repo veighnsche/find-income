@@ -10,6 +10,7 @@ package musewire
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -142,6 +143,22 @@ func TestFoldExecLine(t *testing.T) {
 					tc.name, i, kind, tool, bytes, step, done, fatal)
 			}
 		}
+	}
+}
+
+func TestExitDetailKeepsRecordedCause(t *testing.T) {
+	waitErr := errors.New("exit status 143")
+	if got := exitDetail("retrieval fetch bound 12 exceeded", "", waitErr); got != "retrieval fetch bound 12 exceeded" {
+		t.Errorf("bound detail = %q, want the recorded bound", got)
+	}
+	if got := exitDetail("", "", waitErr); got != "host exit: exit status 143" {
+		t.Errorf("unexplained exit = %q, want host exit", got)
+	}
+	if got := exitDetail("", "completed", waitErr); got != "" {
+		t.Errorf("clean terminal = %q, want empty", got)
+	}
+	if got := exitDetail("", "", nil); got != "" {
+		t.Errorf("quiet end = %q, want empty", got)
 	}
 }
 
