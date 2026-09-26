@@ -4,12 +4,14 @@ import {
   getOwnerOpportunityDecision,
   getResearchCapture,
   getRoleWorkflowOrNull,
+  listCompanies,
   listRoleWorkflows,
   isUnauthenticated,
   listOpportunities,
   listRunFindings,
   RequestError,
   setOwnerOpportunityDecision,
+  type Company,
   type FindingEntry,
   type OpportunityView,
   type OwnerDecision,
@@ -17,6 +19,9 @@ import {
 } from "@/api/client"
 import { useSession } from "@/api/session"
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/shared"
+import { SavedGoalsProvider } from "@/components/shared/saved-goals"
+import { requestGoalEditorOpen } from "@/components/shared/goal-editor"
+import { useInvalidate } from "@/components/shared/invalidation"
 import { Button } from "@/components/ui/button"
 import {
   CheckChosenJobs,
@@ -26,9 +31,10 @@ import {
   type MuseScenario,
   useMuseState,
 } from "@/features/discovery/muse-state"
-import { discoveryRunStorageKey } from "@/features/discovery/discovery-section"
 import { newIdempotencyKey } from "@/features/discovery/research-controls"
+import { listResearchRuns } from "@/features/discovery/run-history"
 import { useOwnerContext } from "@/features/owner-context/useOwnerContext"
+import { describeCompensation } from "@/pages/format"
 import { compactStageLabel } from "@/pages/role-stages"
 
 export const jevGroupOrder: ReadonlyArray<FindingEntry["group"]> = [
@@ -82,12 +88,50 @@ function requestMessage(cause: unknown): string {
     : "The request could not be completed."
 }
 
-function readRunId(): string | null {
-  try {
-    const value = window.localStorage.getItem(discoveryRunStorageKey)
-    return value !== null && value.trim() !== "" ? value : null
-  } catch {
-    return null
+/**
+ * Evidence-grounded work arrangement (G3/R25): the saved pattern plus the
+ * saved location, or an honest unknown. Never upgrades "unknown" to
+ * remote/hybrid from vibes; the owner opens evidence for more.
+ */
+export function describeArrangement(
+  workPattern: string,
+  locationText: string
+): string {
+  const pattern =
+    workPattern === "remote"
+      ? "Remote"
+      : workPattern === "hybrid"
+        ? "Hybrid"
+        : workPattern === "onsite"
+          ? "On-site"
+          : null
+  const parts: string[] = []
+  if (pattern !== null) parts.push(pattern)
+  if (locationText !== "") parts.push(locationText)
+  if (pattern === null) parts.push("arrangement not recorded")
+  return parts.join(" · ")
+}
+
+/**
+ * Honest Jev support (G3/R28): the backend records 0 when the assessment
+ * supplies no calibrated support, so zero renders as unrecorded — never
+ * as a measured "0". Nonzero values render verbatim beside the
+ * not-verified-correctness note.
+ */
+export function describeJevSupport(support: number): string {
+  return support === 0
+    ? "Support signal: not recorded"
+    : `Jev support signal: ${support}`
+}
+
+function kindLabel(kind: string): string {
+  switch (kind) {
+    case "employment":
+      return "Employment"
+    case "project":
+      return "Project"
+    default:
+      return kind === "" ? "Role" : kind
   }
 }
 
@@ -101,7 +145,9 @@ interface GroupedJobsData {
   runFindingsError: string | null
   findingFailures: number
   decisionFailures: number
+  companiesError: string | null
   opportunities: OpportunityView[]
+  companies: Map<string, Company>
   findings: Map<string, TrackedFinding>
   workflows: Map<string, RoleWorkflowState>
   decisions: Map<string, OwnerDecision>
@@ -134,6 +180,7 @@ interface SelectionState {
 
 interface JobCardProps {
   view: OpportunityView
+  employer: Company | null
   tracked: TrackedFinding | null
   runId: string | null
   workflow: RoleWorkflowState | null
@@ -147,6 +194,7 @@ interface JobCardProps {
 
 function JobCard({
   view,
+  employer,
   tracked,
   runId,
   workflow,
@@ -166,10 +214,15 @@ function JobCard({
   const effective = selection?.saved ?? decision
   const busy = selection?.busy === true
   const locked = workflow !== null && workflow.stage === "handoff_saved"
+  const chosen = effective?.decision === "selected"
+  const pay = describeCompensation(job.compensation)
 
   return (
     <li className="rounded-lg border bg-card px-3 py-2.5">
-      <p className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+      <p className="text-xs wrap-break-word text-muted-foreground">
+        {`${employer?.name ?? "Employer not recorded"} · ${describeArrangement(job.workPattern, job.locationText)}`}
+      </p>
+      <p className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2">
         <a
           href={href}
           className="text-sm font-medium wrap-break-word underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -187,7 +240,7 @@ function JobCard({
         )}
       </p>
       <p className="mt-1 text-xs wrap-break-word text-muted-foreground">
-        {`${job.kind} · ${job.workPattern}${job.locationText === "" ? "" : ` · ${job.locationText}`}${archived ? " · archived" : ""}`}
+        {`${kindLabel(job.kind)} · ${pay ?? "pay not advertised"}${archived ? " · archived" : ""}`}
       </p>
       {finding === null || expanded ? null : (
         <div className="mt-1 flex min-w-0 flex-col gap-1">
@@ -328,7 +381,7 @@ function JobCard({
                       </p>
                       <p className="text-sm wrap-break-word">{reason.detail}</p>
                       <p className="text-xs wrap-break-word text-muted-foreground">
-                        {`Jev support signal: ${reason.jevSupport}`}
+                        {describeJevSupport(reason.jevSupport)}
                       </p>
                     </li>
                   ))}
@@ -365,38 +418,21 @@ function JobCard({
           </p>
         )}
         {locked ? null : (
-          <div className="flex min-w-0 flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
+          // Native checkbox, as in the prototype: one consistent choice
+          // control in every group. Checking chooses the role for this job
+          // only (standing goals never change); unchecking passes on it.
+          <label className="flex min-w-0 cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={chosen}
               disabled={busy}
-              aria-label={`Select ${title}`}
-              onClick={() => onDecide("selected")}
-            >
-              Select
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              aria-label={`Shortlist ${title}`}
-              onClick={() => onDecide("acknowledged")}
-            >
-              Shortlist
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              aria-label={`Pass on ${title}`}
-              onClick={() => onDecide("dismissed")}
-            >
-              Pass
-            </Button>
-          </div>
+              onChange={(event) =>
+                onDecide(event.target.checked ? "selected" : "dismissed")
+              }
+              aria-label={`Choose ${title}`}
+            />
+            <span className="wrap-break-word">Choose {title}</span>
+          </label>
         )}
         {selection?.error === undefined || selection.error === null ? null : (
           <p role="alert" className="text-sm wrap-break-word text-destructive">
@@ -408,26 +444,39 @@ function JobCard({
   )
 }
 
-// GroupedJobs renders tracked roles grouped by their SAVED Jev group. No
-// run-list endpoint exists, so the latest tracked run id is read from the
-// same localStorage key DiscoverySection persists: when present,
-// listRunFindings pages that run's latest-per-opportunity findings and roles
-// missing from the run fall back to per-role getOpportunityFinding; without
-// a tracked run every role resolves through getOpportunityFinding (404 means
-// not yet classified). Saved brief/catalog identity comes from the single
+// GroupedJobs renders tracked roles grouped by their SAVED Jev group. The
+// tracked run resolves from the server run history (newest first): when a
+// run is known, listRunFindings pages that run's latest-per-opportunity
+// findings and roles missing from the run fall back to per-role
+// getOpportunityFinding; without a tracked run every role resolves through
+// getOpportunityFinding (404 means not yet classified). Employer names come
+// from the company list; unknown employers and arrangements stay visibly
+// unknown. Saved brief/catalog identity comes from the single
 // useOwnerContext read for this surface. Loading is GET-only, explanation
 // expansion re-reads nothing, stale findings are labeled and retained, and
-// selecting a role POSTs only an owner decision — never a check. The sticky
-// Check action receives the Contributor readiness from the muse-state
-// view-model ("live" in production), so a blocked tier disables checks plainly.
+// choosing a role POSTs only an owner decision — never a check, never a
+// goal change. The sticky Check action receives the Contributor readiness
+// from the muse-state view-model ("live" in production), so a blocked tier
+// disables checks plainly.
 export function GroupedJobs({
   museScenario = "ready",
 }: {
   museScenario?: MuseScenario
 } = {}) {
+  // JobsPage carries no goals provider, so the surface owns one: the shared
+  // saved-goal read stays single per surface either way (G1).
+  return (
+    <SavedGoalsProvider>
+      <GroupedJobsBody museScenario={museScenario} />
+    </SavedGoalsProvider>
+  )
+}
+
+function GroupedJobsBody({ museScenario }: { museScenario: MuseScenario }) {
   const { session, loseSession } = useSession()
   const owner = useOwnerContext()
   const muse = useMuseState(museScenario)
+  const invalidate = useInvalidate()
   const [attempt, setAttempt] = useState(0)
   const [load, setLoad] = useState<LoadState>({ kind: "loading" })
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
@@ -438,8 +487,22 @@ export function GroupedJobs({
   const loadAll = useCallback(
     async (signal: AbortSignal) => {
       setLoad({ kind: "loading" })
-      const runId = readRunId()
+      let runId: string | null = null
       try {
+        // Server-tracked run first (D3): newest research run when the
+        // server exposes history; null (per-role latest) otherwise.
+        try {
+          const history = await listResearchRuns({ limit: 1 }, signal)
+          runId = history.items.length > 0 ? history.items[0]!.runId : null
+        } catch (cause) {
+          if (signal.aborted) return
+          if (isUnauthenticated(cause)) {
+            loseSession()
+            return
+          }
+          runId = null
+        }
+
         const opportunities: OpportunityView[] = []
         let cursor = ""
         for (let page = 0; page < 20; page += 1) {
@@ -447,6 +510,28 @@ export function GroupedJobs({
           opportunities.push(...result.items)
           if (result.nextCursor === undefined || result.nextCursor === "") break
           cursor = result.nextCursor
+        }
+
+        const companies = new Map<string, Company>()
+        let companiesError: string | null = null
+        try {
+          let companyCursor = ""
+          for (let page = 0; page < 20; page += 1) {
+            const result = await listCompanies(companyCursor, signal)
+            for (const view of result.items) {
+              companies.set(view.company.id, view.company)
+            }
+            if (result.nextCursor === undefined || result.nextCursor === "")
+              break
+            companyCursor = result.nextCursor
+          }
+        } catch (cause) {
+          if (signal.aborted) return
+          if (isUnauthenticated(cause)) {
+            loseSession()
+            return
+          }
+          companiesError = requestMessage(cause)
         }
 
         const findings = new Map<string, TrackedFinding>()
@@ -589,7 +674,9 @@ export function GroupedJobs({
             runFindingsError,
             findingFailures,
             decisionFailures,
+            companiesError,
             opportunities,
+            companies,
             findings,
             workflows,
             decisions,
@@ -656,12 +743,52 @@ export function GroupedJobs({
     switchedBuckets.find(({ bucket }) => bucket === activeBucket) ??
     switchedBuckets[0] ?? { bucket: activeBucket, items: [], chosen: 0 }
 
-  // Chosen roles for the C5 fixed action: opportunities with a saved server
-  // workflow (selected decision). Computing this list starts nothing; only an
-  // explicit click in CheckChosenJobs posts checks, one per role.
-  const chosenRoles = useMemo<ChosenRoleInput[]>(() => {
-    if (load.kind !== "ready") return []
-    const roles: ChosenRoleInput[] = []
+  function onTabKeyDown(event: React.KeyboardEvent): void {
+    // Roving tabindex (G4): arrows move and select, Home/End jump.
+    const current = switchedBuckets.findIndex(
+      ({ bucket }) => bucket === active.bucket
+    )
+    if (current === -1) return
+    let next: number | null = null
+    switch (event.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        next = (current + 1) % switchedBuckets.length
+        break
+      case "ArrowLeft":
+      case "ArrowUp":
+        next = (current - 1 + switchedBuckets.length) % switchedBuckets.length
+        break
+      case "Home":
+        next = 0
+        break
+      case "End":
+        next = switchedBuckets.length - 1
+        break
+      default:
+        return
+    }
+    event.preventDefault()
+    const target = switchedBuckets[next]
+    if (target === undefined) return
+    setActiveBucket(target.bucket)
+    document.getElementById(`jobs-tab-${target.bucket}`)?.focus()
+  }
+
+  // Fresh eligible choices for the bulk Check (G4/R24): a saved selected
+  // decision whose workflow is still at the virtual selected stage and
+  // whose vacancy is not archived. Checked, preparing, Handoff and held
+  // roles stay out of the bulk action; explicit recheck lives on each
+  // role's Check page instead. Computing these lists starts nothing; only
+  // an explicit click in CheckChosenJobs posts checks, one per role.
+  const { eligibleRoles, inProgressRoles } = useMemo(() => {
+    if (load.kind !== "ready")
+      return {
+        eligibleRoles: [] as ChosenRoleInput[],
+        inProgressRoles: [] as { jobId: string; title: string }[],
+      }
+    const eligible: ChosenRoleInput[] = []
+    const inProgress: { jobId: string; title: string }[] = []
     for (const view of load.data.opportunities) {
       const workflow = load.data.workflows.get(view.opportunity.id)
       if (workflow === undefined) continue
@@ -669,14 +796,19 @@ export function GroupedJobs({
         view.opportunity.title === ""
           ? "(untitled role)"
           : view.opportunity.title
-      roles.push({
+      if (workflow.stage !== "selected") {
+        inProgress.push({ jobId: view.opportunity.id, title })
+        continue
+      }
+      if (view.opportunity.archivedAt !== undefined) continue
+      eligible.push({
         jobId: view.opportunity.id,
         title,
         opportunityRevision: view.opportunity.revision,
         workflowRevision: workflow.revision,
       })
     }
-    return roles
+    return { eligibleRoles: eligible, inProgressRoles: inProgress }
   }, [load])
 
   if (session === undefined)
@@ -689,6 +821,13 @@ export function GroupedJobs({
       />
     )
   const csrfToken = session.csrfToken
+
+  function editGoals() {
+    // The deterministic editor opens and takes focus; from Jobs the
+    // fallback routes to the search page, where the editor lives.
+    if (!requestGoalEditorOpen("jobs:edit-goals"))
+      window.location.hash = "#/search"
+  }
 
   function toggleWhy(id: string) {
     setOpen((previous) => {
@@ -734,6 +873,9 @@ export function GroupedJobs({
         decisions.set(opportunityId, saved)
         return { kind: "ready", data: { ...current.data, decisions } }
       })
+      // An accepted choice refreshes selection/workflow projections
+      // elsewhere (shell, Applications) without a reload (F1).
+      invalidate("selection", "workflows")
       try {
         const workflow = await getRoleWorkflowOrNull(opportunityId)
         setLoad((current) => {
@@ -780,12 +922,30 @@ export function GroupedJobs({
       className="flex min-w-0 flex-col gap-4"
     >
       <div className="min-w-0">
-        <h2
-          id="grouped-jobs-heading"
-          className="font-heading text-lg font-medium"
-        >
-          Jobs by recommendation
-        </h2>
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          <h2
+            id="grouped-jobs-heading"
+            className="font-heading text-lg font-medium"
+          >
+            Jobs by recommendation
+          </h2>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={editGoals}
+            >
+              Edit goals
+            </Button>
+            <a
+              href="#/search"
+              className="inline-flex h-8 items-center justify-center gap-1 rounded-4xl border border-border bg-input/30 px-3 text-sm font-medium whitespace-nowrap transition-all outline-none select-none hover:bg-input/50 hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              Find more jobs
+            </a>
+          </div>
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
           Roles grouped by their saved Jev classification. Opening an
           explanation rereads nothing: every reason below is saved text.
@@ -858,6 +1018,11 @@ export function GroupedJobs({
             {`${data.decisionFailures} ${data.decisionFailures === 1 ? "role" : "roles"} failed to load a saved decision.`}
           </p>
         )}
+        {data.companiesError === null ? null : (
+          <p className="mt-1 text-xs wrap-break-word text-muted-foreground">
+            {`Employer names are unavailable (${data.companiesError}); roles below show an unknown employer.`}
+          </p>
+        )}
       </div>
 
       {data.opportunities.length === 0 ? (
@@ -870,6 +1035,7 @@ export function GroupedJobs({
           <div
             role="tablist"
             aria-label="Recommendation groups"
+            onKeyDown={onTabKeyDown}
             className="flex min-w-0 flex-wrap gap-2"
           >
             {switchedBuckets.map(({ bucket, items, chosen }) => (
@@ -877,7 +1043,10 @@ export function GroupedJobs({
                 key={bucket}
                 type="button"
                 role="tab"
+                id={`jobs-tab-${bucket}`}
                 aria-selected={active.bucket === bucket}
+                aria-controls={`jobs-panel-${bucket}`}
+                tabIndex={active.bucket === bucket ? 0 : -1}
                 variant={active.bucket === bucket ? "default" : "outline"}
                 size="sm"
                 onClick={() => setActiveBucket(bucket)}
@@ -889,7 +1058,10 @@ export function GroupedJobs({
           <section
             key={active.bucket}
             role="tabpanel"
+            id={`jobs-panel-${active.bucket}`}
+            aria-labelledby={`jobs-tab-${active.bucket}`}
             aria-label={jevGroupLabel(active.bucket)}
+            tabIndex={0}
             className="flex min-w-0 flex-col gap-2"
           >
             <h3 className="text-sm font-medium">
@@ -903,6 +1075,9 @@ export function GroupedJobs({
                   <JobCard
                     key={view.opportunity.id}
                     view={view}
+                    employer={
+                      data.companies.get(view.opportunity.companyId) ?? null
+                    }
                     tracked={data.findings.get(view.opportunity.id) ?? null}
                     runId={data.runId}
                     workflow={data.workflows.get(view.opportunity.id) ?? null}
@@ -929,7 +1104,11 @@ export function GroupedJobs({
         </>
       )}
 
-      <CheckChosenJobs roles={chosenRoles} contributor={muse.contributor} />
+      <CheckChosenJobs
+        roles={eligibleRoles}
+        inProgress={inProgressRoles}
+        contributor={muse.contributor}
+      />
     </section>
   )
 }

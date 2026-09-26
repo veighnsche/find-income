@@ -754,6 +754,27 @@ func (e FindingReasonKind) Valid() bool {
 	}
 }
 
+// Defines values for HandoffUploadRequired.
+const (
+	HandoffUploadRequiredOptional HandoffUploadRequired = "optional"
+	HandoffUploadRequiredRequired HandoffUploadRequired = "required"
+	HandoffUploadRequiredUnknown  HandoffUploadRequired = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the HandoffUploadRequired enum.
+func (e HandoffUploadRequired) Valid() bool {
+	switch e {
+	case HandoffUploadRequiredOptional:
+		return true
+	case HandoffUploadRequiredRequired:
+		return true
+	case HandoffUploadRequiredUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthResponseService.
 const (
 	JobseekApi HealthResponseService = "jobseek-api"
@@ -3234,6 +3255,53 @@ type FindingReason struct {
 // FindingReasonKind defines model for FindingReason.Kind.
 type FindingReasonKind string
 
+// HandoffItem defines model for HandoffItem.
+type HandoffItem struct {
+	Basis         *string              `json:"basis,omitempty"`
+	Content       *string              `json:"content,omitempty"`
+	ContentSha256 *string              `json:"contentSha256,omitempty"`
+	FormValues    *[]ArtifactFormValue `json:"formValues,omitempty"`
+	Reason        string               `json:"reason"`
+	Required      bool                 `json:"required"`
+	State         string               `json:"state"`
+	Type          string               `json:"type"`
+	Version       *int64               `json:"version,omitempty"`
+}
+
+// HandoffSave defines model for HandoffSave.
+type HandoffSave struct {
+	ExpectedWorkflowRevision int64 `json:"expectedWorkflowRevision"`
+}
+
+// HandoffUpload defines model for HandoffUpload.
+type HandoffUpload struct {
+	ArtifactType  *string               `json:"artifactType,omitempty"`
+	ContentSha256 *string               `json:"contentSha256,omitempty"`
+	QuestionId    string                `json:"questionId"`
+	QuestionText  string                `json:"questionText"`
+	Required      HandoffUploadRequired `json:"required"`
+	State         string                `json:"state"`
+	Version       *int64                `json:"version,omitempty"`
+}
+
+// HandoffUploadRequired defines model for HandoffUpload.Required.
+type HandoffUploadRequired string
+
+// HandoffView defines model for HandoffView.
+type HandoffView struct {
+	CheckId          *string         `json:"checkId,omitempty"`
+	CheckStatus      string          `json:"checkStatus"`
+	CompanyName      string          `json:"companyName"`
+	Items            []HandoffItem   `json:"items"`
+	OpportunityId    string          `json:"opportunityId"`
+	RouteDestination *string         `json:"routeDestination,omitempty"`
+	RouteExcerpt     *string         `json:"routeExcerpt,omitempty"`
+	RouteKind        *string         `json:"routeKind,omitempty"`
+	Title            string          `json:"title"`
+	Uploads          []HandoffUpload `json:"uploads"`
+	WorkflowStage    string          `json:"workflowStage"`
+}
+
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
 	Service HealthResponseService `json:"service"`
@@ -4621,6 +4689,25 @@ type SavedAnswerVersionCreate struct {
 	Text            string  `json:"text"`
 }
 
+// SavedJobEntry defines model for SavedJobEntry.
+type SavedJobEntry struct {
+	CheckStatus   string         `json:"checkStatus"`
+	CompanyName   string         `json:"companyName"`
+	Items         []SavedJobItem `json:"items"`
+	OpportunityId string         `json:"opportunityId"`
+	Title         string         `json:"title"`
+}
+
+// SavedJobItem defines model for SavedJobItem.
+type SavedJobItem struct {
+	Reason    string  `json:"reason"`
+	Required  bool    `json:"required"`
+	State     string  `json:"state"`
+	Type      string  `json:"type"`
+	UpdatedAt *string `json:"updatedAt,omitempty"`
+	Version   int64   `json:"version"`
+}
+
 // SearchBriefView defines model for SearchBriefView.
 type SearchBriefView struct {
 	CatalogVersion *string `json:"catalogVersion,omitempty"`
@@ -4911,6 +4998,11 @@ type ListPrepareActivityParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ExportOpportunityArtifactParams defines parameters for ExportOpportunityArtifact.
+type ExportOpportunityArtifactParams struct {
+	Version *int64 `form:"version,omitempty" json:"version,omitempty"`
+}
+
 // ListOpportunityCheckActivityParams defines parameters for ListOpportunityCheckActivity.
 type ListOpportunityCheckActivityParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -5038,6 +5130,9 @@ type DraftOpportunityArtifactsJSONRequestBody = MaterialPrepareRequest
 // SaveOpportunityArtifactJSONRequestBody defines body for SaveOpportunityArtifact for application/json ContentType.
 type SaveOpportunityArtifactJSONRequestBody = ArtifactSaveRequest
 
+// RewriteOpportunityArtifactJSONRequestBody defines body for RewriteOpportunityArtifact for application/json ContentType.
+type RewriteOpportunityArtifactJSONRequestBody = MaterialRewriteRequest
+
 // StartOpportunityCheckJSONRequestBody defines body for StartOpportunityCheck for application/json ContentType.
 type StartOpportunityCheckJSONRequestBody = CheckStartRequest
 
@@ -5049,6 +5144,9 @@ type AnswerClarificationJSONRequestBody = ClarificationAnswer
 
 // SetOwnerOpportunityDecisionJSONRequestBody defines body for SetOwnerOpportunityDecision for application/json ContentType.
 type SetOwnerOpportunityDecisionJSONRequestBody = OwnerDecisionInput
+
+// SaveOpportunityHandoffJSONRequestBody defines body for SaveOpportunityHandoff for application/json ContentType.
+type SaveOpportunityHandoffJSONRequestBody = HandoffSave
 
 // SaveQuestionAnswerJSONRequestBody defines body for SaveQuestionAnswer for application/json ContentType.
 type SaveQuestionAnswerJSONRequestBody = AnswerValueSave

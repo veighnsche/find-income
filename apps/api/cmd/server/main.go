@@ -121,7 +121,9 @@ func runWithContext(ctx context.Context, args []string) error {
 				Career: func() ([]applicationpacks.Source, []byte, error) {
 					return applicationpacks.LoadApprovedCareerSources(root, []string{"cv-vince-liem.typ", "cv-vince-liem.md", "github-evidence-review.md"})
 				},
-				Artifacts: drafter,
+				Artifacts:      drafter,
+				Clarifications: &agency.StoreClarifications{DB: database},
+				Rewrites:       drafter,
 			}
 			options.Materials = materials
 			prepService = materials

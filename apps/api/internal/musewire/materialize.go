@@ -138,7 +138,7 @@ func materializeSighting(ctx context.Context, server *publicresearch.Server, ti,
 		PageURL: pageURL, EmployerName: sighting.EmployerName, Title: sighting.Title,
 		LocationText: sighting.LocationText, PostedText: sighting.PostedText,
 		WorkPattern: sighting.WorkPattern,
-		Receipt: fetched.Receipt.ID,
+		Receipt:     fetched.Receipt.ID,
 	})
 	if err != nil {
 		return "", label + " dropped: " + err.Error()

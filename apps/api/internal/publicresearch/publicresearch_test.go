@@ -493,7 +493,7 @@ func TestSaveVacancyRequiresTrustedReceipt(t *testing.T) {
 		t.Errorf("vacancy fields = %+v", vac)
 	}
 	wantKeys := []string{"captured_at", "employer_name", "location_text", "page_url",
-		"posted_text", "receipt_ref", "source_host", "title", "vacancy_ref"}
+		"posted_text", "receipt_ref", "source_host", "title", "vacancy_ref", "work_pattern"}
 	if keys := dtoKeys(t, "public_save_vacancy", saved, "vacancy"); !reflect.DeepEqual(keys, wantKeys) {
 		t.Errorf("vacancy keys = %v, want frozen %v", keys, wantKeys)
 	}

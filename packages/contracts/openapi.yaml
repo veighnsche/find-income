@@ -1333,6 +1333,135 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/artifacts/{artifactType}/rewrite:
+    parameters:
+      - { $ref: '#/components/parameters/RecordId' }
+      - name: artifactType
+        in: path
+        required: true
+        schema: { type: string, enum: [cv, cover_letter, email_subject, email_body] }
+    post:
+      operationId: rewriteOpportunityArtifact
+      summary: Rewrite one stored artifact with explicit instruction as a new version
+      description: Same grounded basis and version fence as Prepare; idempotent on requestKey.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/MaterialRewriteRequest' } } }
+      responses:
+        '200':
+          description: Exact replay
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/ArtifactReadinessSet' } } }
+        '201':
+          description: Rewritten version saved
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/ArtifactReadinessSet' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/artifacts/{artifactType}/versions:
+    parameters:
+      - { $ref: '#/components/parameters/RecordId' }
+      - name: artifactType
+        in: path
+        required: true
+        schema: { type: string, enum: [cv, cover_letter, email_subject, email_body] }
+    get:
+      operationId: listArtifactVersions
+      summary: Read every stored version of one artifact type, oldest first
+      description: Passive read; no model call, write or transition.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Version list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/ArtifactView' } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /opportunities/{id}/artifacts/{artifactType}/export:
+    parameters:
+      - { $ref: '#/components/parameters/RecordId' }
+      - name: artifactType
+        in: path
+        required: true
+        schema: { type: string, enum: [cv, cover_letter, email_subject, email_body, form_values] }
+      - name: version
+        in: query
+        schema: { type: integer, format: int64, minimum: 1 }
+    get:
+      operationId: exportOpportunityArtifact
+      summary: Download one artifact version rendered from stored content
+      description: Current version by default; form_values derives live. Downloading never means applied.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Rendered file with identity/version/checksum header
+          content:
+            text/markdown:
+              schema: { type: string }
+            text/plain:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /opportunities/{id}/handoff:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: getOpportunityHandoff
+      summary: Read the manual Handoff basis for one role
+      description: Verified destination, take-out items and upload mapping. Passive; opening or copying changes nothing.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Handoff basis
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/HandoffView' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: saveOpportunityHandoff
+      summary: Record the owner's explicit manual-Handoff save
+      description: Terminal prepared to handoff_saved transition; replay-safe. Never fills, attaches, sends or submits.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/HandoffSave' } } }
+      responses:
+        '200':
+          description: Exact replay
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/RoleWorkflowState' } } }
+        '201':
+          description: Handoff saved
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/RoleWorkflowState' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /saved-jobs:
+    get:
+      operationId: listSavedJobs
+      summary: Read the durable saved-job/artifact index
+      description: Every non-archived role with stored work, most recently touched first. Passive.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Saved-job index
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/SavedJobEntry' } }
   /relationships/counterparties:
     get:
       operationId: listRelationshipCounterparties
@@ -4344,6 +4473,70 @@ components:
         checkId: { type: string }
         checkStatus: { type: string }
         entries: { type: array, items: { $ref: '#/components/schemas/ArtifactReadinessEntry' } }
+    SavedJobItem:
+      type: object
+      required: [type, required, state, reason, version]
+      properties:
+        type: { type: string }
+        required: { type: boolean }
+        state: { type: string }
+        reason: { type: string }
+        version: { type: integer, format: int64 }
+        updatedAt: { type: string }
+    SavedJobEntry:
+      type: object
+      required: [opportunityId, title, companyName, checkStatus, items]
+      properties:
+        opportunityId: { type: string }
+        title: { type: string }
+        companyName: { type: string }
+        checkStatus: { type: string }
+        items: { type: array, items: { $ref: '#/components/schemas/SavedJobItem' } }
+    HandoffItem:
+      type: object
+      required: [type, required, state, reason]
+      properties:
+        type: { type: string }
+        required: { type: boolean }
+        state: { type: string }
+        reason: { type: string }
+        basis: { type: string }
+        version: { type: integer, format: int64 }
+        content: { type: string }
+        contentSha256: { type: string }
+        formValues: { type: array, items: { $ref: '#/components/schemas/ArtifactFormValue' } }
+    HandoffUpload:
+      type: object
+      required: [questionId, questionText, required, state]
+      properties:
+        questionId: { type: string }
+        questionText: { type: string }
+        required: { type: string, enum: [required, optional, unknown] }
+        artifactType: { type: string }
+        state: { type: string }
+        version: { type: integer, format: int64 }
+        contentSha256: { type: string }
+    HandoffView:
+      type: object
+      required: [opportunityId, title, companyName, checkStatus, workflowStage, items, uploads]
+      properties:
+        opportunityId: { type: string }
+        title: { type: string }
+        companyName: { type: string }
+        checkId: { type: string }
+        checkStatus: { type: string }
+        workflowStage: { type: string }
+        routeKind: { type: string }
+        routeDestination: { type: string }
+        routeExcerpt: { type: string }
+        items: { type: array, items: { $ref: '#/components/schemas/HandoffItem' } }
+        uploads: { type: array, items: { $ref: '#/components/schemas/HandoffUpload' } }
+    HandoffSave:
+      type: object
+      additionalProperties: false
+      required: [expectedWorkflowRevision]
+      properties:
+        expectedWorkflowRevision: { type: integer, format: int64, minimum: 0 }
     ArtifactSaveRequest:
       type: object
       additionalProperties: false

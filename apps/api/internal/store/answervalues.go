@@ -43,6 +43,7 @@ const (
 	AnswerValueOriginOwnerWritten  = "owner_written"
 	AnswerValueOriginOwnerEdited   = "owner_edited"
 	AnswerValueOriginCarriedBlank  = "carried_blank"
+	AnswerValueOriginStandardDraft = "standard_draft"
 )
 
 const answerValueMaxText = 20000
@@ -84,11 +85,14 @@ type QuestionAnswerList struct {
 }
 
 // AnswerValueSaveInput is the whole browser payload: the guarded version
-// plus exact text. Empty text saves an explicit blank.
+// plus exact text. Empty text saves an explicit blank. Origin is empty
+// on browser saves (derived from history); the Prepare producer sets
+// AnswerValueOriginStandardDraft for the drafts it writes.
 type AnswerValueSaveInput struct {
 	ExpectedAnswerVersion int64  `json:"expectedAnswerVersion"`
 	Text                  string `json:"text"`
 	DraftRequested        bool   `json:"draftRequested"`
+	Origin                string `json:"-"`
 }
 
 func answerValueTextSHA(text string) string {
@@ -250,6 +254,8 @@ func (s *Store) SaveAnswerValue(ctx context.Context, actor Actor, opportunityID,
 		state = AnswerValueStateBlank
 		textSHA = ""
 		origin = AnswerValueOriginCarriedBlank
+	} else if input.Origin == AnswerValueOriginStandardDraft {
+		origin = AnswerValueOriginStandardDraft
 	} else if suggestion != nil {
 		origin = AnswerValueOriginOwnerEdited
 		if input.Text == suggestion.text {

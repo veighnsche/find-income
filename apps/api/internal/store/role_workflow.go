@@ -161,6 +161,32 @@ func (s *Store) ListRoleWorkflows(ctx context.Context) ([]RoleWorkflow, error) {
 	return items, rows.Err()
 }
 
+// SaveRoleHandoff records the owner's explicit manual-Handoff save: the
+// terminal prepared → handoff_saved transition. Replay-safe: a role
+// already at handoff_saved resolves by state with created=false. Saving
+// never fills, attaches, sends or submits anything — it only records
+// that the owner took the materials out themselves.
+func (s *Store) SaveRoleHandoff(ctx context.Context, opportunityID string, expectedRevision int64) (RoleWorkflow, bool, error) {
+	if opportunityID == "" || expectedRevision < 0 {
+		return RoleWorkflow{}, false, ErrInvalid
+	}
+	current, err := s.RoleWorkflow(ctx, opportunityID)
+	if err != nil {
+		return RoleWorkflow{}, false, err
+	}
+	if current.Stage == RoleStageHandoffSaved {
+		return current, false, nil
+	}
+	if current.Stage != RoleStagePrepared {
+		return RoleWorkflow{}, false, ErrInvalid
+	}
+	next, err := s.AdvanceRoleWorkflow(ctx, opportunityID, expectedRevision, RoleStageHandoffSaved, "")
+	if err != nil {
+		return RoleWorkflow{}, false, err
+	}
+	return next, true, nil
+}
+
 // AdvanceRoleWorkflow persists one guarded stage transition for a selected
 // role. The caller supplies the revision it read; a mismatch fails with
 // ErrConflict so reloads and concurrent sessions cannot silently diverge.

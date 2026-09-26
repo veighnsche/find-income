@@ -18,7 +18,10 @@ import type {
   SteeringMessage,
 } from "@/api/client"
 import { SessionProvider } from "@/api/session"
+import { SavedGoalsProvider } from "@/components/shared/saved-goals"
+import { registerGoalEditorOpener } from "@/components/shared/goal-editor"
 import { DiscoverySection } from "@/features/discovery/discovery-section"
+import type { RunHistoryItem } from "@/features/discovery/run-history"
 import { sessionFixture } from "@/pages/fixtures"
 
 interface FetchCall {
@@ -170,12 +173,27 @@ function discoveryBriefFixture(
   }
 }
 
+function historyItem(runId: string, state: string): RunHistoryItem {
+  return {
+    runId,
+    requestKey: `key-${runId}`,
+    intent: "find-jobs",
+    outcome: "research_run",
+    state,
+    stopReason: "",
+    createdAt: "2026-09-24T10:00:00Z",
+    updatedAt: "2026-09-24T11:00:00Z",
+  }
+}
+
 interface StubOptions {
   runState?: ResearchRunView["state"]
   preferences?: Preferences
   // null serves a 404 (no saved brief yet); "error" serves a 500.
   brief?: SearchBriefView | null | "error"
   round?: Round
+  // "missing" serves a 404 (server predates D3); "error" serves a 500.
+  runHistory?: RunHistoryItem[] | "missing" | "error"
 }
 
 function stubResearchFetch(options: StubOptions = {}): {
@@ -213,6 +231,14 @@ function stubResearchFetch(options: StubOptions = {}): {
           return jsonResponse(404, { error: { message: "No brief." } })
         return jsonResponse(200, brief)
       }
+      if (path === "/api/v1/research/runs" && method === "GET") {
+        const history = options.runHistory ?? "missing"
+        if (history === "missing")
+          return jsonResponse(404, { error: { message: "No run history." } })
+        if (history === "error")
+          return jsonResponse(500, { error: { message: "History down." } })
+        return jsonResponse(200, { items: history })
+      }
       if (path === "/api/v1/research/runs" && method === "POST") {
         commissions += 1
         return jsonResponse(
@@ -247,15 +273,20 @@ function stubResearchFetch(options: StubOptions = {}): {
   return { calls }
 }
 
-function renderSection() {
+function renderSection(runId?: string | null) {
   return render(
     <SessionProvider>
-      <DiscoverySection />
+      <SavedGoalsProvider>
+        <DiscoverySection runId={runId ?? null} />
+      </SavedGoalsProvider>
     </SessionProvider>
   )
 }
 
-async function startRun(note = "") {
+async function startRun(
+  note = "",
+  doneText = "Running — research is underway."
+) {
   if (note !== "") {
     const noteInput = await screen.findByLabelText(
       "Extra note for this run only (optional)"
@@ -263,17 +294,19 @@ async function startRun(note = "") {
     fireEvent.change(noteInput, { target: { value: note } })
   }
   fireEvent.click(await screen.findByRole("button", { name: "Find jobs" }))
-  await screen.findByText("Running — research is underway.")
+  await screen.findByText(doneText)
 }
 
 beforeEach(() => {
   window.localStorage.clear()
+  window.location.hash = ""
 })
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
   window.localStorage.clear()
+  window.location.hash = ""
 })
 
 describe("DiscoverySection", () => {
@@ -296,8 +329,8 @@ describe("DiscoverySection", () => {
     expect(calls.filter((call) => call.method === "POST")).toEqual([])
   })
 
-  it("restores the saved run with reads only", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-9")
+  it("restores the linked run with reads only", async () => {
+    window.location.hash = "#/search?run=run-9"
     const { calls } = stubResearchFetch()
     renderSection()
 
@@ -308,6 +341,57 @@ describe("DiscoverySection", () => {
       )
     ).toBe(true)
     expect(calls.filter((call) => call.method === "POST")).toEqual([])
+  })
+
+  it("ignores the retired browser pointer and restores from the server", async () => {
+    // A stale pointer from before G2 must not shadow server recovery.
+    window.localStorage.setItem("jobseek.research-run-id", "run-stale")
+    const { calls } = stubResearchFetch({ runHistory: [historyItem("run-9", "paused")] })
+    renderSection()
+
+    await screen.findByText("Running — research is underway.")
+    expect(
+      calls.some((call) =>
+        call.url.startsWith("/api/v1/research/runs/run-9")
+      )
+    ).toBe(true)
+    expect(
+      calls.some((call) => call.url.includes("run-stale"))
+    ).toBe(false)
+  })
+
+  it("restores the newest resumable server run without a link", async () => {
+    const { calls } = stubResearchFetch({
+      runHistory: [
+        historyItem("run-new-done", "completed"),
+        historyItem("run-old-paused", "paused"),
+      ],
+    })
+    renderSection()
+
+    await screen.findByText("Running — research is underway.")
+    expect(
+      calls.some((call) =>
+        call.url.startsWith("/api/v1/research/runs/run-old-paused")
+      )
+    ).toBe(true)
+    expect(calls.filter((call) => call.method === "POST")).toEqual([])
+    // The settled run stays reachable from history.
+    expect(
+      await screen.findByRole("link", { name: /run-new-done · completed/ })
+    ).toBeDefined()
+  })
+
+  it("restores an unlisted run explicitly from its history link", async () => {
+    stubResearchFetch({ runHistory: [historyItem("run-x", "mystery")] })
+    renderSection()
+
+    // Unknown states never auto-restore: the idle panel stays.
+    await screen.findByRole("button", { name: "Find jobs" })
+    fireEvent.click(
+      await screen.findByRole("link", { name: /run-x · mystery/ })
+    )
+    await screen.findByText("Running — research is underway.")
   })
 
   it("commissions with an explicit idempotent payload", async () => {
@@ -328,38 +412,65 @@ describe("DiscoverySection", () => {
     expect(payload["allowance"]).toEqual(allowanceFixture)
     expect(typeof payload["idempotencyKey"]).toBe("string")
     expect((payload["idempotencyKey"] as string).length).toBeGreaterThan(0)
-    expect(window.localStorage.getItem("jobseek.research-run-id")).toBe("run-1")
+    // The run link is the recovery pointer; no browser pointer is written.
+    expect(window.location.hash).toBe("#/search?run=run-1")
+    expect(window.localStorage.getItem("jobseek.research-run-id")).toBeNull()
   })
 
-  it("stops and resumes through round control, then refreshes", async () => {
+  it("stops a running run through round control, then refreshes", async () => {
+    window.location.hash = "#/search?run=run-9"
     const { calls } = stubResearchFetch()
     renderSection()
-    await startRun()
+    await screen.findByText("Running — research is underway.")
 
     fireEvent.click(await screen.findByRole("button", { name: "Stop" }))
     await waitFor(() =>
       expect(
         calls.some(
           (call) =>
-            call.method === "POST" && call.url === "/api/v1/rounds/run-1/stop"
-        )
-      ).toBe(true)
-    )
-    fireEvent.click(await screen.findByRole("button", { name: "Resume" }))
-    await waitFor(() =>
-      expect(
-        calls.some(
-          (call) =>
-            call.method === "POST" &&
-            call.url === "/api/v1/rounds/run-1/resume"
+            call.method === "POST" && call.url === "/api/v1/rounds/run-9/stop"
         )
       ).toBe(true)
     )
     const runReads = calls.filter(
       (call) =>
-        call.method === "GET" && call.url === "/api/v1/research/runs/run-1"
+        call.method === "GET" && call.url === "/api/v1/research/runs/run-9"
     )
-    expect(runReads.length).toBeGreaterThanOrEqual(3)
+    expect(runReads.length).toBeGreaterThanOrEqual(2)
+    // Resume is state-invalid while running and says so.
+    expect(
+      (await screen.findByRole("button", { name: "Resume" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true)
+    expect(
+      await screen.findByText(/Resume applies to a paused run/)
+    ).toBeDefined()
+  })
+
+  it("resumes a paused run through round control", async () => {
+    window.location.hash = "#/search?run=run-9"
+    const { calls } = stubResearchFetch({ runState: "paused" })
+    renderSection()
+    await screen.findByText("Paused — resume continues with the remaining allowance.")
+
+    expect(
+      (await screen.findByRole("button", { name: "Resume" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(false)
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }))
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (call) =>
+            call.method === "POST" &&
+            call.url === "/api/v1/rounds/run-9/resume"
+        )
+      ).toBe(true)
+    )
+    expect(
+      (screen.getByRole("button", { name: "Stop" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true)
   })
 
   it("steers with a body payload and shows the server ack", async () => {
@@ -410,13 +521,15 @@ describe("DiscoverySection", () => {
   })
 
   it("finds more jobs as a fresh pass with a new idempotency key", async () => {
-    const { calls } = stubResearchFetch()
+    const { calls } = stubResearchFetch({ runState: "completed" })
     renderSection()
-    await startRun("remote backend roles")
+    await startRun("remote backend roles", "Completed — outcomes and report are saved.")
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Find more jobs" })
-    )
+    const findMore = (await screen.findByRole("button", {
+      name: "Find more jobs",
+    })) as HTMLButtonElement
+    expect(findMore.disabled).toBe(false)
+    fireEvent.click(findMore)
     await waitFor(() =>
       expect(
         calls.filter(
@@ -432,7 +545,67 @@ describe("DiscoverySection", () => {
     const second = JSON.parse(posts[1]?.body ?? "{}") as Record<string, unknown>
     expect(second["idempotencyKey"]).not.toBe(first["idempotencyKey"])
     expect(second).not.toHaveProperty("briefText")
-    expect(window.localStorage.getItem("jobseek.research-run-id")).toBe("run-2")
+    expect(window.location.hash).toBe("#/search?run=run-2")
+  })
+
+  it("disables Find more while a run is active and names the reason", async () => {
+    stubResearchFetch()
+    renderSection()
+    await startRun()
+
+    expect(
+      (await screen.findByRole("button", {
+        name: "Find more jobs",
+      }) as HTMLButtonElement).disabled
+    ).toBe(true)
+    expect(
+      await screen.findByText("Find more starts after this run settles.")
+    ).toBeDefined()
+  })
+
+  it("continues a settled run to Select jobs beside Find more and Edit goals", async () => {
+    stubResearchFetch({ runState: "completed" })
+    renderSection()
+    await startRun("", "Completed — outcomes and report are saved.")
+
+    const selectJobs = (await screen.findByRole("link", {
+      name: "Select jobs",
+    })) as HTMLAnchorElement
+    expect(selectJobs.getAttribute("href")).toBe("#/jobs")
+    expect(
+      (screen.getByRole("button", { name: "Find more jobs" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(false)
+    expect(
+      (screen.getByRole("button", { name: "Edit goals" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(false)
+    expect(
+      (screen.getByRole("button", { name: "Stop" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true)
+    expect(
+      await screen.findByText(/already completed; there is nothing to stop/)
+    ).toBeDefined()
+  })
+
+  it("opens Change goals through the goal-editor registry", async () => {
+    const opened: string[] = []
+    const unregister = registerGoalEditorOpener((reason) => {
+      opened.push(reason)
+    })
+    try {
+      stubResearchFetch()
+      renderSection()
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Change goals" })
+      )
+      expect(opened).toEqual(["discovery:change-goals"])
+      // The registry open navigates nowhere.
+      expect(window.location.hash).toBe("")
+    } finally {
+      unregister()
+    }
   })
 
   it("loads the report for terminal runs", async () => {

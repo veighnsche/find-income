@@ -8,6 +8,7 @@ import {
   within,
 } from "@testing-library/react"
 import type {
+  Company,
   FindingEntry,
   OpportunityView,
   OwnerDecision,
@@ -17,7 +18,9 @@ import type {
   SearchBriefView,
 } from "@/api/client"
 import { SessionProvider } from "@/api/session"
+import { registerGoalEditorOpener } from "@/components/shared/goal-editor"
 import { GroupedJobs } from "@/features/discovery/grouped-jobs"
+import type { RunHistoryItem } from "@/features/discovery/run-history"
 import { sessionFixture } from "@/pages/fixtures"
 
 interface FetchCall {
@@ -37,7 +40,12 @@ function notFound(message: string): Response {
   return jsonResponse(404, { error: { message } })
 }
 
-function jobView(id: string, title: string, revision = 2): OpportunityView {
+function jobView(
+  id: string,
+  title: string,
+  revision = 2,
+  overrides: Partial<OpportunityView["opportunity"]> = {}
+): OpportunityView {
   return {
     opportunity: {
       id,
@@ -56,8 +64,32 @@ function jobView(id: string, title: string, revision = 2): OpportunityView {
       createdAt: "2026-09-10T09:00:00Z",
       updatedAt: "2026-09-12T09:00:00Z",
       compensation: {},
+      ...overrides,
     },
     likelyDuplicates: [],
+  }
+}
+
+const companyFixture: Company = {
+  id: "company-1",
+  name: "Harbour Ltd",
+  website: "https://example.com/harbour",
+  notes: "",
+  revision: 1,
+  createdAt: "2026-09-10T09:00:00Z",
+  updatedAt: "2026-09-12T09:00:00Z",
+}
+
+function runHistoryItem(runId: string, state: string): RunHistoryItem {
+  return {
+    runId,
+    requestKey: `key-${runId}`,
+    intent: "find-jobs",
+    outcome: "research_run",
+    state,
+    stopReason: "",
+    createdAt: "2026-09-24T10:00:00Z",
+    updatedAt: "2026-09-24T11:00:00Z",
   }
 }
 
@@ -242,6 +274,13 @@ interface StubOptions {
   // null serves a 404 (no saved brief yet); "error" serves a 500.
   brief?: SearchBriefView | null | "error"
   failBriefAttempts?: number
+  opportunities?: OpportunityView[]
+  // "missing" serves a 404 (server predates D3); "error" serves a 500.
+  runHistory?: RunHistoryItem[] | "missing" | "error"
+  // "error" serves a 500 for the company list.
+  companies?: Company[] | "error"
+  // Per-opportunity finding overrides (merged over the base fixtures).
+  findingOverrides?: Record<string, Partial<FindingEntry>>
 }
 
 function stubGroupedFetch(options: StubOptions = {}): { calls: FetchCall[] } {
@@ -259,6 +298,12 @@ function stubGroupedFetch(options: StubOptions = {}): { calls: FetchCall[] } {
     auditId: "audit-rec",
     createdAt: "2026-09-18T10:00:00Z",
   })
+  const jobs = options.opportunities ?? jobsFixture
+  const findings: Record<string, FindingEntry> = { ...findingsByOpportunity }
+  for (const [id, override] of Object.entries(options.findingOverrides ?? {})) {
+    const base = findings[id]
+    if (base !== undefined) findings[id] = { ...base, ...override }
+  }
   let briefAttempts = 0
   const fetchMock = vi.fn(
     async (input: string | URL | Request, init?: RequestInit) => {
@@ -280,7 +325,26 @@ function stubGroupedFetch(options: StubOptions = {}): { calls: FetchCall[] } {
       if (path === "/api/v1/auth/session")
         return jsonResponse(200, sessionFixture)
       if (path === "/api/v1/opportunities" && method === "GET")
-        return jsonResponse(200, { items: jobsFixture })
+        return jsonResponse(200, { items: jobs })
+      if (path === "/api/v1/companies" && method === "GET") {
+        const companies = options.companies ?? [companyFixture]
+        if (companies === "error")
+          return jsonResponse(500, { error: { message: "Companies down." } })
+        return jsonResponse(200, {
+          items: companies.map((company) => ({
+            company,
+            likelyDuplicates: [],
+          })),
+        })
+      }
+      if (path === "/api/v1/research/runs" && method === "GET") {
+        const history = options.runHistory ?? "missing"
+        if (history === "missing")
+          return jsonResponse(404, { error: { message: "No run history." } })
+        if (history === "error")
+          return jsonResponse(500, { error: { message: "History down." } })
+        return jsonResponse(200, { items: history })
+      }
       if (path === "/api/v1/preferences" && method === "GET")
         return jsonResponse(
           200,
@@ -312,7 +376,11 @@ function stubGroupedFetch(options: StubOptions = {}): { calls: FetchCall[] } {
         /^\/api\/v1\/research\/runs\/([^/]+)\/findings$/
       )
       if (runFindings?.[1] !== undefined && method === "GET") {
-        return jsonResponse(200, { items: [recFinding, unknownFinding] })
+        return jsonResponse(200, {
+          items: [findings["job-rec"], findings["job-unknown"]].filter(
+            (entry) => entry !== undefined
+          ),
+        })
       }
 
       const captureMatch = path.match(
@@ -331,7 +399,7 @@ function stubGroupedFetch(options: StubOptions = {}): { calls: FetchCall[] } {
         const id = decodeURIComponent(oppMatch[1])
         const leaf = oppMatch[2]
         if (leaf === "finding" && method === "GET") {
-          const entry = findingsByOpportunity[id]
+          const entry = findings[id]
           if (entry === undefined) return notFound("No saved finding.")
           return jsonResponse(200, entry)
         }
@@ -433,14 +501,9 @@ describe("GroupedJobs", () => {
       )
     ).toBeDefined()
     expect(
-      screen.getByRole("button", { name: "Select Backend Engineer" })
-    ).toBeDefined()
-    expect(
-      screen.getByRole("button", { name: "Shortlist Backend Engineer" })
-    ).toBeDefined()
-    expect(
-      screen.getByRole("button", { name: "Pass on Backend Engineer" })
-    ).toBeDefined()
+      (screen.getByRole("checkbox", { name: "Choose Backend Engineer" }) as HTMLInputElement)
+        .checked
+    ).toBe(true)
 
     first.unmount()
     renderJobs()
@@ -458,8 +521,8 @@ describe("GroupedJobs", () => {
     await screen.findByRole("button", { name: "Check chosen jobs (1)" })
 
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "Pass on Backend Engineer",
+      screen.getByRole("checkbox", {
+        name: "Choose Backend Engineer",
       })
     )
     await screen.findByRole("button", { name: "Check chosen jobs (0)" })
@@ -469,10 +532,9 @@ describe("GroupedJobs", () => {
       )
     ).toBeDefined()
     expect(
-      screen.getByRole("button", {
-        name: "Select Backend Engineer",
-      })
-    ).toBeDefined()
+      (screen.getByRole("checkbox", { name: "Choose Backend Engineer" }) as HTMLInputElement)
+        .checked
+    ).toBe(false)
     const post = calls.find(
       (call) =>
         call.method === "POST" &&
@@ -484,34 +546,56 @@ describe("GroupedJobs", () => {
     expect(calls.filter((call) => call.url.includes("/checks"))).toEqual([])
   })
 
-  it("offers the decision triple during review but not after a saved handoff", async () => {
-    stubGroupedFetch({ workflowStages: { "job-rec": "prepared" } })
-    const first = renderJobs()
+  it("choosing a conflicting job relaxes no standing goal", async () => {
+    const { calls } = stubGroupedFetch()
+    renderJobs()
     await screen.findByRole("button", { name: "Check chosen jobs (1)" })
+
+    // Backend Engineer carries a saved conflict; un- and re-choosing it
+    // writes only owner decisions.
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "Pass on Backend Engineer",
-      })
+      screen.getByRole("checkbox", { name: "Choose Backend Engineer" })
     )
     await screen.findByRole("button", { name: "Check chosen jobs (0)" })
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Choose Backend Engineer" })
+    )
+    await screen.findByRole("button", { name: "Check chosen jobs (1)" })
+    expect(
+      within(cardFor("Backend Engineer")).getByText(
+        "Selected — decision rev 3."
+      )
+    ).toBeDefined()
+    expect(
+      calls.filter(
+        (call) =>
+          call.method === "PUT" || call.url.includes("process-input")
+      )
+    ).toEqual([])
+  })
+
+  it("offers the checkbox during review but not after a saved handoff", async () => {
+    stubGroupedFetch({ workflowStages: { "job-rec": "prepared" } })
+    const first = renderJobs()
+    // A preparing role is outside the bulk action but still chooses.
+    await screen.findByRole("button", { name: "Check chosen jobs (0)" })
+    expect(
+      screen.getByRole("checkbox", { name: "Choose Backend Engineer" })
+    ).toBeDefined()
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Choose Backend Engineer",
+      })
+    )
+    await screen.findByText("Passed — decision rev 2.")
 
     first.unmount()
     stubGroupedFetch({ workflowStages: { "job-rec": "handoff_saved" } })
     renderJobs()
-    await screen.findByRole("button", { name: "Check chosen jobs (1)" })
+    await screen.findByText("Selected — decision rev 1.")
     expect(
-      screen.queryByRole("button", {
-        name: "Select Backend Engineer",
-      })
-    ).toBeNull()
-    expect(
-      screen.queryByRole("button", {
-        name: "Shortlist Backend Engineer",
-      })
-    ).toBeNull()
-    expect(
-      screen.queryByRole("button", {
-        name: "Pass on Backend Engineer",
+      screen.queryByRole("checkbox", {
+        name: "Choose Backend Engineer",
       })
     ).toBeNull()
     expect(
@@ -522,8 +606,7 @@ describe("GroupedJobs", () => {
   })
 
   it("groups listings by saved Jev group, including exceptional Unknown", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
-    stubGroupedFetch()
+    stubGroupedFetch({ runHistory: [runHistoryItem("run-7", "completed")] })
     renderJobs()
 
     await screen.findByText("Recommended (1)")
@@ -585,14 +668,13 @@ describe("GroupedJobs", () => {
   })
 
   it("keeps choices visible while switching views", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     stubGroupedFetch()
     renderJobs()
 
     await screen.findByText("Recommended (1)")
     switchTab("Might not recommend")
     fireEvent.click(
-      screen.getByRole("button", { name: "Select Weekend Project" })
+      screen.getByRole("checkbox", { name: "Choose Weekend Project" })
     )
     await screen.findByText("Selected — decision rev 1.")
     screen.getByRole("tab", { name: "Might not recommend (1 · 1 chosen)" })
@@ -604,7 +686,6 @@ describe("GroupedJobs", () => {
   })
 
   it("leads cards with the principal saved reason, conflict and unknown basis", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     stubGroupedFetch()
     renderJobs()
 
@@ -621,7 +702,6 @@ describe("GroupedJobs", () => {
   })
 
   it("renders saved reason text verbatim with signal, conflict and missing info", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     stubGroupedFetch()
     renderJobs()
 
@@ -647,7 +727,6 @@ describe("GroupedJobs", () => {
   })
 
   it("opens explanations with zero model calls and zero new fetches", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     const { calls } = stubGroupedFetch()
     renderJobs()
 
@@ -682,15 +761,14 @@ describe("GroupedJobs", () => {
   })
 
   it("posts a guarded select decision and never starts a check", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     const { calls } = stubGroupedFetch()
     renderJobs()
 
     await screen.findByText("Recommended (1)")
     switchTab("Might not recommend")
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "Select Weekend Project",
+      screen.getByRole("checkbox", {
+        name: "Choose Weekend Project",
       })
     )
     await screen.findByText("Selected — decision rev 1.")
@@ -723,7 +801,6 @@ describe("GroupedJobs", () => {
   })
 
   it("sends the existing decision revision as the guard", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     const { calls } = stubGroupedFetch({
       existingDecisions: {
         "job-could": {
@@ -742,8 +819,8 @@ describe("GroupedJobs", () => {
     await screen.findByText("Recommended (1)")
     switchTab("Might recommend")
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "Select Support Engineer",
+      screen.getByRole("checkbox", {
+        name: "Choose Support Engineer",
       })
     )
     await screen.findByText("Selected — decision rev 5.")
@@ -787,32 +864,42 @@ describe("GroupedJobs", () => {
     ).toBeDefined()
   })
 
-  it("shortlists a job without touching the chosen count or starting a check", async () => {
-    const { calls } = stubGroupedFetch()
+  it("keeps a shortlisted job out of the chosen count without starting a check", async () => {
+    const { calls } = stubGroupedFetch({
+      existingDecisions: {
+        "job-prob": {
+          id: "decision-p",
+          opportunityId: "job-prob",
+          decision: "acknowledged",
+          revision: 2,
+          opportunityRevision: 2,
+          auditId: "audit-p",
+          createdAt: "2026-09-18T10:00:00Z",
+        },
+      },
+    })
     renderJobs()
 
+    // Only the selected Backend Engineer counts; the shortlist shows with
+    // an unchecked box and no check starts.
     await screen.findByRole("button", { name: "Check chosen jobs (1)" })
     switchTab("Might not recommend")
-    fireEvent.click(
-      screen.getByRole("button", { name: "Shortlist Weekend Project" })
-    )
-    await screen.findByText("Shortlisted — decision rev 1.")
     expect(
-      screen.getByRole("button", { name: "Check chosen jobs (1)" })
+      within(cardFor("Weekend Project")).getByText(
+        "Shortlisted — decision rev 2."
+      )
     ).toBeDefined()
-    const post = calls.find(
-      (call) =>
-        call.method === "POST" &&
-        call.url === "/api/v1/opportunities/job-prob/decision"
-    )
-    const body = JSON.parse(post?.body ?? "{}") as Record<string, unknown>
-    expect(body["decision"]).toBe("acknowledged")
-    expect(body["expectedDecisionRevision"]).toBe(0)
+    expect(
+      (screen.getByRole("checkbox", { name: "Choose Weekend Project" }) as HTMLInputElement)
+        .checked
+    ).toBe(false)
+    expect(
+      screen.getByRole("tab", { name: "Might not recommend (1 · 0 chosen)" })
+    ).toBeDefined()
     expect(calls.filter((call) => call.url.includes("/checks"))).toEqual([])
   })
 
   it("shows staleness per listing", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     stubGroupedFetch()
     renderJobs()
 
@@ -829,8 +916,7 @@ describe("GroupedJobs", () => {
   })
 
   it("shows brief and catalog versions", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
-    stubGroupedFetch()
+    stubGroupedFetch({ runHistory: [runHistoryItem("run-7", "completed")] })
     renderJobs()
 
     await screen.findByText(
@@ -852,7 +938,6 @@ describe("GroupedJobs", () => {
   })
 
   it("reads the saved context once per surface", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     const { calls } = stubGroupedFetch()
     renderJobs()
 
@@ -873,7 +958,6 @@ describe("GroupedJobs", () => {
   })
 
   it("retains and labels stale findings after the brief moves on", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     stubGroupedFetch({
       preferences: { ...groupedPreferencesFixture, version: 5 },
       brief: {
@@ -916,7 +1000,6 @@ describe("GroupedJobs", () => {
   })
 
   it("shows an honest empty state when no brief exists yet", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     stubGroupedFetch({ brief: null })
     renderJobs()
 
@@ -929,7 +1012,6 @@ describe("GroupedJobs", () => {
   })
 
   it("keeps saved findings visible when the context read fails, with a retry", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     stubGroupedFetch({ failBriefAttempts: 1 })
     renderJobs()
 
@@ -964,7 +1046,6 @@ describe("GroupedJobs", () => {
   })
 
   it("shows evidence links and source refs for new-source discovery", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     stubGroupedFetch()
     renderJobs()
 
@@ -1000,7 +1081,6 @@ describe("GroupedJobs", () => {
   })
 
   it("wires the fixed Check chosen jobs action to chosen roles only", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     const { calls } = stubGroupedFetch()
     renderJobs()
 
@@ -1014,8 +1094,8 @@ describe("GroupedJobs", () => {
     // Selecting another role updates the count but starts no check.
     switchTab("Might not recommend")
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "Select Weekend Project",
+      screen.getByRole("checkbox", {
+        name: "Choose Weekend Project",
       })
     )
     await screen.findByText("Selected — decision rev 1.")
@@ -1060,15 +1140,14 @@ describe("GroupedJobs", () => {
   })
 
   it("surfaces decision conflicts without starting a check", async () => {
-    window.localStorage.setItem("jobseek.research-run-id", "run-7")
     const { calls } = stubGroupedFetch({ decisionConflict: true })
     renderJobs()
 
     await screen.findByText("Recommended (1)")
     switchTab("Not recommended")
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "Select Night Shift Ops",
+      screen.getByRole("checkbox", {
+        name: "Choose Night Shift Ops",
       })
     )
     const card = cardFor("Night Shift Ops")
@@ -1078,5 +1157,226 @@ describe("GroupedJobs", () => {
         (call) => call.method === "POST" && call.url.includes("/checks")
       )
     ).toEqual([])
+  })
+
+  it("leads cards with employer, grounded arrangement and pay", async () => {
+    stubGroupedFetch()
+    renderJobs()
+
+    await screen.findByText("Recommended (1)")
+    const card = cardFor("Backend Engineer")
+    // Essential comparison facts without opening evidence.
+    expect(
+      within(card).getByText("Harbour Ltd · Remote · Berlin")
+    ).toBeDefined()
+    expect(
+      within(card).getByText("Employment · pay not advertised")
+    ).toBeDefined()
+  })
+
+  it("renders advertised pay from saved compensation", async () => {
+    stubGroupedFetch({
+      opportunities: [
+        jobView("job-pay", "Paid Role", 2, {
+          compensation: {
+            currency: "EUR",
+            minAmountCents: 400000,
+            maxAmountCents: 600000,
+            period: "month",
+            basis: "base",
+          },
+        }),
+      ],
+    })
+    renderJobs()
+
+    await screen.findByRole("tab", { name: "Not yet classified (1 · 0 chosen)" })
+    switchTab("Not yet classified")
+    await screen.findByText("Not yet classified (1)")
+    const card = cardFor("Paid Role")
+    expect(
+      within(card).getByText(
+        "Employment · EUR 4000.00 – EUR 6000.00, per month, base"
+      )
+    ).toBeDefined()
+  })
+
+  it("keeps unknown employer and arrangement visibly unknown", async () => {
+    stubGroupedFetch({
+      companies: [],
+      opportunities: [
+        jobView("job-x", "X Role", 2, {
+          companyId: "company-missing",
+          workPattern: "unknown",
+          locationText: "",
+        }),
+        jobView("job-y", "Y Role", 2, {
+          companyId: "company-missing",
+          workPattern: "unknown",
+          locationText: "Berlin",
+        }),
+      ],
+    })
+    renderJobs()
+
+    await screen.findByRole("tab", { name: "Not yet classified (2 · 0 chosen)" })
+    switchTab("Not yet classified")
+    await screen.findByText("Not yet classified (2)")
+    expect(
+      within(cardFor("X Role")).getByText(
+        "Employer not recorded · arrangement not recorded"
+      )
+    ).toBeDefined()
+    expect(
+      within(cardFor("Y Role")).getByText(
+        "Employer not recorded · Berlin · arrangement not recorded"
+      )
+    ).toBeDefined()
+  })
+
+  it("renders absent Jev support as unrecorded, never zero", async () => {
+    stubGroupedFetch({
+      findingOverrides: {
+        "job-rec": {
+          reasons: [
+            {
+              reasonId: "r-pos-1",
+              kind: "positive",
+              label: "Remote-first team",
+              detail: "Docs say remote-first.",
+              jevSupport: 0,
+            },
+          ],
+        },
+      },
+    })
+    renderJobs()
+
+    await screen.findByText("Recommended (1)")
+    const card = cardFor("Backend Engineer")
+    fireEvent.click(within(card).getByRole("button", { name: "Why this job" }))
+    await within(card).findByText("Support signal: not recorded")
+    expect(
+      within(card).queryByText("Jev support signal: 0")
+    ).toBeNull()
+    expect(
+      within(card).queryByText("Jev support signal: 0.85")
+    ).toBeNull()
+  })
+
+  it("resolves the tracked run from server history, not the browser pointer", async () => {
+    window.localStorage.setItem("jobseek.research-run-id", "run-stale")
+    const { calls } = stubGroupedFetch({
+      runHistory: [runHistoryItem("run-7", "completed")],
+    })
+    renderJobs()
+
+    await screen.findByText("Tracked research run: run-7")
+    expect(
+      calls.some((call) => call.url.includes("run-stale"))
+    ).toBe(false)
+  })
+
+  it("moves between groups with arrow keys and keeps tab/panel linkage", async () => {
+    stubGroupedFetch()
+    renderJobs()
+
+    await screen.findByText("Recommended (1)")
+    const recommended = screen.getByRole("tab", { name: /Recommended \(/ })
+    expect(recommended.getAttribute("tabindex")).toBe("0")
+    expect(recommended.getAttribute("aria-controls")).toBe(
+      "jobs-panel-recommended"
+    )
+    const panel = screen.getByRole("tabpanel")
+    expect(panel.getAttribute("id")).toBe("jobs-panel-recommended")
+    expect(panel.getAttribute("aria-labelledby")).toBe("jobs-tab-recommended")
+
+    recommended.focus()
+    fireEvent.keyDown(recommended, { key: "ArrowRight" })
+    const could = await screen.findByRole("tab", { name: /Might recommend \(/ })
+    expect(document.activeElement).toBe(could)
+    expect(could.getAttribute("tabindex")).toBe("0")
+    expect(
+      screen.getByRole("tab", { name: /Recommended \(/ }).getAttribute("tabindex")
+    ).toBe("-1")
+    await screen.findByText("Might recommend (1)")
+
+    fireEvent.keyDown(could, { key: "End" })
+    const last = await screen.findByRole("tab", { name: /Not yet classified \(/ })
+    expect(document.activeElement).toBe(last)
+    await screen.findByText("Not yet classified (1)")
+
+    fireEvent.keyDown(last, { key: "Home" })
+    expect(document.activeElement).toBe(
+      screen.getByRole("tab", { name: /Recommended \(/ })
+    )
+    await screen.findByText("Recommended (1)")
+
+    fireEvent.keyDown(
+      screen.getByRole("tab", { name: /Recommended \(/ }),
+      { key: "ArrowLeft" }
+    )
+    // Wraps to the last populated group.
+    await screen.findByText("Not yet classified (1)")
+  })
+
+  it("offers Edit goals through the registry and Find more beside results", async () => {
+    const opened: string[] = []
+    const unregister = registerGoalEditorOpener((reason) => {
+      opened.push(reason)
+    })
+    try {
+      stubGroupedFetch()
+      renderJobs()
+
+      await screen.findByText("Recommended (1)")
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Edit goals" })
+      )
+      expect(opened).toEqual(["jobs:edit-goals"])
+      const findMore = screen.getByRole("link", {
+        name: "Find more jobs",
+      }) as HTMLAnchorElement
+      expect(findMore.getAttribute("href")).toBe("#/search")
+    } finally {
+      unregister()
+    }
+  })
+
+  it("excludes started and archived roles from the bulk check", async () => {
+    stubGroupedFetch({
+      workflowStages: { "job-rec": "preparing" },
+      opportunities: [
+        ...jobsFixture,
+        jobView("job-arch", "Archived Role", 2, {
+          archivedAt: "2026-09-15T09:00:00Z",
+        }),
+      ],
+    })
+    renderJobs()
+
+    // The preparing role is current work, not a fresh choice.
+    const bulk = (await screen.findByRole("button", {
+      name: "Check chosen jobs (0)",
+    })) as HTMLButtonElement
+    expect(bulk.disabled).toBe(true)
+    expect(
+      await screen.findByRole("link", { name: "Current work (1 started)" })
+    ).toBeDefined()
+    const started = screen.getByRole("link", {
+      name: "Open Backend Engineer",
+    }) as HTMLAnchorElement
+    expect(started.getAttribute("href")).toBe("#/jobs/job-rec")
+
+    // Choosing the archived role leaves the bulk action disabled.
+    switchTab("Not yet classified")
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Choose Archived Role" })
+    )
+    await screen.findByText("Selected — decision rev 1.")
+    expect(
+      (screen.getByRole("button", { name: "Check chosen jobs (0)" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true)
   })
 })

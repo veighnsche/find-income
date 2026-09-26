@@ -35,7 +35,7 @@ func TestContributorDTOsExposeNoPrivateFields(t *testing.T) {
 		"vacancy": {PublicVacancy{VacancyRef: "v", SourceHost: "h", PageURL: "u", EmployerName: "e",
 			Title: "t", LocationText: "l", PostedText: "p", CapturedAt: "c", ReceiptRef: "r"},
 			[]string{"captured_at", "employer_name", "location_text", "page_url", "posted_text",
-				"receipt_ref", "source_host", "title", "vacancy_ref"}},
+				"receipt_ref", "source_host", "title", "vacancy_ref", "work_pattern"}},
 		"question": {PublicQuestion{QuestionRef: "q", VacancyRef: "v", PromptText: "p", Required: true, SourceURL: "u"},
 			[]string{"prompt_text", "question_ref", "required", "source_url", "vacancy_ref"}},
 	}

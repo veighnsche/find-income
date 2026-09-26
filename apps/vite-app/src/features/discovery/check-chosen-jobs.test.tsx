@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react"
 import type { CheckStatusView } from "@/api/client"
 import { SessionProvider, useSession } from "@/api/session"
@@ -132,7 +133,7 @@ describe("CheckChosenJobs", () => {
       screen.getByRole("button", { name: "Check chosen jobs (2)" })
     ).toBeDefined()
     const viewSelection = screen.getByRole("link", {
-      name: "View selection (2 chosen)",
+      name: "View selection (2 fresh)",
     }) as HTMLAnchorElement
     expect(viewSelection.getAttribute("href")).toBe("#/applications")
     expect(viewSelection.textContent).toBe("View selection (2)")
@@ -288,6 +289,59 @@ describe("CheckChosenJobs", () => {
     }) as HTMLAnchorElement
     link.focus()
     expect(document.activeElement).toBe(link)
+  })
+
+  it("keeps the sticky bar compact with role detail outside it", () => {
+    stubCheckFetch()
+    renderAction()
+
+    // The sticky bar carries counts and actions only — no per-role rows.
+    const bar = screen.getByRole("region", { name: "Check chosen jobs" })
+    expect(
+      within(bar).queryByRole("link", {
+        name: "Open check page for Backend Engineer",
+      })
+    ).toBeNull()
+    expect(
+      within(bar).queryByText("Not started — selection alone starts nothing.")
+    ).toBeNull()
+    expect(
+      within(bar).getByText("2 new jobs selected")
+    ).toBeDefined()
+    // Role detail renders in normal flow below the bar.
+    expect(
+      screen.getByRole("region", { name: "Fresh chosen roles" })
+    ).toBeDefined()
+    expect(
+      screen.getByRole("link", { name: "Open check page for Backend Engineer" })
+    ).toBeDefined()
+  })
+
+  it("links started roles outside the bulk action and disables on zero fresh", () => {
+    stubCheckFetch()
+    render(
+      <SessionProvider>
+        <CheckChosenJobs
+          roles={[]}
+          inProgress={[{ jobId: "job-h", title: "Handoff Role" }]}
+        />
+      </SessionProvider>
+    )
+
+    const button = screen.getByRole("button", {
+      name: "Check chosen jobs (0)",
+    }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(
+      screen.getByRole("link", { name: "Current work (1 started)" })
+    ).toBeDefined()
+    const started = screen.getByRole("link", {
+      name: "Open Handoff Role",
+    }) as HTMLAnchorElement
+    expect(started.getAttribute("href")).toBe("#/jobs/job-h")
+    expect(
+      screen.getByRole("region", { name: "Started roles" })
+    ).toBeDefined()
   })
 
   it("does not auto-start a role selected after an earlier click", async () => {

@@ -20,6 +20,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/veighnsche/find-income-dashboard/api/internal/agency"
 	"github.com/veighnsche/find-income-dashboard/api/internal/applicationpacks"
 	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
@@ -76,6 +77,16 @@ type Service struct {
 	// opportunity carries no text (discovery-saved roles). Nil keeps the
 	// previous behavior: undescribed roles resolve an empty description.
 	Captures researchcontract.CaptureReader
+	// Clarifications persists owner questions for genuinely unknown
+	// personal facts (K4). Production wires
+	// &agency.StoreClarifications{DB: store}. Nil disables
+	// clarification opens and resume tracking: missing facts hold
+	// with their reason and the owner sees no question.
+	Clarifications agency.ClarificationStore
+	// Rewrites runs explicit targeted rewrites of chosen current
+	// items. Production wires the same StandardDrafter as Artifacts;
+	// nil reports ErrUnavailable.
+	Rewrites ArtifactRewriter
 }
 
 func validSHA(value string) bool {

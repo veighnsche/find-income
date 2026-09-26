@@ -79,6 +79,82 @@ export function describeRunState(state: ResearchRunView["state"]): string {
   }
 }
 
+export type RunAction = "stop" | "resume" | "steer" | "findMore"
+
+/**
+ * State-valid run actions (G2/R26). Every control enables only in a state
+ * where the server can honor it; otherwise the UI names the reason instead
+ * of offering an inert button. A stopped run rests paused (D3), so Stop
+ * never targets paused or terminal runs, and Find more starts an explicit
+ * new pass only once active work has settled or paused.
+ */
+export function runActionAvailability(
+  state: ResearchRunView["state"]
+): Record<RunAction, { enabled: boolean; reason: string | null }> {
+  switch (state) {
+    case "queued":
+    case "running":
+    case "awaiting_input":
+      return {
+        stop: { enabled: true, reason: null },
+        resume: {
+          enabled: false,
+          reason: `Resume applies to a paused run; this run is ${state}.`,
+        },
+        steer: { enabled: true, reason: null },
+        findMore: {
+          enabled: false,
+          reason: "Find more starts after this run settles.",
+        },
+      }
+    case "stopping":
+      return {
+        stop: {
+          enabled: false,
+          reason: "A stop is already settling; wait for it to pause.",
+        },
+        resume: {
+          enabled: false,
+          reason: "Resume applies once the stop settles into paused.",
+        },
+        steer: { enabled: true, reason: null },
+        findMore: {
+          enabled: false,
+          reason: "Find more starts after this run settles.",
+        },
+      }
+    case "paused":
+      return {
+        stop: {
+          enabled: false,
+          reason: "This run is already paused; resume it or start Find more.",
+        },
+        resume: { enabled: true, reason: null },
+        steer: { enabled: true, reason: null },
+        // A fresh pass never touches the paused run: it stays resumable
+        // from the recent-runs history.
+        findMore: { enabled: true, reason: null },
+      }
+    case "completed":
+    case "failed":
+      return {
+        stop: {
+          enabled: false,
+          reason: `This run already ${state}; there is nothing to stop.`,
+        },
+        resume: {
+          enabled: false,
+          reason: `A ${state} run cannot resume; Find more starts a new pass.`,
+        },
+        steer: {
+          enabled: false,
+          reason: `This run already ${state}; steering cannot reach it.`,
+        },
+        findMore: { enabled: true, reason: null },
+      }
+  }
+}
+
 export function newIdempotencyKey(): string {
   const cryptoRef =
     typeof globalThis.crypto === "object" &&
@@ -111,11 +187,15 @@ export interface ResearchControlsProps {
   onRefresh: () => void
   onSteer: () => void
   onFindMore: () => void
+  /** Open the deterministic goal editor (G2: registry-backed). */
+  onEditGoals: () => void
 }
 
 // ResearchControls renders explicit run actions only. It never commissions,
 // stops, resumes or steers during render; every mutation runs from an owner
-// click handler owned by the parent section.
+// click handler owned by the parent section. Buttons gate on the run state
+// (G2/R26): disabled controls name the state reason instead of silently
+// doing nothing, and a settled run continues to Select jobs.
 export function ResearchControls({
   run,
   busy,
@@ -131,6 +211,7 @@ export function ResearchControls({
   onRefresh,
   onSteer,
   onFindMore,
+  onEditGoals,
 }: ResearchControlsProps) {
   if (run === null) {
     return (
@@ -174,6 +255,15 @@ export function ResearchControls({
   }
 
   const counts = runCounts(run)
+  const availability = runActionAvailability(run.state)
+  const terminal = run.state === "completed" || run.state === "failed"
+  const stateReasons = (
+    ["stop", "resume", "steer", "findMore"] as const
+  ).flatMap((action) =>
+    availability[action].enabled || busy
+      ? []
+      : [availability[action].reason ?? `${action} is unavailable.`]
+  )
   return (
     <div className="flex min-w-0 flex-col gap-4 rounded-2xl border bg-card px-4 py-4">
       <div className="min-w-0">
@@ -184,6 +274,19 @@ export function ResearchControls({
           ){run.stopReason !== undefined ? ` — stopped: ${run.stopReason}` : ""}
         </p>
       </div>
+
+      {terminal ? (
+        <p className="text-sm wrap-break-word">
+          <a
+            href="#/jobs"
+            className="underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            Select jobs
+          </a>{" "}
+          to choose from this run&apos;s saved roles, or start a new pass
+          below.
+        </p>
+      ) : null}
 
       <ul className="flex min-w-0 flex-col gap-1 text-sm">
         <li>Saved records: {counts.saved}</li>
@@ -205,7 +308,7 @@ export function ResearchControls({
           type="button"
           variant="outline"
           size="sm"
-          disabled={busy}
+          disabled={busy || !availability.stop.enabled}
           onClick={onStop}
         >
           Stop
@@ -214,7 +317,7 @@ export function ResearchControls({
           type="button"
           variant="outline"
           size="sm"
-          disabled={busy}
+          disabled={busy || !availability.resume.enabled}
           onClick={onResume}
         >
           Resume
@@ -232,12 +335,33 @@ export function ResearchControls({
           type="button"
           variant="outline"
           size="sm"
-          disabled={busy}
+          disabled={busy || !availability.findMore.enabled}
           onClick={onFindMore}
         >
           Find more jobs
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={onEditGoals}
+        >
+          Edit goals
+        </Button>
       </div>
+      {stateReasons.length > 0 ? (
+        <ul className="flex min-w-0 flex-col gap-1">
+          {stateReasons.map((reason) => (
+            <li
+              key={reason}
+              className="text-xs wrap-break-word text-muted-foreground"
+            >
+              {reason}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <div className="flex min-w-0 flex-col gap-2">
         <Label htmlFor="discovery-steer">Steer the run</Label>
@@ -248,14 +372,16 @@ export function ResearchControls({
           value={steerText}
           onChange={(event) => onSteerTextChange(event.target.value)}
           placeholder="Message or correction for the running agent"
-          disabled={busy}
+          disabled={busy || !availability.steer.enabled}
         />
         <div>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            disabled={busy || steerText.trim() === ""}
+            disabled={
+              busy || !availability.steer.enabled || steerText.trim() === ""
+            }
             onClick={onSteer}
           >
             Send steering message

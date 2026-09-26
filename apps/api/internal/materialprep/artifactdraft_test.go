@@ -44,10 +44,11 @@ func TestDraftArtifactsGroundsAndFences(t *testing.T) {
 		  {"type":"email_body","content":"Dear Harbour, please find my CV.","facts":["cv"],"answers":[]}
 		]}`}, nil
 	}}
-	drafts, err := (&materialprep.StandardDrafter{Runner: runner}).DraftArtifacts(ctx, artifactTestRequest())
-	if err != nil || len(drafts) != 3 || runner.calls != 1 {
-		t.Fatalf("drafts: %+v calls=%d err=%v", drafts, runner.calls, err)
+	outcome, err := (&materialprep.StandardDrafter{Runner: runner}).DraftArtifacts(ctx, artifactTestRequest())
+	if err != nil || len(outcome.Drafts) != 3 || len(outcome.Held) != 0 || runner.calls != 1 {
+		t.Fatalf("drafts: %+v calls=%d err=%v", outcome, runner.calls, err)
 	}
+	drafts := outcome.Drafts
 	input := runner.inputs[0]
 	if input.Purpose != materialprep.StandardArtifactPurpose || input.BundleRef != "check-test" ||
 		len(input.Targets) != 3 {
@@ -100,23 +101,63 @@ func TestDraftArtifactsRejectsUngrounded(t *testing.T) {
 	subset := &fakeStandardRunner{fn: func(musecode.StandardInput) ([]string, error) {
 		return []string{`{"artifacts":[{"type":"cv","content":"Go engineer.","facts":["cv"],"answers":[]}]}`}, nil
 	}}
-	drafts, err := (&materialprep.StandardDrafter{Runner: subset}).DraftArtifacts(ctx, artifactTestRequest())
-	if err != nil || len(drafts) != 1 {
-		t.Fatalf("subset: %+v err=%v", drafts, err)
+	outcome, err := (&materialprep.StandardDrafter{Runner: subset}).DraftArtifacts(ctx, artifactTestRequest())
+	if err != nil || len(outcome.Drafts) != 1 || len(outcome.Held) != 0 {
+		t.Fatalf("subset: %+v err=%v", outcome, err)
+	}
+}
+
+func TestDraftArtifactsHoldsUnsupportedClaims(t *testing.T) {
+	ctx := context.Background()
+	newRunner := func(message string) *fakeStandardRunner {
+		return &fakeStandardRunner{fn: func(musecode.StandardInput) ([]string, error) {
+			return []string{message}, nil
+		}}
+	}
+	// A deliberate invented claim with a valid fact id holds: ids alone
+	// never suffice.
+	outcome, err := (&materialprep.StandardDrafter{Runner: newRunner(`{"artifacts":[
+	  {"type":"cv","content":"Go engineer, six years.","facts":["cv"],"answers":[]},
+	  {"type":"email_subject","content":"Application: Go engineer","facts":[],"answers":[]},
+	  {"type":"email_body","content":"I bring 10 years of Kubernetes platform experience.","facts":["cv"],"answers":[]}
+	]}`)}).DraftArtifacts(ctx, artifactTestRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcome.Drafts) != 2 || len(outcome.Held) != 1 {
+		t.Fatalf("outcome: %+v", outcome)
+	}
+	hold := outcome.Held[0]
+	if hold.Type != "email_body" || hold.MissingFact == "" || !strings.Contains(hold.MissingFact, "Kubernetes") {
+		t.Fatalf("hold: %+v", hold)
+	}
+	// A supported tailored sentence with the same valid id commits.
+	outcome, err = (&materialprep.StandardDrafter{Runner: newRunner(`{"artifacts":[
+	  {"type":"cv","content":"Go platform engineer with six years of Go platform work.","facts":["cv"],"answers":["q-motivation"]}
+	]}`)}).DraftArtifacts(ctx, artifactTestRequest())
+	if err != nil || len(outcome.Drafts) != 1 || len(outcome.Held) != 0 {
+		t.Fatalf("supported: %+v err=%v", outcome, err)
+	}
+	// An invented employer name holds even without numbers.
+	outcome, err = (&materialprep.StandardDrafter{Runner: newRunner(`{"artifacts":[
+	  {"type":"email_body","content":"Dear Acme, please consider my application.","facts":[],"answers":[]}
+	]}`)}).DraftArtifacts(ctx, artifactTestRequest())
+	if err != nil || len(outcome.Drafts) != 0 || len(outcome.Held) != 1 {
+		t.Fatalf("invented name: %+v err=%v", outcome, err)
 	}
 }
 
 type stubArtifactDrafter struct {
 	calls    int
 	requests []materialprep.ArtifactDraftRequest
-	fn       func(materialprep.ArtifactDraftRequest) ([]materialprep.ArtifactDraft, error)
+	fn       func(materialprep.ArtifactDraftRequest) (materialprep.DraftOutcome, error)
 }
 
-func (f *stubArtifactDrafter) DraftArtifacts(_ context.Context, req materialprep.ArtifactDraftRequest) ([]materialprep.ArtifactDraft, error) {
+func (f *stubArtifactDrafter) DraftArtifacts(_ context.Context, req materialprep.ArtifactDraftRequest) (materialprep.DraftOutcome, error) {
 	f.calls++
 	f.requests = append(f.requests, req)
 	if f.fn == nil {
-		return nil, nil
+		return materialprep.DraftOutcome{}, nil
 	}
 	return f.fn(req)
 }
@@ -133,12 +174,12 @@ func artifactEntry(set store.ArtifactReadinessSet, artifactType string) store.Ar
 func TestDraftOpportunityArtifactsCommitsSubset(t *testing.T) {
 	ctx := context.Background()
 	f := setupPrep(t, "artifact-draft")
-	f.svc.Artifacts = &stubArtifactDrafter{fn: func(req materialprep.ArtifactDraftRequest) ([]materialprep.ArtifactDraft, error) {
+	f.svc.Artifacts = &stubArtifactDrafter{fn: func(req materialprep.ArtifactDraftRequest) (materialprep.DraftOutcome, error) {
 		if len(req.Targets) != 3 {
 			t.Fatalf("targets: %+v", req.Targets)
 		}
-		return []materialprep.ArtifactDraft{{Type: "cv", Content: "Go engineer, six years.",
-			FactIDs: []string{careerEvidenceID}}}, nil
+		return materialprep.DraftOutcome{Drafts: []materialprep.ArtifactDraft{{Type: "cv", Content: "Go engineer, six years.",
+			FactIDs: []string{careerEvidenceID}}}}, nil
 	}}
 	checkID, questionSet, workflowRev := prepPins(t, f)
 	set, created, err := f.svc.DraftOpportunityArtifacts(ctx, testOwner(), f.opportunity.ID,
@@ -163,14 +204,14 @@ func TestDraftOpportunityArtifactsCommitsSubset(t *testing.T) {
 	}
 	// A second draft with the remaining types commits them without
 	// touching the stored CV.
-	f.svc.Artifacts = &stubArtifactDrafter{fn: func(req materialprep.ArtifactDraftRequest) ([]materialprep.ArtifactDraft, error) {
+	f.svc.Artifacts = &stubArtifactDrafter{fn: func(req materialprep.ArtifactDraftRequest) (materialprep.DraftOutcome, error) {
 		if len(req.Targets) != 2 {
 			t.Fatalf("second targets: %+v", req.Targets)
 		}
-		return []materialprep.ArtifactDraft{
+		return materialprep.DraftOutcome{Drafts: []materialprep.ArtifactDraft{
 			{Type: "email_subject", Content: "Application: Backend Engineer"},
 			{Type: "email_body", Content: "Dear Harbour, please find my CV attached."},
-		}, nil
+		}}, nil
 	}}
 	set, created, err = f.svc.DraftOpportunityArtifacts(ctx, testOwner(), f.opportunity.ID,
 		"draft-2", checkID, questionSet, workflowRev)
@@ -188,9 +229,9 @@ func TestDraftOpportunityArtifactsCommitsSubset(t *testing.T) {
 func TestDraftOpportunityArtifactsJournalsActivity(t *testing.T) {
 	ctx := context.Background()
 	f := setupPrep(t, "artifact-journal")
-	f.svc.Artifacts = &stubArtifactDrafter{fn: func(materialprep.ArtifactDraftRequest) ([]materialprep.ArtifactDraft, error) {
-		return []materialprep.ArtifactDraft{{Type: "cv", Content: "Go engineer.",
-			FactIDs: []string{careerEvidenceID}}}, nil
+	f.svc.Artifacts = &stubArtifactDrafter{fn: func(materialprep.ArtifactDraftRequest) (materialprep.DraftOutcome, error) {
+		return materialprep.DraftOutcome{Drafts: []materialprep.ArtifactDraft{{Type: "cv", Content: "Go engineer.",
+			FactIDs: []string{careerEvidenceID}}}}, nil
 	}}
 	checkID, questionSet, workflowRev := prepPins(t, f)
 	if _, _, err := f.svc.DraftOpportunityArtifacts(ctx, testOwner(), f.opportunity.ID,

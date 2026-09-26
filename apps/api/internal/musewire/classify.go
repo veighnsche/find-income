@@ -203,7 +203,7 @@ func vacancyOpportunity(companyID string, vacancy musecode.PublicVacancy) store.
 		CompanyID: companyID, Title: strings.TrimSpace(vacancy.Title), Kind: "employment",
 		SourceURL: strings.TrimSpace(vacancy.PageURL), Stage: "found",
 		LocationText: strings.TrimSpace(vacancy.LocationText),
-		WorkPattern: musecode.SanitizeWorkPattern(strings.TrimSpace(vacancy.WorkPattern)),
+		WorkPattern:  musecode.SanitizeWorkPattern(strings.TrimSpace(vacancy.WorkPattern)),
 	}
 }
 

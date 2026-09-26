@@ -11,6 +11,7 @@ import {
   type SearchBriefView,
 } from "@/api/client"
 import { useSession } from "@/api/session"
+import { useSavedGoals } from "@/components/shared/saved-goals"
 import { useRead } from "@/pages/useRead"
 
 export type RoleCriterion = Preferences["roleCriteria"][number]
@@ -218,12 +219,16 @@ function pendingRoundDescription(roundState: Round["state"]): string {
 // navigation only issue GETs; submitCorrection is the sole commissioning path
 // and every saved/conflict transition is confirmed by a fresh preferences
 // readback, never by the accepted round alone.
+//
+// G1: the preferences half is F's single shared saved-goal read
+// (SavedGoalsProvider/useSavedGoals), so every surface on the page —
+// Search, discovery, grouped jobs — gates on the same accepted version and
+// a save refreshes Find jobs immediately (R02). The brief read stays local
+// (subscribed to the "run" scope: commissions author the brief) and the
+// correction machine is unchanged. Must render under SavedGoalsProvider.
 export function useOwnerContext(): OwnerContextValue {
   const { session, loseSession } = useSession()
-  const preferencesRead = useRead<Preferences>(
-    "owner-context:preferences",
-    (signal) => getPreferences(signal)
-  )
+  const savedGoals = useSavedGoals()
   const briefRead = useRead<SearchBriefView | null>(
     "owner-context:brief",
     (signal) =>
@@ -231,7 +236,8 @@ export function useOwnerContext(): OwnerContextValue {
         // No authored brief yet is normal before the first run, not an error.
         if (cause instanceof RequestError && cause.status === 404) return null
         throw cause
-      })
+      }),
+    { scopes: ["run"] }
   )
 
   const [correction, setCorrectionState] = useState<CorrectionStatus>(() => {
@@ -250,10 +256,10 @@ export function useOwnerContext(): OwnerContextValue {
   }, [])
 
   const retryContext = useCallback(() => {
-    preferencesRead.retry()
+    savedGoals.retry()
     briefRead.retry()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- useRead retry callbacks are stable; the read objects are not
-  }, [preferencesRead.retry, briefRead.retry])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- retry callbacks are stable; the read objects are not
+  }, [savedGoals.retry, briefRead.retry])
 
   const resolveTerminalRound = useCallback(
     async (
@@ -367,7 +373,7 @@ export function useOwnerContext(): OwnerContextValue {
         return
       const trimmed = text.trim()
       if (trimmed === "") return
-      if (preferencesRead.status !== "ready" || preferencesRead.data === null) {
+      if (savedGoals.state !== "ready" || savedGoals.goals === null) {
         updateCorrection({
           kind: "error",
           message:
@@ -392,7 +398,7 @@ export function useOwnerContext(): OwnerContextValue {
         })
         return
       }
-      const baseVersion = preferencesRead.data.version
+      const baseVersion = savedGoals.goals.version
       const requestKey = correctionRequestKey(baseVersion, trimmed)
       submittingRef.current = true
       updateCorrection({ kind: "sending", baseVersion, targetText: trimmed })
@@ -494,8 +500,8 @@ export function useOwnerContext(): OwnerContextValue {
     },
     [
       loseSession,
-      preferencesRead.data,
-      preferencesRead.status,
+      savedGoals.goals,
+      savedGoals.state,
       resolveTerminalRound,
       retryContext,
       session,
@@ -535,23 +541,23 @@ export function useOwnerContext(): OwnerContextValue {
   }, [polling, refreshCorrection])
 
   const contextState: OwnerContextValue["contextState"] =
-    preferencesRead.status === "error" || briefRead.status === "error"
+    savedGoals.state === "error" || briefRead.status === "error"
       ? "error"
-      : preferencesRead.status === "ready" && briefRead.status === "ready"
+      : savedGoals.state === "ready" && briefRead.status === "ready"
         ? "ready"
         : "loading"
   const contextError =
-    preferencesRead.status === "error"
-      ? preferencesRead.error
+    savedGoals.state === "error"
+      ? savedGoals.error
       : briefRead.status === "error"
         ? briefRead.error
         : null
 
   const context: EffectiveSavedContext | null = useMemo(() => {
-    if (preferencesRead.status !== "ready" || preferencesRead.data === null)
+    if (savedGoals.state !== "ready" || savedGoals.goals === null)
       return null
     if (briefRead.status !== "ready") return null
-    const preferences = preferencesRead.data
+    const preferences = savedGoals.goals
     const brief = briefRead.data
     return {
       profileVersion: preferences.version,
@@ -564,7 +570,7 @@ export function useOwnerContext(): OwnerContextValue {
       catalogVersion: brief?.catalogVersion ?? null,
       briefStale: brief !== null && brief.profileVersion !== preferences.version,
     }
-  }, [briefRead.data, briefRead.status, preferencesRead.data, preferencesRead.status])
+  }, [briefRead.data, briefRead.status, savedGoals.goals, savedGoals.state])
 
   const readiness = useMemo<{
     ready: boolean

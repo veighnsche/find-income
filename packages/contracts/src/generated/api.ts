@@ -1300,6 +1300,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/opportunities/{id}/artifacts/{artifactType}/rewrite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                artifactType: "cv" | "cover_letter" | "email_subject" | "email_body";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rewrite one stored artifact with explicit instruction as a new version
+         * @description Same grounded basis and version fence as Prepare; idempotent on requestKey.
+         */
+        post: operations["rewriteOpportunityArtifact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/artifacts/{artifactType}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                artifactType: "cv" | "cover_letter" | "email_subject" | "email_body";
+            };
+            cookie?: never;
+        };
+        /**
+         * Read every stored version of one artifact type, oldest first
+         * @description Passive read; no model call, write or transition.
+         */
+        get: operations["listArtifactVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/artifacts/{artifactType}/export": {
+        parameters: {
+            query?: {
+                version?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                artifactType: "cv" | "cover_letter" | "email_subject" | "email_body" | "form_values";
+            };
+            cookie?: never;
+        };
+        /**
+         * Download one artifact version rendered from stored content
+         * @description Current version by default; form_values derives live. Downloading never means applied.
+         */
+        get: operations["exportOpportunityArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the manual Handoff basis for one role
+         * @description Verified destination, take-out items and upload mapping. Passive; opening or copying changes nothing.
+         */
+        get: operations["getOpportunityHandoff"];
+        put?: never;
+        /**
+         * Record the owner's explicit manual-Handoff save
+         * @description Terminal prepared to handoff_saved transition; replay-safe. Never fills, attaches, sends or submits.
+         */
+        post: operations["saveOpportunityHandoff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/saved-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the durable saved-job/artifact index
+         * @description Every non-archived role with stored work, most recently touched first. Passive.
+         */
+        get: operations["listSavedJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/relationships/counterparties": {
         parameters: {
             query?: never;
@@ -3474,6 +3591,62 @@ export interface components {
             checkStatus: string;
             entries: components["schemas"]["ArtifactReadinessEntry"][];
         };
+        SavedJobItem: {
+            type: string;
+            required: boolean;
+            state: string;
+            reason: string;
+            /** Format: int64 */
+            version: number;
+            updatedAt?: string;
+        };
+        SavedJobEntry: {
+            opportunityId: string;
+            title: string;
+            companyName: string;
+            checkStatus: string;
+            items: components["schemas"]["SavedJobItem"][];
+        };
+        HandoffItem: {
+            type: string;
+            required: boolean;
+            state: string;
+            reason: string;
+            basis?: string;
+            /** Format: int64 */
+            version?: number;
+            content?: string;
+            contentSha256?: string;
+            formValues?: components["schemas"]["ArtifactFormValue"][];
+        };
+        HandoffUpload: {
+            questionId: string;
+            questionText: string;
+            /** @enum {string} */
+            required: "required" | "optional" | "unknown";
+            artifactType?: string;
+            state: string;
+            /** Format: int64 */
+            version?: number;
+            contentSha256?: string;
+        };
+        HandoffView: {
+            opportunityId: string;
+            title: string;
+            companyName: string;
+            checkId?: string;
+            checkStatus: string;
+            workflowStage: string;
+            routeKind?: string;
+            routeDestination?: string;
+            routeExcerpt?: string;
+            items: components["schemas"]["HandoffItem"][];
+            uploads: components["schemas"]["HandoffUpload"][];
+        };
+        HandoffSave: {
+            /** Format: int64 */
+            expectedWorkflowRevision: number;
+        };
         ArtifactSaveRequest: {
             requestKey: string;
             /** Format: int64 */
@@ -5494,6 +5667,185 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             503: components["responses"]["Unavailable"];
+        };
+    };
+    rewriteOpportunityArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                artifactType: "cv" | "cover_letter" | "email_subject" | "email_body";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialRewriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Exact replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactReadinessSet"];
+                };
+            };
+            /** @description Rewritten version saved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactReadinessSet"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listArtifactVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                artifactType: "cv" | "cover_letter" | "email_subject" | "email_body";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Version list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ArtifactView"][];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    exportOpportunityArtifact: {
+        parameters: {
+            query?: {
+                version?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                artifactType: "cv" | "cover_letter" | "email_subject" | "email_body" | "form_values";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rendered file with identity/version/checksum header */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/markdown": string;
+                    "text/plain": string;
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getOpportunityHandoff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Handoff basis */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoffView"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    saveOpportunityHandoff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandoffSave"];
+            };
+        };
+        responses: {
+            /** @description Exact replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleWorkflowState"];
+                };
+            };
+            /** @description Handoff saved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleWorkflowState"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listSavedJobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved-job index */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["SavedJobEntry"][];
+                    };
+                };
+            };
         };
     };
     listRelationshipCounterparties: {

@@ -98,12 +98,38 @@ func matchesKeywords(text string, keywords []string) bool {
 	return false
 }
 
+// artifactNegationPhrases mark a document source as explicitly not
+// required. A keyword hit inside a negated label, question or
+// requirement ("Cover letter not required") never forces requiredness:
+// the verified text wins over keyword presence (M3/R09).
+var artifactNegationPhrases = []string{
+	"not required", "not necessary", "not needed", "no longer required",
+	"none required", "not accepted", "optional", "if desired", "only if",
+	"if available", "do not attach", "do not send", "don't attach",
+	"don't send", "niet vereist", "niet nodig", "optioneel",
+}
+
+func negatesRequirement(text string) bool {
+	lowered := strings.ToLower(text)
+	for _, phrase := range artifactNegationPhrases {
+		if strings.Contains(lowered, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
 // documentBasis finds the first verified source naming a document: a
-// requested-document label, an attachment question text, or a requirement
-// statement. A bare "motivation"/"motivatie" label names a letter only when
-// it is the whole label; inside longer prose only compound forms count.
+// required requested-document label, an attachment question text, or a
+// requirement statement. Optional documents stay optional, negated
+// sources never force requiredness, and a bare
+// "motivation"/"motivatie" label names a letter only when it is the
+// whole label; inside longer prose only compound forms count.
 func documentBasis(check *CheckView, keywords []string, letter bool) (string, bool) {
 	for _, doc := range check.RequestedDocuments {
+		if !doc.Required || negatesRequirement(doc.Label) {
+			continue
+		}
 		if matchesKeywords(doc.Label, keywords) ||
 			(letter && (strings.EqualFold(strings.TrimSpace(doc.Label), "motivation") ||
 				strings.EqualFold(strings.TrimSpace(doc.Label), "motivatie"))) {
@@ -114,13 +140,56 @@ func documentBasis(check *CheckView, keywords []string, letter bool) (string, bo
 		if question.Kind != CheckQuestionAttachment {
 			continue
 		}
+		if negatesRequirement(question.Text) {
+			continue
+		}
 		if matchesKeywords(question.Text, keywords) {
 			return "attachment question " + strconv.Quote(question.Text), true
 		}
 	}
 	for _, requirement := range check.Requirements {
+		if negatesRequirement(requirement.Statement) {
+			continue
+		}
 		if matchesKeywords(requirement.Statement, keywords) {
 			return "requirement " + strconv.Quote(requirement.Statement), true
+		}
+	}
+	return "", false
+}
+
+// basisStaleness compares one stored version's pins against the
+// current verified inputs (M2/R07). An empty pin cites nothing and
+// cannot contradict current inputs; the first mismatch wins with an
+// owner-readable reason. facts maps approved source ids to current
+// digests; a nil map skips the fact check (no loader on this read).
+func basisStaleness(check *CheckView, current ArtifactView, answers map[string]QuestionAnswerValue, facts map[string]string) (string, bool) {
+	basis := current.Basis
+	if basis.CheckID != "" && basis.CheckID != check.ID {
+		return "outdated: a recheck superseded the pinned check behind version " + strconv.FormatInt(current.Version, 10), true
+	}
+	if basis.QuestionSetSHA256 != "" && basis.QuestionSetSHA256 != check.QuestionSetSHA256 {
+		return "outdated: the employer questions changed behind version " + strconv.FormatInt(current.Version, 10), true
+	}
+	for _, ref := range basis.AnswerRefs {
+		saved, ok := answers[ref.QuestionID]
+		if !ok {
+			return "outdated: answer " + strconv.Quote(ref.QuestionID) + " left the current question set", true
+		}
+		if saved.Version != ref.AnswerVersion {
+			return "outdated: answer " + strconv.Quote(ref.QuestionID) + " moved v" +
+				strconv.FormatInt(ref.AnswerVersion, 10) + " to v" + strconv.FormatInt(saved.Version, 10), true
+		}
+	}
+	if facts != nil {
+		for id, digest := range basis.FactSHA256 {
+			live, ok := facts[id]
+			if !ok {
+				return "outdated: source fact " + strconv.Quote(id) + " is no longer approved", true
+			}
+			if live != digest {
+				return "outdated: source fact " + strconv.Quote(id) + " changed", true
+			}
 		}
 	}
 	return "", false
@@ -130,7 +199,18 @@ func documentBasis(check *CheckView, keywords []string, letter bool) (string, bo
 // Unchecked, outdated, blocked or checking roles leave every type
 // unresolved; only a checked role with a verified application route can
 // mark types required, and every required verdict cites its basis.
+// Stored versions whose basis pins contradict the current verified
+// inputs read held with an outdated reason instead of ready (M2/R07),
+// while the prior content stays attached for inspection.
 func (s *Store) ArtifactReadiness(ctx context.Context, opportunityID string) (ArtifactReadinessSet, error) {
+	return s.ArtifactReadinessWithFacts(ctx, opportunityID, nil)
+}
+
+// ArtifactReadinessWithFacts is ArtifactReadiness with live approved
+// source digests (id -> hex sha256) so changed career facts also
+// invalidate the affected stored versions. A nil map skips the fact
+// check; answer, check and question-set pins always apply.
+func (s *Store) ArtifactReadinessWithFacts(ctx context.Context, opportunityID string, facts map[string]string) (ArtifactReadinessSet, error) {
 	if opportunityID == "" {
 		return ArtifactReadinessSet{}, ErrInvalid
 	}
@@ -202,17 +282,24 @@ func (s *Store) ArtifactReadiness(ctx context.Context, opportunityID string) (Ar
 			answers[value.QuestionID] = value
 		}
 	}
-	set.Entries = evaluateApplicationRoute(check, stored, answers)
+	set.Entries = evaluateApplicationRoute(check, stored, answers, facts)
 	return set, nil
 }
 
 // evaluateApplicationRoute is the pure per-type verdict table for a checked
 // role with a verified application route. Stored versions flip required
-// types to ready; form values derive from saved answers at call time.
-func evaluateApplicationRoute(check *CheckView, stored map[string]ArtifactView, answers map[string]QuestionAnswerValue) []ArtifactReadinessEntry {
+// types to ready unless their basis pins contradict the current inputs;
+// form values derive from saved answers at call time. Pasteable form
+// text is required only when a non-attachment question exists:
+// upload-only routes carry their instructions in Handoff, not in text
+// values (M3/R09).
+func evaluateApplicationRoute(check *CheckView, stored map[string]ArtifactView, answers map[string]QuestionAnswerValue, facts map[string]string) []ArtifactReadinessEntry {
 	required := map[string]string{}
-	if len(check.Questions) > 0 {
-		required[ArtifactFormValues] = "vacancy states employer questions"
+	for _, question := range check.Questions {
+		if question.Kind != CheckQuestionAttachment {
+			required[ArtifactFormValues] = "vacancy states employer questions"
+			break
+		}
 	}
 	if artifactEmailPattern.MatchString(check.Route.DestinationText) {
 		required[ArtifactEmailSubject] = "route destination " + strconv.Quote(check.Route.DestinationText)
@@ -262,6 +349,15 @@ func evaluateApplicationRoute(check *CheckView, stored map[string]ArtifactView, 
 		default:
 			entry.State = ArtifactStateHeld
 			entry.Reason = "awaiting draft"
+		}
+		if entry.Current != nil && artifactType != ArtifactFormValues {
+			if reason, stale := basisStaleness(check, *entry.Current, answers, facts); stale {
+				// Held, not silent ready: the stored content stays
+				// attached under Current for inspection while the
+				// state tells the owner it no longer matches.
+				entry.State = ArtifactStateHeld
+				entry.Reason = reason
+			}
 		}
 		entries = append(entries, entry)
 	}

@@ -78,11 +78,31 @@ func (h *Handler) listPrepareActivity(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, page)
 }
 
+// artifactFactDigests maps approved career source ids to current
+// digests for freshness reads. A nil loader or load failure yields a
+// nil map, which skips the fact check without failing the read.
+func artifactFactDigests() map[string]string {
+	if ownerCareerLoader == nil {
+		return nil
+	}
+	sources, err := ownerCareerLoader()
+	if err != nil {
+		return nil
+	}
+	out := make(map[string]string, len(sources))
+	for _, source := range sources {
+		if source.Approved && source.ID != "" && source.SHA256 != "" {
+			out[source.ID] = source.SHA256
+		}
+	}
+	return out
+}
+
 func (h *Handler) listArtifactReadiness(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.owner(w, r); !ok {
 		return
 	}
-	set, err := h.database.ArtifactReadiness(r.Context(), r.PathValue("id"))
+	set, err := h.database.ArtifactReadinessWithFacts(r.Context(), r.PathValue("id"), artifactFactDigests())
 	if err != nil {
 		failArtifact(w, err)
 		return
@@ -95,7 +115,7 @@ func (h *Handler) getArtifactReadiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	artifactType := r.PathValue("artifactType")
-	set, err := h.database.ArtifactReadiness(r.Context(), r.PathValue("id"))
+	set, err := h.database.ArtifactReadinessWithFacts(r.Context(), r.PathValue("id"), artifactFactDigests())
 	if err != nil {
 		failArtifact(w, err)
 		return
@@ -107,6 +127,210 @@ func (h *Handler) getArtifactReadiness(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Unknown artifact type.")
+}
+
+// rewriteOpportunityArtifact runs one explicit targeted rewrite of a
+// stored artifact type (M5; proposed route POST
+// /opportunities/{id}/artifacts/{artifactType}/rewrite, owned by the
+// integration lane). Pins come from server truth; the body carries
+// the request key, the fenced expected version and the owner
+// instruction.
+func (h *Handler) rewriteOpportunityArtifact(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.owner(w, r)
+	if !ok || !h.mutationAllowed(w, r, p) {
+		return
+	}
+	rewriter, ok := h.materials.(MaterialRewriter)
+	if h.materials == nil || !ok {
+		h.materialUnavailable(w, "Artifact rewrite")
+		return
+	}
+	var body generated.MaterialRewriteRequest
+	if !decodeRecordJSON(w, r, &body) {
+		return
+	}
+	instruction := ""
+	if body.Instruction != nil {
+		instruction = *body.Instruction
+	}
+	set, created, err := rewriter.RewriteOpportunityArtifacts(r.Context(),
+		store.Actor{Kind: p.Kind, ID: p.ID}, r.PathValue("id"), body.RequestKey,
+		materialprep.RewriteInput{
+			Items:       []materialprep.RewriteItem{{Type: r.PathValue("artifactType"), ExpectedVersion: body.ExpectedVersion}},
+			Instruction: instruction,
+		})
+	if err != nil {
+		failArtifactDraft(w, err)
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, artifactReadinessSetModel(set))
+}
+
+// listArtifactVersions reads every stored version of one artifact
+// type, oldest first (M6; proposed route GET
+// /opportunities/{id}/artifacts/{artifactType}/versions). Passive:
+// no model call, no write, no transition.
+func (h *Handler) listArtifactVersions(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.owner(w, r); !ok {
+		return
+	}
+	artifactType := r.PathValue("artifactType")
+	if !storedArtifactType(artifactType) {
+		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Unknown stored artifact type.")
+		return
+	}
+	views, err := h.database.ListArtifactVersions(r.Context(), r.PathValue("id"), artifactType)
+	if err != nil {
+		failArtifact(w, err)
+		return
+	}
+	items := make([]generated.ArtifactView, 0, len(views))
+	for _, view := range views {
+		items = append(items, artifactViewModel(view))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// exportOpportunityArtifact downloads one artifact version rendered
+// from the actual stored content (M6; proposed route GET
+// /opportunities/{id}/artifacts/{artifactType}/export with optional
+// ?version=N, default current). form_values exports the derived
+// field text. Passive: no model call, no write, no transition, and
+// downloading never means applied.
+func (h *Handler) exportOpportunityArtifact(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.owner(w, r); !ok {
+		return
+	}
+	if !rejectUnknownQuery(w, r, "version") {
+		return
+	}
+	opportunityID := r.PathValue("id")
+	artifactType := r.PathValue("artifactType")
+	version := int64(0)
+	if raw := r.URL.Query().Get("version"); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || parsed < 1 {
+			fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Invalid artifact version.")
+			return
+		}
+		version = parsed
+	}
+	opportunity, err := h.database.Opportunity(r.Context(), opportunityID)
+	if err != nil {
+		failArtifact(w, err)
+		return
+	}
+	if opportunity.ArchivedAt != "" {
+		fail(w, http.StatusNotFound, generated.ApiErrorCodeNotFound, "Role, check, or artifact not found.")
+		return
+	}
+	company, err := h.database.Company(r.Context(), opportunity.CompanyID)
+	if err != nil {
+		failArtifact(w, err)
+		return
+	}
+	if artifactType == store.ArtifactFormValues {
+		if version != 0 {
+			fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Form values are derived live and have no versions.")
+			return
+		}
+		set, err := h.database.ArtifactReadinessWithFacts(r.Context(), opportunityID, artifactFactDigests())
+		if err != nil {
+			failArtifact(w, err)
+			return
+		}
+		for _, entry := range set.Entries {
+			if entry.Type != store.ArtifactFormValues {
+				continue
+			}
+			export := materialprep.ExportFormValues(opportunity.Title, company.Name, set.CheckID, entry.FormValues)
+			writeExport(w, export)
+			return
+		}
+		fail(w, http.StatusNotFound, generated.ApiErrorCodeNotFound, "Role, check, or artifact not found.")
+		return
+	}
+	if !storedArtifactType(artifactType) {
+		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Unknown artifact type.")
+		return
+	}
+	views, err := h.database.ListArtifactVersions(r.Context(), opportunityID, artifactType)
+	if err != nil {
+		failArtifact(w, err)
+		return
+	}
+	pick := -1
+	for i := range views {
+		if version == 0 && (pick < 0 || views[i].Version > views[pick].Version) {
+			pick = i
+		}
+		if version != 0 && views[i].Version == version {
+			pick = i
+		}
+	}
+	if pick < 0 {
+		fail(w, http.StatusNotFound, generated.ApiErrorCodeNotFound, "Role, check, or artifact not found.")
+		return
+	}
+	writeExport(w, materialprep.ExportArtifact(views[pick], opportunity.Title, company.Name))
+}
+
+// listSavedJobs reads the durable saved-job/artifact index (M6;
+// proposed route GET /saved-jobs). Passive: no model call, no write,
+// no transition.
+func (h *Handler) listSavedJobs(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.owner(w, r); !ok {
+		return
+	}
+	entries, err := h.database.ListSavedJobs(r.Context())
+	if err != nil {
+		failArtifact(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": entries})
+}
+
+// getOpportunityHandoff reads the manual Handoff basis for one role
+// (M6; proposed route GET /opportunities/{id}/handoff). Passive: no
+// model call, no write, and no terminal transition — saving the
+// Handoff is a separate explicit write. Opening, copying or
+// downloading never means applied.
+func (h *Handler) getOpportunityHandoff(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.owner(w, r); !ok {
+		return
+	}
+	view, err := h.database.HandoffProjection(r.Context(), r.PathValue("id"))
+	if err != nil {
+		failArtifact(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+// storedArtifactType reports whether an artifact type has stored
+// versions. form_values derives at read time and is never stored.
+func storedArtifactType(artifactType string) bool {
+	switch artifactType {
+	case store.ArtifactCV, store.ArtifactCoverLetter, store.ArtifactEmailSubject, store.ArtifactEmailBody:
+		return true
+	default:
+		return false
+	}
+}
+
+// writeExport sends one rendered download with its filename and
+// media type. Filenames are server-generated and already safe.
+func writeExport(w http.ResponseWriter, export materialprep.Export) {
+	w.Header().Set("Content-Type", export.MediaType)
+	w.Header().Set("Content-Disposition", "attachment; filename="+strconv.Quote(export.Filename))
+	if export.ContentSHA256 != "" {
+		w.Header().Set("X-Content-SHA256", export.ContentSHA256)
+	}
+	_, _ = w.Write([]byte(export.Body))
 }
 
 func (h *Handler) saveOpportunityArtifact(w http.ResponseWriter, r *http.Request) {
@@ -157,26 +381,44 @@ func prepareActivitySummary(kind, outcome string, payload json.RawMessage) strin
 		}
 		return strings.Join(values, ", ")
 	}
+	rewrite, _ := detail["rewrite"].(bool)
+	verb := "Drafting"
+	if rewrite {
+		verb = "Rewriting"
+	}
 	switch kind {
 	case store.PrepareTurnStarted:
+		if rewrite {
+			return "Rewriting " + join(stringsOf("targets")) + "."
+		}
 		return "Drafting " + join(stringsOf("targets")) + " from facts " +
 			join(stringsOf("factIds")) + " and answers " + join(stringsOf("answerIds")) + "."
 	case store.PrepareArtifactDone:
 		name, _ := detail["type"].(string)
-		return "Saved " + name + " naming facts " + join(stringsOf("factIds")) +
+		saved := "Saved "
+		if rewrite {
+			saved = "Rewrote "
+		}
+		return saved + name + " naming facts " + join(stringsOf("factIds")) +
 			" and answers " + join(stringsOf("answerIds")) + "."
 	case store.PrepareArtifactHeld:
 		name, _ := detail["type"].(string)
+		if reason, _ := detail["reason"].(string); reason != "" && reason != "omitted by turn" {
+			if id, _ := detail["clarificationId"].(string); id != "" {
+				return "Held " + name + ": " + reason + " (question " + id + ")."
+			}
+			return "Held " + name + ": " + reason + "."
+		}
 		return "Held " + name + ": omitted by the drafting turn."
 	case store.PrepareCompleted:
-		return "Drafting finished: ready " + join(stringsOf("drafted")) +
+		return verb + " finished: ready " + join(stringsOf("drafted")) +
 			"; held " + join(stringsOf("held")) + "."
 	case store.PrepareFailed:
 		message, _ := detail["error"].(string)
 		if message == "" {
 			message = outcome
 		}
-		return "Drafting failed: " + message
+		return verb + " failed: " + message
 	default:
 		if outcome == "" {
 			return kind + "."

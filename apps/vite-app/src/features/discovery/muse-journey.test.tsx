@@ -19,16 +19,14 @@ import type {
   SearchBriefView,
 } from "@/api/client"
 import { SessionProvider, useSession } from "@/api/session"
+import { SavedGoalsProvider } from "@/components/shared/saved-goals"
 import { AnswersPage } from "@/features/answers"
 import { CheckPage } from "@/features/check/CheckPage"
 import {
   CheckChosenJobs,
   type ChosenRoleInput,
 } from "@/features/discovery/check-chosen-jobs"
-import {
-  discoveryRunStorageKey,
-  DiscoverySection,
-} from "@/features/discovery/discovery-section"
+import { DiscoverySection } from "@/features/discovery/discovery-section"
 import {
   fixtureMuseState,
   type MuseFixtureScenario,
@@ -214,7 +212,9 @@ function stubDiscoveryFetch(options: DiscoveryStubOptions = {}): {
 function renderDiscovery(museScenario?: MuseFixtureScenario) {
   return render(
     <SessionProvider>
-      <DiscoverySection museScenario={museScenario} />
+      <SavedGoalsProvider>
+        <DiscoverySection museScenario={museScenario} />
+      </SavedGoalsProvider>
     </SessionProvider>
   )
 }
@@ -226,11 +226,13 @@ function SessionProbe() {
 
 beforeEach(() => {
   window.localStorage.clear()
+  window.location.hash = ""
 })
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  window.location.hash = ""
 })
 
 describe("muse readiness on discovery", () => {
@@ -319,7 +321,7 @@ describe("muse readiness on discovery", () => {
   })
 
   it("reloads the tracked run through reads only", async () => {
-    window.localStorage.setItem(discoveryRunStorageKey, "run-9")
+    window.location.hash = "#/search?run=run-9"
     const { calls } = stubDiscoveryFetch({ runState: "completed" })
     renderDiscovery()
 

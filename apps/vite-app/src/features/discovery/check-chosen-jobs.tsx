@@ -11,6 +11,11 @@ export interface ChosenRoleInput {
   workflowRevision: number
 }
 
+export interface InProgressRoleInput {
+  jobId: string
+  title: string
+}
+
 function startedLabel(status: CheckStatusView["status"]): string {
   switch (status) {
     case "checking":
@@ -120,18 +125,24 @@ function ChosenRoleCheckRow({
   )
 }
 
-// CheckChosenJobs is the C5 persistent Jobs action. It stays visible at the
-// bottom of long lists (sticky) and is keyboard reachable through native
-// buttons and links. An explicit click starts checks only for the chosen
-// (server-selected) roles passed in; rendering or selecting roles starts
-// nothing, and each role's blocked/pending outcome stays independent. When a
-// Contributor readiness is supplied and not ready, the action stays disabled
-// with the blocking code as the reason.
+// CheckChosenJobs is the persistent Jobs action (G4/R24). The sticky bar
+// stays compact — fresh count, View selection/current work links and the
+// bulk button — so many chosen jobs never cover a narrow viewport.
+// Per-role rows and in-progress links render in normal flow BELOW the bar.
+// `roles` carries only fresh eligible choices; with zero of them the bulk
+// action disables while started roles stay reachable. Rendering or
+// selecting roles starts nothing, and each role's blocked/pending outcome
+// stays independent. When a Contributor readiness is supplied and not
+// ready, the action stays disabled with the blocking code as the reason.
 export function CheckChosenJobs({
   roles,
+  inProgress = [],
   contributor,
 }: {
+  /** Fresh eligible choices: the bulk action covers exactly these. */
   roles: ChosenRoleInput[]
+  /** Started roles (checking/preparing/Handoff/held): linked, never bulked. */
+  inProgress?: InProgressRoleInput[]
   contributor?: MuseReadiness | null
 }) {
   const [startEpoch, setStartEpoch] = useState(0)
@@ -141,41 +152,69 @@ export function CheckChosenJobs({
     contributor.state !== "ready"
 
   return (
-    <section
-      aria-label="Check chosen jobs"
-      className="sticky bottom-0 z-10 border-t border-border bg-background/95 py-3 backdrop-blur"
-    >
-      <div className="flex min-w-0 flex-col gap-2 rounded-lg border bg-card px-3 py-2.5">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            disabled={roles.length === 0 || blocked}
-            onClick={() => setStartEpoch((value) => value + 1)}
-          >
-            {`Check chosen jobs (${roles.length})`}
-          </Button>
-          <a
-            href="#/applications"
-            aria-label={`View selection (${roles.length} chosen)`}
-            className="text-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            {`View selection (${roles.length})`}
-          </a>
+    <>
+      <section
+        aria-label="Check chosen jobs"
+        className="sticky bottom-0 z-10 border-t border-border bg-background/95 py-3 backdrop-blur"
+      >
+        <div className="flex min-w-0 flex-col gap-2 rounded-lg border bg-card px-3 py-2.5">
+          <p className="text-sm wrap-break-word">
+            <strong>
+              {roles.length === 0
+                ? "No fresh choices"
+                : `${roles.length} new ${roles.length === 1 ? "job" : "jobs"} selected`}
+            </strong>
+          </p>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              disabled={roles.length === 0 || blocked}
+              onClick={() => setStartEpoch((value) => value + 1)}
+            >
+              {`Check chosen jobs (${roles.length})`}
+            </Button>
+            <a
+              href="#/applications"
+              aria-label={`View selection (${roles.length} fresh)`}
+              className="text-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              {`View selection (${roles.length})`}
+            </a>
+            {inProgress.length > 0 ? (
+              <a
+                href="#/applications"
+                aria-label={`Current work (${inProgress.length} started)`}
+                className="text-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {`Current work (${inProgress.length})`}
+              </a>
+            ) : null}
+          </div>
+          <p className="text-xs wrap-break-word text-muted-foreground">
+            Starts checks only for fresh eligible choices below — one
+            independent request per role. Selecting a role starts nothing.
+          </p>
+          {blocked && contributor !== undefined && contributor !== null ? (
+            <p className="text-xs wrap-break-word text-destructive" role="alert">
+              {`Checks are blocked: Muse Contributor is ${contributor.state} (${contributor.code}) — ${contributor.detail}.`}
+            </p>
+          ) : null}
+          {roles.length === 0 && inProgress.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No chosen roles yet. Select a role above to enable checks.
+            </p>
+          ) : null}
         </div>
-        <p className="text-xs wrap-break-word text-muted-foreground">
-          Starts checks only for the chosen roles below — one independent
-          request per role. Selecting a role starts nothing.
-        </p>
-        {blocked && contributor !== undefined && contributor !== null ? (
-          <p className="text-xs wrap-break-word text-destructive" role="alert">
-            {`Checks are blocked: Muse Contributor is ${contributor.state} (${contributor.code}) — ${contributor.detail}.`}
-          </p>
-        ) : null}
-        {roles.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No chosen roles yet. Select a role above to enable checks.
-          </p>
-        ) : (
+      </section>
+
+      {roles.length === 0 ? null : (
+        <section
+          aria-label="Fresh chosen roles"
+          className="flex min-w-0 flex-col gap-2"
+        >
+          <h3 className="text-sm font-medium">
+            {`Fresh choices (${roles.length})`}
+          </h3>
           <ul className="flex min-w-0 flex-col gap-2">
             {roles.map((role) => (
               <ChosenRoleCheckRow
@@ -185,8 +224,32 @@ export function CheckChosenJobs({
               />
             ))}
           </ul>
-        )}
-      </div>
-    </section>
+        </section>
+      )}
+
+      {inProgress.length === 0 ? null : (
+        <section
+          aria-label="Started roles"
+          className="flex min-w-0 flex-col gap-2"
+        >
+          <h3 className="text-sm font-medium">
+            {`Already started (${inProgress.length}) — outside the bulk action`}
+          </h3>
+          <ul className="flex min-w-0 flex-col gap-1">
+            {inProgress.map((role) => (
+              <li key={role.jobId} className="text-sm wrap-break-word">
+                <a
+                  href={`#/jobs/${encodeURIComponent(role.jobId)}`}
+                  aria-label={`Open ${role.title}`}
+                  className="underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  {role.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
   )
 }

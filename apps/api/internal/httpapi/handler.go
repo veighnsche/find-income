@@ -181,6 +181,12 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/artifacts", h.listArtifactReadiness)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/artifacts/{artifactType}", h.getArtifactReadiness)
 	mux.HandleFunc("PUT /api/v1/opportunities/{id}/artifacts/{artifactType}", h.saveOpportunityArtifact)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/artifacts/{artifactType}/rewrite", h.rewriteOpportunityArtifact)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/artifacts/{artifactType}/versions", h.listArtifactVersions)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/artifacts/{artifactType}/export", h.exportOpportunityArtifact)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/handoff", h.getOpportunityHandoff)
+	mux.HandleFunc("POST /api/v1/opportunities/{id}/handoff", h.saveOpportunityHandoff)
+	mux.HandleFunc("GET /api/v1/saved-jobs", h.listSavedJobs)
 	mux.HandleFunc("/api/v1/", h.privateNotFound)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")

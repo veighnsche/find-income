@@ -50,7 +50,7 @@ func TestStandardPromptGuards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"owner instruction", `"texts"`} {
+	for _, want := range []string{"owner instruction", `"artifacts"`} {
 		if !strings.Contains(rewrite, want) {
 			t.Fatalf("rewrite prompt missing %q", want)
 		}
@@ -70,7 +70,7 @@ func TestStandardPromptGuards(t *testing.T) {
 func TestStandardSchemasMirrorDisciplines(t *testing.T) {
 	for purpose, key := range map[string]string{
 		standardDraftPurpose:    "drafts",
-		standardRewritePurpose:  "texts",
+		standardRewritePurpose:  "artifacts",
 		standardArtifactPurpose: "artifacts",
 	} {
 		raw, err := standardSchemaJSON(purpose)

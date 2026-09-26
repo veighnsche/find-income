@@ -38,10 +38,11 @@ func standardDiscipline(purpose string) (string, error) {
 			`{"drafts":[{"questionId":"...","lines":[{"text":"...","citations":[{"sourceId":"...","excerpt":"..."}]}]}]}, ` +
 			`raw or in a single fenced block, and nothing else.`, nil
 	case standardRewritePurpose:
-		return `Rewrite each listed employer-question answer according to the owner instruction, using only the verified facts in this prompt. ` +
+		return `Rewrite each listed application artifact according to the owner instruction, using only the verified facts in this prompt. ` +
 			`Never invent experience, dates, credentials, or availability, and never contact anyone or browse. ` +
-			`Every listed question id gets exactly one text; use the empty string for any question the facts cannot support. ` +
-			`Reply with exactly one JSON object {"texts":[{"questionId":"...","text":"..."}]}, ` +
+			`Rewrite only the listed artifact types, at most once each; omit any type the facts cannot support. ` +
+			`Reply with exactly one JSON object ` +
+			`{"artifacts":[{"type":"...","content":"...","facts":["source-id"],"answers":["question-id"]}]}, ` +
 			`raw or in a single fenced block, and nothing else.`, nil
 	case standardArtifactPurpose:
 		return `Draft the listed application artifacts from the supplied verified facts only. ` +
@@ -108,20 +109,22 @@ func standardSchemaJSON(purpose string) (string, error) {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
-    "texts": {
+    "artifacts": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "questionId": {"type": "string"},
-          "text": {"type": "string"}
+          "type": {"type": "string"},
+          "content": {"type": "string"},
+          "facts": {"type": "array", "items": {"type": "string"}},
+          "answers": {"type": "array", "items": {"type": "string"}}
         },
-        "required": ["questionId", "text"],
+        "required": ["type", "content", "facts", "answers"],
         "additionalProperties": false
       }
     }
   },
-  "required": ["texts"],
+  "required": ["artifacts"],
   "additionalProperties": false
 }`, nil
 	case standardArtifactPurpose:

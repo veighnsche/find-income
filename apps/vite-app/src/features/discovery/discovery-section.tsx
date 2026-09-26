@@ -3,7 +3,6 @@ import {
   commissionResearchRun,
   getResearchCapture,
   getResearchReport,
-  getResearchRun,
   isUnauthenticated,
   listResearchActivity,
   resumeRound,
@@ -19,8 +18,10 @@ import {
   EmptyBlock,
   ErrorBlock,
   LoadingBlock,
-  UnsupportedBlock,
+  useInvalidate,
+  useServerRun,
 } from "@/components/shared"
+import { requestGoalEditorOpen } from "@/components/shared/goal-editor"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -41,44 +42,28 @@ import {
 } from "@/features/discovery/research-controls"
 import { RunActivityFeed } from "@/features/discovery/run-activity-feed"
 import { RunReportView } from "@/features/discovery/run-report-view"
+import {
+  listResearchRuns,
+  pickRestorableRunId,
+} from "@/features/discovery/run-history"
 import { SavedBriefPanel } from "@/features/discovery/saved-brief"
 import { useOwnerContext } from "@/features/owner-context/useOwnerContext"
+import { useRead } from "@/pages/useRead"
+import { useRoute } from "@/routes/useRoute"
 
+/**
+ * @deprecated Nothing restores from this pointer anymore (G2/D3): the
+ * route (`#/search?run=<id>`) plus the server run history are the recovery
+ * source. Kept only so the F-owned SearchPage bridge keeps compiling until
+ * F removes it; G code never reads or writes this key.
+ */
 export const discoveryRunStorageKey = "jobseek.research-run-id"
 export const discoveryPollIntervalMs = 5000
-
-type RunReadState =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "ready"; run: ResearchRunView }
-  | { kind: "stale"; run: ResearchRunView; error: string }
-  | { kind: "error"; error: string }
 
 function requestMessage(cause: unknown): string {
   return cause instanceof Error
     ? cause.message
     : "The request could not be completed."
-}
-
-function loadPersistedRunId(storage: Pick<Storage, "getItem">): string | null {
-  try {
-    const value = storage.getItem(discoveryRunStorageKey)
-    return value !== null && value.trim() !== "" ? value : null
-  } catch {
-    return null
-  }
-}
-
-function persistRunId(
-  storage: Pick<Storage, "setItem" | "removeItem">,
-  runId: string | null
-): void {
-  try {
-    if (runId !== null) storage.setItem(discoveryRunStorageKey, runId)
-    else storage.removeItem(discoveryRunStorageKey)
-  } catch {
-    // Private-mode storage failures must not break the discovery view.
-  }
 }
 
 function mergeActivityEvents(
@@ -102,29 +87,55 @@ interface PendingKey {
 }
 
 // DiscoverySection connects the Find jobs research run: explicit commission,
-// stop/resume/steer, journaled activity and the evidence-backed report. Mount
-// and navigation only read; every mutation needs an explicit owner action and
-// carries a stable idempotency key per distinct intent. Muse readiness,
-// checkpoints and the run report render from the muse-state view-model
-// ("live" reads the real API; fixtures stay for tests); commissions stay
-// disabled while the Contributor tier is not ready.
+// stop/resume/steer, journaled activity and the evidence-backed report.
+//
+// G2/D3: the tracked run resolves from an explicit prop, then the
+// `#/search?run=<id>` deep link, then the newest relevant server run —
+// never from a browser pointer. `useServerRun` restores it GET-only, a
+// commission navigates to the new run link, and a compact recent-runs
+// history replaces the old unavailable-history notice. Mount, navigation,
+// refresh and polling only read; every mutation needs an explicit owner
+// action and carries a stable idempotency key per distinct intent.
+//
+// Task-first layout (G2/R15): the main action (Find jobs or the run
+// controls) follows the contexts above; brief/profile/readiness details
+// sit in secondary disclosures.
 export function DiscoverySection({
   museScenario = "ready",
+  runId: runIdProp = null,
 }: {
   museScenario?: MuseScenario
+  /** Explicit run to show; wins over the route and server restore. */
+  runId?: string | null
 } = {}) {
   const { session, loseSession } = useSession()
+  const [route, navigate] = useRoute()
   // Live reads on "live" (GETs only); fixtures otherwise.
   const muse = useMuseState(museScenario)
   const contributorReady = muse.contributor.state === "ready"
-  const [runId, setRunId] = useState<string | null>(() =>
-    loadPersistedRunId(window.localStorage)
+  // Single saved-context read for this surface: Lane B's hook supplies the
+  // effective profile/brief/catalog identity plus the correction-aware Find
+  // jobs gate. Mount and navigation only issue GETs.
+  const owner = useOwnerContext()
+  const invalidate = useInvalidate()
+  const routeRunId = route.page === "search" ? route.runId : null
+  const history = useRead(
+    "discovery:run-history",
+    (signal) => listResearchRuns({ limit: 25 }, signal),
+    { scopes: ["run"] }
   )
-  const [read, setRead] = useState<RunReadState>(() =>
-    loadPersistedRunId(window.localStorage) === null
-      ? { kind: "idle" }
-      : { kind: "loading" }
-  )
+
+  const linkedRunId = runIdProp ?? routeRunId
+  const restoredRunId =
+    linkedRunId ??
+    (history.status === "ready"
+      ? pickRestorableRunId(history.data.items)
+      : null)
+  const serverRun = useServerRun(restoredRunId)
+
+  // Stale-while-revalidate over the server read: polling refreshes the
+  // saved projection without flashing the panel back to loading.
+  const [shownRun, setShownRun] = useState<ResearchRunView | null>(null)
   const [events, setEvents] = useState<ResearchActivityEvent[]>([])
   const [nextCursor, setNextCursor] = useState("")
   const [loadingMore, setLoadingMore] = useState(false)
@@ -134,10 +145,6 @@ export function DiscoverySection({
   const [reportError, setReportError] = useState<string | null>(null)
   const [captureUrls, setCaptureUrls] = useState<Record<string, string>>({})
   const [noteText, setNoteText] = useState("")
-  // Single saved-context read for this surface: Lane B's hook supplies the
-  // effective profile/brief/catalog identity plus the correction-aware Find
-  // jobs gate. Mount and navigation only issue GETs.
-  const owner = useOwnerContext()
   const [steerText, setSteerText] = useState("")
   const [steerAck, setSteerAck] = useState<SteeringMessage | null>(null)
   const [busy, setBusy] = useState(false)
@@ -146,10 +153,31 @@ export function DiscoverySection({
   const steerKeyRef = useRef<PendingKey | null>(null)
   const captureInflightRef = useRef<ReadonlySet<string>>(new Set())
 
+  // A new tracked run drops the previous run's activity/report/steering.
+  useEffect(() => {
+    setShownRun(null)
+    setEvents([])
+    setNextCursor("")
+    setLoadMoreError(null)
+    setReport(null)
+    setReportError(null)
+    setSteerAck(null)
+    setSteerText("")
+    setNoteText("")
+    setActionError(null)
+  }, [restoredRunId])
+
   const captureUrlMap = useMemo(
     () => new Map(Object.entries(captureUrls)),
     [captureUrls]
   )
+
+  const serverRunStatus = serverRun.status
+  const serverRunData = serverRun.status === "ready" ? serverRun.data : null
+  useEffect(() => {
+    if (serverRunStatus === "ready" && serverRunData !== null)
+      setShownRun(serverRunData)
+  }, [serverRunStatus, serverRunData])
 
   const readReport = useCallback(
     async (id: string, signal?: AbortSignal) => {
@@ -174,60 +202,59 @@ export function DiscoverySection({
     [loseSession]
   )
 
-  // Read-only refresh: refetches the persisted projection, the first activity
-  // page and (for terminal runs) the report. Never commissions work.
-  const refresh = useCallback(
+  // Read-only activity refresh: merges the head page into the journal.
+  // Never commissions work.
+  const refreshActivity = useCallback(
     async (id: string, signal?: AbortSignal) => {
       try {
-        const [view, page] = await Promise.all([
-          getResearchRun(id, signal),
-          listResearchActivity(id, "", 25, signal),
-        ])
+        const page = await listResearchActivity(id, "", 25, signal)
         if (signal?.aborted === true) return
-        setRead({ kind: "ready", run: view })
         setEvents((previous) => mergeActivityEvents(previous, page.events))
         setNextCursor(page.nextCursor ?? "")
-        if (view.state === "completed" || view.state === "failed") {
-          await readReport(id, signal)
-        } else {
-          setReport(null)
-          setReportError(null)
-        }
       } catch (cause) {
         if (signal?.aborted === true) return
         if (isUnauthenticated(cause)) {
           loseSession()
           return
         }
-        const error = requestMessage(cause)
-        setRead((current) =>
-          current.kind === "ready" || current.kind === "stale"
-            ? { kind: "stale", run: current.run, error }
-            : { kind: "error", error }
-        )
       }
     },
-    [loseSession, readReport]
+    [loseSession]
   )
 
-  useEffect(() => {
-    if (runId === null) return
-    const controller = new AbortController()
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- read-only run restore on mount/run change
-    void refresh(runId, controller.signal)
-    return () => controller.abort()
-  }, [runId, refresh])
-
-  const run = read.kind === "ready" || read.kind === "stale" ? read.run : null
+  const run = shownRun
   const polling = run !== null && isActiveRunState(run.state)
 
   useEffect(() => {
-    if (runId === null || !polling) return
+    if (restoredRunId === null) return
+    const controller = new AbortController()
+    void refreshActivity(restoredRunId, controller.signal)
+    return () => controller.abort()
+  }, [restoredRunId, refreshActivity])
+
+  const serverRetry = serverRun.retry
+  useEffect(() => {
+    if (restoredRunId === null || !polling) return
     const timer = window.setInterval(() => {
-      void refresh(runId)
+      serverRetry()
+      void refreshActivity(restoredRunId)
     }, discoveryPollIntervalMs)
     return () => window.clearInterval(timer)
-  }, [runId, polling, refresh])
+  }, [restoredRunId, polling, refreshActivity, serverRetry])
+
+  const terminal =
+    run !== null && (run.state === "completed" || run.state === "failed")
+  useEffect(() => {
+    if (restoredRunId === null) return
+    if (!terminal) {
+      setReport(null)
+      setReportError(null)
+      return
+    }
+    const controller = new AbortController()
+    void readReport(restoredRunId, controller.signal)
+    return () => controller.abort()
+  }, [restoredRunId, terminal, readReport])
 
   // Resolve capture references to their observed URLs through the read-only
   // capture endpoint. Unresolvable captures stay visible as bare ids.
@@ -271,6 +298,13 @@ export function DiscoverySection({
     )
   const csrfToken = session.csrfToken
 
+  function openGoalEditor() {
+    // The deterministic editor opens and takes focus; without a mounted
+    // editor (saved context failed to load) fall back to the search page.
+    if (!requestGoalEditorOpen("discovery:change-goals"))
+      navigate({ page: "search", runId: null })
+  }
+
   async function commission(kind: "start" | "find-more") {
     // Find jobs commissions only against the loaded, fresh saved context with
     // a ready Contributor tier, including while a correction is still saving.
@@ -299,18 +333,10 @@ export function DiscoverySection({
         csrfToken
       )
       commissionKeyRef.current = null
-      persistRunId(window.localStorage, view.runId)
-      setEvents([])
-      setNextCursor("")
-      setLoadMoreError(null)
-      setReport(null)
-      setReportError(null)
-      setSteerAck(null)
-      setRunId(view.runId)
-      setRead({ kind: "ready", run: view })
-      if (view.state === "completed" || view.state === "failed") {
-        await readReport(view.runId)
-      }
+      invalidate("run")
+      // The run link is the recovery pointer: a reload, a second browser or
+      // a shared link restores this exact run from the server (GET-only).
+      navigate({ page: "search", runId: view.runId })
     } catch (cause) {
       if (isUnauthenticated(cause)) loseSession()
       else setActionError(requestMessage(cause))
@@ -320,13 +346,15 @@ export function DiscoverySection({
   }
 
   async function control(kind: "stop" | "resume") {
-    if (runId === null) return
+    if (restoredRunId === null) return
     setBusy(true)
     setActionError(null)
     try {
-      if (kind === "stop") await stopRound(runId, csrfToken)
-      else await resumeRound(runId, csrfToken)
-      await refresh(runId)
+      if (kind === "stop") await stopRound(restoredRunId, csrfToken)
+      else await resumeRound(restoredRunId, csrfToken)
+      invalidate("run")
+      serverRun.retry()
+      await refreshActivity(restoredRunId)
     } catch (cause) {
       if (isUnauthenticated(cause)) loseSession()
       else setActionError(requestMessage(cause))
@@ -336,7 +364,7 @@ export function DiscoverySection({
   }
 
   async function steer() {
-    if (runId === null || steerText.trim() === "") return
+    if (restoredRunId === null || steerText.trim() === "") return
     setBusy(true)
     setActionError(null)
     try {
@@ -348,14 +376,16 @@ export function DiscoverySection({
           : newIdempotencyKey()
       steerKeyRef.current = { key: idempotencyKey, intent: body }
       const ack = await steerResearchRun(
-        runId,
+        restoredRunId,
         { body, idempotencyKey },
         csrfToken
       )
       steerKeyRef.current = null
       setSteerAck(ack)
       setSteerText("")
-      await refresh(runId)
+      invalidate("run")
+      serverRun.retry()
+      await refreshActivity(restoredRunId)
     } catch (cause) {
       if (isUnauthenticated(cause)) loseSession()
       else setActionError(requestMessage(cause))
@@ -365,11 +395,11 @@ export function DiscoverySection({
   }
 
   async function loadMore() {
-    if (runId === null || nextCursor === "") return
+    if (restoredRunId === null || nextCursor === "") return
     setLoadingMore(true)
     setLoadMoreError(null)
     try {
-      const page = await listResearchActivity(runId, nextCursor, 25)
+      const page = await listResearchActivity(restoredRunId, nextCursor, 25)
       setEvents((previous) => mergeActivityEvents(previous, page.events))
       setNextCursor(page.nextCursor ?? "")
     } catch (cause) {
@@ -380,25 +410,18 @@ export function DiscoverySection({
     }
   }
 
-  function forgetRun() {
-    persistRunId(window.localStorage, null)
-    setRunId(null)
-    setRead({ kind: "idle" })
-    setEvents([])
-    setNextCursor("")
-    setReport(null)
-    setReportError(null)
-    setSteerAck(null)
-    setActionError(null)
+  function backToFindJobs() {
+    navigate({ page: "search", runId: null })
   }
 
-  const terminal =
-    run !== null && (run.state === "completed" || run.state === "failed")
   const readiness = {
     ready: owner.discoveryReady,
     reason: owner.discoveryBlockedReason,
   }
   const briefBasis = owner.context
+  const runError =
+    serverRun.status === "error" ? (serverRun.error ?? "Unknown error.") : null
+  const historyItems = history.status === "ready" ? history.data.items : []
 
   return (
     <section
@@ -416,20 +439,28 @@ export function DiscoverySection({
         </p>
       </div>
 
-      <MuseReadinessPanel
-        readiness={muse.contributor}
-        heading="Muse Contributor readiness"
-      />
+      {readiness.ready && briefBasis !== null ? (
+        <p className="text-sm wrap-break-word">
+          {briefBasis.rubricVersion === null
+            ? `Searches with profile v${briefBasis.profileVersion} — the first run authors the search brief.`
+            : `Searches with profile v${briefBasis.profileVersion} (${briefBasis.rubricVersion}).`}
+        </p>
+      ) : (
+        <p className="text-sm wrap-break-word text-muted-foreground">
+          {readiness.reason}
+        </p>
+      )}
+      {run !== null &&
+      briefBasis !== null &&
+      run.briefVersion.profileVersion !== briefBasis.profileVersion ? (
+        <p className="text-xs wrap-break-word text-muted-foreground">
+          {`This run searched profile v${run.briefVersion.profileVersion}; the saved profile is now v${briefBasis.profileVersion}.`}
+        </p>
+      ) : null}
 
-      <SavedBriefPanel
-        context={owner.context}
-        contextState={owner.contextState}
-        contextError={owner.contextError}
-        retryContext={owner.retryContext}
-        runBriefProfileVersion={run?.briefVersion.profileVersion ?? null}
-      />
-
-      {read.kind === "idle" ? (
+      {history.status === "loading" && linkedRunId === null ? (
+        <LoadingBlock label="Loading saved runs…" />
+      ) : restoredRunId === null ? (
         <div className="flex min-w-0 flex-col gap-3 rounded-2xl border bg-card px-4 py-4">
           <h3 className="font-heading text-base font-medium">Find jobs</h3>
           <p className="text-sm text-muted-foreground">
@@ -440,17 +471,6 @@ export function DiscoverySection({
             minutes, 60 actions, 12 Jev assessments, 8 turns, and at most 2
             concurrent operations. Work starts only when you select Find jobs.
           </p>
-          {readiness.ready && briefBasis !== null ? (
-            <p className="text-sm wrap-break-word">
-              {briefBasis.rubricVersion === null
-                ? `Searches with profile v${briefBasis.profileVersion} — the first run authors the search brief.`
-                : `Searches with profile v${briefBasis.profileVersion} (${briefBasis.rubricVersion}).`}
-            </p>
-          ) : (
-            <p className="text-sm wrap-break-word text-muted-foreground">
-              {readiness.reason}
-            </p>
-          )}
           {contributorReady ? null : (
             <p
               className="text-sm wrap-break-word text-destructive"
@@ -467,12 +487,14 @@ export function DiscoverySection({
             >
               {busy ? "Starting…" : "Find jobs"}
             </Button>
-            <a
-              href="#/search"
-              className="inline-flex h-8 items-center justify-center gap-1 rounded-4xl border border-border bg-input/30 px-3 text-sm font-medium whitespace-nowrap transition-all outline-none select-none hover:bg-input/50 hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={openGoalEditor}
             >
               Change goals
-            </a>
+            </Button>
           </div>
           <details className="min-w-0">
             <summary className="cursor-pointer text-sm text-muted-foreground">
@@ -496,30 +518,40 @@ export function DiscoverySection({
           {actionError !== null ? (
             <ErrorBlock title="Research action failed" message={actionError} />
           ) : null}
+          <RecentRunsBlock
+            status={history.status}
+            items={historyItems}
+            activeRunId={null}
+            onRetry={history.retry}
+          />
         </div>
       ) : null}
 
-      {read.kind === "loading" ? (
+      {restoredRunId !== null &&
+      run === null &&
+      serverRun.status === "loading" ? (
         <LoadingBlock label="Loading saved research run…" />
       ) : null}
 
-      {read.kind === "error" ? (
+      {restoredRunId !== null && run === null && runError !== null ? (
         <div className="flex min-w-0 flex-col gap-3">
           <ErrorBlock
-            title="Could not load the research run"
-            message={read.error}
-            onRetry={() => {
-              if (runId !== null) void refresh(runId)
-            }}
+            title={
+              serverRun.status === "error" && serverRun.notFound
+                ? "This run is not on the server"
+                : "Could not load the research run"
+            }
+            message={runError}
+            onRetry={serverRun.retry}
           />
           <div>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={forgetRun}
+              onClick={backToFindJobs}
             >
-              Start a new run
+              Back to Find jobs
             </Button>
           </div>
         </div>
@@ -527,12 +559,12 @@ export function DiscoverySection({
 
       {run !== null ? (
         <>
-          {read.kind === "stale" ? (
+          {runError !== null ? (
             <p
               role="alert"
               className="text-sm wrap-break-word text-destructive"
             >
-              Showing last known state: {read.error}
+              Showing last known state: {runError}
             </p>
           ) : null}
           <ResearchControls
@@ -548,10 +580,12 @@ export function DiscoverySection({
             onStop={() => void control("stop")}
             onResume={() => void control("resume")}
             onRefresh={() => {
-              if (runId !== null) void refresh(runId)
+              serverRun.retry()
+              if (restoredRunId !== null) void refreshActivity(restoredRunId)
             }}
             onSteer={() => void steer()}
             onFindMore={() => void commission("find-more")}
+            onEditGoals={openGoalEditor}
           />
 
           <RunActivityFeed
@@ -575,7 +609,7 @@ export function DiscoverySection({
               title="Could not load the research report"
               message={reportError}
               onRetry={() => {
-                if (runId !== null) void readReport(runId)
+                if (restoredRunId !== null) void readReport(restoredRunId)
               }}
             />
           ) : null}
@@ -587,13 +621,132 @@ export function DiscoverySection({
         </>
       ) : null}
 
-      <MuseCheckpointsPanel checkpoints={muse.checkpoints} />
-      {muse.report !== null ? <MuseReportPanel report={muse.report} /> : null}
+      <details className="min-w-0 rounded-2xl border bg-card px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium">
+          Saved brief details
+        </summary>
+        <div className="mt-3">
+          <SavedBriefPanel
+            context={owner.context}
+            contextState={owner.contextState}
+            contextError={owner.contextError}
+            retryContext={owner.retryContext}
+            runBriefProfileVersion={run?.briefVersion.profileVersion ?? null}
+          />
+        </div>
+      </details>
 
-      <UnsupportedBlock
-        title="Run history is not available yet"
-        message="The API keeps one run per id and exposes no run list, so only the latest pass is kept here. Earlier findings stay saved per role. Change my search above routes to the correction flow on My search; steering messages go to the current run only and never rewrite the saved brief."
-      />
+      <details className="min-w-0 rounded-2xl border bg-card px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium">
+          Muse Contributor readiness
+        </summary>
+        <div className="mt-3">
+          <MuseReadinessPanel readiness={muse.contributor} />
+        </div>
+      </details>
+
+      {restoredRunId !== null ? (
+        <details className="min-w-0 rounded-2xl border bg-card px-4 py-3">
+          <summary className="cursor-pointer text-sm font-medium">
+            Recent runs
+          </summary>
+          <div className="mt-3">
+            <RecentRunsBlock
+              status={history.status}
+              items={historyItems}
+              activeRunId={restoredRunId}
+              onRetry={history.retry}
+            />
+          </div>
+        </details>
+      ) : null}
+
+      <details className="min-w-0 rounded-2xl border bg-card px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium">
+          Checkpoints and run report
+        </summary>
+        <div className="mt-3 flex min-w-0 flex-col gap-3">
+          <MuseCheckpointsPanel checkpoints={muse.checkpoints} />
+          {muse.report !== null ? (
+            <MuseReportPanel report={muse.report} />
+          ) : null}
+        </div>
+      </details>
     </section>
+  )
+}
+
+// RecentRunsBlock lists the server run history newest-first (D3): every
+// entry links to its stable run deep link, so returning to old work never
+// needs this browser's storage. A missing history endpoint is neutral
+// (older servers predate D3); other failures retry honestly.
+function RecentRunsBlock({
+  status,
+  items,
+  activeRunId,
+  onRetry,
+}: {
+  status: "loading" | "ready" | "error"
+  items: { runId: string; state: string; updatedAt: string }[]
+  activeRunId: string | null
+  onRetry: () => void
+}) {
+  if (status === "loading") return <LoadingBlock label="Loading recent runs…" />
+  if (status === "error")
+    return (
+      <div className="flex min-w-0 flex-col gap-2">
+        <p className="text-sm wrap-break-word text-muted-foreground">
+          Recent runs are unavailable on this server.
+        </p>
+        <div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRetry}
+          >
+            Retry recent runs
+          </Button>
+        </div>
+      </div>
+    )
+  if (items.length === 0)
+    return (
+      <p className="text-sm text-muted-foreground">
+        No research runs yet. The first Find jobs run appears here.
+      </p>
+    )
+  return (
+    <div className="min-w-0">
+      <h4 className="text-sm font-medium">
+        {`Recent runs (${items.length})`}
+      </h4>
+      <ul className="mt-2 flex min-w-0 flex-col gap-1">
+        {items.slice(0, 5).map((item) => (
+          <li key={item.runId} className="text-sm wrap-break-word">
+            {item.runId === activeRunId ? (
+              <span className="font-medium">
+                {`${item.runId} · ${item.state} · current`}
+              </span>
+            ) : (
+              <a
+                href={`#/search?run=${encodeURIComponent(item.runId)}`}
+                className="underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {`${item.runId} · ${item.state}`}
+              </a>
+            )}{" "}
+            <span title={item.updatedAt} className="text-muted-foreground">
+              {item.updatedAt.slice(0, 10)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {items.length > 5 ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {`Showing the 5 newest of ${items.length} runs.`}
+        </p>
+      ) : null}
+    </div>
   )
 }

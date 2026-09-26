@@ -9,6 +9,7 @@ import type {
 } from "@/api/client"
 import { useSession } from "@/api/session"
 import { SessionProvider } from "@/api/session"
+import { SavedGoalsProvider } from "@/components/shared/saved-goals"
 import { preferencesFixture, sessionFixture } from "@/pages/fixtures"
 import {
   buildSavedSummary,
@@ -115,7 +116,11 @@ function stubOwnerFetch(script: OwnerFetchScript = {}): { calls: FetchCall[] } {
 }
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>
+  return (
+    <SessionProvider>
+      <SavedGoalsProvider>{children}</SavedGoalsProvider>
+    </SessionProvider>
+  )
 }
 
 function useProbe(): { owner: OwnerContextValue; sessionReady: boolean } {

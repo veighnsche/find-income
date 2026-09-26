@@ -125,7 +125,7 @@ func clarificationModel(value store.Clarification) generated.Clarification {
 		CheckId: value.CheckID, Origin: generated.ClarificationOrigin(value.Origin),
 		Requirement: generated.ClarificationRequirement{Statement: value.Requirement.Statement,
 			CaptureId: value.Requirement.CaptureID, SpanStart: value.Requirement.SpanStart,
-			SpanEnd:   value.Requirement.SpanEnd},
+			SpanEnd: value.Requirement.SpanEnd},
 		Prompt: value.Prompt, Status: generated.ClarificationStatus(value.Status),
 		CreatedAt: recordedTime(value.CreatedAt)}
 	model.AffectedWork = make([]generated.ClarificationWorkRef, 0, len(value.AffectedWork))

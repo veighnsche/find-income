@@ -165,7 +165,7 @@ func TestEvaluateApplicationRouteQuestionlessAndAttachment(t *testing.T) {
 	check := &CheckView{ID: "check-1",
 		Route: CheckRouteView{Kind: CheckRouteDirect, Judgment: CheckRouteJudgmentApplication,
 			DestinationText: "https://harbour.example/apply"}}
-	entries := evaluateApplicationRoute(check, map[string]ArtifactView{}, map[string]QuestionAnswerValue{})
+	entries := evaluateApplicationRoute(check, map[string]ArtifactView{}, map[string]QuestionAnswerValue{}, nil)
 	set := ArtifactReadinessSet{Entries: entries}
 	forms := readinessEntry(set, ArtifactFormValues)
 	if forms.Required || forms.State != ArtifactStateNotRequired || len(forms.FormValues) != 0 {
@@ -175,7 +175,7 @@ func TestEvaluateApplicationRouteQuestionlessAndAttachment(t *testing.T) {
 		Required: CheckRequired, Kind: CheckQuestionAttachment}}
 	entries = evaluateApplicationRoute(check,
 		map[string]ArtifactView{ArtifactCoverLetter: {ID: "stale", Type: ArtifactCoverLetter, Version: 1}},
-		map[string]QuestionAnswerValue{})
+		map[string]QuestionAnswerValue{}, nil)
 	set = ArtifactReadinessSet{Entries: entries}
 	cv := readinessEntry(set, ArtifactCV)
 	if !cv.Required || cv.State != ArtifactStateHeld || cv.Basis == "" {
@@ -184,6 +184,195 @@ func TestEvaluateApplicationRouteQuestionlessAndAttachment(t *testing.T) {
 	letter := readinessEntry(set, ArtifactCoverLetter)
 	if letter.Required || letter.State != ArtifactStateReady || letter.Current == nil {
 		t.Fatalf("kept letter: %+v", letter)
+	}
+}
+
+func TestArtifactReadinessStaleBasisHolds(t *testing.T) {
+	ctx := context.Background()
+	s := openJobTestStore(t)
+	company := createFixtureCompany(t, s)
+	opportunity := selectFixtureOpportunity(t, s, company.ID, "select-stale")
+	view := saveReadyCheck(t, s, opportunity, "stale", nil)
+	var requiredID string
+	for _, question := range view.Questions {
+		if question.Required == CheckRequired {
+			requiredID = question.ID
+		}
+	}
+	if _, err := s.SaveAnswerValue(ctx, ownerActor(), opportunity.ID, requiredID,
+		AnswerValueSaveInput{Text: "because"}); err != nil {
+		t.Fatal(err)
+	}
+	basis := ArtifactBasis{CheckID: view.ID, QuestionSetSHA256: view.QuestionSetSHA256,
+		OpportunityRevision: view.OpportunityRevision,
+		AnswerRefs:          []ArtifactAnswerRef{{QuestionID: requiredID, AnswerVersion: 1}}}
+	if _, _, err := s.SaveOpportunityArtifact(ctx, ownerActor(), opportunity.ID, ArtifactSaveInput{
+		RequestKey: "stale-1", Type: ArtifactCV, Content: "cv v1", Basis: basis}); err != nil {
+		t.Fatal(err)
+	}
+	set, err := s.ArtifactReadiness(ctx, opportunity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry := readinessEntry(set, ArtifactCV); entry.State != ArtifactStateReady {
+		t.Fatalf("fresh cv: %+v", entry)
+	}
+	if _, err := s.SaveAnswerValue(ctx, ownerActor(), opportunity.ID, requiredID,
+		AnswerValueSaveInput{ExpectedAnswerVersion: 1, Text: "because, updated"}); err != nil {
+		t.Fatal(err)
+	}
+	set, err = s.ArtifactReadiness(ctx, opportunity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cv := readinessEntry(set, ArtifactCV)
+	if cv.State == ArtifactStateReady || cv.Current == nil || cv.Current.Content != "cv v1" {
+		t.Fatalf("moved answer must hold with prior content readable: %+v", cv)
+	}
+}
+
+func TestArtifactReadinessRecheckHolds(t *testing.T) {
+	ctx := context.Background()
+	s := openJobTestStore(t)
+	company := createFixtureCompany(t, s)
+	opportunity := selectFixtureOpportunity(t, s, company.ID, "select-recheck-stale")
+	first := saveReadyCheck(t, s, opportunity, "recheck-first", nil)
+	basis := ArtifactBasis{CheckID: first.ID, QuestionSetSHA256: first.QuestionSetSHA256,
+		OpportunityRevision: first.OpportunityRevision}
+	if _, _, err := s.SaveOpportunityArtifact(ctx, ownerActor(), opportunity.ID, ArtifactSaveInput{
+		RequestKey: "recheck-1", Type: ArtifactCV, Content: "cv v1", Basis: basis}); err != nil {
+		t.Fatal(err)
+	}
+	set, err := s.ArtifactReadiness(ctx, opportunity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry := readinessEntry(set, ArtifactCV); entry.State != ArtifactStateReady {
+		t.Fatalf("fresh cv: %+v", entry)
+	}
+	// The vacancy moves, so the next start opens a real recheck with
+	// new question identities; the pinned version goes stale while
+	// its content stays readable.
+	notes := "Owner added a private note."
+	bumped, _, err := s.PatchOpportunity(ctx, ownerActor(), opportunity.ID,
+		OpportunityPatch{ExpectedRevision: opportunity.Revision, Notes: &notes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow, err := s.RoleWorkflow(ctx, opportunity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, created, err := s.StartJobCheck(ctx, ownerActor(), opportunity.ID, CheckStartInput{
+		RequestKey: "check-recheck-stale", ExpectedOpportunityRevision: bumped.Revision,
+		ExpectedWorkflowRevision: workflow.Revision})
+	if err != nil || !created || started.ID == first.ID {
+		t.Fatalf("recheck start: %+v created=%v err=%v", started, created, err)
+	}
+	capture := insertCheckCapture(t, s, "https://harbour.example/jobs/recheck-stale")
+	round, capability := startCheckRound(t, s, "round-recheck-stale",
+		[]string{RoundCodexTurn, RoundCheckSave}, opportunity.ID)
+	save := checkSaveFixture(opportunity.ID, started.ID, capture.ContentSHA256)
+	save.Questions = []CheckQuestionInput{{
+		Text: "What motivates you?", Required: CheckRequired, Kind: CheckQuestionFreeText,
+		SourceSpan:    CheckSourceSpan{CaptureID: capture.ContentSHA256, Start: 10, End: 30},
+		SourceExcerpt: "What motivates you?"}}
+	if _, _, err := applyCheckSave(t, s, round, capability, "save-recheck-stale",
+		started.WorkflowRevision, save); err != nil {
+		t.Fatal(err)
+	}
+	set, err = s.ArtifactReadiness(ctx, opportunity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cv := readinessEntry(set, ArtifactCV)
+	if cv.State == ArtifactStateReady || cv.Current == nil || cv.Current.Version != 1 ||
+		cv.Current.Content != "cv v1" {
+		t.Fatalf("recheck must hold with prior content readable: %+v", cv)
+	}
+}
+
+func TestArtifactReadinessFactDigestStaleness(t *testing.T) {
+	ctx := context.Background()
+	s := openJobTestStore(t)
+	company := createFixtureCompany(t, s)
+	opportunity := selectFixtureOpportunity(t, s, company.ID, "select-factstale")
+	saveReadyCheck(t, s, opportunity, "factstale", nil)
+	basis := ArtifactBasis{FactIDs: []string{"career-cv"},
+		FactSHA256: map[string]string{"career-cv": "aaa"}}
+	if _, _, err := s.SaveOpportunityArtifact(ctx, ownerActor(), opportunity.ID, ArtifactSaveInput{
+		RequestKey: "fact-1", Type: ArtifactCV, Content: "cv v1", Basis: basis}); err != nil {
+		t.Fatal(err)
+	}
+	set, err := s.ArtifactReadinessWithFacts(ctx, opportunity.ID, map[string]string{"career-cv": "aaa"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry := readinessEntry(set, ArtifactCV); entry.State != ArtifactStateReady {
+		t.Fatalf("matching digest: %+v", entry)
+	}
+	set, err = s.ArtifactReadinessWithFacts(ctx, opportunity.ID, map[string]string{"career-cv": "bbb"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry := readinessEntry(set, ArtifactCV); entry.State != ArtifactStateHeld || entry.Current == nil {
+		t.Fatalf("changed fact must hold: %+v", entry)
+	}
+	set, err = s.ArtifactReadinessWithFacts(ctx, opportunity.ID, map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry := readinessEntry(set, ArtifactCV); entry.State != ArtifactStateHeld {
+		t.Fatalf("withdrawn fact must hold: %+v", entry)
+	}
+}
+
+func TestArtifactReadinessOptionalityAndNegation(t *testing.T) {
+	ctx := context.Background()
+	s := openJobTestStore(t)
+	company := createFixtureCompany(t, s)
+	newRole := func(key string, mutate func(*CheckSaveInput)) Opportunity {
+		opportunity := selectFixtureOpportunity(t, s, company.ID, "select-"+key)
+		saveReadyCheck(t, s, opportunity, key, mutate)
+		return opportunity
+	}
+	optional := newRole("optional-cv", func(save *CheckSaveInput) {
+		save.RequestedDocuments = []RequestedDocumentInput{{Label: "CV", Required: false,
+			SourceExcerpt: "A CV is welcome but optional.", SourceSpan: save.RequestedDocuments[0].SourceSpan}}
+	})
+	set, err := s.ArtifactReadiness(ctx, optional.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry := readinessEntry(set, ArtifactCV); entry.Required || entry.State != ArtifactStateNotRequired {
+		t.Fatalf("optional cv: %+v", entry)
+	}
+	negated := newRole("negated-letter", func(save *CheckSaveInput) {
+		save.RequestedDocuments = []RequestedDocumentInput{{Label: "Cover letter (not required)", Required: true,
+			SourceExcerpt: "Cover letter not required.", SourceSpan: save.RequestedDocuments[0].SourceSpan}}
+	})
+	set, err = s.ArtifactReadiness(ctx, negated.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry := readinessEntry(set, ArtifactCoverLetter); entry.Required || entry.State != ArtifactStateNotRequired {
+		t.Fatalf("negated letter: %+v", entry)
+	}
+	uploads := newRole("uploads-only", func(save *CheckSaveInput) {
+		save.Questions = []CheckQuestionInput{{
+			Text: "Upload your curriculum vitae.", Required: CheckRequired, Kind: CheckQuestionAttachment,
+			SourceSpan:    CheckSourceSpan{CaptureID: save.Vacancy.CaptureIDs[0], Start: 10, End: 39},
+			SourceExcerpt: "Upload your curriculum vitae."}}
+	})
+	set, err = s.ArtifactReadiness(ctx, uploads.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry := readinessEntry(set, ArtifactFormValues); entry.Required || entry.State != ArtifactStateNotRequired {
+		t.Fatalf("upload-only forms: %+v", entry)
+	}
+	if entry := readinessEntry(set, ArtifactCV); !entry.Required || entry.State != ArtifactStateHeld {
+		t.Fatalf("upload cv: %+v", entry)
 	}
 }
 

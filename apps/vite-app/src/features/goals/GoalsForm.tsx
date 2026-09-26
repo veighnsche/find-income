@@ -1,9 +1,10 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   RequestError,
   updatePreferences,
   type Preferences,
 } from "@/api/client"
+import { formatCentsAsUnits, parseUnitsToCents } from "./salary"
 import type { RoleCriterion } from "@/features/owner-context/useOwnerContext"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -91,24 +92,48 @@ export function GoalsForm({
   preferences,
   csrfToken,
   onSaved,
+  onDirtyChange,
 }: {
   preferences: Preferences
   csrfToken: string | null
   onSaved: () => void
+  /** Reports unsaved edits so the panel can surface them (G1). */
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const [location, setLocation] = useState(preferences.preferredLocation)
   const [timezone, setTimezone] = useState(preferences.timezone)
   const [remote, setRemote] = useState(preferences.allowRemote)
   const [hybrid, setHybrid] = useState(preferences.allowHybrid)
   const [hours, setHours] = useState(preferences.targetHours)
-  const [baseCents, setBaseCents] = useState(
-    String(preferences.minMonthlyBaseCents)
+  // Salary is edited in ordinary currency units; the exact conversion to
+  // integer cents happens only at the save boundary (G1).
+  const [baseUnits, setBaseUnits] = useState(() =>
+    formatCentsAsUnits(preferences.minMonthlyBaseCents)
   )
   const [currency, setCurrency] = useState(preferences.salaryCurrency)
   const [rows, setRows] = useState<CriterionDraft[]>(
     () => draftFromSaved(preferences.roleCriteria, 0).rows
   )
   const [keyCounter, setKeyCounter] = useState(preferences.roleCriteria.length)
+  // Dirty tracking compares the live draft against the last saved shape.
+  // After an accepted save the baseline moves to the saved draft, so the
+  // form reads clean without a remount; a parent remount resets both.
+  const baselineRef = useRef<string | null>(null)
+  const signature = JSON.stringify([
+    location,
+    timezone,
+    remote,
+    hybrid,
+    hours,
+    baseUnits,
+    currency,
+    rows.map((row) => [row.id, row.label, row.description, row.kind, row.mode]),
+  ])
+  if (baselineRef.current === null) baselineRef.current = signature
+  const dirty = signature !== baselineRef.current
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<
     | { kind: "idle" }
@@ -157,11 +182,9 @@ export function GoalsForm({
       })
       return
     }
-    if (!/^\d+$/.test(baseCents.trim())) {
-      setStatus({
-        kind: "invalid",
-        message: "Minimum base must be a whole number of cents.",
-      })
+    const parsedBase = parseUnitsToCents(baseUnits)
+    if (!parsedBase.ok) {
+      setStatus({ kind: "invalid", message: parsedBase.error })
       return
     }
     if (!/^[A-Za-z]{3}$/.test(currency.trim())) {
@@ -223,13 +246,14 @@ export function GoalsForm({
           allowRemote: remote,
           allowHybrid: hybrid,
           targetHours: hours.trim(),
-          minMonthlyBaseCents: Number(baseCents.trim()),
+          minMonthlyBaseCents: parsedBase.cents,
           salaryCurrency: currency.trim().toUpperCase(),
           timezone: timezone.trim(),
           roleCriteria: criteria,
         },
         csrfToken
       )
+      baselineRef.current = signature
       setStatus({ kind: "saved", version: saved.preferences.version })
       onSaved()
     } catch (cause) {
@@ -308,14 +332,17 @@ export function GoalsForm({
           />
         </div>
         <div className="flex min-w-0 flex-col gap-1.5">
-          <Label htmlFor="goals-base">Minimum monthly base (cents)</Label>
+          <Label htmlFor="goals-base">
+            {`Minimum monthly base (${currency.trim() === "" ? "currency units" : currency.trim().toUpperCase()})`}
+          </Label>
           <Input
             id="goals-base"
-            value={baseCents}
-            onChange={(event) => setBaseCents(event.target.value)}
+            value={baseUnits}
+            onChange={(event) => setBaseUnits(event.target.value)}
             disabled={saving}
-            inputMode="numeric"
-            maxLength={12}
+            inputMode="decimal"
+            maxLength={16}
+            placeholder="4500.00"
           />
         </div>
         <div className="flex min-w-0 flex-col gap-1.5">

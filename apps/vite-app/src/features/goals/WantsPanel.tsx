@@ -1,13 +1,19 @@
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import type { EffectiveSavedContext } from "@/features/owner-context/useOwnerContext"
 import { Button } from "@/components/ui/button"
 import { EmptyBlock } from "@/components/shared"
+import { useRegisterGoalEditorOpener } from "@/components/shared/goal-editor"
 import { GoalsForm, KIND_LABELS, MODE_LABELS } from "./GoalsForm"
 
 /**
  * What-you-want-next panel (B2/F03–F04). Reviews the saved wants and
  * don't-wants beside their level, and opens the deterministic editor.
  * The form is the active content when no explicit choices exist yet.
+ *
+ * G1/G2: the panel registers the deterministic editor opener (F1 seam) so
+ * "Change goals"/"Edit goals" controls elsewhere open and focus this
+ * editor. Unsaved edits are never silently dropped: the draft survives
+ * closing the editor, the panel badges it, and discarding is explicit.
  */
 export function WantsPanel({
   context,
@@ -23,6 +29,11 @@ export function WantsPanel({
   onSaved: () => void
 }) {
   const [editing, setEditing] = useState(context.requirements.length === 0)
+  const [everOpened, setEverOpened] = useState(
+    context.requirements.length === 0
+  )
+  const [dirty, setDirty] = useState(false)
+  const [formKey, setFormKey] = useState(0)
   const wants = context.requirements.filter(
     (criterion) => criterion.mode !== "avoid"
   )
@@ -30,6 +41,33 @@ export function WantsPanel({
     (criterion) => criterion.mode === "avoid"
   )
   const { preferences } = context
+
+  const openEditor = useCallback(() => {
+    setEverOpened(true)
+    setEditing(true)
+    // Focus lands after the editor mounts; a missing node retries briefly.
+    for (const delay of [0, 50, 150]) {
+      window.setTimeout(() => {
+        document.getElementById("goals-location")?.focus({ preventScroll: true })
+      }, delay)
+    }
+  }, [])
+  useRegisterGoalEditorOpener(openEditor)
+
+  function toggleEditor() {
+    if (!editing) {
+      openEditor()
+      return
+    }
+    // Closing keeps the draft mounted (hidden): unsaved edits survive and
+    // stay badged instead of being silently discarded.
+    setEditing(false)
+  }
+
+  function discardDraft() {
+    setFormKey((value) => value + 1)
+    setDirty(false)
+  }
 
   return (
     <section
@@ -40,29 +78,60 @@ export function WantsPanel({
         <h2 id="wants-heading" className="font-heading text-lg font-medium">
           What you want next
         </h2>
-        <Button
-          type="button"
-          variant={editing ? "ghost" : "outline"}
-          size="sm"
-          onClick={() => setEditing((value) => !value)}
-        >
-          {editing ? "Close editor" : "Edit goals"}
-        </Button>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {dirty ? (
+            <p className="text-xs wrap-break-word text-muted-foreground">
+              Unsaved changes
+            </p>
+          ) : null}
+          <Button
+            type="button"
+            variant={editing ? "ghost" : "outline"}
+            size="sm"
+            onClick={toggleEditor}
+          >
+            {editing ? "Close editor" : "Edit goals"}
+          </Button>
+        </div>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
         Saved profile version {context.profileVersion}. The next Find jobs
         run searches with these choices.
       </p>
+      {!editing && dirty ? (
+        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+          <p className="text-sm wrap-break-word">
+            Unsaved goal changes are waiting in the editor. Save them so the
+            next Find jobs run uses them, or discard them.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={discardDraft}
+          >
+            Discard changes
+          </Button>
+        </div>
+      ) : null}
 
-      {editing ? (
-        <div className="mt-4">
+      {/*
+       * Once opened, the form stays mounted (hidden when closed) so a draft
+       * is never silently lost by toggling the editor. `formKey` remounts
+       * only on explicit discard.
+       */}
+      {everOpened ? (
+        <div className="mt-4" hidden={!editing}>
           <GoalsForm
+            key={formKey}
             preferences={preferences}
             csrfToken={csrfToken}
             onSaved={onSaved}
+            onDirtyChange={setDirty}
           />
         </div>
-      ) : (
+      ) : null}
+      {!editing ? (
         <div className="mt-3 flex min-w-0 flex-col gap-4">
           <dl className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
             <div className="min-w-0">
@@ -162,7 +231,7 @@ export function WantsPanel({
             />
           ) : null}
         </div>
-      )}
+      ) : null}
     </section>
   )
 }

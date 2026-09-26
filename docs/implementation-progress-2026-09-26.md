@@ -33,7 +33,25 @@ Task ledger (checkbox only when acceptance evidence exists):
 - [x] K1 truthful route-complete checks — done (wave 2) + I zero-question gate (QuestionsNoneVerified): verdict/completeness/gaps/eligibility; Q0-03 PASS.
 - [x] K2 Jev approved candidates — done (wave 2): Jev-only matching, no lexical gate, bounded recall + runoff, explicit no-fit. Handler wiring to MatchQuestions deferred (current Prefilter path keeps Q0-02 green).
 - [x] K3 answer commit — done (wave 2) + I draft_requested (migration 018, openapi, store/commit/handler): keep/edit/clear/blank + idempotent commit + C4 required-blank satisfaction; Q0-02 PASS. ContinueAnswers batch refactor deferred (no Q0 caller).
-- [ ] K4 owner clarification — contract done (wave 2: service + resolve-once semantics + tests); store/migration/API pending (I, with M/C/A/G wave).
+- [x] K4 owner clarification — done (wave 3 I): owner_clarifications table (020) with request-key idempotency, store open/answer/get/list, agency adapter, open/answer/list API + openapi; resolve-once verified.
+- [x] M2 grounded current materials — done (wave 3): state×reason readiness, staleness sweep/drop (R07), digest-bound request keys (R23); Q0-05 PASS.
+- [x] M3 true target requiredness — done (wave 3): route-mapped targets, required/optional/unknown optionality, derived form_values.
+- [x] M4 grounded single Prepare — done (wave 3) + I producer: full vacancy context, validator (IDs insufficient), K4 hold/resume dependent-only, required-draft producer (standard_draft origin, migration 021) with citation + claim checks and holds.
+- [x] M5 exact edit/targeted rewrite — done (wave 3): literal exact save (zero model calls), bounded rewrite with version fence + idempotency; I fixed rewrite discipline/schema to the artifact shape.
+- [x] M6 canonical export/index/Handoff basis — done (wave 3) + I wiring: versions/export/saved-jobs/Handoff reads, canonical renderers, 6 routes + openapi + main wiring, explicit handoff_saved save (replay-safe).
+- [x] C1 route-aware continuation — done b22fba5 (wave 3): truthful findings, zero-question empty-set commit to same Prepare, no read-time work.
+- [x] A1/A2/A3 answer acceptance — done b22fba5 (wave 3): suggestions vs saved + provenance, draft preservation, save→commit→continue with required draft requests; commit 409 names missing questions (I).
+- [x] G1 goals/source coherence — done (wave 3): boundary salary conversion, experience panel from owner context, no model calls from reads.
+- [x] G2 task-first commission — done (wave 3): server run recovery over localStorage pointers, real controls, Change-goals via registry.
+- [x] G3 useful job cards — done (wave 3): honest cards, grounded arrangement, saved reasons without invention, consistent checkboxes.
+- [x] G4 selection/tabs usability — done (wave 3): roving focus, tab/panel IDs, keyboard relationships.
+- [x] P6/P7/P8 + R19 — done (wave 3 I): failed-run resume with cursor (store revive + round-trip test), work-pattern plumbing (schema→save→classify), classify lookup-first, wired-unauthorized check 503.
+- [ ] E1 one Prepare action — ready (wave 4; needs M4/M6 + F1 + A3, all landed).
+- [ ] E2 canonical editors/rewrite — ready (wave 4; needs E1 + M5).
+- [ ] E3 partial/stale readable — ready (wave 4; needs E1/E2 + M2/M6).
+- [ ] E4 manual Handoff — ready (wave 4; needs E2/E3 + F3 + M6).
+- [ ] F2 status/list/navigation — ready (wave 4; G provisional client modules await F adoption).
+- [ ] F3 saved-list/Handoff nav — ready (wave 4).
 - [ ] M2 evidence pins/replay — blocked on M1+I3+K1+K3
 - [ ] M3 route-needed targets — blocked on M2+K1
 - [ ] M4 grounded prepare — blocked on M2+M3+K3+K4+R1
@@ -64,13 +82,15 @@ Integrated dependencies landed: I0 (a38ee26), I1/C1–C9 (f81c777). R1 design se
 
 Commits: a38ee26 docs(I0); f81c777 docs(I1/C1–C9); 983eb04 docs(I1 dispatch); e10557a docs(R2 map); e6ae53f test(Q0 harness); a7736fc docs(Q0); b4dcb67 docs(R1/M1 dispatch); 02c077e refactor(R1); 23a2654 refactor(M1); 4a93058 refactor(R2); 7c58cd7 test(Q0 rewrite); 2622b33 fix(R2 residuals).
 Accepted boundaries: (1) publicresearch MCP registry type + musecode public_* allowlist + researchwire tool-protocol tests are inert (zero production session constructors) — D1/D3 rewrite them against the direct journey. (2) codexservice internals (dispatch/MCP bridge methods) + cmd/codex-runner retained for rounds/researchwire dispatch; HTTP session surface gone. (3) test_recovery.py fixture broken pre-existing (verified at HEAD b4dcb67: missing delivery tables); recovery.py pack checks removed; Go researchrestore green. (4) openapi pack/codex paths + generated code cut at I3 (contract publish).
-Q0 state: cases 01/02/03/04/06/07/08 PASS; only 05 (R07/R23 staleness) fails — M/C/A/G wave scope.
+Q0 state: all 8 cases PASS (01/02/03/04/05/06/07/08). Full Go suite + 365 vite tests green.
+Decisions: acknowledged (Shortlist) stays display-only (no writer after R26; existing rows still render); commit-409 detail shape {missingQuestionIds}; reuse retires superseded rows so D2 holds over active URLs; failed runs resume only with a cursor; ContinueAnswers batch + P10 skipped (no caller/optional).
 
 Verification: meaningful focused checks per checkpoint before commit; Q gates require production HTTP + real temp store, controlled provider adapters only, no seeded catalog/answered state/ready artifacts.
 
 Remaining limits: full 40-task scope open; live Contributor/Jev/Standard gates require configured services and implementation-run authorization — fixture success cannot close them; no employer contact authorized.
 
-Next ready actions: dispatch M/C/A/G wave (M2–M6 + Q0-05 R07/R23 + deferred P6/P7/P8 + K proposals 3/4/6 + C/A/E/G UI lanes), then E/F finish and Q1–Q4 acceptance.
+Next ready actions: dispatch wave 4 (E1–E4 + F2/F3), then Q1 connected proof and Q2–Q4 acceptance.
+Wave-3 + I-integration evidence: M (M2–M6: readiness/targets/Prepare/edit-rewrite/export-Handoff; Q0-05 green) + C1/A1–A3 (b22fba5) + G1–G4 (goals/discovery/selection) + I (M6 6-route wiring + handoff_saved save, rewrite discipline fix, draft_requested producer + 021, K4 stack already in eaffdee). Deferred with rationale: M proposal 4 outdated-enum (held+reason suffices), G F-proposals (F2/F3 wave).
 Wave-3 transfers: M owns materialprep/*, store/artifacts.go, store/artifact_readiness.go, store/prepare_activity.go, httpapi/materials.go, httpapi/artifacts.go, httpapi/evidence.go (I hands over; handler.go/openapi/migrations stay I-owned). C+A owns features/check/* + features/answers/*. G owns features/goals/*, features/owner-context/*, features/discovery/*. No wave-3 worker touches components/shared/*, api/client.ts (F-owned; propose missing seams to I), handler.go, openapi, migrations, or another lane's files. I keeps K4 persistence + P6/P7/P8 + K-proposal-6 inline.
 Wave-2 + I-integration evidence: D (11 files: catalog/commission/recovery/owner-context) + K (11 files: verdict/match/commit/clarification + musewire check per transfer) + I (P1 fixtures incl. 2 httpapi helpers D missed, zero-question gate, draft_requested e2e, GET /rounds, run_not_found trio, D3/D4 registrations, career loader, P5 research_run, P4 index + reuse-archive composition). Deferred with rationale: K proposal 4/ContinueAnswers (no Q0 caller), P10 (optional), P6/P7/P8 + K3/K5/K6 + Q0-05 (M/C/A/G wave).
 R2 candidate surface (read-only map, cut only after R1/M1 consumer trace): codex/*, codexrunner/*, codexservice/*, rounds/*, researchwire, cmd/codex-runner, httpapi/codex.go + rounds.go (+research/discovery dead paths), store/round_supervision.go, researchexecute, agency engine/input (pack parts via M1), runtimeaccept/doc.go. External importers outside those dirs: cmd/server/main.go, materialprep/standard.go (R1 seam), researchservice.go, reasoncatalog.go. Frontend: run/check activity feeds, actor-label, client.ts codex/round methods, fixtures. Keep: needed run persistence for D3, public evidence, Jev, bounded direct invocation, auth.

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
+	"github.com/veighnsche/find-income-dashboard/api/internal/materialprep"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
@@ -21,4 +22,14 @@ type MaterialPreparer interface {
 	// one bounded Standard turn and returns the stored readiness set.
 	DraftOpportunityArtifacts(ctx context.Context, actor store.Actor, opportunityID, requestKey string,
 		expectedCheckID, expectedQuestionSetSHA256 string, expectedWorkflowRevision int64) (store.ArtifactReadinessSet, bool, error)
+}
+
+// MaterialRewriter rewrites chosen current artifacts in one bounded
+// Standard turn. It stays a separate interface so existing
+// draft-only preparers keep compiling: the rewrite handler asserts
+// it and reports honestly unavailable otherwise. Production
+// materialprep.Service implements both.
+type MaterialRewriter interface {
+	RewriteOpportunityArtifacts(ctx context.Context, actor store.Actor, opportunityID, requestKey string,
+		input materialprep.RewriteInput) (store.ArtifactReadinessSet, bool, error)
 }
