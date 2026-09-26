@@ -7,6 +7,7 @@ export type Route =
   | { page: "check"; jobId: string }
   | { page: "answers"; jobId: string }
   | { page: "prepare"; jobId: string }
+  | { page: "handoff"; jobId: string }
   | { page: "applications"; jobId: string | null }
   | { page: "not-found"; hash: string }
 
@@ -39,6 +40,8 @@ export function parseHash(hash: string): Route {
       return { page: "answers", jobId: second }
     if (first === "jobs" && second !== undefined && third === "prepare")
       return { page: "prepare", jobId: second }
+    if (first === "jobs" && second !== undefined && third === "handoff")
+      return { page: "handoff", jobId: second }
     return { page: "not-found", hash: hash || "#/" }
   }
   switch (first) {
@@ -83,6 +86,8 @@ export function routeToHash(route: Route): string {
       return `#/jobs/${encodeURIComponent(route.jobId)}/answers`
     case "prepare":
       return `#/jobs/${encodeURIComponent(route.jobId)}/prepare`
+    case "handoff":
+      return `#/jobs/${encodeURIComponent(route.jobId)}/handoff`
     case "not-found":
       return route.hash.startsWith("#") ? route.hash : `#${route.hash}`
   }

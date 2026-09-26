@@ -48,6 +48,12 @@ export function JobDetailPage({ jobId }: { jobId: string }) {
         >
           Prepare application
         </a>
+        <a
+          href={`#/jobs/${encodeURIComponent(jobId)}/handoff`}
+          className="text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          Handoff
+        </a>
       </p>
 
       {opportunity.status === "loading" ? (

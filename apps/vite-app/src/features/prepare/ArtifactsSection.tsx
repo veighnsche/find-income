@@ -72,7 +72,7 @@ function artifactStateLabel(
   }
 }
 
-async function copyText(text: string): Promise<boolean> {
+export async function copyText(text: string): Promise<boolean> {
   try {
     if (
       typeof navigator !== "undefined" &&
@@ -87,7 +87,7 @@ async function copyText(text: string): Promise<boolean> {
   return false
 }
 
-function downloadText(filename: string, text: string): boolean {
+export function downloadText(filename: string, text: string): boolean {
   try {
     if (typeof URL.createObjectURL !== "function") return false
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" })

@@ -5,7 +5,7 @@
 // not an LLM) suggests answers, and preparation drafts from verified
 // facts. Nothing here commissions work; all reads stay GET-only.
 const COPY: Record<
-  "check" | "answer" | "prepare",
+  "check" | "answer" | "prepare" | "handoff",
   { title: string; body: string; note: string }
 > = {
   check: {
@@ -22,6 +22,11 @@ const COPY: Record<
     title: "Putting your application together",
     body: "I'll turn your answers into a clear application, tailor your CV, and write a short message if needed. If you left a required answer blank, it can be drafted from verified facts. Optional answers can stay blank.",
     note: "Nothing leaves this app. You copy the saved materials and apply manually from Handoff.",
+  },
+  handoff: {
+    title: "You send the application yourself",
+    body: "This page lists the verified destination and every ready text or file, with the exact copy, paste, upload and attach steps in order. Work through them in your browser or email app.",
+    note: "The app cannot fill employer forms, attach files there, send, or submit. Opening a link is not submitting.",
   },
 }
 

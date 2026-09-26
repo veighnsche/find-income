@@ -51,17 +51,20 @@ describe("ApplicationContinue", () => {
     renderContinue("job-1")
 
     const link = await screen.findByRole("link", { name: "Handoff" })
-    expect(link.getAttribute("href")).toBe("#/applications/job-1")
+    expect(link.getAttribute("href")).toBe("#/jobs/job-1/handoff")
   })
 
-  it("reports blocked and sent roles without a next step", async () => {
-    stubWorkflow("blocked")
-    const { unmount } = renderContinue("job-1")
-    expect(await screen.findByText(/no next step/i)).toBeDefined()
-    unmount()
-
+  it("reopens the saved handoff for sent roles", async () => {
     stubWorkflow("sent")
     renderContinue("job-1")
-    expect(await screen.findByText(/saved state/i)).toBeDefined()
+
+    const link = await screen.findByRole("link", { name: "Saved handoff" })
+    expect(link.getAttribute("href")).toBe("#/jobs/job-1/handoff")
+  })
+
+  it("reports blocked roles without a next step", async () => {
+    stubWorkflow("blocked")
+    renderContinue("job-1")
+    expect(await screen.findByText(/no next step/i)).toBeDefined()
   })
 })

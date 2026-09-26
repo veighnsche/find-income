@@ -59,15 +59,15 @@ function nextStep(workflow: RoleWorkflowState): {
       return {
         label: "Handoff",
         description:
-          "Materials are ready. Open the saved handoff on this page for manual steps.",
-        href: `#/applications/${id}`,
+          "Materials are ready. Open the saved handoff page for manual steps.",
+        href: `#/jobs/${id}/handoff`,
       }
     case "sent":
       return {
-        label: "Saved for handoff",
+        label: "Saved handoff",
         description:
-          "This role reached the terminal saved state. Read its materials below.",
-        href: null,
+          "This role reached the terminal saved state. Reopen its handoff any time.",
+        href: `#/jobs/${id}/handoff`,
       }
     case "blocked":
       return {

@@ -23,6 +23,22 @@ describe("parseHash", () => {
       page: "applications",
       jobId: "job-2",
     })
+    expect(parseHash("#/jobs/job-1/check")).toEqual({
+      page: "check",
+      jobId: "job-1",
+    })
+    expect(parseHash("#/jobs/job-1/answers")).toEqual({
+      page: "answers",
+      jobId: "job-1",
+    })
+    expect(parseHash("#/jobs/job-1/prepare")).toEqual({
+      page: "prepare",
+      jobId: "job-1",
+    })
+    expect(parseHash("#/jobs/job-1/handoff")).toEqual({
+      page: "handoff",
+      jobId: "job-1",
+    })
   })
 
   it("decodes and round-trips identifiers with special characters", () => {
@@ -54,6 +70,18 @@ describe("routeToHash", () => {
     )
     expect(routeToHash({ page: "applications", jobId: "job-2" })).toBe(
       "#/applications/job-2"
+    )
+    expect(routeToHash({ page: "check", jobId: "job-1" })).toBe(
+      "#/jobs/job-1/check"
+    )
+    expect(routeToHash({ page: "answers", jobId: "job-1" })).toBe(
+      "#/jobs/job-1/answers"
+    )
+    expect(routeToHash({ page: "prepare", jobId: "job-1" })).toBe(
+      "#/jobs/job-1/prepare"
+    )
+    expect(routeToHash({ page: "handoff", jobId: "job-1" })).toBe(
+      "#/jobs/job-1/handoff"
     )
   })
 })

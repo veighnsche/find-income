@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label"
 import { useRoute, type Route } from "@/routes/useRoute"
 import { AnswersPage } from "@/features/answers"
 import { CheckPage } from "@/features/check"
+import { HandoffPage } from "@/features/handoff"
 import { PreparePage } from "@/features/prepare"
 import { ApplicationsPage } from "@/pages/ApplicationsPage"
 import { JobDetailPage } from "@/pages/JobDetailPage"
@@ -228,6 +229,8 @@ function RoutePage({
       return <AnswersPage jobId={route.jobId} />
     case "prepare":
       return <PreparePage jobId={route.jobId} />
+    case "handoff":
+      return <HandoffPage jobId={route.jobId} />
     case "not-found":
       return (
         <EmptyBlock
