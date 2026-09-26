@@ -19,10 +19,10 @@ File ownership (one writer per file; transfers recorded before editing):
 - api/client.ts always F-owned; generated types always I-owned; handler.go/main.go/workflow/migrations always I-owned.
 
 Task ledger (checkbox only when acceptance evidence exists):
-- [ ] I0 baseline/ownership ledger — active
-- [ ] I1 minimum cross-layer semantics — ready after I0
-- [ ] R1 direct CLI seam — ready after I1
-- [ ] M1 remove second preparation workflow — ready after I1
+- [x] I0 baseline/ownership ledger — done: HEAD ef463c4 == reviewed commit; docs-only delta; ledger committed a38ee26; baseline workflow synthesis confirmed.
+- [x] I1 minimum cross-layer semantics — done: contracts C1–C9 frozen in implementation-contracts-2026-09-26.md (f81c777) with shapes, ownership, 8 failing Q0 cases. No Jev consultation: semantics derive directly from product vision + reviewed findings.
+- [ ] R1 direct CLI seam — active (worker lane/r1). Temp R ownership of LiveTransport construction blocks in cmd/server/main.go + researchwire/wire.go (call-site compat only).
+- [ ] M1 remove second preparation workflow — active (worker lane/m1). Temp M ownership of obsolete pack controls in features/prepare/PreparePage.tsx + ApplicationsPage pack list for deletion only; then handover to E. client.ts/openapi/handler/main/migrations stay I/F-owned: worker proposes, coordinator applies.
 - [ ] R2 cut rejected runtime consumers — blocked on R1+M1
 - [ ] I2 subtraction gate — blocked on M1+R2
 - [ ] I3 publish contracts — blocked on I2
@@ -54,13 +54,13 @@ Task ledger (checkbox only when acceptance evidence exists):
 - [ ] E2 editors/rewrite — blocked on E1+M5+F1
 - [ ] E3 partial/stale readable — blocked on E1+E2+M2+M6
 - [ ] E4 manual Handoff — blocked on E2+E3+F3+M6
-- [ ] Q0 connected harness — active at agreed boundaries (contract cases update after I3)
+- [ ] Q0 connected harness — active (worker lane/q0, new harness files only; contract cases update after I3). Offending-test corrections go through lane owners later.
 - [ ] Q1 seven-step identities — blocked on all feature lanes
 - [ ] Q2 UI/usability — blocked on Q1
 - [ ] Q3 live provider evidence — blocked on Q1 (+Q2 corrections for walkthrough)
 - [ ] Q4 closure ledger — blocked on I2+Q1+Q2+Q3
 
-Integrated dependencies landed: none yet (I0 in progress).
+Integrated dependencies landed: I0 (a38ee26), I1/C1–C9 (f81c777). R1 design settled on evidence: `muse exec` has native web tools + --output-schema, so direct invocation needs no MCP loopback; app verifies cited URLs itself.
 
 Commits: a38ee26 docs(I0) ledger/baseline/ownership checkpoint.
 
