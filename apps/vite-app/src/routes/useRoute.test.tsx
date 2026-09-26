@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest"
 import { parseHash, routeToHash, type Route } from "@/routes/useRoute"
 
 describe("parseHash", () => {
-  it("treats an empty hash as Today so refresh keeps a default page", () => {
-    expect(parseHash("")).toEqual({ page: "today" })
-    expect(parseHash("#/")).toEqual({ page: "today" })
+  it("treats an empty hash as My search so refresh keeps a default page", () => {
+    expect(parseHash("")).toEqual({ page: "search", runId: null })
+    expect(parseHash("#/")).toEqual({ page: "search", runId: null })
     expect(parseHash("#/today")).toEqual({ page: "today" })
   })
 

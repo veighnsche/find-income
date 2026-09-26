@@ -35,7 +35,9 @@ export function parseHash(hash: string): Route {
     .split("/")
     .filter((segment) => segment.length > 0)
     .map(decodeSegment)
-  if (segments.length === 0) return { page: "today" }
+  // F2: the bare root opens My search (the saved-before-run opening
+  // state); Today stays available as the explicit `#/today` resume hub.
+  if (segments.length === 0) return { page: "search", runId: null }
   const [first, second, third, fourth, ...rest] = segments
   if (first === undefined || rest.length > 0)
     return { page: "not-found", hash: hash || "#/" }

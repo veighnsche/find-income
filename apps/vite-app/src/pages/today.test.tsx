@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen, within } from "@testing-library/react"
 import App from "@/App"
 import type { Round } from "@/api/client"
-import { preferencesFixture, stubFetch } from "@/pages/fixtures"
+import {
+  preferencesFixture,
+  roleWorkflowFixture,
+  runHistoryFixture,
+  stubFetch,
+} from "@/pages/fixtures"
 
 afterEach(() => {
   cleanup()
@@ -63,6 +68,53 @@ describe("Today resume hub (B3)", () => {
       name: "Continue this application",
     })
     expect(link.getAttribute("href")).toBe("#/applications/job-1")
+  })
+
+  it("leads a failed run back to its review link", async () => {
+    stubFetch({ runHistory: [runHistoryFixture("run-9", "failed")] })
+    window.location.hash = "#/today"
+    render(<App />)
+
+    const region = await continueRegion()
+    expect(
+      await within(region).findByText(/latest search failed/)
+    ).toBeDefined()
+    const link = await within(region).findByRole("link", {
+      name: "Review this failed run",
+    })
+    expect(link.getAttribute("href")).toBe("#/search?run=run-9")
+  })
+
+  it("opens the per-job handoff for prepared and saved roles", async () => {
+    stubFetch({
+      workflowsByOpportunity: {
+        "job-1": roleWorkflowFixture("job-1", "prepared"),
+      },
+    })
+    window.location.hash = "#/today"
+    render(<App />)
+
+    const region = await continueRegion()
+    const link = await within(region).findByRole("link", {
+      name: "Open materials and handoff",
+    })
+    expect(link.getAttribute("href")).toBe("#/jobs/job-1/handoff")
+  })
+
+  it("reopens the saved handoff for handoff_saved roles", async () => {
+    stubFetch({
+      workflowsByOpportunity: {
+        "job-1": roleWorkflowFixture("job-1", "handoff_saved"),
+      },
+    })
+    window.location.hash = "#/today"
+    render(<App />)
+
+    const region = await continueRegion()
+    const link = await within(region).findByRole("link", {
+      name: "Open the saved handoff",
+    })
+    expect(link.getAttribute("href")).toBe("#/jobs/job-1/handoff")
   })
 
   it("sends an empty search to the goals form", async () => {

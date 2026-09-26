@@ -1,13 +1,18 @@
 import { vi } from "vitest"
 import type {
+  MuseReadiness,
   OpportunityView,
   OwnerDecision,
   Preferences,
+  ResearchRunView,
   RoleWorkflowState,
   Round,
+  RunHistoryItem,
   RuntimeStatus,
   SavedAnswerList,
+  SavedJobEntry,
   Session,
+  SourcedOwnerContext,
 } from "@/api/client"
 
 export const sessionFixture: Session = {
@@ -152,6 +157,86 @@ export interface FetchStubOptions {
   activeRound?: Round | null
   savedAnswers?: SavedAnswerList
   preferencesConflict?: boolean
+  /** Newest-first research run history; absent keeps the 404 default. */
+  runHistory?: RunHistoryItem[]
+  researchRunById?: Record<string, ResearchRunView | null>
+  sourcedContext?: SourcedOwnerContext
+  /** Saved-job index; defaults to an empty index (no existing consumer). */
+  savedJobs?: SavedJobEntry[]
+  museReadinessByTier?: Partial<Record<"contributor" | "standard", MuseReadiness>>
+}
+
+export function runHistoryFixture(
+  runId: string,
+  state: string,
+  updatedAt = "2026-09-26T10:00:00Z"
+): RunHistoryItem {
+  return {
+    runId,
+    requestKey: `key-${runId}`,
+    intent: "find_jobs",
+    outcome: "research_run",
+    state,
+    stopReason: "",
+    createdAt: "2026-09-26T09:00:00Z",
+    updatedAt,
+  }
+}
+
+export function researchRunFixture(
+  runId: string,
+  state: ResearchRunView["state"],
+  overrides: Partial<ResearchRunView> = {}
+): ResearchRunView {
+  return {
+    runId,
+    state,
+    briefVersion: { profileVersion: 3, rubricVersion: "criteria-v3-abc123" },
+    allowance: { maxInvestigations: 20 },
+    usage: { investigations: 1 },
+    investigations: [],
+    savedIds: [],
+    unresolvedCount: 0,
+    ...overrides,
+  } as ResearchRunView
+}
+
+export function sourcedContextFixture(
+  overrides: Partial<SourcedOwnerContext> = {}
+): SourcedOwnerContext {
+  return {
+    owner: { kind: "administrator", id: "owner" },
+    sourcesConnected: true,
+    sources: [],
+    ...overrides,
+  }
+}
+
+export function savedJobFixture(
+  opportunityId: string,
+  overrides: Partial<SavedJobEntry> = {}
+): SavedJobEntry {
+  return {
+    opportunityId,
+    title: "Backend Engineer",
+    companyName: "Acme",
+    checkStatus: "complete",
+    items: [],
+    ...overrides,
+  }
+}
+
+export function museReadinessFixture(
+  tier: MuseReadiness["tier"],
+  state: MuseReadiness["state"] = "ready",
+  detail = ""
+): MuseReadiness {
+  return {
+    state,
+    code: state === "ready" ? "muse_ready" : "muse_unavailable",
+    detail: detail === "" && state === "ready" ? "Muse is ready." : detail,
+    tier,
+  }
 }
 
 export interface FetchCall {
@@ -248,6 +333,38 @@ export function stubFetch(options: FetchStubOptions = {}): {
           options.activeRound === null
           ? jsonResponse(404, { error: { message: "No active round." } })
           : jsonResponse(200, options.activeRound)
+      if (path === "/api/v1/research/runs" && method === "GET")
+        return options.runHistory === undefined
+          ? jsonResponse(404, { error: { message: "No run history." } })
+          : jsonResponse(200, { items: options.runHistory })
+      if (path === "/api/v1/research/owner-context")
+        return options.sourcedContext === undefined
+          ? jsonResponse(404, { error: { message: "No such route." } })
+          : jsonResponse(200, options.sourcedContext)
+      if (path === "/api/v1/saved-jobs")
+        return jsonResponse(200, { items: options.savedJobs ?? [] })
+      if (path === "/api/v1/muse/readiness") {
+        const tier = new URL(url, "http://localhost").searchParams.get("tier")
+        const readiness =
+          tier === "contributor" || tier === "standard"
+            ? options.museReadinessByTier?.[tier]
+            : undefined
+        return readiness === undefined
+          ? jsonResponse(404, { error: { message: "No readiness." } })
+          : jsonResponse(200, readiness)
+      }
+
+      const researchRunMatch = path.match(
+        /^\/api\/v1\/research\/runs\/([^/]+)$/
+      )
+      if (researchRunMatch?.[1] !== undefined) {
+        const run = options.researchRunById?.[
+          decodeURIComponent(researchRunMatch[1])
+        ]
+        return run === undefined || run === null
+          ? jsonResponse(404, { error: { message: "Research run not found." } })
+          : jsonResponse(200, run)
+      }
 
       const match = path.match(/^\/api\/v1\/opportunities\/([^/]+)(\/.*)?$/)
       if (match?.[1] !== undefined) {

@@ -48,7 +48,7 @@ export function JobDetailPage({ jobId }: { jobId: string }) {
           href={`#/jobs/${encodeURIComponent(jobId)}/prepare`}
           className="text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          Prepare application
+          Prepare materials
         </a>
         <a
           href={`#/jobs/${encodeURIComponent(jobId)}/handoff`}

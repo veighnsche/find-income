@@ -6,11 +6,21 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react"
 import App from "@/App"
 import type { Round } from "@/api/client"
-import { discoveryRunStorageKey } from "@/features/discovery/discovery-section"
-import { preferencesFixture, sessionFixture, stubFetch } from "@/pages/fixtures"
+import {
+  museReadinessFixture,
+  preferencesFixture,
+  researchRunFixture,
+  roleWorkflowFixture,
+  runHistoryFixture,
+  sessionFixture,
+  sourcedContextFixture,
+  stubFetch,
+} from "@/pages/fixtures"
+import { newestRunState, searchStageView } from "@/pages/SearchPage"
 
 beforeEach(() => {
   window.location.hash = ""
@@ -24,8 +34,23 @@ afterEach(() => {
 })
 
 describe("read-only shell", () => {
+  it("opens the bare root on My search, the saved-before-run state", async () => {
+    stubFetch()
+    window.location.hash = ""
+    render(<App />)
+
+    expect(
+      await screen.findByRole("heading", { name: "Let's find your next role" })
+    ).toBeDefined()
+    const nav = screen.getByRole("navigation", { name: "Primary" })
+    expect(
+      nav.querySelector('a[href="#/search"]')?.getAttribute("aria-current")
+    ).toBe("page")
+  })
+
   it("renders Today from real preference, opportunity and runtime reads", async () => {
     stubFetch()
+    window.location.hash = "#/today"
     render(<App />)
 
     expect(await screen.findByRole("heading", { name: "Today" })).toBeDefined()
@@ -39,37 +64,20 @@ describe("read-only shell", () => {
     expect(nav.querySelector('a[href="#/jobs"]')).not.toBeNull()
   })
 
-  it("links back to the verified saved research run without starting work", async () => {
-    window.localStorage.setItem(discoveryRunStorageKey, "run-1")
-    expect(window.localStorage.getItem(discoveryRunStorageKey)).toBe("run-1")
-    const { calls } = stubFetch()
-    const baseFetch = globalThis.fetch
-    vi.stubGlobal(
-      "fetch",
-      async (input: string | URL | Request, init?: RequestInit) => {
-        const url =
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.toString()
-              : input.url
-        if (
-          new URL(url, "http://localhost").pathname ===
-          "/api/v1/research/runs/run-1"
-        ) {
-          return new Response(
-            JSON.stringify({
-              runId: "run-1",
-              state: "paused",
-              savedIds: ["job-1"],
-              unresolvedCount: 1,
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } }
-          )
-        }
-        return baseFetch(input, init)
-      }
-    )
+  it("links back to the server-restored research run without starting work", async () => {
+    const { calls } = stubFetch({
+      runHistory: [
+        runHistoryFixture("run-1", "paused"),
+        runHistoryFixture("run-0", "completed", "2026-09-25T10:00:00Z"),
+      ],
+      researchRunById: {
+        "run-1": researchRunFixture("run-1", "paused", {
+          savedIds: ["job-1"],
+          unresolvedCount: 1,
+        }),
+      },
+    })
+    window.location.hash = "#/today"
     render(<App />)
 
     expect(
@@ -79,10 +87,41 @@ describe("read-only shell", () => {
     ).toBeDefined()
     expect(screen.getByText("1 saved role · 1 unresolved.")).toBeDefined()
     const link = screen.getByRole("link", {
-      name: "Open this research run",
+      name: "Resume this run",
     }) as HTMLAnchorElement
     expect(link.getAttribute("href")).toBe("#/search?run=run-1")
+    expect(await screen.findByText("Recent runs (2)")).toBeDefined()
+    expect(
+      screen.getByRole("link", { name: "run-0 · completed" })
+    ).toBeDefined()
+    expect(window.localStorage.length).toBe(0)
     expect(calls.every((call) => call.method === "GET")).toBe(true)
+  })
+
+  it("surfaces a failed run with its reason and valid next action", async () => {
+    stubFetch({
+      runHistory: [runHistoryFixture("run-9", "failed")],
+      researchRunById: {
+        "run-9": researchRunFixture("run-9", "failed", {
+          stopReason: "Contributor CLI exited.",
+        }),
+      },
+    })
+    window.location.hash = "#/today"
+    render(<App />)
+
+    expect(
+      await screen.findByText("Failed — see the report for what is known.")
+    ).toBeDefined()
+    expect(await screen.findByText("Contributor CLI exited.")).toBeDefined()
+    const saved = await screen.findByRole("region", { name: "Saved research" })
+    const link = within(saved).getByRole("link", {
+      name: "Review this failed run",
+    }) as HTMLAnchorElement
+    expect(link.getAttribute("href")).toBe("#/search?run=run-9")
+    expect(
+      await screen.findByText(/cannot resume; Find more on My search/)
+    ).toBeDefined()
   })
 
   it("renders My search with the saved criteria", async () => {
@@ -162,6 +201,7 @@ describe("read-only shell", () => {
 
   it("shows the sign-in panel when the session is null and signs in", async () => {
     stubFetch({ session: null })
+    window.location.hash = "#/today"
     render(<App />)
 
     const password = (await screen.findByLabelText(
@@ -175,6 +215,7 @@ describe("read-only shell", () => {
 
   it("commissions no work while reading and navigating every surface", async () => {
     const { calls } = stubFetch()
+    window.location.hash = "#/today"
     render(<App />)
     expect(await screen.findByRole("heading", { name: "Today" })).toBeDefined()
 
@@ -286,7 +327,7 @@ function correctionRound(overrides: Partial<Round> = {}): Round {
   } as Round
 }
 
-describe("frame sidebar and work-status strip (B1)", () => {
+describe("frame sidebar and work-status strip (B1/F2)", () => {
   it("shows product identity, strip status and chosen-work navigation", async () => {
     stubFetch()
     render(<App />)
@@ -294,7 +335,7 @@ describe("frame sidebar and work-status strip (B1)", () => {
     expect(await screen.findByText("Your personal recruitment agency"))
       .toBeDefined()
     expect(await screen.findByText("Your job search")).toBeDefined()
-    expect(await screen.findByText("1 chosen job in progress")).toBeDefined()
+    expect(await screen.findByText("Select jobs · 1 role")).toBeDefined()
     const nav = screen.getByRole("navigation", { name: "Primary" })
     expect(nav.querySelector('a[href="#/applications"]')).not.toBeNull()
     expect(nav.querySelector('a[href="#/search"]')).not.toBeNull()
@@ -315,7 +356,85 @@ describe("frame sidebar and work-status strip (B1)", () => {
     })
     render(<App />)
 
-    expect(await screen.findByText("Search paused")).toBeDefined()
+    expect(await screen.findByText("Find jobs · paused")).toBeDefined()
+  })
+
+  it("never claims Ready when no search goals are saved", async () => {
+    stubFetch({
+      workflowsByOpportunity: {},
+      preferences: { ...preferencesFixture, roleCriteria: [] },
+    })
+    render(<App />)
+
+    expect(
+      await screen.findByText("No search goals saved yet")
+    ).toBeDefined()
+    expect(screen.queryByText("Ready to find jobs")).toBeNull()
+  })
+
+  it("reports a known Contributor blocker instead of Ready", async () => {
+    stubFetch({
+      workflowsByOpportunity: {},
+      museReadinessByTier: {
+        contributor: museReadinessFixture(
+          "contributor",
+          "unavailable",
+          "Muse CLI is not installed."
+        ),
+      },
+    })
+    render(<App />)
+
+    expect(
+      await screen.findByText(
+        "Find jobs unavailable: Muse CLI is not installed."
+      )
+    ).toBeDefined()
+    expect(screen.queryByText("Ready to find jobs")).toBeNull()
+  })
+
+  it("reports per-stage chosen work and terminal Handoff", async () => {
+    stubFetch({
+      workflowsByOpportunity: {
+        "job-1": roleWorkflowFixture("job-1", "checking"),
+        "job-2": roleWorkflowFixture("job-2", "answering"),
+      },
+    })
+    render(<App />)
+
+    expect(
+      await screen.findByText("Check job details · 1 role; Answer questions · 1 role")
+    ).toBeDefined()
+  })
+
+  it("reports terminal Handoff when every role is saved", async () => {
+    stubFetch({
+      workflowsByOpportunity: {
+        "job-1": roleWorkflowFixture("job-1", "handoff_saved"),
+      },
+    })
+    render(<App />)
+
+    expect(
+      await screen.findByText("Handoff · 1 saved role")
+    ).toBeDefined()
+  })
+
+  it("shows the supported owner identity at the sidebar foot", async () => {
+    stubFetch({ sourcedContext: sourcedContextFixture() })
+    render(<App />)
+
+    expect(await screen.findByText("Signed in as owner")).toBeDefined()
+  })
+
+  it("falls back to session text when owner context is absent", async () => {
+    stubFetch()
+    render(<App />)
+
+    expect(
+      await screen.findByText("Signed in · session ends 2099-01-01")
+    ).toBeDefined()
+    expect(screen.queryByText(/Signed in as /)).toBeNull()
   })
 
   it("opens My search with the seven-stage row and Handoff last", async () => {
@@ -336,11 +455,85 @@ describe("frame sidebar and work-status strip (B1)", () => {
     expect(labels[0]).toContain("Your goals")
     expect(labels[6]).toContain("Handoff")
     expect(labels[1]).toContain("Contributor")
+    expect(labels[1]).toContain("Jev")
     expect(labels[5]).toContain("Standard")
-    expect(journey.querySelector('[aria-current="step"]')?.textContent).toContain(
-      "Your goals"
+    // Saved goals with no known run rest on Find jobs, the next step.
+    await waitFor(() =>
+      expect(
+        journey.querySelector('[aria-current="step"]')?.textContent
+      ).toContain("Find jobs")
     )
     expect(screen.queryByText(/Review & send/)).toBeNull()
+  })
+
+  it("marks Your goals active when no goals are saved yet", async () => {
+    window.location.hash = "#/search"
+    stubFetch({
+      preferences: { ...preferencesFixture, roleCriteria: [] },
+    })
+    render(<App />)
+
+    const journey = await screen.findByRole("list", {
+      name: "Seven-step journey",
+    })
+    await waitFor(() =>
+      expect(
+        journey.querySelector('[aria-current="step"]')?.textContent
+      ).toContain("Your goals")
+    )
+  })
+
+  it("marks Select jobs active once results are saved", async () => {
+    window.location.hash = "#/search"
+    stubFetch({ runHistory: [runHistoryFixture("run-7", "completed")] })
+    render(<App />)
+
+    const journey = await screen.findByRole("list", {
+      name: "Seven-step journey",
+    })
+    await waitFor(() =>
+      expect(
+        journey.querySelector('[aria-current="step"]')?.textContent
+      ).toContain("Select jobs")
+    )
+  })
+})
+
+describe("search stage derivation (F2)", () => {
+  it("prefers active work, else the newest terminal run", () => {
+    expect(
+      newestRunState([
+        runHistoryFixture("run-2", "completed"),
+        runHistoryFixture("run-1", "paused"),
+      ])
+    ).toBe("paused")
+    expect(newestRunState([runHistoryFixture("run-2", "failed")])).toBe(
+      "failed"
+    )
+    expect(newestRunState([])).toBeNull()
+    expect(
+      newestRunState([runHistoryFixture("run-x", "mystery")])
+    ).toBeNull()
+  })
+
+  it("derives goals, find and select markers from actual state", () => {
+    expect(
+      searchStageView({ goalsSaved: false, runState: null }).activeStageId
+    ).toBe("goals")
+    expect(
+      searchStageView({ goalsSaved: null, runState: null }).activeStageId
+    ).toBe("goals")
+    const find = searchStageView({ goalsSaved: true, runState: "running" })
+    expect(find.activeStageId).toBe("find")
+    expect(find.stages[0]?.state).toBe("complete")
+    expect(find.stages[1]?.state).toBe("upcoming")
+    const failed = searchStageView({ goalsSaved: true, runState: "failed" })
+    expect(failed.activeStageId).toBe("find")
+    const select = searchStageView({ goalsSaved: true, runState: "completed" })
+    expect(select.activeStageId).toBe("select")
+    expect(select.stages[0]?.state).toBe("complete")
+    expect(select.stages[1]?.state).toBe("complete")
+    expect(select.stages[2]?.state).toBe("upcoming")
   })
 })
 

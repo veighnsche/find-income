@@ -1,3 +1,7 @@
+import {
+  SEVEN_STAGES,
+  StageProgress,
+} from "@/components/shared/stage-progress"
 import { GroupedJobs } from "@/features/discovery/grouped-jobs"
 
 export function JobsPage() {
@@ -10,6 +14,15 @@ export function JobsPage() {
           links to its own page, which keeps working across refresh and
           browser back.
         </p>
+        <StageProgress
+          ariaLabel="Seven-step journey"
+          activeStageId="select"
+          stages={SEVEN_STAGES.map((stage, index) => ({
+            ...stage,
+            state: index < 2 ? ("complete" as const) : ("upcoming" as const),
+          }))}
+          className="mt-3"
+        />
       </div>
 
       <GroupedJobs museScenario="live" />

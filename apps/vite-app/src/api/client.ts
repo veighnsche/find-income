@@ -637,6 +637,97 @@ export function getResearchCapture(
   )
 }
 
+// Server run history (F2 consolidation of the provisional G2/D3 module
+// `features/discovery/run-history.ts`). G switches its import to these
+// and deletes that module; see the I-side proposal.
+export type RunHistoryItem = components["schemas"]["RunHistoryItem"]
+export type RunHistoryPage = components["schemas"]["RunHistoryPage"]
+
+/** Research commissions carry outcome `research_run` (rounds supervisor). */
+export const researchRunOutcome = "research_run"
+
+/** States worth resuming: active work plus stopped-but-resumable paused. */
+const resumableRunStates: ReadonlySet<string> = new Set([
+  "queued",
+  "running",
+  "awaiting_input",
+  "stopping",
+  "paused",
+])
+
+const terminalRunStates: ReadonlySet<string> = new Set([
+  "completed",
+  "failed",
+])
+
+/**
+ * Newest-first run history for server-backed restoration. Always scoped to
+ * the research outcome so profile-correction rounds never surface here.
+ * Pure GET, zero model calls, commissions nothing.
+ */
+export function listResearchRuns(
+  options: { limit?: number; cursor?: string } = {},
+  signal?: AbortSignal
+): Promise<RunHistoryPage> {
+  const query = new URLSearchParams({ outcome: researchRunOutcome })
+  if (options.limit !== undefined) query.set("limit", String(options.limit))
+  if (options.cursor !== undefined && options.cursor !== "")
+    query.set("cursor", options.cursor)
+  return request<RunHistoryPage>(`/research/runs?${query.toString()}`, {
+    signal,
+  })
+}
+
+/**
+ * Pick the run a fresh context restores: the newest resumable
+ * (active/paused) run when one exists, else the newest terminal run, else
+ * null (idle commission). The page is newest-first, so the first match
+ * wins. Unknown states never match: they stay visible in history but are
+ * never auto-restored.
+ */
+export function pickRestorableRunId(items: RunHistoryItem[]): string | null {
+  const resumable = items.find((item) => resumableRunStates.has(item.state))
+  if (resumable !== undefined) return resumable.runId
+  const terminal = items.find((item) => terminalRunStates.has(item.state))
+  return terminal?.runId ?? null
+}
+
+// Sourced owner context (F2 consolidation of the provisional G1/D4 module
+// `features/owner-context/sourced-context.ts`). G switches its import to
+// these and deletes that module; see the I-side proposal.
+export type SourcedOwnerContext = components["schemas"]["SourcedOwnerContext"]
+export type OwnerCareerSource = SourcedOwnerContext["sources"][number]
+
+/** The server predates D4 or has no owner-context route: neutral absence. */
+export class CareerSourceNotConnected extends Error {
+  constructor() {
+    super("Career sources are not available on this server.")
+    this.name = "CareerSourceNotConnected"
+  }
+}
+
+export function isCareerSourceNotConnected(cause: unknown): boolean {
+  return cause instanceof CareerSourceNotConnected
+}
+
+/**
+ * Read owner identity plus approved career sources with provenance (D4).
+ * Pure GET, zero model calls; bodies serve verbatim. A 404 means the
+ * endpoint is absent and maps to `CareerSourceNotConnected` (neutral);
+ * every other failure keeps its `RequestError` status/message.
+ */
+export function getSourcedOwnerContext(
+  signal?: AbortSignal
+): Promise<SourcedOwnerContext> {
+  return request<SourcedOwnerContext>("/research/owner-context", {
+    signal,
+  }).catch((cause: unknown) => {
+    if (cause instanceof RequestError && cause.status === 404)
+      throw new CareerSourceNotConnected()
+    throw cause
+  })
+}
+
 export function explainResearchIdentity(
   subjectKind: "employer" | "vacancy",
   subjectId: string,
@@ -667,8 +758,6 @@ export type AnswerMatchRequest = components["schemas"]["AnswerMatchRequest"]
 export type QuestionAnswerList = components["schemas"]["QuestionAnswerList"]
 export type QuestionAnswerValue = components["schemas"]["QuestionAnswerValue"]
 export type AnswerValueSave = components["schemas"]["AnswerValueSave"]
-export type MaterialVersion = components["schemas"]["MaterialVersion"]
-export type MaterialStatusView = components["schemas"]["MaterialStatusView"]
 export type MaterialPrepareRequest =
   components["schemas"]["MaterialPrepareRequest"]
 export type ArtifactView = components["schemas"]["ArtifactView"]
@@ -678,7 +767,6 @@ export type ArtifactReadinessEntry =
 export type ArtifactReadinessSet =
   components["schemas"]["ArtifactReadinessSet"]
 export type ArtifactSaveRequest = components["schemas"]["ArtifactSaveRequest"]
-export type MaterialEditRequest = components["schemas"]["MaterialEditRequest"]
 export type MaterialRewriteRequest =
   components["schemas"]["MaterialRewriteRequest"]
 
@@ -897,70 +985,10 @@ export function saveQuestionAnswer(
   )
 }
 
-export function prepareOpportunityMaterials(
-  id: string,
-  input: MaterialPrepareRequest,
-  csrfToken: string
-): Promise<MaterialStatusView> {
-  return request<MaterialStatusView>(
-    `/opportunities/${encodeURIComponent(id)}/materials/prepare`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRF-Token": csrfToken,
-      },
-      body: JSON.stringify(input),
-    }
-  )
-}
-
-export function getCurrentOpportunityMaterials(
-  id: string,
-  signal?: AbortSignal
-): Promise<MaterialStatusView> {
-  return request<MaterialStatusView>(
-    `/opportunities/${encodeURIComponent(id)}/materials/current`,
-    { signal }
-  )
-}
-
-export function editOpportunityMaterials(
-  id: string,
-  input: MaterialEditRequest,
-  csrfToken: string
-): Promise<MaterialVersion> {
-  return request<MaterialVersion>(
-    `/opportunities/${encodeURIComponent(id)}/materials/current`,
-    {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRF-Token": csrfToken,
-      },
-      body: JSON.stringify(input),
-    }
-  )
-}
-
-export function rewriteOpportunityMaterials(
-  id: string,
-  input: MaterialRewriteRequest,
-  csrfToken: string
-): Promise<MaterialVersion> {
-  return request<MaterialVersion>(
-    `/opportunities/${encodeURIComponent(id)}/materials/rewrite`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRF-Token": csrfToken,
-      },
-      body: JSON.stringify(input),
-    }
-  )
-}
-
+// The duplicate combined-pack Prepare application and its `/materials/*`
+// endpoints are gone (M1 cut the endpoints, E1 cut `usePrepareActions`):
+// drafting reads `listArtifactReadiness`, writes `draftOpportunityArtifacts`,
+// edits `saveOpportunityArtifact`, and rewrites `rewriteOpportunityArtifact`.
 export function listArtifactReadiness(
   id: string,
   signal?: AbortSignal
@@ -1029,15 +1057,183 @@ export function saveOpportunityArtifact(
   )
 }
 
-export function getOpportunityMaterialVersion(
+// Per-artifact rewrite/versions/export + clarifications + Handoff (F2/F3
+// consolidation of the provisional E module
+// `features/prepare/artifactsApi.ts`, adopted verbatim so E can switch its
+// imports to client reuse; see the I-side proposal).
+export type Clarification = components["schemas"]["Clarification"]
+export type ClarificationAnswer = components["schemas"]["ClarificationAnswer"]
+export type ClarificationList = { items: Clarification[] }
+export type ArtifactVersionList = { items: ArtifactView[] }
+export type HandoffView = components["schemas"]["HandoffView"]
+export type HandoffItem = components["schemas"]["HandoffItem"]
+export type HandoffUpload = components["schemas"]["HandoffUpload"]
+export type HandoffSave = components["schemas"]["HandoffSave"]
+export type SavedJobEntry = components["schemas"]["SavedJobEntry"]
+export type SavedJobItem = components["schemas"]["SavedJobItem"]
+export type SavedJobList = { items: SavedJobEntry[] }
+
+export function listClarifications(
   id: string,
-  version: number,
   signal?: AbortSignal
-): Promise<MaterialVersion> {
-  return request<MaterialVersion>(
-    `/opportunities/${encodeURIComponent(id)}/materials/versions/${version}`,
+): Promise<ClarificationList> {
+  return request<ClarificationList>(
+    `/opportunities/${encodeURIComponent(id)}/clarifications`,
     { signal }
   )
+}
+
+export function answerClarification(
+  id: string,
+  clarificationId: string,
+  input: ClarificationAnswer,
+  csrfToken: string
+): Promise<Clarification> {
+  return request<Clarification>(
+    `/opportunities/${encodeURIComponent(id)}/clarifications/${encodeURIComponent(clarificationId)}/answer`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify(input),
+    }
+  )
+}
+
+export function rewriteOpportunityArtifact(
+  id: string,
+  artifactType: string,
+  input: MaterialRewriteRequest,
+  csrfToken: string
+): Promise<ArtifactReadinessSet> {
+  return request<ArtifactReadinessSet>(
+    `/opportunities/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactType)}/rewrite`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify(input),
+    }
+  )
+}
+
+export function listArtifactVersions(
+  id: string,
+  artifactType: string,
+  signal?: AbortSignal
+): Promise<ArtifactVersionList> {
+  return request<ArtifactVersionList>(
+    `/opportunities/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactType)}/versions`,
+    { signal }
+  )
+}
+
+export interface ArtifactExport {
+  text: string
+  mediaType: string
+  filename: string
+}
+
+// Extension from the export content type. The server renders markdown or
+// plain text; anything unexpected stays a safe .txt rather than inventing
+// a format.
+export function exportFileExtension(mediaType: string): string {
+  return mediaType.toLowerCase().includes("markdown") ? "md" : "txt"
+}
+
+// Filenames name the job, the item and the pinned version so a download
+// taken out of the app stays attributable: job-1-cv-v2.md.
+export function exportFilename(
+  jobId: string,
+  artifactType: string,
+  version: number | "live",
+  mediaType: string
+): string {
+  const tag = version === "live" ? "live" : `v${version}`
+  return `${jobId}-${artifactType}-${tag}.${exportFileExtension(mediaType)}`
+}
+
+// Canonical file download for the shown version, rendered by the server
+// from stored content with identity/version/checksum headers. Downloading
+// never means applied. form_values omits the version and derives live.
+export async function exportOpportunityArtifact(
+  id: string,
+  artifactType: string,
+  version: number | null,
+  signal?: AbortSignal
+): Promise<ArtifactExport> {
+  const query = version === null ? "" : `?version=${version}`
+  const response = await fetch(
+    `/api/v1/opportunities/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactType)}/export${query}`,
+    { credentials: "same-origin", signal }
+  )
+  if (!response.ok) {
+    let message = `The API returned HTTP ${response.status}.`
+    let details: Record<string, unknown> | undefined
+    try {
+      const body = (await response.json()) as {
+        error?: { message?: string; details?: Record<string, unknown> }
+      }
+      if (body.error?.message) message = body.error.message
+      details = body.error?.details
+    } catch {
+      // An unavailable server may not return a JSON envelope.
+    }
+    throw new RequestError(response.status, message, details)
+  }
+  const mediaType =
+    response.headers.get("Content-Type")?.split(";")[0]?.trim() ?? ""
+  const text = await response.text()
+  return {
+    text,
+    mediaType,
+    filename: exportFilename(
+      id,
+      artifactType,
+      version ?? "live",
+      mediaType === "" ? "text/plain" : mediaType
+    ),
+  }
+}
+
+export function getOpportunityHandoff(
+  id: string,
+  signal?: AbortSignal
+): Promise<HandoffView> {
+  return request<HandoffView>(
+    `/opportunities/${encodeURIComponent(id)}/handoff`,
+    { signal }
+  )
+}
+
+export function saveOpportunityHandoff(
+  id: string,
+  input: HandoffSave,
+  csrfToken: string
+): Promise<RoleWorkflowState> {
+  return request<RoleWorkflowState>(
+    `/opportunities/${encodeURIComponent(id)}/handoff`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify(input),
+    }
+  )
+}
+
+/**
+ * Durable saved-job/artifact index (M6/F3): every non-archived role with
+ * stored work, most recently touched first. Passive.
+ */
+export function listSavedJobs(signal?: AbortSignal): Promise<SavedJobList> {
+  return request<SavedJobList>("/saved-jobs", { signal })
 }
 
 export type MuseTierParam = "contributor" | "standard"

@@ -45,6 +45,18 @@ describe("deep links and history", () => {
     ).toBeDefined()
   })
 
+  it("keeps Jobs active on the per-job handoff route", async () => {
+    stubFetch()
+    window.location.hash = "#/jobs/job-1/handoff"
+    render(<App />)
+
+    await screen.findByRole("heading", { name: "Handoff" })
+    const nav = screen.getByRole("navigation", { name: "Primary" })
+    expect(
+      nav.querySelector('a[href="#/jobs"]')?.getAttribute("aria-current")
+    ).toBe("page")
+  })
+
   it("follows hash history forward and back without losing the page", async () => {
     stubFetch()
     window.location.hash = "#/jobs"

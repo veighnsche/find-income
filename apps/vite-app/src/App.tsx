@@ -1,9 +1,16 @@
 import { useState, type FormEvent } from "react"
 import {
   getActiveRound,
+  getMuseReadiness,
+  getPreferences,
+  getSourcedOwnerContext,
+  isCareerSourceNotConnected,
   listRoleWorkflows,
+  type MuseReadiness,
+  type Preferences,
   type RoleWorkflowState,
   type Round,
+  type SourcedOwnerContext,
 } from "@/api/client"
 import { SessionProvider, useSession } from "@/api/session"
 import {
@@ -12,6 +19,7 @@ import {
   LoadingBlock,
   ShellNav,
 } from "@/components/shared"
+import { journeyLabelFor } from "@/pages/role-stages"
 import { useRead } from "@/pages/useRead"
 import { Button } from "@/components/ui/button"
 import {
@@ -89,6 +97,14 @@ function Frame({
     (signal) => listRoleWorkflows(signal),
     { scopes: ["selection", "workflows"] }
   )
+  const goals = useRead("shell-goals", (signal) => getPreferences(signal), {
+    scopes: ["goals"],
+  })
+  // Contributor readiness has no invalidation scope of its own; it reads
+  // once per mount and only gates the Ready claim when positively known.
+  const contributor = useRead("shell-contributor", (signal) =>
+    getMuseReadiness("contributor", signal)
+  )
   const chosen =
     workflows.status === "ready" ? workflows.data.length > 0 : false
   const navItems = [
@@ -112,7 +128,8 @@ function Frame({
         route.page === "jobs" ||
         route.page === "check" ||
         route.page === "answers" ||
-        route.page === "prepare",
+        route.page === "prepare" ||
+        route.page === "handoff",
     },
   ]
   if (chosen) {
@@ -139,12 +156,7 @@ function Frame({
           </div>
         </div>
         <ShellNav ariaLabel="Primary" items={navItems} direction="vertical" />
-        <p
-          className="mt-auto hidden text-xs text-muted-foreground md:block"
-          title={sessionExpiresAt}
-        >
-          Signed in · session ends {sessionExpiresAt.slice(0, 10)}
-        </p>
+        <OwnerIdentityFoot sessionExpiresAt={sessionExpiresAt} />
         <div className="hidden md:block">
           <SignOutButton />
         </div>
@@ -156,6 +168,8 @@ function Frame({
           <WorkStatusText
             activeRound={activeRound}
             workflows={workflows}
+            goals={goals}
+            contributor={contributor}
           />
         </div>
 
@@ -167,42 +181,149 @@ function Frame({
   )
 }
 
+// The strip names the real step and its real state (F2/R14): an active
+// round reports its Find-jobs state, chosen work reports per-stage role
+// counts on the seven-step journey, and Ready is claimed only with saved
+// goals, no running work and no known Contributor blocker.
 function WorkStatusText({
   activeRound,
   workflows,
+  goals,
+  contributor,
 }: {
   activeRound: { status: string; data: Round | null }
   workflows: { status: string; data: RoleWorkflowState[] | null }
+  goals: { status: string; data: Preferences | null }
+  contributor: { status: string; data: MuseReadiness | null }
 }) {
-  if (activeRound.status === "loading" || workflows.status === "loading")
+  if (
+    activeRound.status === "loading" ||
+    workflows.status === "loading" ||
+    goals.status === "loading" ||
+    contributor.status === "loading"
+  )
     return <p className="text-xs text-muted-foreground">Checking work status…</p>
-  if (activeRound.status !== "ready" || workflows.status !== "ready")
+  if (
+    activeRound.status !== "ready" ||
+    workflows.status !== "ready" ||
+    goals.status !== "ready"
+  )
     return <p className="text-xs text-muted-foreground">Work status unavailable</p>
   const round = activeRound.data
   if (round !== null) {
-    switch (round.state) {
-      case "paused":
-        return <p className="text-xs text-muted-foreground">Search paused</p>
-      case "awaiting_input":
-        return <p className="text-xs text-muted-foreground">Search needs your input</p>
-      case "stopping":
-        return <p className="text-xs text-muted-foreground">Search stopping…</p>
-      default:
-        return <p className="text-xs text-muted-foreground">Search running…</p>
-    }
-  }
-  const items = workflows.data ?? []
-  if (items.length > 0) {
-    const handoff = items.filter((item) => item.stage === "handoff_saved").length
-    if (handoff === items.length)
-      return <p className="text-xs text-muted-foreground">Applications ready for handoff</p>
     return (
       <p className="text-xs text-muted-foreground">
-        {items.length} chosen {items.length === 1 ? "job" : "jobs"} in progress
+        {describeActiveRound(round.state)}
       </p>
     )
   }
+  const items = workflows.data ?? []
+  if (items.length > 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {describeChosenWork(items)}
+      </p>
+    )
+  }
+  const criteria = goals.data?.roleCriteria.length ?? 0
+  if (criteria === 0)
+    return (
+      <p className="text-xs text-muted-foreground">No search goals saved yet</p>
+    )
+  if (contributor.status === "ready" && contributor.data !== null) {
+    const readiness = contributor.data
+    if (readiness.state !== "ready") {
+      const why =
+        readiness.detail !== "" ? readiness.detail : readiness.code
+      return (
+        <p className="text-xs text-muted-foreground">
+          {`Find jobs unavailable: ${why}`}
+        </p>
+      )
+    }
+  }
+  // A failed readiness read leaves the blocker unknown rather than
+  // inventing one; the Find jobs panel itself reports the exact blocker.
   return <p className="text-xs text-muted-foreground">Ready to find jobs</p>
+}
+
+function describeActiveRound(state: string): string {
+  switch (state) {
+    case "queued":
+      return "Find jobs · queued"
+    case "running":
+      return "Find jobs · running"
+    case "awaiting_input":
+      return "Find jobs · needs your input"
+    case "stopping":
+      return "Find jobs · stopping"
+    case "paused":
+      return "Find jobs · paused"
+    default:
+      return `Find jobs · ${state}`
+  }
+}
+
+function describeChosenWork(items: RoleWorkflowState[]): string {
+  const handoff = items.filter((item) => item.stage === "handoff_saved").length
+  if (handoff === items.length)
+    return `Handoff · ${items.length} saved ${items.length === 1 ? "role" : "roles"}`
+  const counts = new Map<string, number>()
+  const order: string[] = []
+  for (const item of items) {
+    // A mixed list names Handoff roles honestly instead of letting the
+    // null journey label fall through to Blocked.
+    const label =
+      item.stage === "handoff_saved"
+        ? "Handoff"
+        : (journeyLabelFor(item.stage) ?? "Blocked")
+    if (!counts.has(label)) order.push(label)
+    counts.set(label, (counts.get(label) ?? 0) + 1)
+  }
+  return order
+    .map((label) => {
+      const count = counts.get(label) ?? 0
+      return `${label} · ${count} ${count === 1 ? "role" : "roles"}`
+    })
+    .join("; ")
+}
+
+// Sidebar foot (F2/F01): the supported D4 owner identity, falling back to
+// the session text while loading, on errors, or on servers that predate
+// the owner-context route. GET-only like every other shell read.
+function OwnerIdentityFoot({
+  sessionExpiresAt,
+}: {
+  sessionExpiresAt: string
+}) {
+  const context = useRead(
+    "shell-owner-identity",
+    (signal) =>
+      getSourcedOwnerContext(signal).catch((cause: unknown) => {
+        if (isCareerSourceNotConnected(cause)) return null
+        throw cause
+      }) as Promise<SourcedOwnerContext | null>,
+    { scopes: ["goals"] }
+  )
+  if (context.status === "ready" && context.data !== null) {
+    const owner = context.data.owner
+    return (
+      <p
+        className="mt-auto hidden text-xs text-muted-foreground md:block"
+        title={`${owner.kind} ${owner.id} · session ends ${sessionExpiresAt}`}
+      >
+        Signed in as {owner.id}
+      </p>
+    )
+  }
+  return (
+    <p
+      className="mt-auto hidden text-xs text-muted-foreground md:block"
+      title={sessionExpiresAt}
+    >
+      Signed in · session ends {sessionExpiresAt.slice(0, 10)}
+    </p>
+  )
 }
 
 function RoutePage({

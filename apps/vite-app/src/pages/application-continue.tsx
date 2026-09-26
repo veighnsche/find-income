@@ -12,8 +12,8 @@ import { stageStatusText } from "@/pages/role-stages"
 import { useRead } from "@/pages/useRead"
 
 // Next-step copy per server stage. Labels name the destination stage page;
-// handoff_saved and blocked are terminal here (the saved state or reason
-// reads below), so they report status instead of linking anywhere.
+// prepared and handoff_saved continue to the per-job Handoff route, and
+// only blocked has no next step (its reason reads as status instead).
 function nextStep(workflow: RoleWorkflowState): {
   label: string
   description: string
@@ -50,10 +50,10 @@ function nextStep(workflow: RoleWorkflowState): {
       }
     case "prepared":
       return {
-        label: "Prepare materials",
+        label: "Open handoff",
         description:
-          "Review the prepared materials, then open the saved handoff below.",
-        href: `#/jobs/${id}/prepare`,
+          "Review the prepared materials and the steps you fill in manually.",
+        href: `#/jobs/${id}/handoff`,
       }
     case "handoff_saved":
       return {

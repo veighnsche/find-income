@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { listResearchRuns, type RunHistoryItem } from "@/api/client"
 import { useSession } from "@/api/session"
 import {
   EmptyBlock,
@@ -6,10 +7,12 @@ import {
   LoadingBlock,
   notifyGoalsAccepted,
   SavedGoalsProvider,
+  useSavedGoals,
 } from "@/components/shared"
 import {
   SEVEN_STAGES,
   StageProgress,
+  type StageInput,
 } from "@/components/shared/stage-progress"
 import { ExperiencePanel } from "@/features/goals/ExperiencePanel"
 import { WantsPanel } from "@/features/goals/WantsPanel"
@@ -18,24 +21,79 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  DiscoverySection,
-  discoveryRunStorageKey,
-} from "@/features/discovery/discovery-section"
+import { DiscoverySection } from "@/features/discovery/discovery-section"
 import {
   useOwnerContext,
   type EffectiveSavedContext,
 } from "@/features/owner-context/useOwnerContext"
+import { useRead } from "@/pages/useRead"
 import { useRoute } from "@/routes/useRoute"
 
 const STAGE_ACTORS: Record<string, string> = {
   goals: "You",
-  find: "Contributor",
+  find: "Contributor + Jev",
   select: "You",
   check: "Contributor",
   answer: "You + Jev",
   prepare: "Standard",
   handoff: "You",
+}
+
+const ACTIVE_RUN_STATES: ReadonlySet<string> = new Set([
+  "queued",
+  "running",
+  "awaiting_input",
+  "stopping",
+  "paused",
+])
+
+/**
+ * Newest relevant run state from newest-first history: active work wins
+ * (the search is in Find jobs), else the newest terminal state. Unknown
+ * states and empty/unreadable history yield null (no known run).
+ */
+export function newestRunState(items: RunHistoryItem[]): string | null {
+  const active = items.find((item) => ACTIVE_RUN_STATES.has(item.state))
+  if (active !== undefined) return active.state
+  const terminal = items.find(
+    (item) => item.state === "completed" || item.state === "failed"
+  )
+  return terminal?.state ?? null
+}
+
+/**
+ * My-search stage orientation from actual state (F2/R17): saved goals
+ * complete step 1, a running/paused/failed search rests on Find jobs,
+ * and completed results move to Select jobs. Unknown goals keep the
+ * conservative Your-goals marker; unknown runs keep Find jobs as the
+ * next step once goals exist.
+ */
+export function searchStageView({
+  goalsSaved,
+  runState,
+}: {
+  goalsSaved: boolean | null
+  runState: string | null
+}): { stages: StageInput[]; activeStageId: string } {
+  let active = "goals"
+  let completedThrough = -1
+  if (goalsSaved === true) {
+    if (runState === "completed") {
+      active = "select"
+      completedThrough = 1
+    } else {
+      active = "find"
+      completedThrough = 0
+    }
+  }
+  return {
+    stages: SEVEN_STAGES.map((stage, index) => ({
+      ...stage,
+      state: index <= completedThrough ? ("complete" as const) : ("upcoming" as const),
+      actor: STAGE_ACTORS[stage.id] ?? "",
+    })),
+    activeStageId: active,
+  }
 }
 
 function ProfileFactsPanel({ context }: { context: EffectiveSavedContext }) {
@@ -102,25 +160,29 @@ function SearchPageBody() {
   const { session } = useSession()
   const [route] = useRoute()
   const owner = useOwnerContext()
+  const savedGoals = useSavedGoals()
   const [draft, setDraft] = useState("")
   const draftRef = useRef<HTMLTextAreaElement>(null)
   const savedSeenRef = useRef<string | null>(null)
   const routeRunId = route.page === "search" ? route.runId : null
 
-  // Deep-link bridge (F1 seam): `#/search?run=<id>` points the stored run
-  // pointer at the linked run before discovery mounts, so the existing
-  // discovery section restores that run from the server (GET-only) instead
-  // of a stale pointer. The write is idempotent and guarded; the server
-  // stays the recovery source. G replaces this with direct `useServerRun`
-  // adoption once DiscoverySection accepts a run id prop.
-  if (routeRunId !== null) {
-    try {
-      if (window.localStorage.getItem(discoveryRunStorageKey) !== routeRunId)
-        window.localStorage.setItem(discoveryRunStorageKey, routeRunId)
-    } catch {
-      // A blocked store only loses the convenience pointer.
-    }
-  }
+  // F2: the run deep link passes straight into discovery, which restores
+  // it from the server GET-only. No browser pointer is written or read;
+  // the route plus the server history are the recovery source (C1).
+  const runHistory = useRead(
+    "search:run-history",
+    (signal) => listResearchRuns({ limit: 5 }, signal),
+    { scopes: ["run"] }
+  )
+  const goalsSaved =
+    savedGoals.state === "ready"
+      ? (savedGoals.goals?.roleCriteria.length ?? 0) > 0
+      : null
+  const runState =
+    runHistory.status === "ready"
+      ? newestRunState(runHistory.data.items)
+      : null
+  const stageView = searchStageView({ goalsSaved, runState })
 
   const correction = owner.correction
   const correctionBusy =
@@ -181,12 +243,8 @@ function SearchPageBody() {
         </p>
         <StageProgress
           ariaLabel="Seven-step journey"
-          activeStageId="goals"
-          stages={SEVEN_STAGES.map((stage) => ({
-            ...stage,
-            state: "upcoming" as const,
-            actor: STAGE_ACTORS[stage.id] ?? "",
-          }))}
+          activeStageId={stageView.activeStageId}
+          stages={stageView.stages}
           className="mt-3"
         />
       </div>
@@ -347,6 +405,7 @@ function SearchPageBody() {
       <DiscoverySection
         key={routeRunId ?? "live"}
         museScenario="live"
+        runId={routeRunId}
       />
     </div>
   )
