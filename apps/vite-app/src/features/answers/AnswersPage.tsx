@@ -7,6 +7,7 @@ import {
 } from "react"
 import {
   RequestError,
+  commitRoleAnswers,
   getCurrentAnswerMatch,
   getCurrentOpportunityCheck,
   getCurrentQuestionAnswers,
@@ -27,8 +28,14 @@ import {
   type ActivityEntry,
 } from "@/components/shared/activity-disclosure"
 import { StageExplainer } from "@/components/shared/stage-explainer"
+import {
+  clearAnswerDraftsForCheck,
+  notifyAccepted,
+  useAnswerDraft,
+} from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import {
   useAnswerSave,
@@ -43,15 +50,19 @@ type CheckDetail = NonNullable<CheckStatusView["check"]>
 type CheckQuestion = CheckDetail["questions"][number]
 type MatchEntry = AnswerMatchView["matches"][number]
 
-// AnswersPage is the E3 answer-questions surface for one role, reached by
-// deep link (#/jobs/:id/answers, registered by the coordinator). Mount,
-// reads and reloads are GET-only and commission nothing: no Codex, no LLM.
-// One explicit button runs Jev saved-answer matching (classifier only, plus
-// the no-fit choice); every saved suggestion starts inside its own editable
-// box, unanswered questions stay blank, and each save is an explicit
-// per-question PUT with the version observed from the values read. The
-// Prepare continuation commits every dirty box before navigating, so no
-// typed text is dropped. All state is keyed by jobId and the detail section
+// AnswersPage is the answer-questions surface for one role, reached by deep
+// link (#/jobs/:id/answers, registered by the coordinator). Mount, reads
+// and reloads are GET-only and commission nothing: no Codex, no LLM. One
+// explicit button runs Jev saved-answer matching (classifier only, plus
+// the no-fit choice); suggestions stay unsaved until the owner explicitly
+// saves or continues. Each box saves with an explicit per-question PUT
+// guarded on the version observed from the values read; continuation
+// persists every box (untouched kept suggestions, edited text, cleared
+// boxes, explicit blanks with optional draft requests), commits the
+// answer set once, then navigates to the same job's Prepare task.
+// Preparation itself starts only from its own explicit action there.
+// Draft text is job/check/question-scoped and survives rematching and
+// internal navigation. All state is keyed by jobId and the detail section
 // remounts per role.
 export function AnswersPage({ jobId }: { jobId: string }) {
   const opportunity = useRead(`answers:${jobId}:opportunity`, (signal) =>
@@ -147,11 +158,15 @@ function AnswersDetailSection({ jobId }: { jobId: string }) {
   const check = useRead(`answers:${jobId}:check`, (signal) =>
     getCurrentOpportunityCheck(jobId, signal)
   )
-  const match = useRead(`answers:${jobId}:match`, (signal) =>
-    readMatchOrNull(jobId, signal)
+  const match = useRead(
+    `answers:${jobId}:match`,
+    (signal) => readMatchOrNull(jobId, signal),
+    { scopes: ["answers"] }
   )
-  const values = useRead(`answers:${jobId}:values`, (signal) =>
-    readValuesOrNull(jobId, signal)
+  const values = useRead(
+    `answers:${jobId}:values`,
+    (signal) => readValuesOrNull(jobId, signal),
+    { scopes: ["answers"] }
   )
 
   if (
@@ -194,7 +209,7 @@ function AnswersDetailSection({ jobId }: { jobId: string }) {
       check={check.data}
       match={match.data}
       values={values.data}
-      onMatchRefresh={match.retry}
+      onMatchAccepted={() => notifyAccepted("answers")}
     />
   )
 }
@@ -204,13 +219,13 @@ function AnswersBody({
   check,
   match,
   values,
-  onMatchRefresh,
+  onMatchAccepted,
 }: {
   jobId: string
   check: CheckStatusView
   match: AnswerMatchView | null
   values: QuestionAnswerList | null
-  onMatchRefresh: () => void
+  onMatchAccepted: () => void
 }) {
   const detail = check.check ?? null
   if (check.status === "not_checked" || detail === null) {
@@ -251,10 +266,20 @@ function AnswersBody({
   }
   if (detail.questions.length === 0) {
     return (
-      <EmptyBlock
-        title="No questions found"
-        description="The completed check recorded no employer questions, so there is nothing to answer."
-      />
+      <div className="flex min-w-0 flex-col gap-3">
+        <EmptyBlock
+          title="No questions found"
+          description="The completed check recorded no employer questions, so there is nothing to answer here. Continuation for a verified questionless route lives on the check page."
+        />
+        <p>
+          <a
+            href={`#/jobs/${encodeURIComponent(jobId)}/check`}
+            className="text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            Return to the check page
+          </a>
+        </p>
+      </div>
     )
   }
   return (
@@ -263,7 +288,7 @@ function AnswersBody({
       detail={detail}
       match={match}
       values={values}
-      onMatchRefresh={onMatchRefresh}
+      onMatchAccepted={onMatchAccepted}
     />
   )
 }
@@ -298,12 +323,23 @@ function suggestedAnswerRef(entry: MatchEntry | null): {
 }
 
 type SuggestionText =
-  { status: "ready"; text: string } | { status: "unavailable" }
+  | { status: "ready"; text: string }
+  | { status: "unavailable" }
+
+// PersistedAnswer is one question's accepted row after continuation
+// persistence: either the PUT response or the already-saved snapshot when
+// the box was clean. The commit-hold message reads requiredness from it.
+interface PersistedAnswer {
+  version: number
+  state: AnswerBoxState
+  text: string
+  draftRequested: boolean
+}
 
 interface AnswerCommitHandle {
   dirty: boolean
   saving: boolean
-  commit: () => Promise<unknown>
+  persist: () => Promise<PersistedAnswer>
 }
 
 function AnswersList({
@@ -311,13 +347,13 @@ function AnswersList({
   detail,
   match,
   values,
-  onMatchRefresh,
+  onMatchAccepted,
 }: {
   jobId: string
   detail: CheckDetail
   match: AnswerMatchView | null
   values: QuestionAnswerList | null
-  onMatchRefresh: () => void
+  onMatchAccepted: () => void
 }) {
   const commits = useRef(new Map<string, AnswerCommitHandle>())
   const registerCommit = useCallback(
@@ -327,6 +363,10 @@ function AnswersList({
     },
     []
   )
+  // Frozen while the save→commit→continue sequence runs: editors and
+  // matching stay blocked until it completes, so the captured input
+  // cannot change under a delayed save.
+  const [frozen, setFrozen] = useState(false)
   const refs = new Map<string, number>()
   for (const question of detail.questions) {
     const ref = suggestedAnswerRef(matchEntryFor(match, detail.id, question.id))
@@ -383,7 +423,8 @@ function AnswersList({
         jobId={jobId}
         detail={detail}
         match={match}
-        onMatched={onMatchRefresh}
+        frozen={frozen}
+        onMatched={onMatchAccepted}
       />
       <MatchBanner match={match} checkId={detail.id} />
       <AnswerActivityFeed
@@ -395,6 +436,7 @@ function AnswersList({
         <AnswerCard
           key={question.id}
           jobId={jobId}
+          checkId={detail.id}
           index={index}
           question={question}
           entry={matchEntryFor(match, detail.id, question.id)}
@@ -403,13 +445,17 @@ function AnswersList({
             suggestions.data
           )}
           saved={savedByQuestion.get(question.id) ?? null}
+          frozen={frozen}
           registerCommit={registerCommit}
         />
       ))}
       <PrepareContinuation
         jobId={jobId}
+        checkId={detail.id}
         questions={detail.questions}
         commits={commits}
+        frozen={frozen}
+        setFrozen={setFrozen}
       />
     </div>
   )
@@ -418,17 +464,20 @@ function AnswersList({
 // MatchTrigger runs the existing Jev saved-answer matching action for the
 // current question set: relevant approved answers plus the no-fit choice.
 // It is classifier-only — no Contributor, no Standard, no LLM — and only an
-// explicit click runs it. Success re-reads the saved match view, which
-// prefills boxes that have no stored value yet.
+// explicit click runs it. Success notifies the answers scope, which
+// re-reads the saved match view; boxes with stored values keep them, and
+// dirty text survives the refresh in the draft store.
 function MatchTrigger({
   jobId,
   detail,
   match,
+  frozen,
   onMatched,
 }: {
   jobId: string
   detail: CheckDetail
   match: AnswerMatchView | null
+  frozen: boolean
   onMatched: () => void
 }) {
   const { session, loseSession } = useSession()
@@ -440,7 +489,7 @@ function MatchTrigger({
     match.status !== "outdated"
 
   async function run() {
-    if (session === undefined || session === null || running) return
+    if (session === undefined || session === null || running || frozen) return
     setRunning(true)
     setError(null)
     try {
@@ -483,7 +532,7 @@ function MatchTrigger({
           type="button"
           variant="outline"
           disabled={
-            running || session === undefined || session === null
+            running || frozen || session === undefined || session === null
           }
           onClick={() => void run()}
         >
@@ -564,20 +613,31 @@ function AnswerActivityFeed({
   )
 }
 
-// PrepareContinuation commits every dirty answer box and then routes to
-// preparation. Preparation itself starts from its own explicit action, but
-// this button never drops typed text: it saves dirty boxes first, refuses
-// to navigate while a save is running or a commit fails, and names the
-// failed questions honestly. Clean boxes navigate immediately.
+// PrepareContinuation saves, commits, then continues to the same Prepare
+// task. It persists every box exactly as shown — untouched kept
+// suggestions, edited text, cleared boxes and explicit blanks (required
+// blanks may carry a draft request) — then POSTs the K3 answer commit and
+// navigates only after the server accepts it. Editors stay frozen until
+// the sequence completes, so newer edits cannot slip under a delayed
+// save; any save or commit failure keeps every box exactly as typed and
+// stays on this page. Preparation itself starts only from its own
+// explicit action on the Prepare page, never from this navigation.
 function PrepareContinuation({
   jobId,
+  checkId,
   questions,
   commits,
+  frozen,
+  setFrozen,
 }: {
   jobId: string
+  checkId: string
   questions: CheckDetail["questions"]
   commits: RefObject<Map<string, AnswerCommitHandle>>
+  frozen: boolean
+  setFrozen: (frozen: boolean) => void
 }) {
+  const { session, loseSession } = useSession()
   const [committing, setCommitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const prepareHash = `#/jobs/${encodeURIComponent(jobId)}/prepare`
@@ -585,6 +645,7 @@ function PrepareContinuation({
   async function continueToPrepare() {
     if (committing) return
     const entries = questions.map((question, index) => ({
+      question,
       number: index + 1,
       handle: commits.current.get(question.id) ?? null,
     }))
@@ -596,29 +657,75 @@ function PrepareContinuation({
       setError("A save is still running; wait for it to finish, then continue.")
       return
     }
-    const dirty = entries.filter((entry) => entry.handle!.dirty)
-    if (dirty.length === 0) {
-      setError(null)
-      window.location.hash = prepareHash
+    if (session === undefined || session === null) {
+      setError("Sign in to save and commit answers.")
       return
     }
     setCommitting(true)
+    setFrozen(true)
     setError(null)
+    const persisted: {
+      number: number
+      required: CheckQuestion["required"]
+      result: PersistedAnswer
+    }[] = []
     const failed: string[] = []
-    for (const entry of dirty) {
+    for (const entry of entries) {
       try {
-        await entry.handle!.commit()
+        const result = await entry.handle!.persist()
+        persisted.push({
+          number: entry.number,
+          required: entry.question.required,
+          result,
+        })
       } catch {
         failed.push(`Question ${entry.number}`)
       }
     }
-    setCommitting(false)
     if (failed.length > 0) {
+      setCommitting(false)
+      setFrozen(false)
       setError(
         `Could not save ${failed.join(", ")}. Fix the boxes above — your text is kept — then continue again.`
       )
       return
     }
+    try {
+      await commitRoleAnswers(jobId, session.csrfToken)
+    } catch (cause: unknown) {
+      setCommitting(false)
+      setFrozen(false)
+      if (isUnauthenticated(cause)) {
+        loseSession()
+        return
+      }
+      const message =
+        cause instanceof Error
+          ? cause.message
+          : "The request could not be completed."
+      if (cause instanceof RequestError && cause.status === 409) {
+        const missing = persisted
+          .filter(
+            (entry) =>
+              entry.required === "required" &&
+              entry.result.text.trim() === "" &&
+              !entry.result.draftRequested
+          )
+          .map((entry) => `Question ${entry.number}`)
+        setError(
+          missing.length > 0
+            ? `The server held the commit: ${message} ${missing.join(", ")} still ${
+                missing.length === 1 ? "needs" : "need"
+              } an answer, or a draft request for Prepare.`
+            : `The server held the commit: ${message} The check or answers moved; reload the page and reconcile before continuing.`
+        )
+      } else {
+        setError(message)
+      }
+      return
+    }
+    clearAnswerDraftsForCheck(jobId, checkId)
+    notifyAccepted("answers", "workflows")
     window.location.hash = prepareHash
   }
 
@@ -628,16 +735,19 @@ function PrepareContinuation({
       className="flex min-w-0 flex-col gap-3 rounded-xl border border-border p-4"
     >
       <p className="text-sm wrap-break-word">
-        Leave a box blank if you want it drafted during Prepare. Personal
-        facts are never guessed, and optional questions can stay blank.
+        Every box is saved exactly as shown — kept suggestions, edited text,
+        cleared boxes and explicit blanks — then the answer set commits and
+        preparation opens for this same job. Required questions left blank
+        hold the commit unless marked for drafting. Preparation itself starts
+        only from its own explicit action there.
       </p>
       <div>
         <Button
           type="button"
-          disabled={committing}
+          disabled={committing || frozen}
           onClick={() => void continueToPrepare()}
         >
-          {committing ? "Saving answers…" : "Prepare materials"}
+          {committing || frozen ? "Saving and committing…" : "Save, commit and continue"}
         </Button>
       </div>
       {error === null ? null : (
@@ -718,40 +828,91 @@ function originLabel(
 
 function AnswerCard({
   jobId,
+  checkId,
   index,
   question,
   entry,
   suggestion,
   saved,
+  frozen,
   registerCommit,
 }: {
   jobId: string
+  checkId: string
   index: number
   question: CheckQuestion
   entry: MatchEntry | null
   suggestion: string | null
   saved: QuestionAnswerValue | null
+  frozen: boolean
   registerCommit: (questionId: string, handle: AnswerCommitHandle | null) => void
 }) {
   const savedState: AnswerBoxState =
     saved === null ? "unset" : saved.state === "blank" ? "blank" : "answered"
-  const initialText = saved !== null ? saved.text : (suggestion ?? "")
+  // The box opens on the preserved draft when one exists, else the stored
+  // value, else the fresh suggestion, else blank. baseText is the stored
+  // value (or the same unsaved starting point), so a restored draft or an
+  // untouched suggestion compares honestly for dirtiness.
+  const baseText = saved !== null ? saved.text : (suggestion ?? "")
+  const { draft, setDraft, clearDraft } = useAnswerDraft({
+    jobId,
+    checkId,
+    questionId: question.id,
+  })
   const save = useAnswerSave({
     jobId,
     questionId: question.id,
-    initialText,
+    initialText: draft ?? baseText,
+    baseText,
     initial: {
       version: saved?.version ?? 0,
       state: savedState,
       provenance: saved?.provenance ?? null,
+      draftRequested: saved?.draftRequested ?? false,
     },
+    onSaved: clearDraft,
   })
   const boxId = `answers-${question.id}`
-  const { dirty, saving, saveAsync } = save
+  const { dirty, saving } = save
+
+  function handleChange(value: string) {
+    save.setText(value)
+    if (value !== baseText) setDraft(value)
+    else clearDraft()
+  }
+
+  // persist() saves exactly what continuation needs: dirty boxes save
+  // their current content; clean boxes with no stored value persist the
+  // untouched suggestion (keep) or the explicit blank; clean boxes with a
+  // stored value are already persisted and resolve their snapshot.
+  const persist = useCallback(async (): Promise<PersistedAnswer> => {
+    if (save.saving)
+      throw new Error("A save is still running for this question.")
+    if (!save.dirty && save.saved.version > 0) {
+      return {
+        version: save.saved.version,
+        state: save.saved.state,
+        text: save.text,
+        draftRequested: save.saved.draftRequested,
+      }
+    }
+    const value = await save.saveExact(save.text, save.draftRequested)
+    return {
+      version: value.version,
+      state: value.state === "blank" ? "blank" : "answered",
+      text: value.text,
+      draftRequested: value.draftRequested ?? false,
+    }
+  }, [save])
+
   useEffect(() => {
-    registerCommit(question.id, { dirty, saving, commit: saveAsync })
+    registerCommit(question.id, { dirty, saving, persist })
     return () => registerCommit(question.id, null)
-  }, [registerCommit, question.id, dirty, saving, saveAsync])
+  }, [registerCommit, question.id, dirty, saving, persist])
+
+  const showDraftRequest =
+    question.required === "required" && save.text === ""
+  const matchRef = suggestedAnswerRef(entry)
 
   return (
     <section
@@ -778,6 +939,7 @@ function AnswerCard({
       </p>
       <SuggestionNote
         entry={entry}
+        matchRef={matchRef}
         suggestion={suggestion}
         saved={saved !== null}
       />
@@ -788,17 +950,28 @@ function AnswerCard({
         <Textarea
           id={boxId}
           value={save.text}
-          onChange={(event) => save.setText(event.target.value)}
+          onChange={(event) => handleChange(event.target.value)}
           rows={4}
           placeholder="Leave blank when there is nothing to say."
           aria-describedby={`${boxId}-status`}
+          disabled={frozen}
         />
       </div>
+      {showDraftRequest ? (
+        <label className="flex cursor-pointer items-start gap-2 text-sm wrap-break-word">
+          <Checkbox
+            checked={save.draftRequested}
+            onCheckedChange={(value) => save.setDraftRequested(value === true)}
+            disabled={frozen || save.saving}
+          />
+          Leave blank and request drafting during Prepare from verified facts
+        </label>
+      ) : null}
       <div className="flex min-w-0 flex-wrap items-center gap-3">
         <Button
           type="button"
           size="sm"
-          disabled={!save.canSave}
+          disabled={frozen || !save.canSave}
           onClick={save.save}
         >
           {save.saving ? "Saving…" : "Save answer"}
@@ -820,9 +993,11 @@ function AnswerCard({
           {originLabel(save.saved.provenance.origin)} · v{save.saved.version} ·
           edited {formatDate(save.saved.provenance.editedAt)} by{" "}
           {save.saved.provenance.editedBy.actorId}
-          {save.saved.provenance.matchChoice?.answerId !== undefined
-            ? " · based on a saved suggestion"
+          {save.saved.provenance.matchChoice?.answerId !== undefined &&
+          save.saved.provenance.matchChoice.answerVersion !== undefined
+            ? ` · based on saved answer ${save.saved.provenance.matchChoice.answerId} v${save.saved.provenance.matchChoice.answerVersion}`
             : null}
+          {save.saved.draftRequested ? " · draft requested for Prepare" : null}
         </p>
       ) : null}
     </section>
@@ -831,10 +1006,12 @@ function AnswerCard({
 
 function SuggestionNote({
   entry,
+  matchRef,
   suggestion,
   saved,
 }: {
   entry: MatchEntry | null
+  matchRef: { answerId: string; answerVersion: number } | null
   suggestion: string | null
   saved: boolean
 }) {
@@ -855,15 +1032,19 @@ function SuggestionNote({
   if (suggestion === null) {
     return (
       <p className="text-sm wrap-break-word text-muted-foreground">
-        The saved suggestion could not be loaded; the box starts blank.
+        {matchRef === null
+          ? "The saved suggestion could not be loaded; the box starts blank."
+          : `The saved suggestion (answer ${matchRef.answerId} v${matchRef.answerVersion}) could not be loaded; the box starts blank.`}
       </p>
     )
   }
   return (
     <p className="text-sm wrap-break-word text-muted-foreground">
-      {saved
-        ? "A saved suggestion exists for this question; the box shows the stored value."
-        : "Prefilled from a saved suggestion; change it or clear the box before saving."}
+      {matchRef === null
+        ? "A suggestion exists for this question."
+        : saved
+          ? `A saved suggestion (answer ${matchRef.answerId} v${matchRef.answerVersion}) exists for this question; the box shows the stored value.`
+          : `Suggested from saved answer ${matchRef.answerId} v${matchRef.answerVersion}; the box is unsaved until you save or continue.`}
     </p>
   )
 }
@@ -879,11 +1060,14 @@ function AnswerStatus({
   if (save.dirty) return <>Unsaved changes.</>
   if (save.saved.version > 0 || savedVersion > 0) {
     const version = save.saved.version > 0 ? save.saved.version : savedVersion
-    return (
-      <>
-        {save.saved.state === "blank" ? "Blank saved" : "Saved"} · v{version}.
-      </>
-    )
+    if (save.saved.state === "blank")
+      return (
+        <>
+          Blank saved · v{version}
+          {save.saved.draftRequested ? " · draft requested" : ""}.
+        </>
+      )
+    return <>Saved · v{version}.</>
   }
   return <>Not answered yet.</>
 }

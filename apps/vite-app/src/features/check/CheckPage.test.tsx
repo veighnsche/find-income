@@ -138,6 +138,7 @@ interface CheckStubOptions {
   checks?: Record<string, CheckStatusView | null>
   activityPages?: Record<string, CheckActivityPage[]>
   postCheck?: (jobId: string, body: unknown) => Response
+  postCommit?: (jobId: string) => Response
 }
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -203,6 +204,11 @@ function stubCheckFetch(options: CheckStubOptions = {}): {
         if (suffix === "/checks" && method === "POST") {
           if (options.postCheck !== undefined)
             return options.postCheck(id, body === null ? null : JSON.parse(body))
+          return jsonResponse(500, { error: { message: "No stub handler." } })
+        }
+        if (suffix === "/answers/commit" && method === "POST") {
+          if (options.postCommit !== undefined)
+            return options.postCommit(id)
           return jsonResponse(500, { error: { message: "No stub handler." } })
         }
       }
@@ -679,6 +685,43 @@ describe("read-only mount and per-role independence", () => {
     for (const call of second.calls) expect(call.method).toBe("GET")
   })
 
+  it("labels saved requiredness and upload kinds without inventing answers", async () => {
+    stubCheckFetch({
+      opportunities: { "job-1": jobOne },
+      workflows: {
+        "job-1": roleWorkflowFixture("job-1", "checked", {
+          revision: 1,
+          opportunityRevision: 2,
+        }),
+      },
+      checks: {
+        "job-1": {
+          status: "checked",
+          check: checkFixture("job-1", "checked", {
+            questions: [
+              {
+                id: "q-1",
+                checkId: "check-job-1",
+                ordinal: 0,
+                text: "Why do you want this role?",
+                required: "unknown",
+                kind: "attachment",
+                sourceSpan: { captureId: "cap-1", start: 30, end: 58 },
+                sourceExcerpt: "Why do you want this role?",
+                textSha256: "abc123",
+              },
+            ],
+          }),
+        },
+      },
+    })
+    renderCheckPage("job-1")
+
+    expect(
+      await screen.findByText("requiredness unknown · upload")
+    ).toBeDefined()
+  })
+
   it("keeps two roles independent across reads and starts", async () => {
     const posts: { url: string; body: unknown }[] = []
     const options = baseOptions()
@@ -709,5 +752,166 @@ describe("read-only mount and per-role independence", () => {
     const payload = posts[0]?.body as Record<string, unknown>
     expect(payload["expectedOpportunityRevision"]).toBe(5)
     expect(payload["expectedWorkflowRevision"]).toBe(0)
+  })
+})
+
+describe("zero-question continuation", () => {
+  function zeroQuestionOptions(
+    judgment: "application_route" | "unresolved" | "other_contact",
+    stage: RoleWorkflowState["stage"] = "checked",
+    extra: Partial<CheckStubOptions> = {}
+  ): CheckStubOptions {
+    return {
+      opportunities: { "job-1": jobOne },
+      workflows: {
+        "job-1": roleWorkflowFixture("job-1", stage, {
+          revision: 1,
+          opportunityRevision: 2,
+        }),
+      },
+      checks: {
+        "job-1": {
+          status: "checked",
+          check: checkFixture("job-1", "checked", {
+            questions: [],
+            route: {
+              judgment,
+              kind: "direct",
+              destinationText: "Apply by email to jobs@example.com.",
+              sourceExcerpt: "Apply by email.",
+              observedAt: "2026-09-20T10:00:00Z",
+            },
+          }),
+        },
+      },
+      ...extra,
+    }
+  }
+
+  it("commits the empty set explicitly and continues to the same Prepare task", async () => {
+    const commits: string[] = []
+    const { calls } = stubCheckFetch(
+      zeroQuestionOptions("application_route", "checked", {
+        postCommit: (jobId) => {
+          commits.push(jobId)
+          return jsonResponse(
+            200,
+            roleWorkflowFixture("job-1", "answered", { revision: 3 })
+          )
+        },
+      })
+    )
+    window.location.hash = "#/jobs/job-1/check"
+    renderCheckPage("job-1")
+
+    expect(
+      await screen.findByText("No employer questions recorded.")
+    ).toBeDefined()
+    expect(
+      await screen.findByText("Apply by email to jobs@example.com.")
+    ).toBeDefined()
+    expect(
+      screen.queryByRole("link", { name: "Answer questions" })
+    ).toBeNull()
+    for (const call of calls) expect(call.method).toBe("GET")
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Continue to preparation" })
+    )
+    await waitFor(() =>
+      expect(window.location.hash).toBe("#/jobs/job-1/prepare")
+    )
+    expect(commits).toEqual(["job-1"])
+    const posts = calls.filter(
+      (call) =>
+        call.method === "POST" &&
+        call.url === "/api/v1/opportunities/job-1/answers/commit"
+    )
+    expect(posts).toHaveLength(1)
+    expect(posts[0]?.body).toBeNull()
+  })
+
+  it("holds an unresolved zero-question route with findings readable", async () => {
+    const { calls } = stubCheckFetch(zeroQuestionOptions("unresolved"))
+    renderCheckPage("job-1")
+
+    expect(
+      await screen.findByText("No verified application route")
+    ).toBeDefined()
+    expect(await screen.findByText("Saved vacancy")).toBeDefined()
+    expect(await screen.findByText("CV · required")).toBeDefined()
+    expect(
+      await screen.findByText("Salary band unconfirmed.")
+    ).toBeDefined()
+    expect(
+      screen.queryByRole("link", { name: "Answer questions" })
+    ).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: "Continue to preparation" })
+    ).toBeNull()
+    for (const call of calls) expect(call.method).toBe("GET")
+  })
+
+  it("holds an other-contact zero-question route without a bypass", async () => {
+    const { calls } = stubCheckFetch(zeroQuestionOptions("other_contact"))
+    renderCheckPage("job-1")
+
+    expect(
+      await screen.findByText("No verified application route")
+    ).toBeDefined()
+    expect(
+      screen.queryByRole("link", { name: "Answer questions" })
+    ).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: "Continue to preparation" })
+    ).toBeNull()
+    for (const call of calls) expect(call.method).toBe("GET")
+  })
+
+  it("stays held with the server message when the empty-set commit conflicts", async () => {
+    stubCheckFetch(
+      zeroQuestionOptions("application_route", "checked", {
+        postCommit: () =>
+          jsonResponse(409, {
+            error: { message: "The answer changed. Refresh and reconcile." },
+          }),
+      })
+    )
+    window.location.hash = "#/jobs/job-1/check"
+    renderCheckPage("job-1")
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Continue to preparation" })
+    )
+    expect(
+      await screen.findByText("The answer changed. Refresh and reconcile.")
+    ).toBeDefined()
+    expect(window.location.hash).toBe("#/jobs/job-1/check")
+  })
+
+  it("links already-committed zero-question roles to preparation without a write", async () => {
+    const { calls } = stubCheckFetch(
+      zeroQuestionOptions("application_route", "answered")
+    )
+    renderCheckPage("job-1")
+
+    const link = await screen.findByRole("link", {
+      name: "Open preparation",
+    })
+    expect(link.getAttribute("href")).toBe("#/jobs/job-1/prepare")
+    expect(
+      screen.queryByRole("button", { name: "Continue to preparation" })
+    ).toBeNull()
+    for (const call of calls) expect(call.method).toBe("GET")
+  })
+
+  it("links handoff-saved zero-question roles to the saved handoff", async () => {
+    stubCheckFetch(zeroQuestionOptions("application_route", "handoff_saved"))
+    renderCheckPage("job-1")
+
+    const link = await screen.findByRole("link", {
+      name: "Open saved handoff",
+    })
+    expect(link.getAttribute("href")).toBe("#/jobs/job-1/handoff")
   })
 })

@@ -8,6 +8,7 @@ import {
   type CheckStatusView,
   type CheckView,
   type ResearchActivityEvent,
+  type RoleWorkflowState,
 } from "@/api/client"
 import { useSession } from "@/api/session"
 import {
@@ -19,6 +20,7 @@ import { StageExplainer } from "@/components/shared/stage-explainer"
 import { Button } from "@/components/ui/button"
 import { CheckActivityFeed } from "@/features/check/check-activity-feed"
 import { useCheckStart } from "@/features/check/useCheckStart"
+import { ZeroQuestionContinuation } from "@/features/check/zero-question-continuation"
 import type { MuseReadiness } from "@/features/discovery/muse-state"
 import { formatDate } from "@/pages/format"
 import { RoleStageIndicator } from "@/pages/role-stages"
@@ -26,11 +28,13 @@ import { useRead } from "@/pages/useRead"
 
 // CheckPage is the D2 check job details page for one role, reached by deep
 // link (#/jobs/:id/check, registered by the coordinator). Mount, reads and
-// reloads are GET-only and never start a check; the only mutation is the
-// explicit start control, which posts the requestKey plus the expected
-// revisions observed from the reads below. All state is keyed by jobId and
-// the detail section remounts per role, so each role advances independently.
-// An optional Contributor readiness disables the start control with the
+// reloads are GET-only and never start a check, match, commit or prepare;
+// the only mutations are the explicit start control (requestKey plus the
+// expected revisions observed from the reads below) and, for a verified
+// zero-question route, the explicit empty-set commit that continues to the
+// same job's Prepare task. All state is keyed by jobId and the detail
+// section remounts per role, so each role advances independently. An
+// optional Contributor readiness disables the start control with the
 // blocking code when the tier is not ready.
 export function CheckPage({
   jobId,
@@ -103,6 +107,7 @@ export function CheckPage({
             jobId={jobId}
             opportunityRevision={opportunity.data.opportunity.revision}
             workflowRevision={workflow.data.revision}
+            workflowStage={workflow.data.stage}
             contributor={contributor}
             onStarted={workflow.retry}
           />
@@ -116,12 +121,14 @@ function CheckDetailSection({
   jobId,
   opportunityRevision,
   workflowRevision,
+  workflowStage,
   contributor,
   onStarted,
 }: {
   jobId: string
   opportunityRevision: number
   workflowRevision: number
+  workflowStage: RoleWorkflowState["stage"]
   contributor?: MuseReadiness | null
   onStarted: () => void
 }) {
@@ -198,6 +205,7 @@ function CheckDetailSection({
         status={check.data}
         opportunityRevision={opportunityRevision}
         workflowRevision={workflowRevision}
+        workflowStage={workflowStage}
         contributor={contributor}
         onStarted={() => {
           refreshAll()
@@ -242,6 +250,7 @@ function CheckStatusSection({
   status,
   opportunityRevision,
   workflowRevision,
+  workflowStage,
   contributor,
   onStarted,
   onRefresh,
@@ -250,6 +259,7 @@ function CheckStatusSection({
   status: CheckStatusView
   opportunityRevision: number
   workflowRevision: number
+  workflowStage: RoleWorkflowState["stage"]
   contributor?: MuseReadiness | null
   onStarted: () => void
   onRefresh: () => void
@@ -333,14 +343,11 @@ function CheckStatusSection({
           ) : (
             <>
               <CheckEvidence check={status.check} />
-              <p>
-                <a
-                  href={`#/jobs/${encodeURIComponent(jobId)}/answers`}
-                  className="text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                  Answer questions
-                </a>
-              </p>
+              <CheckedContinuation
+                jobId={jobId}
+                check={status.check}
+                workflowStage={workflowStage}
+              />
             </>
           )}
           <div>
@@ -420,6 +427,43 @@ function CheckStatusSection({
   }
 }
 
+// CheckedContinuation routes a completed check by its verified content:
+// actual employer questions lead to Answers; a verified zero-question
+// application route offers the explicit empty-set commit to the same
+// Prepare task; a zero-question check without a verified application
+// route stays held with its findings readable and no bypass.
+function CheckedContinuation({
+  jobId,
+  check,
+  workflowStage,
+}: {
+  jobId: string
+  check: CheckView
+  workflowStage: RoleWorkflowState["stage"]
+}) {
+  if (check.questions.length > 0) {
+    return (
+      <p>
+        <a
+          href={`#/jobs/${encodeURIComponent(jobId)}/answers`}
+          className="text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          Answer questions
+        </a>
+      </p>
+    )
+  }
+  if (check.route.judgment === "application_route") {
+    return <ZeroQuestionContinuation jobId={jobId} stage={workflowStage} />
+  }
+  return (
+    <EmptyBlock
+      title="No verified application route"
+      description={`The check completed with zero employer questions, but the route judgment is “${check.route.judgment}”, so there is no verified application to continue. The saved vacancy, route, documents and gaps above stay readable; answering and preparation stay closed rather than guessing a destination.`}
+    />
+  )
+}
+
 function StartCheckControls({
   jobId,
   label,
@@ -476,6 +520,40 @@ function StartCheckControls({
       ) : null}
     </div>
   )
+}
+
+// Saved requiredness/kind wording: unknown requiredness stays unknown
+// (never upgraded to required or relaxed to optional), and an upload
+// question is an upload — the owner attaches the file manually at
+// Handoff; it is never a pasteable text answer.
+function checkQuestionRequiredLabel(
+  required: CheckView["questions"][number]["required"]
+): string {
+  switch (required) {
+    case "required":
+      return "required"
+    case "optional":
+      return "optional"
+    default:
+      return "requiredness unknown"
+  }
+}
+
+function checkQuestionKindLabel(
+  kind: CheckView["questions"][number]["kind"]
+): string | null {
+  switch (kind) {
+    case "free_text":
+      return "text answer"
+    case "choice":
+      return "choice"
+    case "attachment":
+      return "upload"
+    case "other":
+      return "other"
+    default:
+      return null
+  }
 }
 
 function CheckEvidence({ check }: { check: CheckView }) {
@@ -607,8 +685,10 @@ function CheckEvidence({ check }: { check: CheckView }) {
                 </p>
                 <p className="wrap-break-word">{question.text}</p>
                 <p className="mt-1 text-xs text-muted-foreground wrap-break-word">
-                  {question.required}
-                  {question.kind === undefined ? "" : ` · ${question.kind}`}
+                  {checkQuestionRequiredLabel(question.required)}
+                  {checkQuestionKindLabel(question.kind) === null
+                    ? ""
+                    : ` · ${checkQuestionKindLabel(question.kind)}`}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground wrap-break-word">
                   Source: {question.sourceSpan.captureId} · chars{" "}

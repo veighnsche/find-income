@@ -6,6 +6,7 @@ import {
   type CheckStatusView,
 } from "@/api/client"
 import { useSession } from "@/api/session"
+import { notifyAccepted } from "@/components/shared/invalidation"
 
 // Request-key generator for explicit check starts. UUIDs keep the key
 // opaque and well under the 200-char schema limit; the fallback only
@@ -120,6 +121,8 @@ export function useCheckStart({
       (view) => {
         pendingKeyRef.current = null
         setStarting(false)
+        // Accepted write: refresh check/workflow projections everywhere.
+        notifyAccepted("check", "workflows")
         onStarted?.(view)
       },
       (cause: unknown) => {

@@ -18,6 +18,7 @@ import type {
   SavedAnswer,
 } from "@/api/client"
 import { SessionProvider } from "@/api/session"
+import { clearAnswerDraftsForJob } from "@/components/shared"
 import { AnswersPage } from "@/features/answers/AnswersPage"
 import { buildAnswerValueSave } from "@/features/answers/useAnswerSave"
 import { roleWorkflowFixture, sessionFixture } from "@/pages/fixtures"
@@ -25,6 +26,10 @@ import { roleWorkflowFixture, sessionFixture } from "@/pages/fixtures"
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  // Drafts survive unmounts by design; clear the jobs this file uses so
+  // one test's dirty text never leaks into the next.
+  clearAnswerDraftsForJob("job-1")
+  clearAnswerDraftsForJob("job-2")
 })
 
 const SUGGESTED_TEXT = "I work remotely from Example City."
@@ -215,7 +220,12 @@ interface AnswersStubOptions {
   matches?: Record<string, AnswerMatchView | null>
   values?: Record<string, QuestionAnswerList | null>
   answers?: Record<string, SavedAnswer | null>
-  putAnswer?: (jobId: string, questionId: string, body: unknown) => Response
+  putAnswer?: (
+    jobId: string,
+    questionId: string,
+    body: unknown
+  ) => Response | Promise<Response>
+  postCommit?: (jobId: string) => Response
   matchConflict?: boolean
 }
 
@@ -310,11 +320,16 @@ function stubAnswersFetch(options: AnswersStubOptions = {}): {
         const putMatch = suffix.match(/^\/questions\/([^/]+)\/answer$/)
         if (putMatch?.[1] !== undefined && method === "PUT") {
           if (options.putAnswer !== undefined)
-            return options.putAnswer(
+            return await options.putAnswer(
               id,
               decodeURIComponent(putMatch[1]),
               body === null ? null : JSON.parse(body)
             )
+          return jsonResponse(500, { error: { message: "No stub handler." } })
+        }
+        if (suffix === "/answers/commit" && method === "POST") {
+          if (options.postCommit !== undefined)
+            return options.postCommit(id)
           return jsonResponse(500, { error: { message: "No stub handler." } })
         }
       }
@@ -366,6 +381,22 @@ describe("answer value payloads", () => {
     expect(buildAnswerValueSave(0, "  spaced ✅ \n")).toEqual({
       expectedAnswerVersion: 0,
       text: "  spaced ✅ \n",
+    })
+  })
+
+  it("carries a draft request on explicit blanks only", () => {
+    expect(buildAnswerValueSave(0, "", true)).toEqual({
+      expectedAnswerVersion: 0,
+      text: "",
+      draftRequested: true,
+    })
+    expect(buildAnswerValueSave(1, "", false)).toEqual({
+      expectedAnswerVersion: 1,
+      text: "",
+    })
+    expect(buildAnswerValueSave(1, "text", true)).toEqual({
+      expectedAnswerVersion: 1,
+      text: "text",
     })
   })
 })
@@ -433,6 +464,74 @@ describe("answers page reads", () => {
     expect(
       await screen.findByText(/Suggested match, edited by owner/)
     ).toBeDefined()
+  })
+
+  it("names the exact saved answer behind suggestions and stored values", async () => {
+    stubAnswersFetch(answeredOptions())
+    renderAnswersPage("job-1")
+
+    expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
+    expect(
+      await screen.findByText(
+        "Suggested from saved answer answer-remote v1; the box is unsaved until you save or continue."
+      )
+    ).toBeDefined()
+  })
+
+  it("shows the exact match behind a kept suggestion with its version", async () => {
+    stubAnswersFetch(
+      answeredOptions({
+        values: {
+          "job-1": {
+            checkId: "check-job-1",
+            questionSetSha256: "set-sha",
+            values: [valueFixture("q-remote")],
+          },
+        },
+      })
+    )
+    renderAnswersPage("job-1")
+
+    expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
+    expect(
+      await screen.findByText(/Suggested match, saved unchanged/)
+    ).toBeDefined()
+    expect(
+      await screen.findByText(/based on saved answer answer-remote v1/)
+    ).toBeDefined()
+  })
+
+  it("shows an explicit blank as saved, distinct from unset", async () => {
+    const { calls } = stubAnswersFetch(
+      answeredOptions({
+        values: {
+          "job-1": {
+            checkId: "check-job-1",
+            questionSetSha256: "set-sha",
+            values: [
+              valueFixture("q-start", {
+                required: "optional",
+                version: 2,
+                state: "blank",
+                text: "",
+                textSha256: "",
+                provenance: {
+                  origin: "carried_blank",
+                  editedAt: "2026-09-22T10:00:00Z",
+                  editedBy: { actorKind: "administrator", actorId: "owner" },
+                },
+              }),
+            ],
+          },
+        },
+      })
+    )
+    renderAnswersPage("job-1")
+
+    expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
+    expect(await screen.findByText("Blank saved · v2.")).toBeDefined()
+    expect(await screen.findByText(/Explicitly left blank/)).toBeDefined()
+    for (const call of calls) expect(call.method).toBe("GET")
   })
 })
 
@@ -531,6 +630,74 @@ describe("answers page saves", () => {
     await waitFor(() => expect(seen).toHaveLength(1))
     expect(seen[0]).toEqual({ expectedAnswerVersion: 0, text: "" })
     expect(await screen.findByText("Blank saved · v1.")).toBeDefined()
+  })
+
+  it("saves a required blank with an explicit draft request", async () => {
+    const seen: unknown[] = []
+    stubAnswersFetch(
+      answeredOptions({
+        putAnswer: (_jobId, questionId, body) => {
+          seen.push(body)
+          return jsonResponse(
+            200,
+            valueFixture(questionId, {
+              version: 1,
+              state: "blank",
+              text: "",
+              textSha256: "",
+              draftRequested: true,
+              provenance: {
+                origin: "carried_blank",
+                matchId: "run-1",
+                editedAt: "2026-09-22T11:00:00Z",
+                editedBy: { actorKind: "administrator", actorId: "owner" },
+              },
+            })
+          )
+        },
+      })
+    )
+    renderAnswersPage("job-1")
+
+    const box = (await screen.findByDisplayValue(
+      SUGGESTED_TEXT
+    )) as HTMLTextAreaElement
+    fireEvent.change(box, { target: { value: "" } })
+    fireEvent.click(
+      await screen.findByRole("checkbox", {
+        name: "Leave blank and request drafting during Prepare from verified facts",
+      })
+    )
+    fireEvent.click(
+      (
+        await screen.findAllByRole("button", { name: "Save answer" })
+      )[0] as HTMLElement
+    )
+
+    await waitFor(() => expect(seen).toHaveLength(1))
+    expect(seen[0]).toEqual({
+      expectedAnswerVersion: 0,
+      text: "",
+      draftRequested: true,
+    })
+    expect(
+      await screen.findByText("Blank saved · v1 · draft requested.")
+    ).toBeDefined()
+    expect(
+      await screen.findByText(/draft requested for Prepare/)
+    ).toBeDefined()
+  })
+
+  it("offers no draft request on optional blanks or filled boxes", async () => {
+    stubAnswersFetch(answeredOptions())
+    renderAnswersPage("job-1")
+
+    const boxes = (await screen.findAllByLabelText(
+      "Your answer"
+    )) as HTMLTextAreaElement[]
+    expect(boxes).toHaveLength(2)
+    // q-remote is required but prefilled; q-start is optional and blank.
+    expect(screen.queryByRole("checkbox")).toBeNull()
   })
 
   it("reports a version conflict without losing the box text", async () => {
@@ -841,25 +1008,101 @@ describe("answers journey flow", () => {
     expect(screen.queryByDisplayValue(SUGGESTED_TEXT)).toBeNull()
   })
 
-  it("continues to preparation with clean boxes and no writes", async () => {
-    const { calls } = stubAnswersFetch(answeredOptions())
+  it("persists untouched suggestions and blanks, commits, then continues", async () => {
+    const puts: Array<{ questionId: string; body: unknown }> = []
+    const commits: string[] = []
+    const { calls } = stubAnswersFetch(
+      answeredOptions({
+        putAnswer: (_jobId, questionId, body) => {
+          puts.push({ questionId, body })
+          const payload = body as {
+            expectedAnswerVersion: number
+            text: string
+          }
+          const kept = payload.text === SUGGESTED_TEXT
+          return jsonResponse(
+            200,
+            valueFixture(questionId, {
+              version: payload.expectedAnswerVersion + 1,
+              state: payload.text === "" ? "blank" : "answered",
+              text: payload.text,
+              provenance: kept
+                ? {
+                    origin: "jev_suggestion",
+                    matchId: "run-1",
+                    matchChoice: {
+                      answerId: "answer-remote",
+                      answerVersion: 1,
+                      textSha256: "text-sha",
+                    },
+                    editedAt: "2026-09-22T11:00:00Z",
+                    editedBy: { actorKind: "administrator", actorId: "owner" },
+                  }
+                : {
+                    origin:
+                      payload.text === "" ? "carried_blank" : "owner_written",
+                    editedAt: "2026-09-22T11:00:00Z",
+                    editedBy: { actorKind: "administrator", actorId: "owner" },
+                  },
+            })
+          )
+        },
+        postCommit: (jobId) => {
+          commits.push(jobId)
+          return jsonResponse(
+            200,
+            roleWorkflowFixture("job-1", "answered", { revision: 3 })
+          )
+        },
+      })
+    )
     window.location.hash = "#/jobs/job-1/answers"
     renderAnswersPage("job-1")
 
+    // Untouched: q-remote holds the suggestion, q-start is blank.
     expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
     fireEvent.click(
-      screen.getByRole("button", { name: "Prepare materials" })
+      screen.getByRole("button", { name: "Save, commit and continue" })
     )
+
     await waitFor(() =>
       expect(window.location.hash).toBe("#/jobs/job-1/prepare")
     )
-    for (const call of calls) {
-      expect(call.method).toBe("GET")
-    }
+    // The untouched suggestion persists byte-identically (keep) and the
+    // empty optional box persists an explicit blank — nothing is dropped.
+    expect(puts).toHaveLength(2)
+    expect(puts[0]).toEqual({
+      questionId: "q-remote",
+      body: { expectedAnswerVersion: 0, text: SUGGESTED_TEXT },
+    })
+    expect(puts[1]).toEqual({
+      questionId: "q-start",
+      body: { expectedAnswerVersion: 0, text: "" },
+    })
+    expect(commits).toEqual(["job-1"])
+    const commitPosts = calls.filter(
+      (call) =>
+        call.method === "POST" &&
+        call.url === "/api/v1/opportunities/job-1/answers/commit"
+    )
+    expect(commitPosts).toHaveLength(1)
+    // No library promotion and no Prepare start from this page.
+    expect(
+      calls.some(
+        (call) => call.method === "POST" && call.url === "/api/v1/answers"
+      )
+    ).toBe(false)
+    expect(
+      calls.some(
+        (call) =>
+          call.url.includes("/materials/") || call.url.includes("/artifacts/")
+      )
+    ).toBe(false)
   })
 
-  it("commits every dirty box before continuing to preparation", async () => {
+  it("saves every dirty box, then commits, before continuing", async () => {
     const seen: Array<{ questionId: string; body: unknown }> = []
+    const commits: string[] = []
     stubAnswersFetch(
       answeredOptions({
         putAnswer: (_jobId, questionId, body) => {
@@ -882,6 +1125,13 @@ describe("answers journey flow", () => {
             })
           )
         },
+        postCommit: (jobId) => {
+          commits.push(jobId)
+          return jsonResponse(
+            200,
+            roleWorkflowFixture("job-1", "answered", { revision: 3 })
+          )
+        },
       })
     )
     window.location.hash = "#/jobs/job-1/answers"
@@ -897,7 +1147,7 @@ describe("answers journey flow", () => {
       target: { value: "Two weeks." },
     })
     fireEvent.click(
-      screen.getByRole("button", { name: "Prepare materials" })
+      screen.getByRole("button", { name: "Save, commit and continue" })
     )
 
     await waitFor(() =>
@@ -912,9 +1162,11 @@ describe("answers journey flow", () => {
       questionId: "q-start",
       body: { expectedAnswerVersion: 0, text: "Two weeks." },
     })
+    expect(commits).toEqual(["job-1"])
   })
 
   it("holds the continuation on a partial save failure and keeps the text", async () => {
+    const commits: string[] = []
     stubAnswersFetch(
       answeredOptions({
         putAnswer: (_jobId, questionId, body) => {
@@ -935,6 +1187,13 @@ describe("answers journey flow", () => {
             })
           )
         },
+        postCommit: (jobId) => {
+          commits.push(jobId)
+          return jsonResponse(
+            200,
+            roleWorkflowFixture("job-1", "answered", { revision: 3 })
+          )
+        },
       })
     )
     window.location.hash = "#/jobs/job-1/answers"
@@ -950,7 +1209,7 @@ describe("answers journey flow", () => {
       target: { value: "Two weeks." },
     })
     fireEvent.click(
-      screen.getByRole("button", { name: "Prepare materials" })
+      screen.getByRole("button", { name: "Save, commit and continue" })
     )
 
     await screen.findByText(/Could not save Question 2\./)
@@ -958,5 +1217,358 @@ describe("answers journey flow", () => {
     expect(
       (screen.getAllByLabelText("Your answer")[1] as HTMLTextAreaElement).value
     ).toBe("Two weeks.")
+    // A partial save never reaches the commit.
+    expect(commits).toHaveLength(0)
+  })
+})
+
+describe("answers draft preservation", () => {
+  it("preserves dirty text across rematching", async () => {
+    stubAnswersFetch(answeredOptions({ matches: { "job-1": null } }))
+    renderAnswersPage("job-1")
+
+    const boxes = (await screen.findAllByLabelText(
+      "Your answer"
+    )) as HTMLTextAreaElement[]
+    expect(boxes).toHaveLength(2)
+    fireEvent.change(boxes[1] as HTMLTextAreaElement, {
+      target: { value: "Typed before rematch." },
+    })
+    fireEvent.click(
+      screen.getByRole("button", { name: "Match saved answers" })
+    )
+
+    // The rematch prefills q-remote; the dirty q-start text survives the
+    // refresh that unmounts and remounts the boxes.
+    expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
+    expect(
+      (screen.getAllByLabelText("Your answer")[1] as HTMLTextAreaElement).value
+    ).toBe("Typed before rematch.")
+  })
+
+  it("preserves dirty text across navigation, scoped to the exact job", async () => {
+    const options: AnswersStubOptions = {
+      opportunities: {
+        "job-1": opportunityFixture("job-1"),
+        "job-2": opportunityFixture("job-2"),
+      },
+      workflows: {
+        "job-1": roleWorkflowFixture("job-1", "checked", { revision: 1 }),
+        "job-2": roleWorkflowFixture("job-2", "checked", { revision: 1 }),
+      },
+      checks: {
+        "job-1": checkFixture("job-1", "checked"),
+        "job-2": checkFixture("job-2", "checked"),
+      },
+      matches: {
+        "job-1": matchFixture("check-job-1"),
+        "job-2": matchFixture("check-job-2"),
+      },
+      values: {
+        "job-1": {
+          checkId: "check-job-1",
+          questionSetSha256: "set-sha",
+          values: [],
+        },
+        "job-2": {
+          checkId: "check-job-2",
+          questionSetSha256: "set-sha",
+          values: [],
+        },
+      },
+      answers: {
+        "answer-remote": savedAnswerFixture("answer-remote", SUGGESTED_TEXT),
+      },
+    }
+    stubAnswersFetch(options)
+    const first = renderAnswersPage("job-1")
+    const boxes = (await screen.findAllByLabelText(
+      "Your answer"
+    )) as HTMLTextAreaElement[]
+    fireEvent.change(boxes[1] as HTMLTextAreaElement, {
+      target: { value: "Keep me." },
+    })
+    first.unmount()
+    cleanup()
+
+    stubAnswersFetch(options)
+    const second = renderAnswersPage("job-2")
+    const other = (await screen.findAllByLabelText(
+      "Your answer"
+    )) as HTMLTextAreaElement[]
+    // Another job never receives job-1's draft.
+    expect(other[1]?.value).toBe("")
+    second.unmount()
+    cleanup()
+
+    stubAnswersFetch(options)
+    renderAnswersPage("job-1")
+    expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
+    expect(
+      (screen.getAllByLabelText("Your answer")[1] as HTMLTextAreaElement).value
+    ).toBe("Keep me.")
+  })
+
+  it("never applies one check's draft to a new check", async () => {
+    stubAnswersFetch(answeredOptions())
+    const first = renderAnswersPage("job-1")
+    const boxes = (await screen.findAllByLabelText(
+      "Your answer"
+    )) as HTMLTextAreaElement[]
+    fireEvent.change(boxes[0] as HTMLTextAreaElement, {
+      target: { value: "Old-check edit." },
+    })
+    first.unmount()
+    cleanup()
+
+    const next = checkFixture("job-1", "checked")
+    next.check!.id = "check-job-1b"
+    for (const question of next.check!.questions)
+      question.checkId = "check-job-1b"
+    stubAnswersFetch(
+      answeredOptions({
+        checks: { "job-1": next },
+        matches: { "job-1": matchFixture("check-job-1b") },
+        values: {
+          "job-1": {
+            checkId: "check-job-1b",
+            questionSetSha256: "set-sha",
+            values: [],
+          },
+        },
+      })
+    )
+    renderAnswersPage("job-1")
+    expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
+    expect(screen.queryByDisplayValue("Old-check edit.")).toBeNull()
+  })
+
+  it("freezes editors until the save→commit sequence completes", async () => {
+    let release!: (response: Response) => void
+    const gate = new Promise<Response>((resolve) => {
+      release = resolve
+    })
+    stubAnswersFetch(
+      answeredOptions({
+        putAnswer: (_jobId, questionId, body) => {
+          const payload = body as {
+            expectedAnswerVersion: number
+            text: string
+          }
+          return gate.then(() =>
+            jsonResponse(
+              200,
+              valueFixture(questionId, {
+                version: payload.expectedAnswerVersion + 1,
+                state: payload.text === "" ? "blank" : "answered",
+                text: payload.text,
+                provenance: {
+                  origin: "owner_written",
+                  editedAt: "2026-09-22T11:00:00Z",
+                  editedBy: { actorKind: "administrator", actorId: "owner" },
+                },
+              })
+            )
+          )
+        },
+        postCommit: (jobId) =>
+          jsonResponse(
+            200,
+            roleWorkflowFixture(jobId, "answered", { revision: 3 })
+          ),
+      })
+    )
+    window.location.hash = "#/jobs/job-1/answers"
+    renderAnswersPage("job-1")
+
+    const boxes = (await screen.findAllByLabelText(
+      "Your answer"
+    )) as HTMLTextAreaElement[]
+    fireEvent.change(boxes[1] as HTMLTextAreaElement, {
+      target: { value: "Frozen input." },
+    })
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save, commit and continue" })
+    )
+
+    // While the saves are delayed, every editor and match control blocks.
+    await waitFor(() =>
+      expect(
+        (screen.getAllByLabelText("Your answer")[0] as HTMLTextAreaElement)
+          .disabled
+      ).toBe(true)
+    )
+    for (const box of screen.getAllByLabelText("Your answer"))
+      expect((box as HTMLTextAreaElement).disabled).toBe(true)
+    for (const button of screen.getAllByRole("button", { name: "Save answer" }))
+      expect((button as HTMLButtonElement).disabled).toBe(true)
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Re-run answer matching",
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true)
+
+    release(jsonResponse(200, {}))
+    await waitFor(() =>
+      expect(window.location.hash).toBe("#/jobs/job-1/prepare")
+    )
+  })
+})
+
+describe("answers commit holds", () => {
+  function savingOptions(
+    postCommit: (jobId: string) => Response
+  ): AnswersStubOptions {
+    return answeredOptions({
+      putAnswer: (_jobId, questionId, body) => {
+        const payload = body as {
+          expectedAnswerVersion: number
+          text: string
+          draftRequested?: boolean
+        }
+        return jsonResponse(
+          200,
+          valueFixture(questionId, {
+            version: payload.expectedAnswerVersion + 1,
+            state: payload.text === "" ? "blank" : "answered",
+            text: payload.text,
+            draftRequested: payload.draftRequested ?? false,
+            provenance: {
+              origin:
+                payload.text === "" ? "carried_blank" : "owner_written",
+              editedAt: "2026-09-22T11:00:00Z",
+              editedBy: { actorKind: "administrator", actorId: "owner" },
+            },
+          })
+        )
+      },
+      postCommit,
+    })
+  }
+
+  it("holds on a required blank, then continues once drafting is requested", async () => {
+    const puts: Array<{ questionId: string; body: unknown }> = []
+    let commits = 0
+    const options = savingOptions(() => {
+      commits += 1
+      return commits === 1
+        ? jsonResponse(409, {
+            error: {
+              message:
+                "Required answers are missing; answer them before committing.",
+            },
+          })
+        : jsonResponse(
+            200,
+            roleWorkflowFixture("job-1", "answered", { revision: 3 })
+          )
+    })
+    const innerPut = options.putAnswer!
+    options.putAnswer = (_jobId, questionId, body) => {
+      puts.push({ questionId, body })
+      return innerPut(_jobId, questionId, body)
+    }
+    stubAnswersFetch(options)
+    window.location.hash = "#/jobs/job-1/answers"
+    renderAnswersPage("job-1")
+
+    const box = (await screen.findByDisplayValue(
+      SUGGESTED_TEXT
+    )) as HTMLTextAreaElement
+    fireEvent.change(box, { target: { value: "" } })
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save, commit and continue" })
+    )
+
+    expect(
+      await screen.findByText(
+        (_content, element) =>
+          element?.textContent ===
+          "The server held the commit: Required answers are missing; answer them before committing. Question 1 still needs an answer, or a draft request for Prepare."
+      )
+    ).toBeDefined()
+    expect(window.location.hash).toBe("#/jobs/job-1/answers")
+    expect(
+      (screen.getAllByLabelText("Your answer")[0] as HTMLTextAreaElement).value
+    ).toBe("")
+
+    // Request drafting for the blank required question and continue again:
+    // the retry guards on the accepted version, not the stale one.
+    fireEvent.click(
+      await screen.findByRole("checkbox", {
+        name: "Leave blank and request drafting during Prepare from verified facts",
+      })
+    )
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save, commit and continue" })
+    )
+    await waitFor(() =>
+      expect(window.location.hash).toBe("#/jobs/job-1/prepare")
+    )
+    expect(commits).toBe(2)
+    const remotePuts = puts.filter((put) => put.questionId === "q-remote")
+    expect(remotePuts).toHaveLength(2)
+    expect(remotePuts[0]?.body).toEqual({
+      expectedAnswerVersion: 0,
+      text: "",
+    })
+    expect(remotePuts[1]?.body).toEqual({
+      expectedAnswerVersion: 1,
+      text: "",
+      draftRequested: true,
+    })
+  })
+
+  it("reports a moved basis honestly when nothing is locally missing", async () => {
+    stubAnswersFetch(
+      savingOptions(() =>
+        jsonResponse(409, {
+          error: { message: "The answer changed. Refresh and reconcile." },
+        })
+      )
+    )
+    window.location.hash = "#/jobs/job-1/answers"
+    renderAnswersPage("job-1")
+
+    const boxes = (await screen.findAllByLabelText(
+      "Your answer"
+    )) as HTMLTextAreaElement[]
+    fireEvent.change(boxes[1] as HTMLTextAreaElement, {
+      target: { value: "Two weeks." },
+    })
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save, commit and continue" })
+    )
+
+    expect(
+      await screen.findByText(
+        (_content, element) =>
+          element?.textContent ===
+          "The server held the commit: The answer changed. Refresh and reconcile. The check or answers moved; reload the page and reconcile before continuing."
+      )
+    ).toBeDefined()
+    expect(window.location.hash).toBe("#/jobs/job-1/answers")
+    expect(
+      (screen.getAllByLabelText("Your answer")[0] as HTMLTextAreaElement).value
+    ).toBe(SUGGESTED_TEXT)
+  })
+
+  it("guides zero-question checks back to the check page without boxes", async () => {
+    const empty = checkFixture("job-1", "checked")
+    empty.check!.questions = []
+    const { calls } = stubAnswersFetch(
+      answeredOptions({ checks: { "job-1": empty } })
+    )
+    renderAnswersPage("job-1")
+
+    expect(await screen.findByText("No questions found")).toBeDefined()
+    const link = await screen.findByRole("link", {
+      name: "Return to the check page",
+    })
+    expect(link.getAttribute("href")).toBe("#/jobs/job-1/check")
+    expect(screen.queryAllByLabelText("Your answer")).toHaveLength(0)
+    for (const call of calls) expect(call.method).toBe("GET")
   })
 })
