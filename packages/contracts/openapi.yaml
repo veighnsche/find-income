@@ -1218,6 +1218,61 @@ paths:
             { application/json: { schema: { $ref: '#/components/schemas/MaterialVersion' } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/artifacts:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: listArtifactReadiness
+      summary: Read the per-type artifact readiness set for one role
+      description: Route-mapped readiness with current versions and derived form values. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Artifact readiness set
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/ArtifactReadinessSet' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/artifacts/{artifactType}:
+    parameters:
+      - { $ref: '#/components/parameters/RecordId' }
+      - name: artifactType
+        in: path
+        required: true
+        schema: { type: string, enum: [cv, cover_letter, email_subject, email_body, form_values] }
+    get:
+      operationId: getArtifactReadiness
+      summary: Read one artifact type readiness entry
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Artifact readiness entry
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/ArtifactReadinessEntry' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    put:
+      operationId: saveOpportunityArtifact
+      summary: Save an exact per-type artifact edit as a new version
+      description: Exact content, no LLM call; fenced on the current version. form_values is derived and rejected.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/ArtifactSaveRequest' } } }
+      responses:
+        '200':
+          description: Edited version saved
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/ArtifactView' } } }
+        '201':
+          description: First version saved
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/ArtifactView' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /opportunities/{id}/application-packs:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     get:
@@ -4256,6 +4311,74 @@ components:
         requestKey: { type: string, minLength: 1, maxLength: 200 }
         expectedVersion: { type: integer, format: int64, minimum: 1 }
         instruction: { type: string, maxLength: 2000 }
+    ArtifactAnswerRef:
+      type: object
+      required: [questionId, answerVersion]
+      properties:
+        questionId: { type: string }
+        answerVersion: { type: integer, format: int64, minimum: 0 }
+    ArtifactBasis:
+      type: object
+      required: [factIds, answerRefs, checkSpans]
+      properties:
+        factIds: { type: array, items: { type: string } }
+        answerRefs: { type: array, items: { $ref: '#/components/schemas/ArtifactAnswerRef' } }
+        checkSpans: { type: array, items: { $ref: '#/components/schemas/CheckSourceSpan' } }
+    ArtifactView:
+      type: object
+      required: [id, opportunityId, type, version, content, basis, createdAt, createdBy]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        type: { type: string, enum: [cv, cover_letter, email_subject, email_body] }
+        version: { type: integer, format: int64, minimum: 1 }
+        content: { type: string }
+        basis: { $ref: '#/components/schemas/ArtifactBasis' }
+        createdAt: { type: string, format: date-time }
+        createdBy:
+          type: object
+          required: [actorKind, actorId]
+          properties:
+            actorKind: { type: string }
+            actorId: { type: string }
+    ArtifactFormValue:
+      type: object
+      required: [questionId, questionText, required, kind, state, text]
+      properties:
+        questionId: { type: string }
+        questionText: { type: string }
+        required: { type: string, enum: [required, optional, unknown] }
+        kind: { type: string }
+        state: { type: string }
+        text: { type: string }
+    ArtifactReadinessEntry:
+      type: object
+      required: [type, required, state, reason]
+      properties:
+        type: { type: string, enum: [cv, cover_letter, email_subject, email_body, form_values] }
+        required: { type: boolean }
+        state: { type: string, enum: [ready, held, not_required, unresolved] }
+        reason: { type: string }
+        basis: { type: string }
+        current: { $ref: '#/components/schemas/ArtifactView' }
+        formValues: { type: array, items: { $ref: '#/components/schemas/ArtifactFormValue' } }
+    ArtifactReadinessSet:
+      type: object
+      required: [opportunityId, checkStatus, entries]
+      properties:
+        opportunityId: { type: string }
+        checkId: { type: string }
+        checkStatus: { type: string }
+        entries: { type: array, items: { $ref: '#/components/schemas/ArtifactReadinessEntry' } }
+    ArtifactSaveRequest:
+      type: object
+      additionalProperties: false
+      required: [requestKey, expectedVersion, content]
+      properties:
+        requestKey: { type: string, minLength: 1, maxLength: 200 }
+        expectedVersion: { type: integer, format: int64, minimum: 0 }
+        content: { type: string, minLength: 1, maxLength: 65536 }
+        basis: { $ref: '#/components/schemas/ArtifactBasis' }
     ResearchCaptureView:
       type: object
       required: [captureId, observedUrl, retrievedAt, status, mediaType, contentHash, extent]

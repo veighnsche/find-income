@@ -175,6 +175,102 @@ func (e ApplicationPackRelevanceScope) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactFormValueRequired.
+const (
+	ArtifactFormValueRequiredOptional ArtifactFormValueRequired = "optional"
+	ArtifactFormValueRequiredRequired ArtifactFormValueRequired = "required"
+	ArtifactFormValueRequiredUnknown  ArtifactFormValueRequired = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactFormValueRequired enum.
+func (e ArtifactFormValueRequired) Valid() bool {
+	switch e {
+	case ArtifactFormValueRequiredOptional:
+		return true
+	case ArtifactFormValueRequiredRequired:
+		return true
+	case ArtifactFormValueRequiredUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactReadinessEntryState.
+const (
+	ArtifactReadinessEntryStateHeld        ArtifactReadinessEntryState = "held"
+	ArtifactReadinessEntryStateNotRequired ArtifactReadinessEntryState = "not_required"
+	ArtifactReadinessEntryStateReady       ArtifactReadinessEntryState = "ready"
+	ArtifactReadinessEntryStateUnresolved  ArtifactReadinessEntryState = "unresolved"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactReadinessEntryState enum.
+func (e ArtifactReadinessEntryState) Valid() bool {
+	switch e {
+	case ArtifactReadinessEntryStateHeld:
+		return true
+	case ArtifactReadinessEntryStateNotRequired:
+		return true
+	case ArtifactReadinessEntryStateReady:
+		return true
+	case ArtifactReadinessEntryStateUnresolved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactReadinessEntryType.
+const (
+	ArtifactReadinessEntryTypeCoverLetter  ArtifactReadinessEntryType = "cover_letter"
+	ArtifactReadinessEntryTypeCv           ArtifactReadinessEntryType = "cv"
+	ArtifactReadinessEntryTypeEmailBody    ArtifactReadinessEntryType = "email_body"
+	ArtifactReadinessEntryTypeEmailSubject ArtifactReadinessEntryType = "email_subject"
+	ArtifactReadinessEntryTypeFormValues   ArtifactReadinessEntryType = "form_values"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactReadinessEntryType enum.
+func (e ArtifactReadinessEntryType) Valid() bool {
+	switch e {
+	case ArtifactReadinessEntryTypeCoverLetter:
+		return true
+	case ArtifactReadinessEntryTypeCv:
+		return true
+	case ArtifactReadinessEntryTypeEmailBody:
+		return true
+	case ArtifactReadinessEntryTypeEmailSubject:
+		return true
+	case ArtifactReadinessEntryTypeFormValues:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactViewType.
+const (
+	ArtifactViewTypeCoverLetter  ArtifactViewType = "cover_letter"
+	ArtifactViewTypeCv           ArtifactViewType = "cv"
+	ArtifactViewTypeEmailBody    ArtifactViewType = "email_body"
+	ArtifactViewTypeEmailSubject ArtifactViewType = "email_subject"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactViewType enum.
+func (e ArtifactViewType) Valid() bool {
+	switch e {
+	case ArtifactViewTypeCoverLetter:
+		return true
+	case ArtifactViewTypeCv:
+		return true
+	case ArtifactViewTypeEmailBody:
+		return true
+	case ArtifactViewTypeEmailSubject:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CheckBlockedReasonCode.
 const (
 	CheckBlockedReasonCodeOther               CheckBlockedReasonCode = "other"
@@ -900,26 +996,6 @@ func (e MuseRunReportTier) Valid() bool {
 		return false
 	}
 }
-
-// Defines values for OfferExactRangeKind.
-
-// Valid indicates whether the value is a known member of the OfferExactRangeKind enum.
-
-// Defines values for OfferHolidayTermTreatment.
-
-// Valid indicates whether the value is a known member of the OfferHolidayTermTreatment enum.
-
-// Defines values for OfferPayPairStatus.
-
-// Valid indicates whether the value is a known member of the OfferPayPairStatus enum.
-
-// Defines values for OfferPayTermAmountKind.
-
-// Valid indicates whether the value is a known member of the OfferPayTermAmountKind enum.
-
-// Defines values for OfferReviewAlternativeKind.
-
-// Valid indicates whether the value is a known member of the OfferReviewAlternativeKind enum.
 
 // Defines values for OpportunityKind.
 const (
@@ -2378,16 +2454,16 @@ func (e ListOpportunitiesParamsKind) Valid() bool {
 
 // Defines values for ExplainResearchIdentityParamsSubjectKind.
 const (
-	ExplainResearchIdentityParamsSubjectKindEmployer ExplainResearchIdentityParamsSubjectKind = "employer"
-	ExplainResearchIdentityParamsSubjectKindVacancy  ExplainResearchIdentityParamsSubjectKind = "vacancy"
+	Employer ExplainResearchIdentityParamsSubjectKind = "employer"
+	Vacancy  ExplainResearchIdentityParamsSubjectKind = "vacancy"
 )
 
 // Valid indicates whether the value is a known member of the ExplainResearchIdentityParamsSubjectKind enum.
 func (e ExplainResearchIdentityParamsSubjectKind) Valid() bool {
 	switch e {
-	case ExplainResearchIdentityParamsSubjectKindEmployer:
+	case Employer:
 		return true
-	case ExplainResearchIdentityParamsSubjectKindVacancy:
+	case Vacancy:
 		return true
 	default:
 		return false
@@ -2703,6 +2779,83 @@ type ArchiveRequest struct {
 	ExpectedRevision int64 `json:"expectedRevision"`
 }
 
+// ArtifactAnswerRef defines model for ArtifactAnswerRef.
+type ArtifactAnswerRef struct {
+	AnswerVersion int64  `json:"answerVersion"`
+	QuestionId    string `json:"questionId"`
+}
+
+// ArtifactBasis defines model for ArtifactBasis.
+type ArtifactBasis struct {
+	AnswerRefs []ArtifactAnswerRef `json:"answerRefs"`
+	CheckSpans []CheckSourceSpan   `json:"checkSpans"`
+	FactIds    []string            `json:"factIds"`
+}
+
+// ArtifactFormValue defines model for ArtifactFormValue.
+type ArtifactFormValue struct {
+	Kind         string                    `json:"kind"`
+	QuestionId   string                    `json:"questionId"`
+	QuestionText string                    `json:"questionText"`
+	Required     ArtifactFormValueRequired `json:"required"`
+	State        string                    `json:"state"`
+	Text         string                    `json:"text"`
+}
+
+// ArtifactFormValueRequired defines model for ArtifactFormValue.Required.
+type ArtifactFormValueRequired string
+
+// ArtifactReadinessEntry defines model for ArtifactReadinessEntry.
+type ArtifactReadinessEntry struct {
+	Basis      *string                     `json:"basis,omitempty"`
+	Current    *ArtifactView               `json:"current,omitempty"`
+	FormValues *[]ArtifactFormValue        `json:"formValues,omitempty"`
+	Reason     string                      `json:"reason"`
+	Required   bool                        `json:"required"`
+	State      ArtifactReadinessEntryState `json:"state"`
+	Type       ArtifactReadinessEntryType  `json:"type"`
+}
+
+// ArtifactReadinessEntryState defines model for ArtifactReadinessEntry.State.
+type ArtifactReadinessEntryState string
+
+// ArtifactReadinessEntryType defines model for ArtifactReadinessEntry.Type.
+type ArtifactReadinessEntryType string
+
+// ArtifactReadinessSet defines model for ArtifactReadinessSet.
+type ArtifactReadinessSet struct {
+	CheckId       *string                  `json:"checkId,omitempty"`
+	CheckStatus   string                   `json:"checkStatus"`
+	Entries       []ArtifactReadinessEntry `json:"entries"`
+	OpportunityId string                   `json:"opportunityId"`
+}
+
+// ArtifactSaveRequest defines model for ArtifactSaveRequest.
+type ArtifactSaveRequest struct {
+	Basis           *ArtifactBasis `json:"basis,omitempty"`
+	Content         string         `json:"content"`
+	ExpectedVersion int64          `json:"expectedVersion"`
+	RequestKey      string         `json:"requestKey"`
+}
+
+// ArtifactView defines model for ArtifactView.
+type ArtifactView struct {
+	Basis     ArtifactBasis `json:"basis"`
+	Content   string        `json:"content"`
+	CreatedAt time.Time     `json:"createdAt"`
+	CreatedBy struct {
+		ActorId   string `json:"actorId"`
+		ActorKind string `json:"actorKind"`
+	} `json:"createdBy"`
+	Id            string           `json:"id"`
+	OpportunityId string           `json:"opportunityId"`
+	Type          ArtifactViewType `json:"type"`
+	Version       int64            `json:"version"`
+}
+
+// ArtifactViewType defines model for ArtifactView.Type.
+type ArtifactViewType string
+
 // CheckActivityPage defines model for CheckActivityPage.
 type CheckActivityPage struct {
 	Events     []ResearchActivityEvent `json:"events"`
@@ -2959,8 +3112,6 @@ type CreatedAgentCredential struct {
 	// Token Only returned at creation; store securely.
 	Token string `json:"token"`
 }
-
-// Notes Complete owner reported debrief notes
 
 // ErrorEnvelope defines model for ErrorEnvelope.
 type ErrorEnvelope struct {
@@ -3330,16 +3481,6 @@ type MuseRunReportOutcome string
 // MuseRunReportTier defines model for MuseRunReport.Tier.
 type MuseRunReportTier string
 
-// OfferExactRangeKind defines model for OfferExactRange.Kind.
-
-// OfferHolidayTermTreatment defines model for OfferHolidayTerm.Treatment.
-
-// OfferPayPairStatus defines model for OfferPayPair.Status.
-
-// OfferPayTermAmountKind defines model for OfferPayTerm.AmountKind.
-
-// OfferReviewAlternativeKind defines model for OfferReviewAlternative.Kind.
-
 // Opportunity defines model for Opportunity.
 type Opportunity struct {
 	ArchivedAt *time.Time `json:"archivedAt,omitempty"`
@@ -3658,8 +3799,6 @@ type PreferencesResponse struct {
 	Timezone            string              `json:"timezone"`
 	Version             int64               `json:"version"`
 }
-
-// Context Complete owner supplied invitation and relevant context in one payload
 
 // PrepareRoundRequest Owner selects an existing sourced opportunity; the server derives all pack details and authority.
 type PrepareRoundRequest struct {
@@ -4909,6 +5048,9 @@ type RetryIngestionJSONRequestBody = RetryIngestionRequest
 // MatchOpportunityAnswersJSONRequestBody defines body for MatchOpportunityAnswers for application/json ContentType.
 type MatchOpportunityAnswersJSONRequestBody = AnswerMatchRequest
 
+// SaveOpportunityArtifactJSONRequestBody defines body for SaveOpportunityArtifact for application/json ContentType.
+type SaveOpportunityArtifactJSONRequestBody = ArtifactSaveRequest
+
 // StartOpportunityCheckJSONRequestBody defines body for StartOpportunityCheck for application/json ContentType.
 type StartOpportunityCheckJSONRequestBody = CheckStartRequest
 
@@ -4929,6 +5071,9 @@ type SaveQuestionAnswerJSONRequestBody = AnswerValueSave
 
 // AddOwnerInstructionJSONRequestBody defines body for AddOwnerInstruction for application/json ContentType.
 type AddOwnerInstructionJSONRequestBody = OwnerInstructionInput
+
+// UpdatePreferencesJSONRequestBody defines body for UpdatePreferences for application/json ContentType.
+type UpdatePreferencesJSONRequestBody = UpdatePreferencesRequest
 
 // CommissionResearchRunJSONRequestBody defines body for CommissionResearchRun for application/json ContentType.
 type CommissionResearchRunJSONRequestBody = CommissionResearchRequest

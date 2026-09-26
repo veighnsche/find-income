@@ -1251,6 +1251,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/opportunities/{id}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the per-type artifact readiness set for one role
+         * @description Route-mapped readiness with current versions and derived form values. Side-effect-free.
+         */
+        get: operations["listArtifactReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/artifacts/{artifactType}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                artifactType: "cv" | "cover_letter" | "email_subject" | "email_body" | "form_values";
+            };
+            cookie?: never;
+        };
+        /** Read one artifact type readiness entry */
+        get: operations["getArtifactReadiness"];
+        /**
+         * Save an exact per-type artifact edit as a new version
+         * @description Exact content, no LLM call; fenced on the current version. form_values is derived and rejected.
+         */
+        put: operations["saveOpportunityArtifact"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/opportunities/{id}/application-packs": {
         parameters: {
             query?: never;
@@ -3469,6 +3515,65 @@ export interface components {
             expectedVersion: number;
             instruction?: string;
         };
+        ArtifactAnswerRef: {
+            questionId: string;
+            /** Format: int64 */
+            answerVersion: number;
+        };
+        ArtifactBasis: {
+            factIds: string[];
+            answerRefs: components["schemas"]["ArtifactAnswerRef"][];
+            checkSpans: components["schemas"]["CheckSourceSpan"][];
+        };
+        ArtifactView: {
+            id: string;
+            opportunityId: string;
+            /** @enum {string} */
+            type: "cv" | "cover_letter" | "email_subject" | "email_body";
+            /** Format: int64 */
+            version: number;
+            content: string;
+            basis: components["schemas"]["ArtifactBasis"];
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: {
+                actorKind: string;
+                actorId: string;
+            };
+        };
+        ArtifactFormValue: {
+            questionId: string;
+            questionText: string;
+            /** @enum {string} */
+            required: "required" | "optional" | "unknown";
+            kind: string;
+            state: string;
+            text: string;
+        };
+        ArtifactReadinessEntry: {
+            /** @enum {string} */
+            type: "cv" | "cover_letter" | "email_subject" | "email_body" | "form_values";
+            required: boolean;
+            /** @enum {string} */
+            state: "ready" | "held" | "not_required" | "unresolved";
+            reason: string;
+            basis?: string;
+            current?: components["schemas"]["ArtifactView"];
+            formValues?: components["schemas"]["ArtifactFormValue"][];
+        };
+        ArtifactReadinessSet: {
+            opportunityId: string;
+            checkId?: string;
+            checkStatus: string;
+            entries: components["schemas"]["ArtifactReadinessEntry"][];
+        };
+        ArtifactSaveRequest: {
+            requestKey: string;
+            /** Format: int64 */
+            expectedVersion: number;
+            content: string;
+            basis?: components["schemas"]["ArtifactBasis"];
+        };
         ResearchCaptureView: {
             captureId: string;
             observedUrl: string;
@@ -5344,6 +5449,96 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listArtifactReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Artifact readiness set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactReadinessSet"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getArtifactReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                artifactType: "cv" | "cover_letter" | "email_subject" | "email_body" | "form_values";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Artifact readiness entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactReadinessEntry"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    saveOpportunityArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                artifactType: "cv" | "cover_letter" | "email_subject" | "email_body" | "form_values";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtifactSaveRequest"];
+            };
+        };
+        responses: {
+            /** @description Edited version saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactView"];
+                };
+            };
+            /** @description First version saved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactView"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["Unavailable"];
         };
     };
