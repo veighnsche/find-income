@@ -142,9 +142,20 @@ semantics (Q2); proof levels separated (this ledger + Q3 record).
    it contacts external sites and spends multi-turn budget. The E11
    validation turn (PASS, 33s, zero retrieval) proves the direct wire;
    the owner should explicitly authorize the full run.
-3. No visual-browser pass exists in this environment: Q2 is proved via
-   jsdom render tests, source inspection, and build; narrow/keyboard via
-   responsive classes and focus/aria semantics.
+3. Headless browser pass DONE after closure: 12/12 green driving the
+   real API + vite dev pair in headless Chromium (login, search opening,
+   jobs, detail, check, answers, prepare, real exact edit vN→vN+1, real
+   export download with pinned filename, honest rewrite-unavailable,
+   saved list, real handoff save + reload replay, second-session return,
+   narrow 390px frames + keyboard focus; zero page errors, zero
+   horizontal overflow on every frame; screenshots read back and
+   verified). Seed role was built through production store writers.
+4. Repo e2e slices 1–4 are stale (fail on pre-F2/pre-E UI expectations
+   and pre-subtraction doubles: root opens My search now, pack/round
+   concepts removed); slice0 session contract still passes. They are
+   not part of `bun run check`. Superseded for journey proof by the
+   headless pass above; rewriting them is drift-chase, recorded here
+   instead.
 4. Delivery smoke (skill): API + built-app reachability is verified at
    handoff with exact start commands and a concrete local URL below.
 
