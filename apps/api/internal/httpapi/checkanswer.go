@@ -432,8 +432,10 @@ func (h *Handler) commitRoleAnswers(w http.ResponseWriter, r *http.Request) {
 		store.Actor{Kind: p.Kind, ID: p.ID}, r.PathValue("id"))
 	if err != nil {
 		if errors.Is(err, store.ErrConflict) && len(missing) > 0 {
-			fail(w, http.StatusConflict, generated.ApiErrorCodeConflict,
-				"Required answers are missing; answer them before committing.")
+			details := map[string]interface{}{"missingQuestionIds": append([]string(nil), missing...)}
+			writeJSON(w, http.StatusConflict, generated.ErrorEnvelope{Error: generated.ApiError{
+				Code: generated.ApiErrorCodeConflict, Details: &details,
+				Message: "Required answers are missing; answer them before committing."}})
 			return
 		}
 		failAnswerValue(w, err)

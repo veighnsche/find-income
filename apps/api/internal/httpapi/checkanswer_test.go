@@ -45,6 +45,29 @@ func TestCommitRoleAnswersEndpoint(t *testing.T) {
 	if response.Code != 404 {
 		t.Fatalf("unchecked commit: got %d, want honest 404", response.Code)
 	}
+	answered, check := completeMatchCheck(t, h, "answer-commit-2")
+	response = h.request("POST", "/api/v1/opportunities/"+answered.ID+"/answers/commit", "", cookie, "", csrf, origin)
+	var held struct {
+		Error struct {
+			Code    string              `json:"code"`
+			Details map[string][]string `json:"details"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(response.Body.Bytes(), &held)
+	if response.Code != 409 || held.Error.Code != "conflict" || len(held.Error.Details["missingQuestionIds"]) == 0 {
+		t.Fatalf("missing commit: got %d %+v, want 409 naming missing questions", response.Code, held)
+	}
+	for _, id := range held.Error.Details["missingQuestionIds"] {
+		found := false
+		for _, question := range check.Questions {
+			if question.ID == id {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("missing id %q is not a check question: %+v", id, check.Questions)
+		}
+	}
 }
 
 func TestCheckAnswerValuesLiveHonestNotFound(t *testing.T) {
