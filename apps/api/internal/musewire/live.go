@@ -90,6 +90,32 @@ func discoveryPrompt(criteria musecode.PublicCriteria) string {
 	return b.String()
 }
 
+// checkPrompt scopes one Contributor turn to a single already-saved
+// vacancy: fetch its detail page, follow through to the real
+// application destination, save every actual employer question, and
+// return the structured findings below as the final text. The adapter
+// verifies every statement verbatim against cited captures and drops
+// anything it cannot ground, so copy text exactly.
+func checkPrompt(check musecode.CheckInput) string {
+	var b strings.Builder
+	b.WriteString("You are the vacancy-detail checker for a personal job search. ")
+	b.WriteString("Use ONLY these MCP tools: public_fetch, public_save_question, public_list_saved. ")
+	b.WriteString("Never use any other tool, skill, shell, memory, subagent, or background work. ")
+	b.WriteString("Never save vacancies: this turn checks one already-saved opening.\n")
+	fmt.Fprintf(&b, "- vacancy: %s\n- listing page: %s\n- listing receipt: %s\n",
+		check.VacancyRef, check.PageURL, check.ReceiptRef)
+	b.WriteString("Fetch the listing page, then follow links to the real application page or destination. ")
+	b.WriteString("At most 6 public_fetch calls total. ")
+	b.WriteString("Save EVERY actual employer question with public_save_question, passing the receipt_id from the fetch output as the receipt. ")
+	b.WriteString("Every statement below must be copied exactly from fetched bytes; never invent requirements, routes, documents, or questions. ")
+	b.WriteString("End with exactly one JSON object, no surrounding prose:\n")
+	b.WriteString(`{"requirements":[{"text":"...","capture":"cap-..."}],`)
+	b.WriteString(`"route":{"kind":"direct|referral|recruiter|unsupported","destination":"...","capture":"cap-..."},`)
+	b.WriteString(`"documents":[{"label":"...","required":true,"text":"...","capture":"cap-..."}],`)
+	b.WriteString(`"questions":[{"ref":"q-...","capture":"cap-..."}]}`)
+	return b.String()
+}
+
 // resumeContinuation renders the durable cursor's already-saved openings
 // as prompt context. Only vacancies the live tool server still holds
 // list by URL; anything else (question refs, or saves lost to a
@@ -230,11 +256,15 @@ func newExecFolder(modelID, providerID string) *execFolder {
 		tasks: map[string]string{}, called: map[string]bool{}}
 }
 
-// Run conducts one Contributor discovery turn to transport-terminal state.
+// Run conducts one Contributor turn to transport-terminal state: a
+// discovery sweep for PublicInput, or a single-vacancy deep check for
+// CheckInput. Check turns collect the final model text for adapter
+// validation; discovery turns fold saves only.
 func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, input musecode.SessionInput, resume musecode.Cursor, sink musecode.EventSink) error {
-	public, ok := input.(musecode.PublicInput)
-	if !ok {
-		return errors.New("musewire: live transport conducts contributor discovery only")
+	public, isDiscovery := input.(musecode.PublicInput)
+	check, isCheck := input.(musecode.CheckInput)
+	if !isDiscovery && !isCheck {
+		return errors.New("musewire: live transport conducts contributor discovery and checks only")
 	}
 	if t.CLIPath == "" || t.ModelID == "" || t.ProviderID == "" || t.Servers == nil {
 		return errors.New("musewire: live transport needs CLI path, model, provider and run servers")
@@ -316,6 +346,9 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 		}
 	}
 	prompt := discoveryPrompt(public.Criteria)
+	if isCheck {
+		prompt = checkPrompt(check)
+	}
 	if t.ValidationPrompt != "" {
 		prompt = t.ValidationPrompt
 		trace.note("validation prompt override active")
@@ -404,6 +437,10 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 	finished := false
 	terminal := ""
 	detail := ""
+	var deltas strings.Builder
+	deltaBytes := int64(0)
+	finalText := ""
+	textSet := false
 	reader := bufio.NewReader(stdout)
 loop:
 	for {
@@ -416,6 +453,19 @@ loop:
 		line, err := reader.ReadBytes('\n')
 		if len(line) > 0 {
 			trace.hostLine(line)
+			if isCheck {
+				if kind, text := execText(line); kind == "run.output.delta" {
+					deltaBytes += int64(len(text))
+					if deltaBytes > spec.Bounds.MaxBytesTotal {
+						detail = "check turn exceeded the total text bound"
+						stop()
+						break loop
+					}
+					deltas.WriteString(text)
+				} else if text != "" && strings.HasPrefix(kind, "run.terminal.") {
+					finalText, textSet = text, true
+				}
+			}
 			kind, tool, bytes, step, done, terr := folder.fold(line)
 			switch {
 			case terr != "":
@@ -464,6 +514,24 @@ loop:
 		runErr := fmt.Errorf("musewire: turn ended %q without completion", terminal)
 		sink.Emit(musecode.Event{Kind: musecode.EventFailed, Detail: runErr.Error()})
 		return runErr
+	}
+	// A check turn returns its structured findings as model text for
+	// adapter validation. Empty text is not a transport failure: saved
+	// questions already emitted as saves, and the checker judges content
+	// completeness from what the adapter verifies.
+	if isCheck {
+		text := finalText
+		if !textSet || text == "" {
+			text = deltas.String()
+		}
+		if int64(len(text)) > spec.Bounds.MaxBytesPerOp {
+			runErr := errors.New("musewire: check turn exceeded the per-operation text bound")
+			sink.Emit(musecode.Event{Kind: musecode.EventFailed, Detail: runErr.Error()})
+			return runErr
+		}
+		if text != "" {
+			sink.Emit(musecode.Event{Kind: musecode.EventModelText, Text: text, BytesOut: int64(len(text))})
+		}
 	}
 	sink.Emit(musecode.Event{Kind: musecode.EventFinished})
 	return nil

@@ -76,6 +76,9 @@ func checkSaveFixture(opportunityID, checkID, captureID string) CheckSaveInput {
 		RequestedDocuments: []RequestedDocumentInput{{Label: "CV", Required: true,
 			SourceExcerpt: "Send your CV to jobs@example.invalid",
 			SourceSpan:    CheckSourceSpan{CaptureID: captureID, Start: 214, End: 260}}},
+		Requirements: []CheckRequirementInput{{Statement: "Weekend availability is required.",
+			SourceExcerpt: "Weekend availability is required for this rota.",
+			SourceSpan:    CheckSourceSpan{CaptureID: captureID, Start: 100, End: 149}}},
 		Route: CheckRouteInput{Kind: CheckRouteDirect, DestinationText: "jobs@example.invalid",
 			Judgment: CheckRouteJudgmentApplication, SourceExcerpt: "Send your CV to jobs@example.invalid",
 			ObservedAt: "2026-09-24T11:30:00Z"},
@@ -262,6 +265,7 @@ func TestCheckSaveCompletesOnlyWhenComplete(t *testing.T) {
 			save.Route.Kind, save.Route.Judgment = CheckRouteUnsupported, CheckRouteJudgmentApplication
 		}},
 		{"implicit documents", func(save *CheckSaveInput) { save.RequestedDocuments = nil }},
+		{"implicit requirements", func(save *CheckSaveInput) { save.Requirements = nil }},
 		{"implicit gaps", func(save *CheckSaveInput) { save.Gaps = nil }},
 		{"empty questions", func(save *CheckSaveInput) { save.Questions = nil }},
 		{"unsourced question", func(save *CheckSaveInput) {
@@ -320,6 +324,10 @@ func TestCheckSaveCompletesOnlyWhenComplete(t *testing.T) {
 	setSum := sha256.Sum256(mustMarshalCheckSet(t, view.Questions))
 	if view.QuestionSetSHA256 != hex.EncodeToString(setSum[:]) {
 		t.Fatalf("question set hash not server-derived: %s", view.QuestionSetSHA256)
+	}
+	if len(view.Requirements) != 1 || view.Requirements[0].Statement != save.Requirements[0].Statement ||
+		view.Requirements[0].SourceSpan != save.Requirements[0].SourceSpan {
+		t.Fatalf("requirements round trip: %+v", view.Requirements)
 	}
 	if workflow, err := s.RoleWorkflow(ctx, opportunity.ID); err != nil || workflow.Stage != RoleStageChecked || workflow.Revision != 2 {
 		t.Fatalf("workflow after save: %+v %v", workflow, err)

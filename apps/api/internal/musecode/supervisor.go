@@ -58,6 +58,18 @@ type PublicInput struct {
 
 func (PublicInput) inputTier() Tier { return TierContributor }
 
+// CheckInput scopes one Contributor session to a single already-saved
+// vacancy: fetch its detail page, judge it, and return structured
+// findings. Its type cannot express private owner data: the vacancy
+// ref, page URL and listing receipt are public discovery evidence.
+type CheckInput struct {
+	VacancyRef string
+	PageURL    string
+	ReceiptRef string
+}
+
+func (CheckInput) inputTier() Tier { return TierContributor }
+
 // StandardInput carries verified owner facts and preparation targets into a
 // private Standard session. Only preparation flows construct it, and only
 // from verified facts; grounding and citation validation stay with the

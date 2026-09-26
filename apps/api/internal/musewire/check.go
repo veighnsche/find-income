@@ -224,10 +224,11 @@ func (c *Checker) complete(ctx context.Context, opportunity store.Opportunity, c
 		OpportunityID: opportunity.ID, CheckID: checkID,
 		Vacancy:            c.vacancyInput(opportunity, role, now),
 		RequestedDocuments: []store.RequestedDocumentInput{},
+		Requirements:       []store.CheckRequirementInput{},
 		Route: store.CheckRouteInput{Judgment: store.CheckRouteJudgmentUnresolved,
 			SourceExcerpt: excerpt, ObservedAt: now},
 		Gaps: []store.CheckGapInput{{Kind: store.CheckGapOther, Consequential: false,
-			Description: "Requested documents are not assessed; this check covers sourced questions only."}},
+			Description: "Requested documents and requirements are not assessed; this check covers sourced questions only."}},
 		Questions: questions,
 		Activity:  activity,
 	})

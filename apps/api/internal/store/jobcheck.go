@@ -87,14 +87,15 @@ const (
 )
 
 const (
-	checkMaxQuestions  = 200
-	checkMaxDocuments  = 100
-	checkMaxGaps       = 100
-	checkMaxActivity   = 50
-	checkMaxText       = 2000
-	checkMaxLabel      = 200
-	checkMaxPayload    = 8000
-	checkMaxSpanWindow = 2000
+	checkMaxQuestions    = 200
+	checkMaxDocuments    = 100
+	checkMaxRequirements = 100
+	checkMaxGaps         = 100
+	checkMaxActivity     = 50
+	checkMaxText         = 2000
+	checkMaxLabel        = 200
+	checkMaxPayload      = 8000
+	checkMaxSpanWindow   = 2000
 )
 
 // CheckSourceSpan cites the exact capture bytes a statement came from.
@@ -122,6 +123,13 @@ type CheckQuestionView struct {
 type RequestedDocumentView struct {
 	Label         string          `json:"label"`
 	Required      bool            `json:"required"`
+	SourceExcerpt string          `json:"sourceExcerpt"`
+	SourceSpan    CheckSourceSpan `json:"sourceSpan"`
+}
+
+// CheckRequirementView is one employer-stated role requirement, sourced.
+type CheckRequirementView struct {
+	Statement     string          `json:"statement"`
 	SourceExcerpt string          `json:"sourceExcerpt"`
 	SourceSpan    CheckSourceSpan `json:"sourceSpan"`
 }
@@ -174,6 +182,7 @@ type CheckView struct {
 	BlockedReason       *CheckBlockedReasonView `json:"blockedReason,omitempty"`
 	Vacancy             CheckVacancyView        `json:"vacancy"`
 	RequestedDocuments  []RequestedDocumentView `json:"requestedDocuments"`
+	Requirements        []CheckRequirementView  `json:"requirements"`
 	Route               CheckRouteView          `json:"route"`
 	Gaps                []CheckGapView          `json:"gaps"`
 	Questions           []CheckQuestionView     `json:"questions"`
@@ -212,6 +221,13 @@ type CheckVacancyInput struct {
 type RequestedDocumentInput struct {
 	Label         string          `json:"label"`
 	Required      bool            `json:"required"`
+	SourceExcerpt string          `json:"sourceExcerpt"`
+	SourceSpan    CheckSourceSpan `json:"sourceSpan"`
+}
+
+// CheckRequirementInput is one sourced employer-stated requirement.
+type CheckRequirementInput struct {
+	Statement     string          `json:"statement"`
 	SourceExcerpt string          `json:"sourceExcerpt"`
 	SourceSpan    CheckSourceSpan `json:"sourceSpan"`
 }
@@ -268,6 +284,7 @@ type CheckSaveInput struct {
 	CheckID            string                   `json:"checkId"`
 	Vacancy            CheckVacancyInput        `json:"vacancy"`
 	RequestedDocuments []RequestedDocumentInput `json:"requestedDocuments"`
+	Requirements       []CheckRequirementInput  `json:"requirements"`
 	Route              CheckRouteInput          `json:"route"`
 	Gaps               []CheckGapInput          `json:"gaps"`
 	Questions          []CheckQuestionInput     `json:"questions"`
@@ -289,6 +306,7 @@ type jobCheckRow struct {
 	VacancySourceURL    string
 	VacancyRetrievedAt  string
 	Documents           string
+	Requirements        string
 	Route               string
 	Gaps                string
 	QuestionSetSHA256   string
@@ -301,7 +319,7 @@ type jobCheckRow struct {
 
 const jobCheckColumns = `id,opportunity_id,opportunity_revision,workflow_revision,status,` +
 	`blocked_code,blocked_detail,vacancy_capture_ids_json,vacancy_evidence_ids_json,` +
-	`vacancy_completeness,vacancy_source_url,vacancy_retrieved_at,documents_json,` +
+	`vacancy_completeness,vacancy_source_url,vacancy_retrieved_at,documents_json,requirements_json,` +
 	`route_json,gaps_json,question_set_sha256,question_set_version,` +
 	`actor_kind,actor_id,created_at,completed_at`
 
@@ -310,7 +328,7 @@ func scanJobCheck(row rowScanner) (jobCheckRow, error) {
 	err := row.Scan(&value.ID, &value.OpportunityID, &value.OpportunityRevision,
 		&value.WorkflowRevision, &value.Status, &value.BlockedCode, &value.BlockedDetail,
 		&value.VacancyCaptures, &value.VacancyEvidence, &value.VacancyCompleteness,
-		&value.VacancySourceURL, &value.VacancyRetrievedAt, &value.Documents,
+		&value.VacancySourceURL, &value.VacancyRetrievedAt, &value.Documents, &value.Requirements,
 		&value.Route, &value.Gaps, &value.QuestionSetSHA256, &value.QuestionSetVersion,
 		&value.ActorKind, &value.ActorID, &value.CreatedAt, &value.CompletedAt)
 	return value, err
@@ -504,7 +522,8 @@ func assembleCheckView(ctx context.Context, q Reader, row jobCheckRow) (CheckVie
 		OpportunityRevision: row.OpportunityRevision, WorkflowRevision: row.WorkflowRevision,
 		Status: row.Status, CreatedAt: row.CreatedAt, CompletedAt: row.CompletedAt.String,
 		CreatedBy:          Actor{Kind: row.ActorKind, ID: row.ActorID},
-		RequestedDocuments: []RequestedDocumentView{}, Gaps: []CheckGapView{}, Questions: []CheckQuestionView{}}
+		RequestedDocuments: []RequestedDocumentView{}, Requirements: []CheckRequirementView{},
+		Gaps:               []CheckGapView{}, Questions: []CheckQuestionView{}}
 	if row.Status == CheckStatusBlocked {
 		view.BlockedReason = &CheckBlockedReasonView{Code: row.BlockedCode, Detail: row.BlockedDetail}
 	}
@@ -524,6 +543,9 @@ func assembleCheckView(ctx context.Context, q Reader, row jobCheckRow) (CheckVie
 	view.Vacancy = CheckVacancyView{CaptureIDs: captures, EvidenceSourceIDs: evidence,
 		Completeness: row.VacancyCompleteness, SourceURL: row.VacancySourceURL, RetrievedAt: row.VacancyRetrievedAt}
 	if err := json.Unmarshal([]byte(orJSON(row.Documents, "[]")), &view.RequestedDocuments); err != nil {
+		return CheckView{}, err
+	}
+	if err := json.Unmarshal([]byte(orJSON(row.Requirements, "[]")), &view.Requirements); err != nil {
 		return CheckView{}, err
 	}
 	if row.Route != "" {
@@ -779,6 +801,11 @@ func validCheckDocument(value RequestedDocumentInput) bool {
 		checkText(value.SourceExcerpt, checkMaxText)
 }
 
+func validCheckRequirement(value CheckRequirementInput) bool {
+	return checkText(value.Statement, checkMaxText) && validCheckSpan(value.SourceSpan) &&
+		checkText(value.SourceExcerpt, checkMaxText)
+}
+
 func vacancyPresent(value CheckVacancyInput) bool {
 	return len(value.CaptureIDs) > 0 || len(value.EvidenceSourceIDs) > 0 ||
 		value.Completeness != "" || value.SourceURL != "" || value.RetrievedAt != ""
@@ -795,6 +822,7 @@ func routePresent(value CheckRouteInput) bool {
 func validateCheckSave(ctx context.Context, tx *sql.Tx, input CheckSaveInput) error {
 	if input.OpportunityID == "" || input.CheckID == "" ||
 		len(input.Questions) > checkMaxQuestions || len(input.RequestedDocuments) > checkMaxDocuments ||
+		len(input.Requirements) > checkMaxRequirements ||
 		len(input.Gaps) > checkMaxGaps || len(input.Activity) > checkMaxActivity {
 		return ErrInvalid
 	}
@@ -809,13 +837,19 @@ func validateCheckSave(ctx context.Context, tx *sql.Tx, input CheckSaveInput) er
 			return ErrInvalid
 		}
 	} else {
-		if input.RequestedDocuments == nil || input.Gaps == nil || len(input.Questions) < 1 ||
+		if input.RequestedDocuments == nil || input.Requirements == nil || input.Gaps == nil ||
+			len(input.Questions) < 1 ||
 			!validCheckVacancy(input.Vacancy) || !validCheckRoute(input.Route) {
 			return ErrInvalid
 		}
 	}
 	for _, document := range input.RequestedDocuments {
 		if !validCheckDocument(document) {
+			return ErrInvalid
+		}
+	}
+	for _, requirement := range input.Requirements {
+		if !validCheckRequirement(requirement) {
 			return ErrInvalid
 		}
 	}
@@ -840,6 +874,9 @@ func validateCheckSave(ctx context.Context, tx *sql.Tx, input CheckSaveInput) er
 	}
 	for _, document := range input.RequestedDocuments {
 		refs[document.SourceSpan.CaptureID] = true
+	}
+	for _, requirement := range input.Requirements {
+		refs[requirement.SourceSpan.CaptureID] = true
 	}
 	for _, question := range input.Questions {
 		refs[question.SourceSpan.CaptureID] = true
@@ -960,6 +997,11 @@ func writeCheckSaveTx(ctx context.Context, tx *sql.Tx, actor Actor, expectedRevi
 		documents = append(documents, RequestedDocumentView{Label: document.Label,
 			Required: document.Required, SourceExcerpt: document.SourceExcerpt, SourceSpan: document.SourceSpan})
 	}
+	requirements := make([]CheckRequirementView, 0, len(input.Requirements))
+	for _, requirement := range input.Requirements {
+		requirements = append(requirements, CheckRequirementView{Statement: requirement.Statement,
+			SourceExcerpt: requirement.SourceExcerpt, SourceSpan: requirement.SourceSpan})
+	}
 	gaps := make([]CheckGapView, 0, len(input.Gaps))
 	for _, gap := range input.Gaps {
 		id, err := randomID()
@@ -998,6 +1040,7 @@ func writeCheckSaveTx(ctx context.Context, tx *sql.Tx, actor Actor, expectedRevi
 		evidenceJSON = []byte("[]")
 	}
 	documentsJSON, _ := json.Marshal(documents)
+	requirementsJSON, _ := json.Marshal(requirements)
 	gapsJSON, _ := json.Marshal(gaps)
 	routeJSON := ""
 	if routePresent(input.Route) {
@@ -1014,12 +1057,14 @@ func writeCheckSaveTx(ctx context.Context, tx *sql.Tx, actor Actor, expectedRevi
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE job_checks SET status=?,blocked_code=?,blocked_detail=?,
 	  vacancy_capture_ids_json=?,vacancy_evidence_ids_json=?,vacancy_completeness=?,
-	  vacancy_source_url=?,vacancy_retrieved_at=?,documents_json=?,route_json=?,gaps_json=?,
+	  vacancy_source_url=?,vacancy_retrieved_at=?,documents_json=?,requirements_json=?,
+	  route_json=?,gaps_json=?,
 	  question_set_sha256=?,question_set_version=?,completed_at=?
 	  WHERE id=? AND status='checking'`,
 		status, blockedCode, blockedDetail, string(capturesJSON), string(evidenceJSON),
 		input.Vacancy.Completeness, input.Vacancy.SourceURL, input.Vacancy.RetrievedAt,
-		string(documentsJSON), routeJSON, string(gapsJSON), setSHA, setVersion, now, row.ID)
+		string(documentsJSON), string(requirementsJSON), routeJSON, string(gapsJSON),
+		setSHA, setVersion, now, row.ID)
 	if err != nil {
 		return "", 0, err
 	}

@@ -250,12 +250,28 @@ func TestResumeContinuationListsPriorOpenings(t *testing.T) {
 	}
 }
 
+func TestCheckPromptContractsAdapterSchema(t *testing.T) {
+	prompt := checkPrompt(musecode.CheckInput{VacancyRef: "vac-1",
+		PageURL: "https://jobs.example.invalid/1", ReceiptRef: "rc-1"})
+	for _, want := range []string{"vac-1", "https://jobs.example.invalid/1", "rc-1",
+		"public_fetch", "public_save_question", "Never save vacancies",
+		`"requirements"`, `"route"`, `"documents"`, `"questions"`,
+		`"capture"`, "copied exactly", "never invent"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("check prompt misses %q:\n%s", want, prompt)
+		}
+	}
+	if strings.Contains(prompt, "public_save_vacancy") || strings.Contains(prompt, "public_search") {
+		t.Errorf("check prompt must not offer discovery tools:\n%s", prompt)
+	}
+}
+
 func TestLiveTransportRefusesStandard(t *testing.T) {
 	transport := &LiveTransport{CLIPath: "/nonexistent", ModelID: "m", ProviderID: "p",
 		Servers: func(string) (*publicresearch.Server, bool) { return nil, false }}
 	err := transport.Run(context.Background(), musecode.SessionSpec{},
 		musecode.StandardInput{Purpose: "x"}, musecode.Cursor{}, &collectSink{})
-	if err == nil || !strings.Contains(err.Error(), "contributor discovery only") {
+	if err == nil || !strings.Contains(err.Error(), "contributor discovery and checks only") {
 		t.Fatalf("standard err = %v, want contributor-only refusal", err)
 	}
 }
