@@ -140,10 +140,16 @@ semantics (Q2); proof levels separated (this ledger + Q3 record).
    cannot match that name. Live Jev answer choice now exercised for
    real: POST answers/match → 201 matched, model jev-1.13.0, one
    0.98-confidence choice bound to approved answer v1 with a recorded
-   Jev attempt id, two deterministic noneFits. Standard drafting still
-   503'd on that server only because no JOBSEEK_APPROVED_CAREER_ROOT
-   was configured (separate requirement); full live collection still
-   needs explicit owner auth (external sites, multi-turn spend).
+   Jev attempt id, two deterministic noneFits. Owner then authorized
+   draft + live collection: Standard draft 201 live (CV/email v1 ready,
+   grounded on cv-vince-liem facts, answered → prepared rev 4→6 through
+   the production handler walk); collection run completed (~2 min, 1
+   Jev call, 1 saved: Staff Software Engineer Golang / relocate.me,
+   verified capture, could_be_recommended + catalog reasons, honest
+   unknowns); chosen-only deep check honestly blocked (fetch truncated
+   before apply section → unresolved route, 4 precise gaps, zero
+   invented questions). First run failed only on a too-tight 4-turn
+   allowance of mine, not an app defect. Q3 fully exercised.
 2. Full live Contributor collection + chosen-only deep check was not run:
    it contacts external sites and spends multi-turn budget. The E11
    validation turn (PASS, 33s, zero retrieval) proves the direct wire;
