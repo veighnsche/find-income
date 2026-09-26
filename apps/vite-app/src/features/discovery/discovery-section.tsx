@@ -218,8 +218,7 @@ export function DiscoverySection({
     return () => controller.abort()
   }, [runId, refresh])
 
-  const run =
-    read.kind === "ready" || read.kind === "stale" ? read.run : null
+  const run = read.kind === "ready" || read.kind === "stale" ? read.run : null
   const polling = run !== null && isActiveRunState(run.state)
 
   useEffect(() => {
@@ -283,9 +282,7 @@ export function DiscoverySection({
     try {
       const note = kind === "start" ? noteText.trim() : ""
       const basis =
-        owner.context !== null
-          ? `v${owner.context.profileVersion}`
-          : "unpinned"
+        owner.context !== null ? `v${owner.context.profileVersion}` : "unpinned"
       const intent = `${kind}:${basis}:${note}`
       const pending = commissionKeyRef.current
       const idempotencyKey =
@@ -409,10 +406,7 @@ export function DiscoverySection({
       className="flex min-w-0 flex-col gap-4"
     >
       <div className="min-w-0">
-        <h2
-          id="discovery-heading"
-          className="font-heading text-lg font-medium"
-        >
+        <h2 id="discovery-heading" className="font-heading text-lg font-medium">
           Find jobs
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -439,11 +433,12 @@ export function DiscoverySection({
         <div className="flex min-w-0 flex-col gap-3 rounded-2xl border bg-card px-4 py-4">
           <h3 className="font-heading text-base font-medium">Find jobs</h3>
           <p className="text-sm text-muted-foreground">
-            Codex chooses sources and queries from the saved search brief
-            above, then Jev classifies what was collected. The allowance is
-            finite: 15 minutes, 60 actions, 12 Jev assessments, 8 turns, at
-            most 2 concurrent operations. Nothing starts until the button below
-            is pressed.
+            Search public job sources under the saved brief above, then return
+            assessed roles with source references and important unknowns. The
+            agent chooses sources and queries; Jev classifies collected roles.
+            This search cannot contact employers. It has a finite allowance: 15
+            minutes, 60 actions, 12 Jev assessments, 8 turns, and at most 2
+            concurrent operations. Work starts only when you select Find jobs.
           </p>
           {readiness.ready && briefBasis !== null ? (
             <p className="text-sm wrap-break-word">
@@ -452,12 +447,15 @@ export function DiscoverySection({
                 : `Searches with profile v${briefBasis.profileVersion} (${briefBasis.rubricVersion}).`}
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground wrap-break-word">
+            <p className="text-sm wrap-break-word text-muted-foreground">
               {readiness.reason}
             </p>
           )}
           {contributorReady ? null : (
-            <p className="text-sm wrap-break-word text-destructive" role="alert">
+            <p
+              className="text-sm wrap-break-word text-destructive"
+              role="alert"
+            >
               {`Find jobs is blocked: Muse Contributor is ${muse.contributor.state} (${muse.contributor.code}) — ${muse.contributor.detail}.`}
             </p>
           )}
@@ -490,10 +488,7 @@ export function DiscoverySection({
             </div>
           </details>
           {actionError !== null ? (
-            <ErrorBlock
-              title="Research action failed"
-              message={actionError}
-            />
+            <ErrorBlock title="Research action failed" message={actionError} />
           ) : null}
         </div>
       ) : null}
@@ -527,7 +522,10 @@ export function DiscoverySection({
       {run !== null ? (
         <>
           {read.kind === "stale" ? (
-            <p role="alert" className="text-sm wrap-break-word text-destructive">
+            <p
+              role="alert"
+              className="text-sm wrap-break-word text-destructive"
+            >
               Showing last known state: {read.error}
             </p>
           ) : null}
@@ -563,7 +561,10 @@ export function DiscoverySection({
           {report === null && terminal && reportLoading ? (
             <LoadingBlock label="Loading research report…" />
           ) : null}
-          {report === null && terminal && !reportLoading && reportError !== null ? (
+          {report === null &&
+          terminal &&
+          !reportLoading &&
+          reportError !== null ? (
             <ErrorBlock
               title="Could not load the research report"
               message={reportError}

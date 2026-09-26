@@ -96,10 +96,20 @@ func NewService(deps Deps) (*Service, error) {
 	}, nil
 }
 
-// Readiness reports the frozen check verdict for one tier without admitting
-// any session input.
+// Readiness reports the frozen check verdict without admitting session input.
+// The discovery transport is a Contributor dependency; Standard preparation
+// uses its own runner and must not inherit this transport's disabled state.
 func (s *Service) Readiness(tier musecode.Tier) musecode.Status {
-	return musecode.Check(tier, s.facts)
+	status := musecode.Check(tier, s.facts)
+	if tier != musecode.TierContributor || !status.Available {
+		return status
+	}
+	switch s.transport.(type) {
+	case musecode.UnavailableTransport, *musecode.UnavailableTransport:
+		return musecode.Status{Tier: tier, Code: musecode.CodeProtocolUnverified,
+			Detail: "Muse Contributor session transport is disabled."}
+	}
+	return status
 }
 
 // Commissions counts admitted discovery runs. Reads never increment it.

@@ -9,11 +9,8 @@ import {
 } from "@testing-library/react"
 import App from "@/App"
 import type { Round } from "@/api/client"
-import {
-  preferencesFixture,
-  sessionFixture,
-  stubFetch,
-} from "@/pages/fixtures"
+import { discoveryRunStorageKey } from "@/features/discovery/discovery-section"
+import { preferencesFixture, sessionFixture, stubFetch } from "@/pages/fixtures"
 
 beforeEach(() => {
   window.location.hash = ""
@@ -22,6 +19,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  window.localStorage.clear()
   window.location.hash = ""
 })
 
@@ -31,12 +29,60 @@ describe("read-only shell", () => {
     render(<App />)
 
     expect(await screen.findByRole("heading", { name: "Today" })).toBeDefined()
-    expect(await screen.findByText("1 active of 2 tracked roles.")).toBeDefined()
+    expect(
+      await screen.findByText("1 active of 2 tracked roles.")
+    ).toBeDefined()
     expect(
       await screen.findByText(/Search profile version 3 · Berlin/)
     ).toBeDefined()
     const nav = screen.getByRole("navigation", { name: "Primary" })
     expect(nav.querySelector('a[href="#/jobs"]')).not.toBeNull()
+  })
+
+  it("links back to the verified saved research run without starting work", async () => {
+    window.localStorage.setItem(discoveryRunStorageKey, "run-1")
+    expect(window.localStorage.getItem(discoveryRunStorageKey)).toBe("run-1")
+    const { calls } = stubFetch()
+    const baseFetch = globalThis.fetch
+    vi.stubGlobal(
+      "fetch",
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        if (
+          new URL(url, "http://localhost").pathname ===
+          "/api/v1/research/runs/run-1"
+        ) {
+          return new Response(
+            JSON.stringify({
+              runId: "run-1",
+              state: "paused",
+              savedIds: ["job-1"],
+              unresolvedCount: 1,
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        }
+        return baseFetch(input, init)
+      }
+    )
+    render(<App />)
+
+    expect(
+      await screen.findByText(
+        "Paused — resume continues with the remaining allowance."
+      )
+    ).toBeDefined()
+    expect(screen.getByText("1 saved role · 1 unresolved.")).toBeDefined()
+    const link = screen.getByRole("link", {
+      name: "Open this research run",
+    }) as HTMLAnchorElement
+    expect(link.getAttribute("href")).toBe("#/search")
+    expect(calls.every((call) => call.method === "GET")).toBe(true)
   })
 
   it("renders My search with the saved criteria", async () => {
@@ -104,9 +150,7 @@ describe("read-only shell", () => {
     window.location.hash = "#/jobs/missing"
     render(<App />)
 
-    expect(
-      await screen.findByText("Opportunity not found.")
-    ).toBeDefined()
+    expect(await screen.findByText("Opportunity not found.")).toBeDefined()
   })
 
   it("shows the sign-in panel when the session is null and signs in", async () => {
@@ -209,7 +253,9 @@ function stubCorrectionFetch(handlers: {
         return correctionJson(200, handlers.preferences())
       if (path === "/api/v1/research/brief") return handlers.brief()
       if (path === "/api/v1/rounds/process-input" && method === "POST")
-        return handlers.processInput(JSON.parse(body ?? "{}") as Record<string, unknown>)
+        return handlers.processInput(
+          JSON.parse(body ?? "{}") as Record<string, unknown>
+        )
       const roundMatch = path.match(/^\/api\/v1\/rounds\/([^/]+)$/)
       if (roundMatch?.[1] !== undefined)
         return handlers.round(decodeURIComponent(roundMatch[1]))
@@ -257,7 +303,9 @@ describe("owner corrections (RW-B1)", () => {
     window.location.hash = "#/search"
     render(<App />)
 
-    expect(await screen.findByRole("heading", { name: "My search" })).toBeDefined()
+    expect(
+      await screen.findByRole("heading", { name: "My search" })
+    ).toBeDefined()
     expect(await screen.findByText("Profile version 3")).toBeDefined()
     expect(
       await screen.findByRole("heading", { name: "Your goals" })
@@ -272,7 +320,9 @@ describe("owner corrections (RW-B1)", () => {
       screen.getByRole("button", { name: "Correct preferred location" })
     ).toBeDefined()
     expect(
-      screen.getByRole("button", { name: 'Correct criterion "Backend engineer"' })
+      screen.getByRole("button", {
+        name: 'Correct criterion "Backend engineer"',
+      })
     ).toBeDefined()
     expect(await screen.findByText("Profile facts")).toBeDefined()
     for (const call of calls) expect(call.method).toBe("GET")
@@ -309,7 +359,8 @@ describe("owner corrections (RW-B1)", () => {
     expect(screen.queryByText(/Saved as profile version/)).toBeNull()
 
     const post = calls.find(
-      (call) => call.method === "POST" && call.url.endsWith("/rounds/process-input")
+      (call) =>
+        call.method === "POST" && call.url.endsWith("/rounds/process-input")
     )
     expect(post).toBeDefined()
     const payload = JSON.parse(post?.body ?? "{}") as Record<string, unknown>
@@ -325,15 +376,15 @@ describe("owner corrections (RW-B1)", () => {
     serverVersion = 4
     fireEvent.click(screen.getByRole("button", { name: "Check again" }))
 
-    expect(
-      await screen.findByText("Saved as profile version 4.")
-    ).toBeDefined()
+    expect(await screen.findByText("Saved as profile version 4.")).toBeDefined()
     expect(await screen.findByText("Profile version 4")).toBeDefined()
     await waitFor(() =>
       expect(
-        (screen.getByLabelText(
-          "Describe the correction in your own words"
-        ) as HTMLTextAreaElement).value
+        (
+          screen.getByLabelText(
+            "Describe the correction in your own words"
+          ) as HTMLTextAreaElement
+        ).value
       ).toBe("")
     )
   })
@@ -341,8 +392,7 @@ describe("owner corrections (RW-B1)", () => {
   it("routes an in-context Correct button into the correction box", async () => {
     stubCorrectionFetch({
       preferences: () => preferencesFixture,
-      brief: () =>
-        correctionJson(404, { error: { message: "No brief yet." } }),
+      brief: () => correctionJson(404, { error: { message: "No brief yet." } }),
       processInput: () => correctionJson(201, { round: correctionRound() }),
       round: (id) => correctionJson(200, correctionRound({ id })),
     })

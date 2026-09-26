@@ -70,10 +70,7 @@ const jobsFixture: OpportunityView[] = [
   jobView("job-new", "Fresh Listing"),
 ]
 
-function findingBase(
-  id: string,
-  group: FindingEntry["group"]
-): FindingEntry {
+function findingBase(id: string, group: FindingEntry["group"]): FindingEntry {
   return {
     opportunityId: id,
     opportunityRevision: 2,
@@ -239,6 +236,7 @@ const groupedPreferencesFixture: Preferences = {
 
 interface StubOptions {
   existingDecisions?: Record<string, OwnerDecision>
+  workflowStages?: Record<string, RoleWorkflowState["stage"]>
   decisionConflict?: boolean
   preferences?: Preferences
   // null serves a 404 (no saved brief yet); "error" serves a 500.
@@ -249,6 +247,18 @@ interface StubOptions {
 function stubGroupedFetch(options: StubOptions = {}): { calls: FetchCall[] } {
   const calls: FetchCall[] = []
   const selected = new Set<string>(["job-rec"])
+  const decisions = new Map<string, OwnerDecision>(
+    Object.entries(options.existingDecisions ?? {})
+  )
+  decisions.set("job-rec", {
+    id: "decision-rec",
+    opportunityId: "job-rec",
+    decision: "selected",
+    revision: 1,
+    opportunityRevision: 2,
+    auditId: "audit-rec",
+    createdAt: "2026-09-18T10:00:00Z",
+  })
   let briefAttempts = 0
   const fetchMock = vi.fn(
     async (input: string | URL | Request, init?: RequestInit) => {
@@ -292,7 +302,10 @@ function stubGroupedFetch(options: StubOptions = {}): { calls: FetchCall[] } {
       }
       if (path === "/api/v1/workflow/roles" && method === "GET")
         return jsonResponse(200, {
-          items: [...selected].map((id) => workflowFixture(id)),
+          items: [...selected].map((id) => ({
+            ...workflowFixture(id),
+            stage: options.workflowStages?.[id] ?? "selected",
+          })),
         })
 
       const runFindings = path.match(
@@ -323,7 +336,7 @@ function stubGroupedFetch(options: StubOptions = {}): { calls: FetchCall[] } {
           return jsonResponse(200, entry)
         }
         if (leaf === "decision" && method === "GET") {
-          const existing = options.existingDecisions?.[id]
+          const existing = decisions.get(id)
           if (existing === undefined) return notFound("No decision recorded.")
           return jsonResponse(200, existing)
         }
@@ -332,25 +345,32 @@ function stubGroupedFetch(options: StubOptions = {}): { calls: FetchCall[] } {
             return jsonResponse(409, {
               error: { message: "Decision revision conflict; refresh first." },
             })
-          selected.add(id)
           const payload = JSON.parse(
             typeof init?.body === "string" ? init.body : "{}"
-          ) as { expectedOpportunityRevision?: number }
-          return jsonResponse(201, {
+          ) as {
+            expectedOpportunityRevision?: number
+            decision: OwnerDecision["decision"]
+          }
+          if (payload.decision === "selected") selected.add(id)
+          else selected.delete(id)
+          const saved: OwnerDecision = {
             id: "decision-9",
             opportunityId: id,
-            decision: "selected",
-            revision:
-              (options.existingDecisions?.[id]?.revision ?? 0) + 1,
-            opportunityRevision:
-              payload.expectedOpportunityRevision ?? 2,
+            decision: payload.decision,
+            revision: (decisions.get(id)?.revision ?? 0) + 1,
+            opportunityRevision: payload.expectedOpportunityRevision ?? 2,
             auditId: "audit-9",
             createdAt: "2026-09-24T10:00:00Z",
-          })
+          }
+          decisions.set(id, saved)
+          return jsonResponse(201, saved)
         }
         if (leaf === "workflow" && method === "GET") {
           if (!selected.has(id)) return notFound("Role is not selected.")
-          return jsonResponse(200, workflowFixture(id))
+          return jsonResponse(200, {
+            ...workflowFixture(id),
+            stage: options.workflowStages?.[id] ?? "selected",
+          })
         }
       }
 
@@ -396,6 +416,80 @@ afterEach(() => {
 })
 
 describe("GroupedJobs", () => {
+  it("shows the saved selection after a fresh mount", async () => {
+    stubGroupedFetch()
+    const first = renderJobs()
+    await screen.findByRole("button", { name: "Check chosen jobs (1)" })
+    expect(
+      within(cardFor("Backend Engineer")).getByText(
+        "Selected — saved owner decision."
+      )
+    ).toBeDefined()
+    expect(
+      screen.queryByRole("button", {
+        name: "Select Backend Engineer for preparation",
+      })
+    ).toBeNull()
+
+    first.unmount()
+    renderJobs()
+    await screen.findByRole("button", { name: "Check chosen jobs (1)" })
+    expect(
+      within(cardFor("Backend Engineer")).getByText(
+        "Selected — saved owner decision."
+      )
+    ).toBeDefined()
+  })
+
+  it("dismisses a chosen job and updates the sticky count without starting a check", async () => {
+    const { calls } = stubGroupedFetch()
+    renderJobs()
+    await screen.findByRole("button", { name: "Check chosen jobs (1)" })
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Remove Backend Engineer from chosen jobs",
+      })
+    )
+    await screen.findByRole("button", { name: "Check chosen jobs (0)" })
+    expect(
+      screen.getByRole("button", {
+        name: "Select Backend Engineer for preparation",
+      })
+    ).toBeDefined()
+    const post = calls.find(
+      (call) =>
+        call.method === "POST" &&
+        call.url === "/api/v1/opportunities/job-rec/decision"
+    )
+    const body = JSON.parse(post?.body ?? "{}") as Record<string, unknown>
+    expect(body["decision"]).toBe("dismissed")
+    expect(body["expectedDecisionRevision"]).toBe(1)
+    expect(calls.filter((call) => call.url.includes("/checks"))).toEqual([])
+  })
+
+  it("offers removal during review but not after a completed send", async () => {
+    stubGroupedFetch({ workflowStages: { "job-rec": "reviewing" } })
+    const first = renderJobs()
+    await screen.findByRole("button", { name: "Check chosen jobs (1)" })
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Remove Backend Engineer from chosen jobs",
+      })
+    )
+    await screen.findByRole("button", { name: "Check chosen jobs (0)" })
+
+    first.unmount()
+    stubGroupedFetch({ workflowStages: { "job-rec": "sent" } })
+    renderJobs()
+    await screen.findByRole("button", { name: "Check chosen jobs (1)" })
+    expect(
+      screen.queryByRole("button", {
+        name: "Remove Backend Engineer from chosen jobs",
+      })
+    ).toBeNull()
+  })
+
   it("groups listings by saved Jev group, including exceptional Unknown", async () => {
     window.localStorage.setItem("jobseek.research-run-id", "run-7")
     stubGroupedFetch()
@@ -421,7 +515,9 @@ describe("GroupedJobs", () => {
       screen.getAllByText("Latest saved finding from outside the tracked run.")
     ).toHaveLength(3)
     // B3 stage pill still shows for the chosen role.
-    expect(within(cardFor("Backend Engineer")).getByText("Selected")).toBeDefined()
+    expect(
+      within(cardFor("Backend Engineer")).getByText("Selected")
+    ).toBeDefined()
     // Unclassified roles get no explanation toggle.
     expect(
       within(cardFor("Fresh Listing")).queryByRole("button", {
@@ -437,14 +533,11 @@ describe("GroupedJobs", () => {
 
     await screen.findByText("Recommended (1)")
     const card = cardFor("Backend Engineer")
-    fireEvent.click(
-      within(card).getByRole("button", { name: "Why this job" })
-    )
+    fireEvent.click(within(card).getByRole("button", { name: "Why this job" }))
     await within(card).findByText("Strength: Loves “quoted” labelling ✓")
     within(card).getByText(
       (_, element) =>
-        element?.textContent ===
-        "Detail with “quotes”, emoji ✓, and\nnewline."
+        element?.textContent === "Detail with “quotes”, emoji ✓, and\nnewline."
     )
     within(card).getByText("Jev support signal: 0.85")
     within(card).getByText("Concern: On-call load")
@@ -603,8 +696,7 @@ describe("GroupedJobs", () => {
     ).toHaveLength(1)
     expect(
       calls.filter(
-        (call) =>
-          call.method === "GET" && call.url === "/api/v1/research/brief"
+        (call) => call.method === "GET" && call.url === "/api/v1/research/brief"
       )
     ).toHaveLength(1)
   })

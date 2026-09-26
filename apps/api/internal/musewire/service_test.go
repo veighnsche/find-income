@@ -769,3 +769,35 @@ func TestServiceFailsClosed(t *testing.T) {
 		t.Errorf("unknown tier status = %+v, want unavailable", status)
 	}
 }
+
+func TestReadinessReflectsContributorTransport(t *testing.T) {
+	db := openFixtureDB(t)
+	deps := Deps{Facts: fixtureFacts(), Bounds: musecode.DefaultBounds(),
+		Cursors: StoreCursors{DB: db}, DB: db, Actor: fixtureActor,
+		Executor: &fakeExecutor{}, Captures: &fakeCaptures{},
+		Assessor: &jevassess.Handler{}, Workspaces: t.TempDir()}
+	for _, transport := range []musecode.Transport{
+		musecode.UnavailableTransport{}, &musecode.UnavailableTransport{},
+	} {
+		deps.Transport = transport
+		service, err := NewService(deps)
+		if err != nil {
+			t.Fatal(err)
+		}
+		status := service.Readiness(musecode.TierContributor)
+		if status.Available || status.Code != musecode.CodeProtocolUnverified {
+			t.Errorf("disabled Contributor transport status = %+v", status)
+		}
+		if standard := service.Readiness(musecode.TierStandard); !standard.Available {
+			t.Errorf("discovery transport incorrectly gated Standard: %+v", standard)
+		}
+	}
+	deps.Transport = scriptTransport{}
+	service, err := NewService(deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status := service.Readiness(musecode.TierContributor); !status.Available || status.Code != musecode.CodeReady {
+		t.Errorf("enabled fixture transport status = %+v", status)
+	}
+}

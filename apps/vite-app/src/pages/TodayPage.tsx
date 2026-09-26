@@ -1,12 +1,71 @@
 import {
   getPreferences,
+  getResearchRun,
   getRuntimeStatus,
   listOpportunities,
 } from "@/api/client"
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/shared"
+import { discoveryRunStorageKey } from "@/features/discovery/discovery-section"
+import { describeRunState } from "@/features/discovery/research-controls"
 import { useRead } from "@/pages/useRead"
 
+function savedRunId(): string | null {
+  try {
+    return window.localStorage.getItem(discoveryRunStorageKey)
+  } catch {
+    return null
+  }
+}
+
+function SavedResearch({ runId }: { runId: string }) {
+  const run = useRead(`today:research:${runId}`, (signal) =>
+    getResearchRun(runId, signal)
+  )
+
+  return (
+    <section
+      aria-labelledby="today-research-heading"
+      className="rounded-2xl border bg-card px-4 py-4"
+    >
+      <h2
+        id="today-research-heading"
+        className="font-heading text-lg font-medium"
+      >
+        Saved research
+      </h2>
+      {run.status === "loading" ? (
+        <LoadingBlock label="Loading saved research…" />
+      ) : run.status === "error" ? (
+        <ErrorBlock
+          title="Could not load saved research"
+          message={run.error}
+          onRetry={run.retry}
+        />
+      ) : (
+        <div className="mt-2 flex flex-col gap-2 text-sm">
+          <p>{describeRunState(run.data.state)}</p>
+          <p>
+            {run.data.savedIds.length} saved{" "}
+            {run.data.savedIds.length === 1 ? "role" : "roles"}
+            {run.data.unresolvedCount > 0
+              ? ` · ${run.data.unresolvedCount} unresolved`
+              : ""}
+            .
+          </p>
+          <a
+            href="#/search"
+            className="font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            Open this research run
+          </a>
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function TodayPage() {
+  const runId = savedRunId()
   const opportunities = useRead("today:opportunities", (signal) =>
     listOpportunities("", signal)
   )
@@ -20,10 +79,12 @@ export function TodayPage() {
       <div>
         <h1 className="font-heading text-2xl font-semibold">Today</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          A read-only summary of your search. Opening any section below reads
-          saved server state and starts nothing.
+          Your saved work and the current state of your search. Opening a
+          section reads saved state and starts nothing.
         </p>
       </div>
+
+      {runId === null ? null : <SavedResearch runId={runId} />}
 
       <section
         aria-labelledby="today-roles-heading"
@@ -163,8 +224,9 @@ export function TodayPage() {
   )
 }
 
-function activeCount(items: { opportunity: { archivedAt?: string } }[]): number {
-  return items.filter(
-    (item) => item.opportunity.archivedAt === undefined
-  ).length
+function activeCount(
+  items: { opportunity: { archivedAt?: string } }[]
+): number {
+  return items.filter((item) => item.opportunity.archivedAt === undefined)
+    .length
 }

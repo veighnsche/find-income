@@ -127,6 +127,7 @@ interface JobCardProps {
   onToggleWhy: () => void
   selection: SelectionState | undefined
   onSelect: () => void
+  onRemove: () => void
 }
 
 function JobCard({
@@ -139,6 +140,7 @@ function JobCard({
   onToggleWhy,
   selection,
   onSelect,
+  onRemove,
 }: JobCardProps) {
   const job = view.opportunity
   const archived = job.archivedAt !== undefined
@@ -146,13 +148,15 @@ function JobCard({
   const title = job.title === "" ? "(untitled role)" : job.title
   const panelId = `why-${job.id}`
   const finding = tracked?.entry ?? null
+  const selected =
+    workflow !== null || selection?.saved?.decision === "selected"
 
   return (
     <li className="rounded-lg border bg-card px-3 py-2.5">
       <p className="flex min-w-0 flex-wrap items-baseline gap-x-2">
         <a
           href={href}
-          className="text-sm font-medium underline-offset-4 outline-none wrap-break-word hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="text-sm font-medium wrap-break-word underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           {title}
         </a>
@@ -166,7 +170,7 @@ function JobCard({
           </a>
         )}
       </p>
-      <p className="mt-1 text-xs text-muted-foreground wrap-break-word">
+      <p className="mt-1 text-xs wrap-break-word text-muted-foreground">
         {`${job.kind} · ${job.workPattern}${job.locationText === "" ? "" : ` · ${job.locationText}`}${archived ? " · archived" : ""}`}
       </p>
 
@@ -316,10 +320,30 @@ function JobCard({
       )}
 
       <div className="mt-2 flex min-w-0 flex-col gap-1">
-        {selection?.saved !== undefined && selection.saved !== null ? (
-          <p className="text-sm">
-            {`Selected — decision rev ${selection.saved.revision}.`}
-          </p>
+        {selected ? (
+          <>
+            <p className="text-sm">
+              {selection?.saved?.decision === "selected"
+                ? `Selected — decision rev ${selection.saved.revision}.`
+                : "Selected — saved owner decision."}
+            </p>
+            {workflow !== null && workflow.stage !== "sent" ? (
+              <div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={selection?.busy === true}
+                  aria-label={`Remove ${title} from chosen jobs`}
+                  onClick={onRemove}
+                >
+                  {selection?.busy === true
+                    ? "Removing…"
+                    : "Remove from chosen jobs"}
+                </Button>
+              </div>
+            ) : null}
+          </>
         ) : (
           <div>
             <Button
@@ -381,11 +405,7 @@ export function GroupedJobs({
         for (let page = 0; page < 20; page += 1) {
           const result = await listOpportunities(cursor, signal)
           opportunities.push(...result.items)
-          if (
-            result.nextCursor === undefined ||
-            result.nextCursor === ""
-          )
-            break
+          if (result.nextCursor === undefined || result.nextCursor === "") break
           cursor = result.nextCursor
         }
 
@@ -590,7 +610,11 @@ export function GroupedJobs({
     })
   }
 
-  async function selectJob(opportunityId: string, revision: number) {
+  async function changeSelection(
+    opportunityId: string,
+    revision: number,
+    decision: "selected" | "dismissed"
+  ) {
     setSelections((previous) => ({
       ...previous,
       [opportunityId]: {
@@ -607,7 +631,7 @@ export function GroupedJobs({
           requestKey: newIdempotencyKey(),
           expectedOpportunityRevision: revision,
           expectedDecisionRevision: existing?.revision ?? 0,
-          decision: "selected",
+          decision,
         },
         csrfToken
       )
@@ -617,17 +641,13 @@ export function GroupedJobs({
       }))
       try {
         const workflow = await getRoleWorkflowOrNull(opportunityId)
-        if (workflow !== null) {
-          setLoad((current) => {
-            if (current.kind !== "ready") return current
-            const workflows = new Map(current.data.workflows)
-            workflows.set(opportunityId, workflow)
-            return {
-              kind: "ready",
-              data: { ...current.data, workflows },
-            }
-          })
-        }
+        setLoad((current) => {
+          if (current.kind !== "ready") return current
+          const workflows = new Map(current.data.workflows)
+          if (workflow !== null) workflows.set(opportunityId, workflow)
+          else workflows.delete(opportunityId)
+          return { kind: "ready", data: { ...current.data, workflows } }
+        })
       } catch (cause) {
         if (isUnauthenticated(cause)) loseSession()
       }
@@ -677,8 +697,8 @@ export function GroupedJobs({
         </p>
         {data.runId === null ? (
           <p className="mt-1 text-xs wrap-break-word text-muted-foreground">
-            No tracked research run — showing the latest saved finding per
-            role. Start a Find jobs pass to collect new sources.
+            No tracked research run — showing the latest saved finding per role.
+            Start a Find jobs pass to collect new sources.
           </p>
         ) : (
           <p className="mt-1 text-xs wrap-break-word text-muted-foreground">
@@ -720,12 +740,18 @@ export function GroupedJobs({
           </p>
         ) : null}
         {data.runFindingsError === null ? null : (
-          <p role="alert" className="mt-1 text-xs wrap-break-word text-destructive">
+          <p
+            role="alert"
+            className="mt-1 text-xs wrap-break-word text-destructive"
+          >
             {`Could not page the tracked run's findings (${data.runFindingsError}); showing per-role latest findings instead.`}
           </p>
         )}
         {data.findingFailures === 0 ? null : (
-          <p role="alert" className="mt-1 text-xs wrap-break-word text-destructive">
+          <p
+            role="alert"
+            className="mt-1 text-xs wrap-break-word text-destructive"
+          >
             {`${data.findingFailures} ${data.findingFailures === 1 ? "role" : "roles"} failed to load a saved finding.`}
           </p>
         )}
@@ -756,21 +782,25 @@ export function GroupedJobs({
                     <JobCard
                       key={view.opportunity.id}
                       view={view}
-                      tracked={
-                        data.findings.get(view.opportunity.id) ?? null
-                      }
+                      tracked={data.findings.get(view.opportunity.id) ?? null}
                       runId={data.runId}
-                      workflow={
-                        data.workflows.get(view.opportunity.id) ?? null
-                      }
+                      workflow={data.workflows.get(view.opportunity.id) ?? null}
                       captureUrls={data.captureUrls}
                       expanded={open.has(view.opportunity.id)}
                       onToggleWhy={() => toggleWhy(view.opportunity.id)}
                       selection={selections[view.opportunity.id]}
                       onSelect={() =>
-                        void selectJob(
+                        void changeSelection(
                           view.opportunity.id,
-                          view.opportunity.revision
+                          view.opportunity.revision,
+                          "selected"
+                        )
+                      }
+                      onRemove={() =>
+                        void changeSelection(
+                          view.opportunity.id,
+                          view.opportunity.revision,
+                          "dismissed"
                         )
                       }
                     />
