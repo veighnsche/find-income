@@ -25,12 +25,12 @@ Task ledger (checkbox only when acceptance evidence exists):
 - [x] M1 remove second preparation workflow — done 23a2654: 30 pack files cut; route artifacts canonical; pack UI controls deleted; E files handed over. No pack PDF survives (not re-derivable).
 - [x] R2 cut rejected runtime consumers — done 4a93058 + 2622b33: pack round-op/outcome/agency branches, codex session endpoints + CodexControl, pack tool/config/relevance, owner-authority case, required-tools list, migration 017, recovery script. R30 HTTP assertions pass.
 - [x] I2 subtraction gate — done: no pack/codex/MCP-server production refs (greps); suite fails only on Q0 01/02/03/05/06/07 (future-lane gaps); build/vet/typecheck green.
-- [ ] I3 publish contracts — active (coordinator): openapi pack/codex cuts + handoff_saved stage + Go/TS regen + minimal client.ts cut (temp I transfer, then F owns).
-- [ ] D1 catalog lifecycle — blocked on I3+R1
+- [x] I3 publish contracts — done 6ca278b + ee9dab1: 12 paths + 14 schemas cut; handoff_saved terminal; both regens pass check:generated; client/fixtures/stage UI aligned (temp I transfer returned to F/E/G). Gates OPEN for D/K/F. Wave-2 transfers: D owns researchwire/* for commission/recovery reads; K owns musewire/check.go + checkadapter.go (R hands over).
+- [ ] D1 catalog lifecycle — ready (wave 2 dispatches D1–D4 as one backend child)
 - [ ] D2 vacancy identity/card facts — blocked on I3+R1
 - [ ] D3 server run recovery — blocked on I3+D1+D2
 - [ ] D4 sourced owner context — blocked on I3+R2
-- [ ] K1 truthful route-complete checks — blocked on I3+R1
+- [ ] K1 truthful route-complete checks — ready (wave 2 dispatches K1–K4 as one backend child)
 - [ ] K2 Jev approved candidates — blocked on I3+K1
 - [ ] K3 answer commit — blocked on I3+K1+K2
 - [ ] K4 owner clarification — blocked on I3+K1+K3
@@ -39,7 +39,7 @@ Task ledger (checkbox only when acceptance evidence exists):
 - [ ] M4 grounded prepare — blocked on M2+M3+K3+K4+R1
 - [ ] M5 edit/rewrite same artifacts — blocked on M2+M4
 - [ ] M6 export/canonical index — blocked on M3+M4+M5+I3
-- [ ] F1 shared seams — blocked on I3
+- [ ] F1 shared seams — ready (wave 2 dispatches F1–F3 as one frontend child)
 - [ ] F2 opening/status/stages — blocked on F1+D3+D4+K1
 - [ ] F3 saved-artifact job list — blocked on F1+F2+M6
 - [ ] G1 goals/source context — blocked on F1+D4
