@@ -41,6 +41,7 @@ export interface UseAnswerSaveResult {
   saving: boolean
   error: string | null
   save: () => void
+  saveAsync: () => Promise<QuestionAnswerValue>
   canSave: boolean
   unavailableReason: string | null
 }
@@ -79,11 +80,21 @@ export function useAnswerSave({
             : null
   const canSave = unavailableReason === null && !saving
 
-  const save = useCallback(() => {
-    if (csrfToken === null || saving || !dirty || tooLong) return
+  const saveAsync = useCallback((): Promise<QuestionAnswerValue> => {
+    if (csrfToken === null)
+      return Promise.reject(new Error("Sign in to save answers."))
+    if (saving)
+      return Promise.reject(
+        new Error("A save is already running for this question.")
+      )
+    if (!dirty) return Promise.reject(new Error("No changes to save."))
+    if (tooLong)
+      return Promise.reject(
+        new Error("Answer text is over the 20,000 character limit.")
+      )
     setSaving(true)
     setError(null)
-    void saveQuestionAnswer(
+    return saveQuestionAnswer(
       jobId,
       questionId,
       buildAnswerValueSave(saved.version, text),
@@ -97,24 +108,27 @@ export function useAnswerSave({
           state: value.state,
           provenance: value.provenance,
         })
+        return value
       },
       (cause: unknown) => {
         setSaving(false)
         if (isUnauthenticated(cause)) {
           loseSession()
-          return
+          throw cause
         }
         if (cause instanceof RequestError && cause.status === 409) {
-          setError(
+          const conflict = new Error(
             "This answer changed elsewhere. Reload the page and reconcile your edits before saving again."
           )
-          return
+          setError(conflict.message)
+          throw conflict
         }
-        setError(
+        const failure =
           cause instanceof Error
-            ? cause.message
-            : "The request could not be completed."
-        )
+            ? cause
+            : new Error("The request could not be completed.")
+        setError(failure.message)
+        throw failure
       }
     )
   }, [
@@ -129,6 +143,12 @@ export function useAnswerSave({
     loseSession,
   ])
 
+  const save = useCallback(() => {
+    void saveAsync().catch(() => {
+      // saveAsync already reports the failure on the box.
+    })
+  }, [saveAsync])
+
   return {
     text,
     setText,
@@ -137,6 +157,7 @@ export function useAnswerSave({
     saving,
     error,
     save,
+    saveAsync,
     canSave,
     unavailableReason,
   }

@@ -1,4 +1,11 @@
 import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react"
+import {
   RequestError,
   getCurrentAnswerMatch,
   getCurrentOpportunityCheck,
@@ -6,11 +13,14 @@ import {
   getOpportunity,
   getRoleWorkflowOrNull,
   getSavedAnswer,
+  isUnauthenticated,
+  matchOpportunityAnswers,
   type AnswerMatchView,
   type CheckStatusView,
   type QuestionAnswerList,
   type QuestionAnswerValue,
 } from "@/api/client"
+import { useSession } from "@/api/session"
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/shared"
 import {
   ActivityDisclosure,
@@ -24,6 +34,7 @@ import {
   useAnswerSave,
   type AnswerBoxState,
 } from "@/features/answers/useAnswerSave"
+import { newIdempotencyKey } from "@/features/discovery/research-controls"
 import { formatDate } from "@/pages/format"
 import { RoleStageIndicator } from "@/pages/role-stages"
 import { useRead } from "@/pages/useRead"
@@ -34,11 +45,14 @@ type MatchEntry = AnswerMatchView["matches"][number]
 
 // AnswersPage is the E3 answer-questions surface for one role, reached by
 // deep link (#/jobs/:id/answers, registered by the coordinator). Mount,
-// reads and reloads are GET-only and commission nothing: no Codex, no LLM,
-// no match POST. Every saved suggestion starts inside its own editable box,
-// unanswered questions stay blank, and each save is an explicit per-question
-// PUT with the version observed from the values read. All state is keyed by
-// jobId and the detail section remounts per role.
+// reads and reloads are GET-only and commission nothing: no Codex, no LLM.
+// One explicit button runs Jev saved-answer matching (classifier only, plus
+// the no-fit choice); every saved suggestion starts inside its own editable
+// box, unanswered questions stay blank, and each save is an explicit
+// per-question PUT with the version observed from the values read. The
+// Prepare continuation commits every dirty box before navigating, so no
+// typed text is dropped. All state is keyed by jobId and the detail section
+// remounts per role.
 export function AnswersPage({ jobId }: { jobId: string }) {
   const opportunity = useRead(`answers:${jobId}:opportunity`, (signal) =>
     getOpportunity(jobId, signal)
@@ -180,6 +194,7 @@ function AnswersDetailSection({ jobId }: { jobId: string }) {
       check={check.data}
       match={match.data}
       values={values.data}
+      onMatchRefresh={match.retry}
     />
   )
 }
@@ -189,11 +204,13 @@ function AnswersBody({
   check,
   match,
   values,
+  onMatchRefresh,
 }: {
   jobId: string
   check: CheckStatusView
   match: AnswerMatchView | null
   values: QuestionAnswerList | null
+  onMatchRefresh: () => void
 }) {
   const detail = check.check ?? null
   if (check.status === "not_checked" || detail === null) {
@@ -241,7 +258,13 @@ function AnswersBody({
     )
   }
   return (
-    <AnswersList jobId={jobId} detail={detail} match={match} values={values} />
+    <AnswersList
+      jobId={jobId}
+      detail={detail}
+      match={match}
+      values={values}
+      onMatchRefresh={onMatchRefresh}
+    />
   )
 }
 
@@ -277,17 +300,33 @@ function suggestedAnswerRef(entry: MatchEntry | null): {
 type SuggestionText =
   { status: "ready"; text: string } | { status: "unavailable" }
 
+interface AnswerCommitHandle {
+  dirty: boolean
+  saving: boolean
+  commit: () => Promise<unknown>
+}
+
 function AnswersList({
   jobId,
   detail,
   match,
   values,
+  onMatchRefresh,
 }: {
   jobId: string
   detail: CheckDetail
   match: AnswerMatchView | null
   values: QuestionAnswerList | null
+  onMatchRefresh: () => void
 }) {
+  const commits = useRef(new Map<string, AnswerCommitHandle>())
+  const registerCommit = useCallback(
+    (questionId: string, handle: AnswerCommitHandle | null) => {
+      if (handle === null) commits.current.delete(questionId)
+      else commits.current.set(questionId, handle)
+    },
+    []
+  )
   const refs = new Map<string, number>()
   for (const question of detail.questions) {
     const ref = suggestedAnswerRef(matchEntryFor(match, detail.id, question.id))
@@ -340,6 +379,12 @@ function AnswersList({
   }
   return (
     <div className="flex min-w-0 flex-col gap-6">
+      <MatchTrigger
+        jobId={jobId}
+        detail={detail}
+        match={match}
+        onMatched={onMatchRefresh}
+      />
       <MatchBanner match={match} checkId={detail.id} />
       <AnswerActivityFeed
         questions={detail.questions}
@@ -358,10 +403,108 @@ function AnswersList({
             suggestions.data
           )}
           saved={savedByQuestion.get(question.id) ?? null}
+          registerCommit={registerCommit}
         />
       ))}
-      <PrepareContinuation jobId={jobId} />
+      <PrepareContinuation
+        jobId={jobId}
+        questions={detail.questions}
+        commits={commits}
+      />
     </div>
+  )
+}
+
+// MatchTrigger runs the existing Jev saved-answer matching action for the
+// current question set: relevant approved answers plus the no-fit choice.
+// It is classifier-only — no Contributor, no Standard, no LLM — and only an
+// explicit click runs it. Success re-reads the saved match view, which
+// prefills boxes that have no stored value yet.
+function MatchTrigger({
+  jobId,
+  detail,
+  match,
+  onMatched,
+}: {
+  jobId: string
+  detail: CheckDetail
+  match: AnswerMatchView | null
+  onMatched: () => void
+}) {
+  const { session, loseSession } = useSession()
+  const [running, setRunning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const current =
+    match !== null &&
+    match.checkId === detail.id &&
+    match.status !== "outdated"
+
+  async function run() {
+    if (session === undefined || session === null || running) return
+    setRunning(true)
+    setError(null)
+    try {
+      await matchOpportunityAnswers(
+        jobId,
+        {
+          requestKey: newIdempotencyKey(),
+          expectedCheckId: detail.id,
+          expectedQuestionSetSha256: detail.questionSetSha256,
+        },
+        session.csrfToken
+      )
+      setRunning(false)
+      onMatched()
+    } catch (cause: unknown) {
+      setRunning(false)
+      if (isUnauthenticated(cause)) {
+        loseSession()
+        return
+      }
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "The request could not be completed."
+      )
+    }
+  }
+
+  return (
+    <section
+      aria-label="Match saved answers"
+      className="flex min-w-0 flex-col gap-2 rounded-xl border border-border p-4"
+    >
+      <p className="text-sm wrap-break-word">
+        Jev matching picks a relevant approved answer per question, or records
+        no fit. It never drafts text and never contacts anyone.
+      </p>
+      <div>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={
+            running || session === undefined || session === null
+          }
+          onClick={() => void run()}
+        >
+          {running
+            ? "Matching…"
+            : current
+              ? "Re-run answer matching"
+              : "Match saved answers"}
+        </Button>
+      </div>
+      {session === null ? (
+        <p className="text-sm wrap-break-word text-muted-foreground">
+          Sign in to run matching.
+        </p>
+      ) : null}
+      {error === null ? null : (
+        <p role="alert" className="text-sm wrap-break-word text-destructive">
+          {error}
+        </p>
+      )}
+    </section>
   )
 }
 
@@ -421,10 +564,64 @@ function AnswerActivityFeed({
   )
 }
 
-// PrepareContinuation routes answered-or-blank boxes to preparation. It
-// navigates only: preparation itself starts from its own explicit action,
-// so this page stays GET-only apart from per-box saves.
-function PrepareContinuation({ jobId }: { jobId: string }) {
+// PrepareContinuation commits every dirty answer box and then routes to
+// preparation. Preparation itself starts from its own explicit action, but
+// this button never drops typed text: it saves dirty boxes first, refuses
+// to navigate while a save is running or a commit fails, and names the
+// failed questions honestly. Clean boxes navigate immediately.
+function PrepareContinuation({
+  jobId,
+  questions,
+  commits,
+}: {
+  jobId: string
+  questions: CheckDetail["questions"]
+  commits: RefObject<Map<string, AnswerCommitHandle>>
+}) {
+  const [committing, setCommitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const prepareHash = `#/jobs/${encodeURIComponent(jobId)}/prepare`
+
+  async function continueToPrepare() {
+    if (committing) return
+    const entries = questions.map((question, index) => ({
+      number: index + 1,
+      handle: commits.current.get(question.id) ?? null,
+    }))
+    if (entries.some((entry) => entry.handle === null)) {
+      setError("Some answer boxes are not ready yet; try again in a moment.")
+      return
+    }
+    if (entries.some((entry) => entry.handle!.saving)) {
+      setError("A save is still running; wait for it to finish, then continue.")
+      return
+    }
+    const dirty = entries.filter((entry) => entry.handle!.dirty)
+    if (dirty.length === 0) {
+      setError(null)
+      window.location.hash = prepareHash
+      return
+    }
+    setCommitting(true)
+    setError(null)
+    const failed: string[] = []
+    for (const entry of dirty) {
+      try {
+        await entry.handle!.commit()
+      } catch {
+        failed.push(`Question ${entry.number}`)
+      }
+    }
+    setCommitting(false)
+    if (failed.length > 0) {
+      setError(
+        `Could not save ${failed.join(", ")}. Fix the boxes above — your text is kept — then continue again.`
+      )
+      return
+    }
+    window.location.hash = prepareHash
+  }
+
   return (
     <section
       aria-label="Continue to preparation"
@@ -436,13 +633,18 @@ function PrepareContinuation({ jobId }: { jobId: string }) {
       </p>
       <div>
         <Button
-          render={
-            <a href={`#/jobs/${encodeURIComponent(jobId)}/prepare`}>
-              Prepare materials
-            </a>
-          }
-        />
+          type="button"
+          disabled={committing}
+          onClick={() => void continueToPrepare()}
+        >
+          {committing ? "Saving answers…" : "Prepare materials"}
+        </Button>
       </div>
+      {error === null ? null : (
+        <p role="alert" className="text-sm wrap-break-word text-destructive">
+          {error}
+        </p>
+      )}
       <p className="text-xs wrap-break-word text-muted-foreground">
         Nothing leaves this app. You keep the saved answers and apply
         manually from the Handoff page.
@@ -521,6 +723,7 @@ function AnswerCard({
   entry,
   suggestion,
   saved,
+  registerCommit,
 }: {
   jobId: string
   index: number
@@ -528,6 +731,7 @@ function AnswerCard({
   entry: MatchEntry | null
   suggestion: string | null
   saved: QuestionAnswerValue | null
+  registerCommit: (questionId: string, handle: AnswerCommitHandle | null) => void
 }) {
   const savedState: AnswerBoxState =
     saved === null ? "unset" : saved.state === "blank" ? "blank" : "answered"
@@ -543,6 +747,11 @@ function AnswerCard({
     },
   })
   const boxId = `answers-${question.id}`
+  const { dirty, saving, saveAsync } = save
+  useEffect(() => {
+    registerCommit(question.id, { dirty, saving, commit: saveAsync })
+    return () => registerCommit(question.id, null)
+  }, [registerCommit, question.id, dirty, saving, saveAsync])
 
   return (
     <section

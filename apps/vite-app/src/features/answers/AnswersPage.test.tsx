@@ -216,6 +216,7 @@ interface AnswersStubOptions {
   values?: Record<string, QuestionAnswerList | null>
   answers?: Record<string, SavedAnswer | null>
   putAnswer?: (jobId: string, questionId: string, body: unknown) => Response
+  matchConflict?: boolean
 }
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -233,6 +234,10 @@ function stubAnswersFetch(options: AnswersStubOptions = {}): {
   calls: FetchCall[]
 } {
   const calls: FetchCall[] = []
+  const liveMatches = new Map<string, AnswerMatchView>()
+  for (const [id, entry] of Object.entries(options.matches ?? {})) {
+    if (entry !== null) liveMatches.set(id, entry)
+  }
   const fetchMock = vi.fn(
     async (input: string | URL | Request, init?: RequestInit) => {
       const url =
@@ -282,10 +287,19 @@ function stubAnswersFetch(options: AnswersStubOptions = {}): {
             : jsonResponse(200, entry)
         }
         if (suffix === "/answers/match/current") {
-          const entry = options.matches?.[id] ?? null
+          const entry = liveMatches.get(id) ?? null
           return entry === null
             ? notFound("Match not found.")
             : jsonResponse(200, entry)
+        }
+        if (suffix === "/answers/match" && method === "POST") {
+          if (options.matchConflict === true)
+            return jsonResponse(409, {
+              error: { message: "Question set moved; recheck first." },
+            })
+          const entry = matchFixture(`check-${id}`)
+          liveMatches.set(id, entry)
+          return jsonResponse(200, entry)
         }
         if (suffix === "/answers/current") {
           const entry = options.values?.[id] ?? null
@@ -767,17 +781,182 @@ describe("answers journey flow", () => {
     expect(screen.getByText(/no saved answer fit/)).toBeDefined()
   })
 
-  it("continues to preparation without commissioning anything", async () => {
+  it("runs Jev matching on explicit click and prefills the returned suggestion", async () => {
+    const { calls } = stubAnswersFetch(
+      answeredOptions({ matches: { "job-1": null } })
+    )
+    renderAnswersPage("job-1")
+
+    expect(await screen.findByText(/No suggested answers yet/)).toBeDefined()
+    expect(
+      calls.filter(
+        (call) =>
+          call.method === "POST" &&
+          call.url === "/api/v1/opportunities/job-1/answers/match"
+      )
+    ).toHaveLength(0)
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Match saved answers" })
+    )
+    expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
+
+    const posts = calls.filter(
+      (call) =>
+        call.method === "POST" &&
+        call.url === "/api/v1/opportunities/job-1/answers/match"
+    )
+    expect(posts).toHaveLength(1)
+    const payload = JSON.parse(posts[0]?.body ?? "{}") as Record<
+      string,
+      unknown
+    >
+    expect(payload["expectedCheckId"]).toBe("check-job-1")
+    expect(payload["expectedQuestionSetSha256"]).toBe("set-sha")
+    expect(typeof payload["requestKey"]).toBe("string")
+    expect((payload["requestKey"] as string).length).toBeGreaterThan(0)
+    expect(
+      calls.filter(
+        (call) =>
+          call.method === "POST" &&
+          call.url !== "/api/v1/opportunities/job-1/answers/match"
+      )
+    ).toEqual([])
+    expect(
+      screen.getByRole("button", { name: "Re-run answer matching" })
+    ).toBeDefined()
+  })
+
+  it("reports a match conflict without touching the boxes", async () => {
+    stubAnswersFetch(
+      answeredOptions({ matches: { "job-1": null }, matchConflict: true })
+    )
+    renderAnswersPage("job-1")
+
+    expect(await screen.findByText(/No suggested answers yet/)).toBeDefined()
+    fireEvent.click(
+      screen.getByRole("button", { name: "Match saved answers" })
+    )
+    await screen.findByText("Question set moved; recheck first.")
+    expect(screen.queryByDisplayValue(SUGGESTED_TEXT)).toBeNull()
+  })
+
+  it("continues to preparation with clean boxes and no writes", async () => {
     const { calls } = stubAnswersFetch(answeredOptions())
+    window.location.hash = "#/jobs/job-1/answers"
     renderAnswersPage("job-1")
 
     expect(await screen.findByDisplayValue(SUGGESTED_TEXT)).toBeDefined()
-    const continuation = screen.getByRole("link", {
-      name: "Prepare materials",
-    })
-    expect(continuation.getAttribute("href")).toBe("#/jobs/job-1/prepare")
+    fireEvent.click(
+      screen.getByRole("button", { name: "Prepare materials" })
+    )
+    await waitFor(() =>
+      expect(window.location.hash).toBe("#/jobs/job-1/prepare")
+    )
     for (const call of calls) {
       expect(call.method).toBe("GET")
     }
+  })
+
+  it("commits every dirty box before continuing to preparation", async () => {
+    const seen: Array<{ questionId: string; body: unknown }> = []
+    stubAnswersFetch(
+      answeredOptions({
+        putAnswer: (_jobId, questionId, body) => {
+          seen.push({ questionId, body })
+          const payload = body as {
+            expectedAnswerVersion: number
+            text: string
+          }
+          return jsonResponse(
+            200,
+            valueFixture(questionId, {
+              version: payload.expectedAnswerVersion + 1,
+              state: payload.text === "" ? "blank" : "answered",
+              text: payload.text,
+              provenance: {
+                origin: "owner_written",
+                editedAt: "2026-09-22T11:00:00Z",
+                editedBy: { actorKind: "administrator", actorId: "owner" },
+              },
+            })
+          )
+        },
+      })
+    )
+    window.location.hash = "#/jobs/job-1/answers"
+    renderAnswersPage("job-1")
+
+    const boxes = (await screen.findAllByLabelText(
+      "Your answer"
+    )) as HTMLTextAreaElement[]
+    fireEvent.change(boxes[0] as HTMLTextAreaElement, {
+      target: { value: "Remote, async-first." },
+    })
+    fireEvent.change(boxes[1] as HTMLTextAreaElement, {
+      target: { value: "Two weeks." },
+    })
+    fireEvent.click(
+      screen.getByRole("button", { name: "Prepare materials" })
+    )
+
+    await waitFor(() =>
+      expect(window.location.hash).toBe("#/jobs/job-1/prepare")
+    )
+    expect(seen).toHaveLength(2)
+    expect(seen[0]).toEqual({
+      questionId: "q-remote",
+      body: { expectedAnswerVersion: 0, text: "Remote, async-first." },
+    })
+    expect(seen[1]).toEqual({
+      questionId: "q-start",
+      body: { expectedAnswerVersion: 0, text: "Two weeks." },
+    })
+  })
+
+  it("holds the continuation on a partial save failure and keeps the text", async () => {
+    stubAnswersFetch(
+      answeredOptions({
+        putAnswer: (_jobId, questionId, body) => {
+          if (questionId === "q-start")
+            return jsonResponse(409, {
+              error: { message: "Answer version conflict." },
+            })
+          const payload = body as {
+            expectedAnswerVersion: number
+            text: string
+          }
+          return jsonResponse(
+            200,
+            valueFixture(questionId, {
+              version: payload.expectedAnswerVersion + 1,
+              state: "answered",
+              text: payload.text,
+            })
+          )
+        },
+      })
+    )
+    window.location.hash = "#/jobs/job-1/answers"
+    renderAnswersPage("job-1")
+
+    const boxes = (await screen.findAllByLabelText(
+      "Your answer"
+    )) as HTMLTextAreaElement[]
+    fireEvent.change(boxes[0] as HTMLTextAreaElement, {
+      target: { value: "Remote, async-first." },
+    })
+    fireEvent.change(boxes[1] as HTMLTextAreaElement, {
+      target: { value: "Two weeks." },
+    })
+    fireEvent.click(
+      screen.getByRole("button", { name: "Prepare materials" })
+    )
+
+    await screen.findByText(/Could not save Question 2\./)
+    expect(window.location.hash).toBe("#/jobs/job-1/answers")
+    expect(
+      (screen.getAllByLabelText("Your answer")[1] as HTMLTextAreaElement).value
+    ).toBe("Two weeks.")
   })
 })
