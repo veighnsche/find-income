@@ -51,9 +51,9 @@ export function jevGroupLabel(bucket: JobsBucket): string {
     case "recommended":
       return "Recommended"
     case "could_be_recommended":
-      return "Could be recommended"
+      return "Might recommend"
     case "probably_not_recommended":
-      return "Probably not recommended"
+      return "Might not recommend"
     case "not_recommended":
       return "Not recommended"
     case "unknown":
@@ -100,10 +100,25 @@ interface GroupedJobsData {
   runId: string | null
   runFindingsError: string | null
   findingFailures: number
+  decisionFailures: number
   opportunities: OpportunityView[]
   findings: Map<string, TrackedFinding>
   workflows: Map<string, RoleWorkflowState>
+  decisions: Map<string, OwnerDecision>
   captureUrls: Map<string, string>
+}
+
+export function decisionLabel(
+  decision: OwnerDecision["decision"]
+): string {
+  switch (decision) {
+    case "selected":
+      return "Selected"
+    case "acknowledged":
+      return "Shortlisted"
+    case "dismissed":
+      return "Passed"
+  }
 }
 
 type LoadState =
@@ -122,12 +137,12 @@ interface JobCardProps {
   tracked: TrackedFinding | null
   runId: string | null
   workflow: RoleWorkflowState | null
+  decision: OwnerDecision | null
   captureUrls: Map<string, string>
   expanded: boolean
   onToggleWhy: () => void
   selection: SelectionState | undefined
-  onSelect: () => void
-  onRemove: () => void
+  onDecide: (decision: OwnerDecision["decision"]) => void
 }
 
 function JobCard({
@@ -135,12 +150,12 @@ function JobCard({
   tracked,
   runId,
   workflow,
+  decision,
   captureUrls,
   expanded,
   onToggleWhy,
   selection,
-  onSelect,
-  onRemove,
+  onDecide,
 }: JobCardProps) {
   const job = view.opportunity
   const archived = job.archivedAt !== undefined
@@ -148,8 +163,9 @@ function JobCard({
   const title = job.title === "" ? "(untitled role)" : job.title
   const panelId = `why-${job.id}`
   const finding = tracked?.entry ?? null
-  const selected =
-    workflow !== null || selection?.saved?.decision === "selected"
+  const effective = selection?.saved ?? decision
+  const busy = selection?.busy === true
+  const locked = workflow !== null && workflow.stage === "sent"
 
   return (
     <li className="rounded-lg border bg-card px-3 py-2.5">
@@ -320,41 +336,44 @@ function JobCard({
       )}
 
       <div className="mt-2 flex min-w-0 flex-col gap-1">
-        {selected ? (
-          <>
-            <p className="text-sm">
-              {selection?.saved?.decision === "selected"
-                ? `Selected — decision rev ${selection.saved.revision}.`
-                : "Selected — saved owner decision."}
-            </p>
-            {workflow !== null && workflow.stage !== "sent" ? (
-              <div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={selection?.busy === true}
-                  aria-label={`Remove ${title} from chosen jobs`}
-                  onClick={onRemove}
-                >
-                  {selection?.busy === true
-                    ? "Removing…"
-                    : "Remove from chosen jobs"}
-                </Button>
-              </div>
-            ) : null}
-          </>
+        {effective === null ? (
+          <p className="text-sm text-muted-foreground">No owner decision yet.</p>
         ) : (
-          <div>
+          <p className="text-sm">
+            {`${decisionLabel(effective.decision)} — decision rev ${effective.revision}.`}
+          </p>
+        )}
+        {locked ? null : (
+          <div className="flex min-w-0 flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              disabled={selection?.busy === true}
-              aria-label={`Select ${title} for preparation`}
-              onClick={onSelect}
+              disabled={busy}
+              aria-label={`Select ${title}`}
+              onClick={() => onDecide("selected")}
             >
-              {selection?.busy === true ? "Selecting…" : "Select this job"}
+              Select
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              aria-label={`Shortlist ${title}`}
+              onClick={() => onDecide("acknowledged")}
+            >
+              Shortlist
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              aria-label={`Pass on ${title}`}
+              onClick={() => onDecide("dismissed")}
+            >
+              Pass
             </Button>
           </div>
         )}
@@ -447,6 +466,7 @@ export function GroupedJobs({
 
         let sawAuth = false
         let findingFailures = 0
+        let decisionFailures = 0
         const missing = opportunities.filter(
           (view) => !findings.has(view.opportunity.id)
         )
@@ -488,6 +508,29 @@ export function GroupedJobs({
           throw cause
         }
 
+        const decisions = new Map<string, OwnerDecision>()
+        await Promise.all(
+          opportunities.map(async (view) => {
+            const id = view.opportunity.id
+            try {
+              const decision = await getOwnerOpportunityDecision(id, signal)
+              if (decision !== null) decisions.set(id, decision)
+            } catch (cause) {
+              if (signal.aborted) return
+              if (isUnauthenticated(cause)) {
+                sawAuth = true
+                return
+              }
+              decisionFailures += 1
+            }
+          })
+        )
+        if (signal.aborted) return
+        if (sawAuth) {
+          loseSession()
+          return
+        }
+
         const captureIds = new Set<string>()
         for (const tracked of findings.values()) {
           for (const link of tracked.entry.evidenceLinks) {
@@ -524,9 +567,11 @@ export function GroupedJobs({
             runId,
             runFindingsError,
             findingFailures,
+            decisionFailures,
             opportunities,
             findings,
             workflows,
+            decisions,
             captureUrls,
           },
         })
@@ -613,7 +658,8 @@ export function GroupedJobs({
   async function changeSelection(
     opportunityId: string,
     revision: number,
-    decision: "selected" | "dismissed"
+    expectedDecisionRevision: number,
+    decision: OwnerDecision["decision"]
   ) {
     setSelections((previous) => ({
       ...previous,
@@ -624,13 +670,12 @@ export function GroupedJobs({
       },
     }))
     try {
-      const existing = await getOwnerOpportunityDecision(opportunityId)
       const saved = await setOwnerOpportunityDecision(
         opportunityId,
         {
           requestKey: newIdempotencyKey(),
           expectedOpportunityRevision: revision,
-          expectedDecisionRevision: existing?.revision ?? 0,
+          expectedDecisionRevision,
           decision,
         },
         csrfToken
@@ -639,6 +684,12 @@ export function GroupedJobs({
         ...previous,
         [opportunityId]: { busy: false, error: null, saved },
       }))
+      setLoad((current) => {
+        if (current.kind !== "ready") return current
+        const decisions = new Map(current.data.decisions)
+        decisions.set(opportunityId, saved)
+        return { kind: "ready", data: { ...current.data, decisions } }
+      })
       try {
         const workflow = await getRoleWorkflowOrNull(opportunityId)
         setLoad((current) => {
@@ -755,6 +806,14 @@ export function GroupedJobs({
             {`${data.findingFailures} ${data.findingFailures === 1 ? "role" : "roles"} failed to load a saved finding.`}
           </p>
         )}
+        {data.decisionFailures === 0 ? null : (
+          <p
+            role="alert"
+            className="mt-1 text-xs wrap-break-word text-destructive"
+          >
+            {`${data.decisionFailures} ${data.decisionFailures === 1 ? "role" : "roles"} failed to load a saved decision.`}
+          </p>
+        )}
       </div>
 
       {data.opportunities.length === 0 ? (
@@ -785,22 +844,21 @@ export function GroupedJobs({
                       tracked={data.findings.get(view.opportunity.id) ?? null}
                       runId={data.runId}
                       workflow={data.workflows.get(view.opportunity.id) ?? null}
+                      decision={
+                        data.decisions.get(view.opportunity.id) ?? null
+                      }
                       captureUrls={data.captureUrls}
                       expanded={open.has(view.opportunity.id)}
                       onToggleWhy={() => toggleWhy(view.opportunity.id)}
                       selection={selections[view.opportunity.id]}
-                      onSelect={() =>
+                      onDecide={(decision) =>
                         void changeSelection(
                           view.opportunity.id,
                           view.opportunity.revision,
-                          "selected"
-                        )
-                      }
-                      onRemove={() =>
-                        void changeSelection(
-                          view.opportunity.id,
-                          view.opportunity.revision,
-                          "dismissed"
+                          selections[view.opportunity.id]?.saved?.revision ??
+                            data.decisions.get(view.opportunity.id)?.revision ??
+                            0,
+                          decision
                         )
                       }
                     />

@@ -193,6 +193,15 @@ export function stubFetch(options: FetchStubOptions = {}): {
 } {
   const calls: FetchCall[] = []
   let currentPreferences = options.preferences ?? preferencesFixture
+  const decisions = new Map<string, OwnerDecision>()
+  if (options.decisionByOpportunity === undefined) {
+    if (options.opportunityById?.["job-1"] !== null)
+      decisions.set("job-1", decisionFixture)
+  } else {
+    for (const [id, entry] of Object.entries(options.decisionByOpportunity)) {
+      if (entry !== null) decisions.set(id, entry)
+    }
+  }
   const opportunities = options.opportunities ?? [jobOneFixture, jobTwoFixture]
   const byId = new Map<string, OpportunityView>(
     opportunities.map((view) => [view.opportunity.id, view])
@@ -273,11 +282,37 @@ export function stubFetch(options: FetchStubOptions = {}): {
             error: { message: "Opportunity not found." },
           })
         if (suffix === "") return jsonResponse(200, view)
+        if (suffix === "/decision" && method === "POST") {
+          const body = JSON.parse((init?.body as string | null) ?? "{}") as {
+            decision?: OwnerDecision["decision"]
+            expectedDecisionRevision?: number
+          }
+          const previous = decisions.get(id) ?? null
+          if ((previous?.revision ?? 0) !== (body.expectedDecisionRevision ?? 0))
+            return jsonResponse(409, {
+              error: { code: "conflict", message: "Decision moved." },
+            })
+          const saved: OwnerDecision = {
+            id: `decision-${id}`,
+            opportunityId: id,
+            decision: body.decision ?? "selected",
+            revision: (previous?.revision ?? 0) + 1,
+            opportunityRevision: view.opportunity.revision,
+            auditId: "audit-stub",
+            createdAt: "2026-09-26T10:00:00Z",
+          }
+          decisions.set(id, saved)
+          if (saved.decision === "selected")
+            workflows.set(
+              id,
+              options.workflowsByOpportunity?.[id] ??
+                roleWorkflowFixture(id, "selected")
+            )
+          else workflows.delete(id)
+          return jsonResponse(previous === null ? 201 : 200, saved)
+        }
         if (suffix === "/decision") {
-          const decision =
-            options.decisionByOpportunity === undefined && id === "job-1"
-              ? decisionFixture
-              : options.decisionByOpportunity?.[id] ?? null
+          const decision = decisions.get(id) ?? null
           return decision === null
             ? jsonResponse(404, { error: { message: "Decision not found." } })
             : jsonResponse(200, decision)

@@ -422,21 +422,25 @@ describe("GroupedJobs", () => {
     await screen.findByRole("button", { name: "Check chosen jobs (1)" })
     expect(
       within(cardFor("Backend Engineer")).getByText(
-        "Selected — saved owner decision."
+        "Selected — decision rev 1."
       )
     ).toBeDefined()
     expect(
-      screen.queryByRole("button", {
-        name: "Select Backend Engineer for preparation",
-      })
-    ).toBeNull()
+      screen.getByRole("button", { name: "Select Backend Engineer" })
+    ).toBeDefined()
+    expect(
+      screen.getByRole("button", { name: "Shortlist Backend Engineer" })
+    ).toBeDefined()
+    expect(
+      screen.getByRole("button", { name: "Pass on Backend Engineer" })
+    ).toBeDefined()
 
     first.unmount()
     renderJobs()
     await screen.findByRole("button", { name: "Check chosen jobs (1)" })
     expect(
       within(cardFor("Backend Engineer")).getByText(
-        "Selected — saved owner decision."
+        "Selected — decision rev 1."
       )
     ).toBeDefined()
   })
@@ -448,13 +452,18 @@ describe("GroupedJobs", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Remove Backend Engineer from chosen jobs",
+        name: "Pass on Backend Engineer",
       })
     )
     await screen.findByRole("button", { name: "Check chosen jobs (0)" })
     expect(
+      within(cardFor("Backend Engineer")).getByText(
+        "Passed — decision rev 2."
+      )
+    ).toBeDefined()
+    expect(
       screen.getByRole("button", {
-        name: "Select Backend Engineer for preparation",
+        name: "Select Backend Engineer",
       })
     ).toBeDefined()
     const post = calls.find(
@@ -468,13 +477,13 @@ describe("GroupedJobs", () => {
     expect(calls.filter((call) => call.url.includes("/checks"))).toEqual([])
   })
 
-  it("offers removal during review but not after a completed send", async () => {
+  it("offers the decision triple during review but not after a completed send", async () => {
     stubGroupedFetch({ workflowStages: { "job-rec": "reviewing" } })
     const first = renderJobs()
     await screen.findByRole("button", { name: "Check chosen jobs (1)" })
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Remove Backend Engineer from chosen jobs",
+        name: "Pass on Backend Engineer",
       })
     )
     await screen.findByRole("button", { name: "Check chosen jobs (0)" })
@@ -485,9 +494,24 @@ describe("GroupedJobs", () => {
     await screen.findByRole("button", { name: "Check chosen jobs (1)" })
     expect(
       screen.queryByRole("button", {
-        name: "Remove Backend Engineer from chosen jobs",
+        name: "Select Backend Engineer",
       })
     ).toBeNull()
+    expect(
+      screen.queryByRole("button", {
+        name: "Shortlist Backend Engineer",
+      })
+    ).toBeNull()
+    expect(
+      screen.queryByRole("button", {
+        name: "Pass on Backend Engineer",
+      })
+    ).toBeNull()
+    expect(
+      within(cardFor("Backend Engineer")).getByText(
+        "Selected — decision rev 1."
+      )
+    ).toBeDefined()
   })
 
   it("groups listings by saved Jev group, including exceptional Unknown", async () => {
@@ -496,8 +520,8 @@ describe("GroupedJobs", () => {
     renderJobs()
 
     await screen.findByText("Recommended (1)")
-    await screen.findByText("Could be recommended (1)")
-    await screen.findByText("Probably not recommended (1)")
+    await screen.findByText("Might recommend (1)")
+    await screen.findByText("Might not recommend (1)")
     await screen.findByText("Not recommended (1)")
     await screen.findByText("Unknown — exceptional, needs a basis (1)")
     await screen.findByText("Not yet classified (1)")
@@ -582,7 +606,7 @@ describe("GroupedJobs", () => {
     await screen.findByText("Recommended (1)")
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Select Weekend Project for preparation",
+        name: "Select Weekend Project",
       })
     )
     await screen.findByText("Selected — decision rev 1.")
@@ -631,10 +655,10 @@ describe("GroupedJobs", () => {
     })
     renderJobs()
 
-    await screen.findByText("Could be recommended (1)")
+    await screen.findByText("Might recommend (1)")
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Select Support Engineer for preparation",
+        name: "Select Support Engineer",
       })
     )
     await screen.findByText("Selected — decision rev 5.")
@@ -650,6 +674,53 @@ describe("GroupedJobs", () => {
       unknown
     >
     expect(payload["expectedDecisionRevision"]).toBe(4)
+    expect(calls.filter((call) => call.url.includes("/checks"))).toEqual([])
+  })
+
+  it("shows the loaded shortlist label before any click", async () => {
+    stubGroupedFetch({
+      existingDecisions: {
+        "job-could": {
+          id: "decision-4",
+          opportunityId: "job-could",
+          decision: "acknowledged",
+          revision: 4,
+          opportunityRevision: 2,
+          auditId: "audit-4",
+          createdAt: "2026-09-18T10:00:00Z",
+        },
+      },
+    })
+    renderJobs()
+
+    await screen.findByText("Might recommend (1)")
+    expect(
+      within(cardFor("Support Engineer")).getByText(
+        "Shortlisted — decision rev 4."
+      )
+    ).toBeDefined()
+  })
+
+  it("shortlists a job without touching the chosen count or starting a check", async () => {
+    const { calls } = stubGroupedFetch()
+    renderJobs()
+
+    await screen.findByRole("button", { name: "Check chosen jobs (1)" })
+    fireEvent.click(
+      screen.getByRole("button", { name: "Shortlist Weekend Project" })
+    )
+    await screen.findByText("Shortlisted — decision rev 1.")
+    expect(
+      screen.getByRole("button", { name: "Check chosen jobs (1)" })
+    ).toBeDefined()
+    const post = calls.find(
+      (call) =>
+        call.method === "POST" &&
+        call.url === "/api/v1/opportunities/job-prob/decision"
+    )
+    const body = JSON.parse(post?.body ?? "{}") as Record<string, unknown>
+    expect(body["decision"]).toBe("acknowledged")
+    expect(body["expectedDecisionRevision"]).toBe(0)
     expect(calls.filter((call) => call.url.includes("/checks"))).toEqual([])
   })
 
@@ -716,8 +787,8 @@ describe("GroupedJobs", () => {
 
     await screen.findByText("Recommended (1)")
     // Every saved group still renders: nothing is erased by the version move.
-    await screen.findByText("Could be recommended (1)")
-    await screen.findByText("Probably not recommended (1)")
+    await screen.findByText("Might recommend (1)")
+    await screen.findByText("Might not recommend (1)")
     await screen.findByText("Not recommended (1)")
     await screen.findByText("Unknown — exceptional, needs a basis (1)")
     await screen.findByText("Not yet classified (1)")
@@ -832,7 +903,7 @@ describe("GroupedJobs", () => {
     // Selecting another role updates the count but starts no check.
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Select Weekend Project for preparation",
+        name: "Select Weekend Project",
       })
     )
     await screen.findByText("Selected — decision rev 1.")
@@ -884,7 +955,7 @@ describe("GroupedJobs", () => {
     await screen.findByText("Not recommended (1)")
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Select Night Shift Ops for preparation",
+        name: "Select Night Shift Ops",
       })
     )
     const card = cardFor("Night Shift Ops")
