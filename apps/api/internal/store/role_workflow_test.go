@@ -9,7 +9,9 @@ import (
 func selectFixtureOpportunity(t *testing.T, s *Store, companyID, key string) Opportunity {
 	t.Helper()
 	ctx := context.Background()
-	opportunity, _, err := s.CreateOpportunity(ctx, ownerActor(), fixtureOpportunity(companyID))
+	fixture := fixtureOpportunity(companyID)
+	fixture.SourceURL = "https://harbour.example/jobs/fixture-" + key
+	opportunity, _, err := s.CreateOpportunity(ctx, ownerActor(), fixture)
 	if err != nil {
 		t.Fatal(err)
 	}

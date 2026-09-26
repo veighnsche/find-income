@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List rounds newest-first for server run recovery */
+        get: operations["listRounds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rounds/active": {
         parameters: {
             query?: never;
@@ -292,13 +309,51 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List research runs newest-first for server run recovery */
+        get: operations["listResearchRuns"];
         put?: never;
         /**
          * Commission one bounded autonomous research run
          * @description Creates a run from the current brief plus optional corrections and a finite allowance. No source, query, company or vacancy fields are required. Run control stays on rounds/{id}/stop|resume.
          */
         post: operations["commissionResearchRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/research/runs/latest-terminal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the newest completed/failed run for one outcome */
+        get: operations["getLatestTerminalResearchRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/research/owner-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read owner identity plus approved career sources with provenance
+         * @description Pure GET-only read with zero model calls. Sources ground drafts and panels; the reusable answer library is served separately.
+         */
+        get: operations["getSourcedOwnerContext"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1751,6 +1806,35 @@ export interface components {
         RoundHistory: {
             items: components["schemas"]["RoundHistoryEvent"][];
         };
+        RunHistoryItem: {
+            runId: string;
+            requestKey: string;
+            intent: string;
+            outcome: string;
+            state: string;
+            stopReason: string;
+            createdAt: string;
+            updatedAt: string;
+            completedAt?: string;
+        };
+        RunHistoryPage: {
+            items: components["schemas"]["RunHistoryItem"][];
+            nextCursor?: string;
+        };
+        SourcedOwnerContext: {
+            owner: {
+                kind: string;
+                id: string;
+            };
+            sourcesConnected: boolean;
+            sources: {
+                id: string;
+                name: string;
+                sha256: string;
+                approved: boolean;
+                body: string;
+            }[];
+        };
         RoundHistoryEvent: {
             auditId: string;
             attemptId: string;
@@ -2266,7 +2350,7 @@ export interface components {
              * @description Stable machine-readable error code.
              * @enum {string}
              */
-            code: "validation_error" | "not_found" | "unauthenticated" | "forbidden" | "csrf_failed" | "rate_limited" | "conflict" | "unavailable" | "internal_error";
+            code: "validation_error" | "not_found" | "run_not_found" | "unauthenticated" | "forbidden" | "csrf_failed" | "rate_limited" | "conflict" | "unavailable" | "internal_error";
             message: string;
             details?: {
                 [key: string]: unknown;
@@ -3156,6 +3240,7 @@ export interface components {
             state: "unset" | "answered" | "blank";
             text: string;
             textSha256?: string;
+            draftRequested?: boolean;
             provenance: {
                 /** @enum {string} */
                 origin: "jev_suggestion" | "owner_written" | "owner_edited" | "carried_blank";
@@ -3180,6 +3265,8 @@ export interface components {
             /** Format: int64 */
             expectedAnswerVersion: number;
             text: string;
+            /** @description C4 explicit owner choice to leave a required answer blank for Standard drafting from verified facts. */
+            draftRequested?: boolean;
         };
         MaterialAnswerRef: {
             questionId: string;
@@ -3466,6 +3553,35 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    listRounds: {
+        parameters: {
+            query?: {
+                outcome?: string;
+                state?: string[];
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest-first round page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Round"][];
+                        nextCursor?: string;
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
     getActiveRound: {
         parameters: {
             query?: never;
@@ -3490,7 +3606,7 @@ export interface operations {
     getLatestCompletedRound: {
         parameters: {
             query: {
-                outcome: "all" | "process_input" | "prepare";
+                outcome: "all" | "process_input" | "prepare" | "research_run";
             };
             header?: never;
             path?: never;
@@ -3874,6 +3990,33 @@ export interface operations {
             429: components["responses"]["RateLimited"];
         };
     };
+    listResearchRuns: {
+        parameters: {
+            query?: {
+                outcome?: string;
+                state?: string[];
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest-first run page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunHistoryPage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
     commissionResearchRun: {
         parameters: {
             query?: never;
@@ -3898,6 +4041,52 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getLatestTerminalResearchRun: {
+        parameters: {
+            query?: {
+                outcome?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Latest terminal run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunHistoryItem"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getSourcedOwnerContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sourced owner context */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcedOwnerContext"];
+                };
+            };
+            503: components["responses"]["Unavailable"];
         };
     };
     getResearchRun: {

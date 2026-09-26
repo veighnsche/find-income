@@ -105,9 +105,10 @@ func checkRefOf(checkID string) string { return "check-" + checkID }
 
 // PerformCheck starts the bounded check turn behind one started check
 // and returns the checking view. Without authorization it refuses
-// before any retrieval; without saved evidence it completes as blocked
-// instead of inventing questions. A repeated start while the turn is
-// conducting replays the current view instead of conducting twice.
+// before any retrieval; without a usable lane or saved evidence it
+// completes as blocked instead of leaving the job inertly checking or
+// inventing questions. A repeated start while the turn is conducting
+// replays the current view instead of conducting twice.
 func (c *Checker) PerformCheck(ctx context.Context, opportunityID, checkID string) (store.CheckView, error) {
 	if !c.authorized {
 		return store.CheckView{}, errors.New("musewire: check retrieval needs the Contributor live authorization")
@@ -132,6 +133,17 @@ func (c *Checker) PerformCheck(ctx context.Context, opportunityID, checkID strin
 	if finding.SourceRef == nil {
 		return c.saveBlocked(ctx, opportunityID, checkID, store.CheckBlockedSourceUnavailable,
 			"saved finding carries no vacancy receipt")
+	}
+	// The lane must be usable before the job is left checking: without
+	// it the check blocks immediately with the honest reason instead of
+	// sitting inertly behind a turn that can never conduct.
+	if perr := publicresearch.ValidateCheckPerformer(c.facts); perr != nil {
+		var unavailable *publicresearch.PerformerUnavailableError
+		detail := strings.TrimSpace(perr.Error())
+		if errors.As(perr, &unavailable) {
+			detail = "contributor lane unavailable (" + unavailable.Code + "): " + unavailable.Detail
+		}
+		return c.saveBlocked(ctx, opportunityID, checkID, store.CheckBlockedOther, detail)
 	}
 	checkRef := checkRefOf(checkID)
 	server, err := publicresearch.NewServer(publicresearch.Deps{
@@ -257,42 +269,59 @@ func (c *Checker) conductCheck(ctx context.Context, opportunity store.Opportunit
 		return
 	}
 	adapted.Gaps = append(adapted.Gaps, uncitedQuestionGaps(server, adapted.CitedQuestions)...)
-	if len(adapted.Questions) == 0 {
-		detail := "check verified no employer questions"
-		if len(adapted.Gaps) > 0 {
-			shown := adapted.Gaps
-			if len(shown) > 3 {
-				shown = shown[:3]
-			}
-			detail += ": " + strings.Join(shown, "; ")
-			if len(detail) > 2000 {
-				detail = detail[:2000]
-			}
-		}
-		blocked(store.CheckBlockedQuestionsUnresolved, detail)
-		return
-	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	captures := verifiedCaptures(adapted)
-	_, err = c.db.SaveJobCheckBody(ctx, c.actor, store.CheckSaveInput{
+	evidence, inspectGaps := publicresearch.InspectCaptures(ctx, c.captures, captures)
+	verdict := publicresearch.DecideCheckVerdict(publicresearch.CheckVerdictInput{
 		OpportunityID: opportunity.ID, CheckID: checkID,
 		Vacancy: store.CheckVacancyInput{CaptureIDs: captures,
-			Completeness: store.CaptureComplete, SourceURL: strings.TrimSpace(opportunity.SourceURL),
-			RetrievedAt: now},
+			Completeness: publicresearch.DeriveCompleteness(evidence),
+			SourceURL:    strings.TrimSpace(opportunity.SourceURL), RetrievedAt: now},
 		RequestedDocuments: nonNilDocuments(adapted.Documents),
 		Requirements:       nonNilRequirements(adapted.Requirements),
 		Route:              orUnresolvedRoute(adapted),
-		Gaps:               checkGaps(adapted.Gaps),
+		RouteVerified:      adapted.Route.Judgment == store.CheckRouteJudgmentApplication,
+		RouteUnsupported:   adapted.Route.Kind == store.CheckRouteUnsupported,
+		Gaps:               checkGaps(append(append([]string{}, adapted.Gaps...), inspectGaps...)),
 		Questions:          adapted.Questions,
+		TurnCompleted:      true,
+		TurnDetail:         checkTurnDetail(adapted),
 		Activity: []store.CheckActivityInput{{Kind: "muse.check_performed",
 			Outcome: string(researchcontract.OutcomeOK), CaptureID: firstCapture(captures),
 			Payload: checkActivityPayload(adapted)}},
 	})
+	_, err = c.db.SaveJobCheckBody(ctx, c.actor, verdict.Save)
 	if err != nil {
+		if verdict.ZeroQuestionsVerified && errors.Is(err, store.ErrInvalid) {
+			// The verdict is correct; the store gate still requires a
+			// non-empty question set on completing saves. The check
+			// stays checking and the owner rechecks once the I-side
+			// gate lands — never a silent hold, never invented
+			// questions.
+			finish(store.RoundFailed, "check needs the zero-question save gate")
+			return
+		}
 		finish(store.RoundFailed, "check failed: "+err.Error())
 		return
 	}
 	finish(store.RoundCompleted, "check completed")
+}
+
+// checkTurnDetail summarizes a finished turn for held verdicts: the
+// questionless observation plus the first verification gaps.
+func checkTurnDetail(adapted AdaptedCheck) string {
+	detail := "check verified no employer questions"
+	if len(adapted.Gaps) > 0 {
+		shown := adapted.Gaps
+		if len(shown) > 3 {
+			shown = shown[:3]
+		}
+		detail += ": " + strings.Join(shown, "; ")
+		if len(detail) > 2000 {
+			detail = detail[:2000]
+		}
+	}
+	return detail
 }
 
 // uncitedQuestionGaps names server-saved questions the turn never cited.
@@ -360,7 +389,8 @@ func nonNilRequirements(in []store.CheckRequirementInput) []store.CheckRequireme
 
 // orUnresolvedRoute keeps the verified route, or an explicitly
 // unresolved one anchored on the first verified excerpt when the turn's
-// route claim dropped.
+// route claim dropped. The fallback excerpt is an honest system
+// observation, never a quote, so the unresolved judgment stays valid.
 func orUnresolvedRoute(adapted AdaptedCheck) store.CheckRouteInput {
 	if adapted.Route.Judgment != "" {
 		return adapted.Route
@@ -373,19 +403,23 @@ func orUnresolvedRoute(adapted AdaptedCheck) store.CheckRouteInput {
 	} else if len(adapted.Questions) > 0 {
 		excerpt = adapted.Questions[0].SourceExcerpt
 	}
+	if strings.TrimSpace(excerpt) == "" {
+		excerpt = "route not verified against cited evidence"
+	}
 	return store.CheckRouteInput{Judgment: store.CheckRouteJudgmentUnresolved,
 		SourceExcerpt: excerpt, ObservedAt: time.Now().UTC().Format(time.RFC3339)}
 }
 
-// checkGaps maps adapter diagnostics into check gaps, bounded by the
-// store gate with an honest overflow note.
+// checkGaps maps adapter diagnostics into check gaps with real kinds,
+// bounded by the store gate with an honest overflow note.
 func checkGaps(diagnostics []string) []store.CheckGapInput {
 	gaps := make([]store.CheckGapInput, 0, len(diagnostics)+1)
 	for _, diagnostic := range diagnostics {
 		if len(gaps) >= 100 {
 			break
 		}
-		gaps = append(gaps, store.CheckGapInput{Description: diagnostic, Kind: store.CheckGapOther})
+		gaps = append(gaps, store.CheckGapInput{Description: diagnostic,
+			Kind: publicresearch.ClassifyGap(diagnostic)})
 	}
 	if len(diagnostics) > len(gaps) {
 		gaps = append(gaps[:99], store.CheckGapInput{

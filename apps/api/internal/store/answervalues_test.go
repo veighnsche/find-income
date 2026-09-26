@@ -269,7 +269,9 @@ func TestAnswerValueSelectionAndIdentity(t *testing.T) {
 	question := f.check.Questions[0]
 	input := AnswerValueSaveInput{ExpectedAnswerVersion: 0, Text: "Hello."}
 
-	unselected, _, err := f.store.CreateOpportunity(ctx, owner, fixtureOpportunity(createFixtureCompany(t, f.store).ID))
+	unselectedInput := fixtureOpportunity(createFixtureCompany(t, f.store).ID)
+	unselectedInput.SourceURL = "https://harbour.example/jobs/identity-unselected"
+	unselected, _, err := f.store.CreateOpportunity(ctx, owner, unselectedInput)
 	if err != nil {
 		t.Fatal(err)
 	}

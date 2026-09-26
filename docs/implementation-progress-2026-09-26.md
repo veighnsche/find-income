@@ -26,20 +26,20 @@ Task ledger (checkbox only when acceptance evidence exists):
 - [x] R2 cut rejected runtime consumers — done 4a93058 + 2622b33: pack round-op/outcome/agency branches, codex session endpoints + CodexControl, pack tool/config/relevance, owner-authority case, required-tools list, migration 017, recovery script. R30 HTTP assertions pass.
 - [x] I2 subtraction gate — done: no pack/codex/MCP-server production refs (greps); suite fails only on Q0 01/02/03/05/06/07 (future-lane gaps); build/vet/typecheck green.
 - [x] I3 publish contracts — done 6ca278b + ee9dab1: 12 paths + 14 schemas cut; handoff_saved terminal; both regens pass check:generated; client/fixtures/stage UI aligned (temp I transfer returned to F/E/G). Gates OPEN for D/K/F. Wave-2 transfers: D owns researchwire/* for commission/recovery reads; K owns musewire/check.go + checkadapter.go (R hands over).
-- [ ] D1 catalog lifecycle — ready (wave 2 dispatches D1–D4 as one backend child)
-- [ ] D2 vacancy identity/card facts — blocked on I3+R1
-- [ ] D3 server run recovery — blocked on I3+D1+D2
-- [ ] D4 sourced owner context — blocked on I3+R2
-- [ ] K1 truthful route-complete checks — ready (wave 2 dispatches K1–K4 as one backend child)
-- [ ] K2 Jev approved candidates — blocked on I3+K1
-- [ ] K3 answer commit — blocked on I3+K1+K2
-- [ ] K4 owner clarification — blocked on I3+K1+K3
+- [x] D1 catalog lifecycle — done (wave 2): deterministic brief→catalog derivation, get-or-author, concurrent convergence; Q0-01 PASS.
+- [x] D2 vacancy identity/card facts — done (wave 2): URL reconcile in CreateOpportunity + P4 active-URL unique index; explicit-reuse retires the superseded row (R02/R03/T26 green); Q0-06 PASS. Card work-pattern capture + classify lookup-first deferred to M wave (P7/P8).
+- [x] D3 server run recovery — done (wave 2) + I P2/P3/P9: recovery reads, GET /rounds list, run_not_found, D3/D4 route registrations; Q0-07 PASS.
+- [x] D4 sourced owner context — done (wave 2) + I P9: owner identity + approved career sources, loader wired in main; zero answers, zero model calls.
+- [x] K1 truthful route-complete checks — done (wave 2) + I zero-question gate (QuestionsNoneVerified): verdict/completeness/gaps/eligibility; Q0-03 PASS.
+- [x] K2 Jev approved candidates — done (wave 2): Jev-only matching, no lexical gate, bounded recall + runoff, explicit no-fit. Handler wiring to MatchQuestions deferred (current Prefilter path keeps Q0-02 green).
+- [x] K3 answer commit — done (wave 2) + I draft_requested (migration 018, openapi, store/commit/handler): keep/edit/clear/blank + idempotent commit + C4 required-blank satisfaction; Q0-02 PASS. ContinueAnswers batch refactor deferred (no Q0 caller).
+- [ ] K4 owner clarification — contract done (wave 2: service + resolve-once semantics + tests); store/migration/API pending (I, with M/C/A/G wave).
 - [ ] M2 evidence pins/replay — blocked on M1+I3+K1+K3
 - [ ] M3 route-needed targets — blocked on M2+K1
 - [ ] M4 grounded prepare — blocked on M2+M3+K3+K4+R1
 - [ ] M5 edit/rewrite same artifacts — blocked on M2+M4
 - [ ] M6 export/canonical index — blocked on M3+M4+M5+I3
-- [ ] F1 shared seams — ready (wave 2 dispatches F1–F3 as one frontend child)
+- [x] F1 shared seams — done 0f34944 (wave 2): invalidation bus, SavedGoalsProvider, run restore, goal-editor registry, answer drafts, run links, commitRoleAnswers; 307/307 vite tests pass.
 - [ ] F2 opening/status/stages — blocked on F1+D3+D4+K1
 - [ ] F3 saved-artifact job list — blocked on F1+F2+M6
 - [ ] G1 goals/source context — blocked on F1+D4
@@ -64,11 +64,12 @@ Integrated dependencies landed: I0 (a38ee26), I1/C1–C9 (f81c777). R1 design se
 
 Commits: a38ee26 docs(I0); f81c777 docs(I1/C1–C9); 983eb04 docs(I1 dispatch); e10557a docs(R2 map); e6ae53f test(Q0 harness); a7736fc docs(Q0); b4dcb67 docs(R1/M1 dispatch); 02c077e refactor(R1); 23a2654 refactor(M1); 4a93058 refactor(R2); 7c58cd7 test(Q0 rewrite); 2622b33 fix(R2 residuals).
 Accepted boundaries: (1) publicresearch MCP registry type + musecode public_* allowlist + researchwire tool-protocol tests are inert (zero production session constructors) — D1/D3 rewrite them against the direct journey. (2) codexservice internals (dispatch/MCP bridge methods) + cmd/codex-runner retained for rounds/researchwire dispatch; HTTP session surface gone. (3) test_recovery.py fixture broken pre-existing (verified at HEAD b4dcb67: missing delivery tables); recovery.py pack checks removed; Go researchrestore green. (4) openapi pack/codex paths + generated code cut at I3 (contract publish).
-Q0 state: cases 04 (R08) + 08 (R30) PASS; 01/02/03/05/06/07 fail substantively.
+Q0 state: cases 01/02/03/04/06/07/08 PASS; only 05 (R07/R23 staleness) fails — M/C/A/G wave scope.
 
 Verification: meaningful focused checks per checkpoint before commit; Q gates require production HTTP + real temp store, controlled provider adapters only, no seeded catalog/answered state/ready artifacts.
 
 Remaining limits: full 40-task scope open; live Contributor/Jev/Standard gates require configured services and implementation-run authorization — fixture success cannot close them; no employer contact authorized.
 
-Next ready actions: integrate Wave 1 worker outputs (R1, M1, Q0) per file set with focused checks, then R2/I2/I3.
+Next ready actions: dispatch M/C/A/G wave (M2–M6 + Q0-05 R07/R23 + deferred P6/P7/P8 + K proposals 3/4/6 + C/A/E/G UI lanes), then E/F finish and Q1–Q4 acceptance.
+Wave-2 + I-integration evidence: D (11 files: catalog/commission/recovery/owner-context) + K (11 files: verdict/match/commit/clarification + musewire check per transfer) + I (P1 fixtures incl. 2 httpapi helpers D missed, zero-question gate, draft_requested e2e, GET /rounds, run_not_found trio, D3/D4 registrations, career loader, P5 research_run, P4 index + reuse-archive composition). Deferred with rationale: K proposal 4/ContinueAnswers (no Q0 caller), P10 (optional), P6/P7/P8 + K3/K5/K6 + Q0-05 (M/C/A/G wave).
 R2 candidate surface (read-only map, cut only after R1/M1 consumer trace): codex/*, codexrunner/*, codexservice/*, rounds/*, researchwire, cmd/codex-runner, httpapi/codex.go + rounds.go (+research/discovery dead paths), store/round_supervision.go, researchexecute, agency engine/input (pack parts via M1), runtimeaccept/doc.go. External importers outside those dirs: cmd/server/main.go, materialprep/standard.go (R1 seam), researchservice.go, reasoncatalog.go. Frontend: run/check activity feeds, actor-label, client.ts codex/round methods, fixtures. Keep: needed run persistence for D3, public evidence, Jev, bounded direct invocation, auth.

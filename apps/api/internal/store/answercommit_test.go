@@ -73,7 +73,9 @@ func TestCommitRoleAnswersGuards(t *testing.T) {
 	if _, _, err := s.CommitRoleAnswers(ctx, ownerActor(), unchecked.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("unchecked: %v", err)
 	}
-	unselected, _, err := s.CreateOpportunity(ctx, ownerActor(), fixtureOpportunity(company.ID))
+	unselectedInput := fixtureOpportunity(company.ID)
+	unselectedInput.SourceURL = "https://harbour.example/jobs/commit-unselected"
+	unselected, _, err := s.CreateOpportunity(ctx, ownerActor(), unselectedInput)
 	if err != nil {
 		t.Fatal(err)
 	}

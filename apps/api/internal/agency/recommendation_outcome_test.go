@@ -205,4 +205,3 @@ func TestInputOutcomeReplaysCapturedChoiceAfterStopWithoutAnotherRequest(t *test
 		t.Fatalf("replayed result became stale after completion: %+v", verdict)
 	}
 }
-

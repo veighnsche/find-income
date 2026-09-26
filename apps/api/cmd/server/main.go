@@ -125,6 +125,10 @@ func runWithContext(ctx context.Context, args []string) error {
 			}
 			options.Materials = materials
 			prepService = materials
+			httpapi.SetOwnerCareerLoader(func() ([]applicationpacks.Source, error) {
+				sources, _, err := applicationpacks.LoadApprovedCareerSources(root, []string{"cv-vince-liem.typ", "cv-vince-liem.md", "github-evidence-review.md"})
+				return sources, err
+			})
 		}
 	}
 	worker := &agency.Engine{Store: database, Runtime: runtime, Decisions: decisions, Context: ctx}

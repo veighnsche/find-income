@@ -318,10 +318,43 @@ func nullableIntPointer(value *int) any {
 	return *value
 }
 
+// OpportunityBySourceURL resolves the verified source identity of one
+// vacancy: the oldest unarchived opportunity saved under exactly the same
+// source URL (case-insensitive, mirroring the same_source_url duplicate
+// warning). An empty URL carries no verified identity and is ErrNotFound.
+// Title/company resemblance never resolves here; only the verified source
+// does. Pure read.
+func (s *Store) OpportunityBySourceURL(ctx context.Context, sourceURL string) (Opportunity, error) {
+	sourceURL = strings.TrimSpace(sourceURL)
+	if sourceURL == "" {
+		return Opportunity{}, ErrNotFound
+	}
+	record, err := scanOpportunity(s.db.QueryRowContext(ctx, `SELECT `+opportunityColumns+opportunityFrom+`
+  WHERE o.archived_at IS NULL AND lower(o.source_url)=lower(?) ORDER BY o.created_at,o.id LIMIT 1`, sourceURL))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Opportunity{}, ErrNotFound
+	}
+	return record, err
+}
+
 func (s *Store) CreateOpportunity(ctx context.Context, actor Actor, input OpportunityInput) (Opportunity, string, error) {
 	input, err := validateOpportunity(input)
 	if err != nil {
 		return Opportunity{}, "", err
+	}
+	// D2: reconcile the verified source identity before creating rows, so
+	// a recollected vacancy (Find more, re-ingestion, recheck) keeps ONE
+	// identity with its choice/check/artifact links instead of forking.
+	// A reconcile hit returns the existing record unchanged with an empty
+	// change id: nothing was written, and the per-run finding records the
+	// new sighting. Only an exact source-URL match reconciles; title or
+	// company resemblance never merges.
+	if input.SourceURL != "" {
+		if existing, err := s.OpportunityBySourceURL(ctx, input.SourceURL); err == nil {
+			return existing, "", nil
+		} else if !errors.Is(err, ErrNotFound) {
+			return Opportunity{}, "", err
+		}
 	}
 	id, err := randomID()
 	if err != nil {
@@ -344,6 +377,13 @@ func (s *Store) CreateOpportunity(ctx context.Context, actor Actor, input Opport
 			input.LocationText, optionalText(input.PostedOn), optionalText(input.DeadlineOn), now, now,
 			input.CompanyID)
 		if err != nil {
+			// A concurrent re-sight may commit the same source URL
+			// first once the active-URL unique index lands: resolve
+			// the lost race to the reconciled identity instead of
+			// surfacing a driver error.
+			if input.SourceURL != "" && strings.Contains(err.Error(), "UNIQUE constraint") {
+				return Change{}, errReconcileRace
+			}
 			return Change{}, err
 		}
 		count, err := result.RowsAffected()
@@ -360,10 +400,22 @@ func (s *Store) CreateOpportunity(ctx context.Context, actor Actor, input Opport
 			RevisionAfter: &revision}, nil
 	})
 	if err != nil {
+		if errors.Is(err, errReconcileRace) {
+			existing, rerr := s.OpportunityBySourceURL(ctx, input.SourceURL)
+			if rerr == nil {
+				return existing, "", nil
+			}
+			return Opportunity{}, "", rerr
+		}
 		return Opportunity{}, "", err
 	}
 	return record, changeID, nil
 }
+
+// errReconcileRace marks a lost insert race against the active source-URL
+// identity: the caller re-reads the reconciled row. It never escapes the
+// store (a still-missing row returns the lookup error instead).
+var errReconcileRace = errors.New("opportunity source reconciled concurrently")
 
 func opportunityInputFromRecord(record Opportunity) OpportunityInput {
 	return OpportunityInput{CompanyID: record.CompanyID, Title: record.Title, Kind: record.Kind,
@@ -487,7 +539,7 @@ func (s *Store) PatchOpportunity(ctx context.Context, actor Actor, id string, pa
 	if id == "" || patch.ExpectedRevision < 1 || emptyOpportunityPatch(patch) {
 		return Opportunity{}, "", fmt.Errorf("%w: opportunity patch and expected revision required", ErrInvalid)
 	}
-	return s.writeOpportunityImmediate(ctx, actor, id, func(conn *sql.Conn, current Opportunity) (opportunityTxnWrite, error) {
+	updated, changeID, err := s.writeOpportunityImmediate(ctx, actor, id, func(conn *sql.Conn, current Opportunity) (opportunityTxnWrite, error) {
 		if current.Revision != patch.ExpectedRevision || current.ArchivedAt != "" {
 			return opportunityTxnWrite{}, ErrConflict
 		}
@@ -530,6 +582,13 @@ func (s *Store) PatchOpportunity(ctx context.Context, actor Actor, id string, pa
 		}
 		return opportunityTxnWrite{updated: updated, operation: "opportunity.patch"}, nil
 	})
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") {
+		// Retargeting a row onto another active vacancy's source URL
+		// collides on the identity index: report a conflict, never a
+		// driver error.
+		return Opportunity{}, "", ErrConflict
+	}
+	return updated, changeID, err
 }
 
 func (s *Store) ArchiveOpportunity(ctx context.Context, actor Actor, id string, expectedRevision int64) (Opportunity, string, error) {

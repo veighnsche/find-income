@@ -300,7 +300,7 @@ func TestJevGroupUnknownBasisRule(t *testing.T) {
 			in.MissingFact = &ReasonChoice{ID: "pay-unknown", Label: "Pay unstated",
 				Detail: "Listing states no base pay, so the minimum cannot be checked."}
 		},
-		"bad group": func(in *FindingSaveInput) { in.Group = "maybe" },
+		"bad group":       func(in *FindingSaveInput) { in.Group = "maybe" },
 		"bad vacancy ref": func(in *FindingSaveInput) { in.VacancyRef = " padded " },
 	}
 	for name, mutate := range violations {
@@ -617,7 +617,11 @@ func TestFindingListRunFindings(t *testing.T) {
 	ctx := context.Background()
 	s := openResearchTestDB(t)
 	fix := seedFindingBase(t, s)
-	opp2, _, err := s.CreateOpportunity(ctx, FixtureActor(), fixtureOpportunity("company-1"))
+	// D2: a genuinely different vacancy needs its own source URL; the same
+	// URL would reconcile to the seeded opportunity instead of forking.
+	opp2Input := fixtureOpportunity("company-1")
+	opp2Input.SourceURL = "https://harbour.example/jobs/2"
+	opp2, _, err := s.CreateOpportunity(ctx, FixtureActor(), opp2Input)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -29,7 +29,9 @@ func TestRelationshipRoundKeepsIntroductionUnqualifiedAndSharesOpportunity(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, _, err := s.CreateOpportunity(ctx, owner, fixtureOpportunity(otherCompany.ID))
+	otherInput := fixtureOpportunity(otherCompany.ID)
+	otherInput.SourceURL = "https://harbour.example/jobs/other"
+	other, _, err := s.CreateOpportunity(ctx, owner, otherInput)
 	if err != nil {
 		t.Fatal(err)
 	}

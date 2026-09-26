@@ -407,7 +407,8 @@ func (h *Handler) saveQuestionAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 	value, err := h.database.SaveAnswerValue(ctx,
 		store.Actor{Kind: p.Kind, ID: p.ID}, opportunityID, r.PathValue("questionId"),
-		store.AnswerValueSaveInput{ExpectedAnswerVersion: body.ExpectedAnswerVersion, Text: body.Text})
+		store.AnswerValueSaveInput{ExpectedAnswerVersion: body.ExpectedAnswerVersion,
+			Text: body.Text, DraftRequested: body.DraftRequested != nil && *body.DraftRequested})
 	if err != nil {
 		failAnswerValue(w, err)
 		return
@@ -457,6 +458,9 @@ func questionAnswerValueModel(value store.QuestionAnswerValue) generated.Questio
 		UpdatedAt:          recordedTime(value.UpdatedAt)}
 	if value.TextSHA256 != "" {
 		model.TextSha256 = &value.TextSHA256
+	}
+	if value.DraftRequested {
+		model.DraftRequested = &value.DraftRequested
 	}
 	model.Provenance.Origin = generated.QuestionAnswerValueProvenanceOrigin(value.Provenance.Origin)
 	model.Provenance.EditedAt = recordedTime(value.Provenance.EditedAt)

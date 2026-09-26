@@ -24,7 +24,9 @@ func TestPrepareActivityJournalAndPage(t *testing.T) {
 		Kind: PrepareTurnStarted, CheckID: "missing"}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("check: %v", err)
 	}
-	unselected, _, err := s.CreateOpportunity(ctx, ownerActor(), fixtureOpportunity(company.ID))
+	unselectedInput := fixtureOpportunity(company.ID)
+	unselectedInput.SourceURL = "https://harbour.example/jobs/prep-unselected"
+	unselected, _, err := s.CreateOpportunity(ctx, ownerActor(), unselectedInput)
 	if err != nil {
 		t.Fatal(err)
 	}

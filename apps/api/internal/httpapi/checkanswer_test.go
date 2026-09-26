@@ -17,7 +17,7 @@ func createCheckedOpportunity(t *testing.T, h *harness, key string) store.Opport
 	}
 	opportunity, _, err := h.db.CreateOpportunity(context.Background(), store.Actor{Kind: "administrator", ID: "owner"}, store.OpportunityInput{
 		CompanyID: company.ID, Title: "Backend Engineer", Kind: "employment",
-		SourceURL: "https://harbour.example/jobs/1", OriginalText: "Build Go services.",
+		SourceURL: "https://harbour.example/jobs/checked-" + key, OriginalText: "Build Go services.",
 		Stage: "new", WorkPattern: "hybrid",
 	})
 	if err != nil {

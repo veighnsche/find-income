@@ -637,6 +637,9 @@ func TestConnectedJourney03QuestionlessRoute(t *testing.T) {
 			Requirements:       []store.CheckRequirementInput{},
 			Gaps:               []store.CheckGapInput{},
 			Questions:          []store.CheckQuestionInput{},
+			// The simulated performer verified the email route carries
+			// zero employer questions (mirrors DecideCheckVerdict).
+			QuestionsNoneVerified: true,
 		})
 	}}
 	h.handler = NewHandler(h.db, h.service, Options{AllowedOrigins: []string{origin}, MuseCheck: verified})

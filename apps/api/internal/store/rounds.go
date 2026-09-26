@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -192,6 +193,86 @@ func (s *Store) ActiveRound(ctx context.Context) (Round, error) {
 		return Round{}, ErrNotFound
 	}
 	return r, err
+}
+
+// ListRoundsOptions filters the newest-first round list. Empty Outcome
+// matches every outcome; empty States matches every state.
+type ListRoundsOptions struct {
+	Outcome string
+	States  []string
+	Cursor  string
+	Limit   int
+}
+
+// ListRounds returns durable rounds newest-first over (updated_at, id)
+// for server run recovery (C1/R13). The cursor is "updatedAt|id" of the
+// last item of the previous page; unknown states and malformed cursors
+// fail with ErrInvalid. Pure read: no commissions, no resumes.
+func (s *Store) ListRounds(ctx context.Context, opts ListRoundsOptions) (rounds []Round, nextCursor string, err error) {
+	if len(opts.Outcome) > 100 || len(opts.Cursor) > 512 {
+		return nil, "", ErrInvalid
+	}
+	for _, state := range opts.States {
+		switch RoundState(state) {
+		case RoundQueued, RoundRunning, RoundAwaitingInput, RoundStopping,
+			RoundPaused, RoundCompleted, RoundFailed:
+		default:
+			return nil, "", fmt.Errorf("%w: unknown round state %q", ErrInvalid, state)
+		}
+	}
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 25
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	cursorAt, cursorID := "9999-12-31T23:59:59.999999999Z", "9999-12-31T23:59:59.999999999Z"
+	if opts.Cursor != "" {
+		parts := strings.SplitN(opts.Cursor, "|", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" ||
+			len(parts[0]) > 64 || len(parts[1]) > 128 {
+			return nil, "", fmt.Errorf("%w: unknown rounds cursor; re-page from the head", ErrInvalid)
+		}
+		cursorAt, cursorID = parts[0], parts[1]
+	}
+	query := `SELECT ` + roundColumns + ` FROM rounds
+	  WHERE (updated_at < ? OR (updated_at = ? AND id < ?))`
+	args := []any{cursorAt, cursorAt, cursorID}
+	if opts.Outcome != "" {
+		query += ` AND outcome=?`
+		args = append(args, opts.Outcome)
+	}
+	if len(opts.States) > 0 {
+		query += ` AND state IN (?` + strings.Repeat(",?", len(opts.States)-1) + `)`
+		for _, state := range opts.States {
+			args = append(args, state)
+		}
+	}
+	query += ` ORDER BY updated_at DESC, id DESC LIMIT ?`
+	args = append(args, limit+1)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+	rounds = []Round{}
+	for rows.Next() {
+		round, err := scanRound(rows)
+		if err != nil {
+			return nil, "", err
+		}
+		rounds = append(rounds, round)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	if len(rounds) > limit {
+		rounds = rounds[:limit]
+		last := rounds[len(rounds)-1]
+		nextCursor = last.UpdatedAt + "|" + last.ID
+	}
+	return rounds, nextCursor, nil
 }
 
 func (s *Store) RoundByRequest(ctx context.Context, actor Actor, key string) (Round, error) {

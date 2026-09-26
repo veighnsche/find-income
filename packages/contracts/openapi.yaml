@@ -19,6 +19,37 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
         '500':
           $ref: '#/components/responses/InternalError'
+  /rounds:
+    get:
+      operationId: listRounds
+      summary: List rounds newest-first for server run recovery
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: outcome
+          schema: { type: string, maxLength: 100 }
+        - in: query
+          name: state
+          explode: true
+          schema: { type: array, items: { type: string } }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - in: query
+          name: cursor
+          schema: { type: string, maxLength: 512 }
+      responses:
+        '200':
+          description: Newest-first round page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Round' } }
+                  nextCursor: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
   /rounds/active:
     get:
       operationId: getActiveRound
@@ -48,6 +79,7 @@ paths:
                   all,
                   process_input,
                   prepare,
+                  research_run,
                 ],
             }
       responses:
@@ -269,6 +301,32 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
   /research/runs:
+    get:
+      operationId: listResearchRuns
+      summary: List research runs newest-first for server run recovery
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: outcome
+          schema: { type: string, maxLength: 100 }
+        - in: query
+          name: state
+          explode: true
+          schema: { type: array, items: { type: string } }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - in: query
+          name: cursor
+          schema: { type: string, maxLength: 512 }
+      responses:
+        '200':
+          description: Newest-first run page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunHistoryPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
     post:
       operationId: commissionResearchRun
       summary: Commission one bounded autonomous research run
@@ -290,6 +348,37 @@ paths:
           }
         '400': { $ref: '#/components/responses/ValidationError' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /research/runs/latest-terminal:
+    get:
+      operationId: getLatestTerminalResearchRun
+      summary: Read the newest completed/failed run for one outcome
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: outcome
+          schema: { type: string, maxLength: 100 }
+      responses:
+        '200':
+          description: Latest terminal run
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunHistoryItem' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /research/owner-context:
+    get:
+      operationId: getSourcedOwnerContext
+      summary: Read owner identity plus approved career sources with provenance
+      description: Pure GET-only read with zero model calls. Sources ground drafts and panels; the reusable answer library is served separately.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Sourced owner context
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SourcedOwnerContext' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /research/runs/{id}:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     get:
@@ -1853,6 +1942,47 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/RoundHistoryEvent' } }
+    RunHistoryItem:
+      type: object
+      required: [runId, requestKey, intent, outcome, state, stopReason, createdAt, updatedAt]
+      properties:
+        runId: { type: string }
+        requestKey: { type: string }
+        intent: { type: string }
+        outcome: { type: string }
+        state: { type: string }
+        stopReason: { type: string }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+        completedAt: { type: string }
+    RunHistoryPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/RunHistoryItem' } }
+        nextCursor: { type: string }
+    SourcedOwnerContext:
+      type: object
+      required: [owner, sourcesConnected, sources]
+      properties:
+        owner:
+          type: object
+          required: [kind, id]
+          properties:
+            kind: { type: string }
+            id: { type: string }
+        sourcesConnected: { type: boolean }
+        sources:
+          type: array
+          items:
+            type: object
+            required: [id, name, sha256, approved, body]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              sha256: { type: string }
+              approved: { type: boolean }
+              body: { type: string }
     RoundHistoryEvent:
       type: object
       required: [auditId, attemptId, operation, entityKind, entityId, occurredAt]
@@ -2684,6 +2814,7 @@ components:
             [
               validation_error,
               not_found,
+              run_not_found,
               unauthenticated,
               forbidden,
               csrf_failed,
@@ -3909,6 +4040,7 @@ components:
         state: { type: string, enum: [unset, answered, blank] }
         text: { type: string }
         textSha256: { type: string }
+        draftRequested: { type: boolean }
         provenance:
           type: object
           required: [origin, editedAt, editedBy]
@@ -3942,6 +4074,7 @@ components:
       properties:
         expectedAnswerVersion: { type: integer, format: int64, minimum: 0 }
         text: { type: string, maxLength: 20000 }
+        draftRequested: { type: boolean, description: C4 explicit owner choice to leave a required answer blank for Standard drafting from verified facts. }
     MaterialAnswerRef:
       type: object
       required: [questionId, questionTextSha256, answerVersion, textSha256]

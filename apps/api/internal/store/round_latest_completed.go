@@ -14,7 +14,7 @@ func (s *Store) LatestCompletedRound(ctx context.Context, actor Actor, outcome s
 		return Round{}, ErrInvalid
 	}
 	query := `SELECT ` + roundColumns + ` FROM rounds WHERE actor_kind=? AND actor_id=? AND
-		(state='completed' OR (state='failed' AND outcome='deliver' AND deliverable_status='submission_unverified' AND report_json IS NOT NULL))`
+		(state='completed' OR (state='failed' AND (outcome='research_run' OR (outcome='deliver' AND deliverable_status='submission_unverified' AND report_json IS NOT NULL))))`
 	args := []any{actor.Kind, actor.ID}
 	if outcome == "all" {
 		query += ` AND outcome IN ('process_input','prepare','compare_offers','deliver','interview_prepare','interview_debrief')`
@@ -32,7 +32,7 @@ func (s *Store) LatestCompletedRound(ctx context.Context, actor Actor, outcome s
 
 func supportedLatestOutcome(outcome string) bool {
 	switch outcome {
-	case "all", "process_input", "prepare", "compare_offers", "deliver", "interview_prepare", "interview_debrief", "process_replies":
+	case "all", "process_input", "prepare", "compare_offers", "deliver", "interview_prepare", "interview_debrief", "process_replies", "research_run":
 		return true
 	default:
 		return false

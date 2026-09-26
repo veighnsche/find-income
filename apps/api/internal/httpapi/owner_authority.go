@@ -93,7 +93,7 @@ func (h *Handler) roundHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := h.database.RoundHistory(r.Context(), r.PathValue("id"))
 	if err != nil {
-		failRound(w, err)
+		failRunNotFound(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, struct {

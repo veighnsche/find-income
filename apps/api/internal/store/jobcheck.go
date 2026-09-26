@@ -290,6 +290,9 @@ type CheckSaveInput struct {
 	Questions          []CheckQuestionInput     `json:"questions"`
 	Blocked            *CheckBlockedInput       `json:"blocked,omitempty"`
 	Activity           []CheckActivityInput     `json:"activity,omitempty"`
+	// QuestionsNoneVerified marks a completing save whose performer
+	// verified the route carries zero employer questions (C3/R06).
+	QuestionsNoneVerified bool `json:"questionsNoneVerified,omitempty"`
 }
 
 type jobCheckRow struct {
@@ -838,7 +841,7 @@ func validateCheckSave(ctx context.Context, tx *sql.Tx, input CheckSaveInput) er
 		}
 	} else {
 		if input.RequestedDocuments == nil || input.Requirements == nil || input.Gaps == nil ||
-			len(input.Questions) < 1 ||
+			(len(input.Questions) < 1 && !input.QuestionsNoneVerified) ||
 			!validCheckVacancy(input.Vacancy) || !validCheckRoute(input.Route) {
 			return ErrInvalid
 		}

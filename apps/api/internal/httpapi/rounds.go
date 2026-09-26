@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
@@ -80,13 +81,58 @@ func (h *Handler) activeRound(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, roundModel(round))
 }
 
+func (h *Handler) listRounds(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.owner(w, r); !ok {
+		return
+	}
+	query := r.URL.Query()
+	opts := store.ListRoundsOptions{
+		Outcome: query.Get("outcome"),
+		States:  query["state"],
+		Cursor:  query.Get("cursor"),
+		Limit:   25,
+	}
+	if raw := query.Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 100 {
+			fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Invalid rounds request.")
+			return
+		}
+		opts.Limit = parsed
+	}
+	rounds, nextCursor, err := h.database.ListRounds(r.Context(), opts)
+	if err != nil {
+		failRound(w, err)
+		return
+	}
+	items := make([]roundResponse, 0, len(rounds))
+	for _, round := range rounds {
+		items = append(items, roundModel(round))
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Items      []roundResponse `json:"items"`
+		NextCursor string          `json:"nextCursor,omitempty"`
+	}{items, nextCursor})
+}
+
+// failRunNotFound reports the C1 unknown-run shape: 404 with the
+// run_not_found code so fresh contexts tell a bad id from a missing
+// record. Other errors keep the shared round mapping.
+func failRunNotFound(w http.ResponseWriter, err error) {
+	if errors.Is(err, store.ErrNotFound) {
+		fail(w, http.StatusNotFound, generated.ApiErrorCodeRunNotFound, "Research run not found.")
+		return
+	}
+	failRound(w, err)
+}
+
 func (h *Handler) getRound(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.owner(w, r); !ok {
 		return
 	}
 	round, err := h.database.Round(r.Context(), r.PathValue("id"))
 	if err != nil {
-		failRound(w, err)
+		failRunNotFound(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, h.roundWithRecommendationCurrentness(r.Context(), round))
@@ -98,7 +144,7 @@ func (h *Handler) roundResults(w http.ResponseWriter, r *http.Request) {
 	}
 	results, err := h.database.RoundResults(r.Context(), r.PathValue("id"))
 	if err != nil {
-		failRound(w, err)
+		failRunNotFound(w, err)
 		return
 	}
 	if results == nil {

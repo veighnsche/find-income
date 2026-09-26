@@ -59,6 +59,8 @@ type AnswerValueProvenance struct {
 }
 
 // QuestionAnswerValue is one saved exact answer or explicit blank.
+// DraftRequested is the C4 explicit owner choice to leave a required
+// answer blank for Standard drafting from verified facts.
 type QuestionAnswerValue struct {
 	QuestionID         string                `json:"questionId"`
 	QuestionTextSHA256 string                `json:"questionTextSha256"`
@@ -67,6 +69,7 @@ type QuestionAnswerValue struct {
 	State              string                `json:"state"`
 	Text               string                `json:"text"`
 	TextSHA256         string                `json:"textSha256,omitempty"`
+	DraftRequested     bool                  `json:"draftRequested,omitempty"`
 	Provenance         AnswerValueProvenance `json:"provenance"`
 	UpdatedAt          string                `json:"updatedAt"`
 }
@@ -85,6 +88,7 @@ type QuestionAnswerList struct {
 type AnswerValueSaveInput struct {
 	ExpectedAnswerVersion int64  `json:"expectedAnswerVersion"`
 	Text                  string `json:"text"`
+	DraftRequested        bool   `json:"draftRequested"`
 }
 
 func answerValueTextSHA(text string) string {
@@ -263,20 +267,24 @@ func (s *Store) SaveAnswerValue(ctx context.Context, actor Actor, opportunityID,
 	if textSHA != "" {
 		storedSHA = textSHA
 	}
+	draftFlag := 0
+	if input.DraftRequested {
+		draftFlag = 1
+	}
 	if currentVersion == 0 {
 		_, err = tx.ExecContext(ctx, `INSERT INTO answer_values
 		  (opportunity_id,check_id,question_id,question_text_sha256,required,version,state,text,
-		   text_sha256,origin,match_run_id,match_answer_id,match_answer_version,
+		   text_sha256,draft_requested,origin,match_run_id,match_answer_id,match_answer_version,
 		   match_answer_text_sha256,edited_at,edited_by_kind,edited_by_id,updated_at)
-		  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, opportunityID, checkID, questionID,
-			questionSHA, required, next, state, input.Text, storedSHA, origin,
+		  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, opportunityID, checkID, questionID,
+			questionSHA, required, next, state, input.Text, storedSHA, draftFlag, origin,
 			matchRun, matchID, matchVersion, matchSHA, now, actor.Kind, actor.ID, now)
 	} else {
 		_, err = tx.ExecContext(ctx, `UPDATE answer_values SET check_id=?,question_text_sha256=?,
-		  required=?,version=?,state=?,text=?,text_sha256=?,origin=?,match_run_id=?,
+		  required=?,version=?,state=?,text=?,text_sha256=?,draft_requested=?,origin=?,match_run_id=?,
 		  match_answer_id=?,match_answer_version=?,match_answer_text_sha256=?,
 		  edited_at=?,edited_by_kind=?,edited_by_id=?,updated_at=? WHERE question_id=?`,
-			checkID, questionSHA, required, next, state, input.Text, storedSHA, origin,
+			checkID, questionSHA, required, next, state, input.Text, storedSHA, draftFlag, origin,
 			matchRun, matchID, matchVersion, matchSHA, now, actor.Kind, actor.ID, now, questionID)
 	}
 	if err != nil {
@@ -321,6 +329,7 @@ func (s *Store) SaveAnswerValue(ctx context.Context, actor Actor, opportunityID,
 	}
 	value := QuestionAnswerValue{QuestionID: questionID, QuestionTextSHA256: questionSHA,
 		Required: required, Version: next, State: state, Text: input.Text, TextSHA256: textSHA,
+		DraftRequested: input.DraftRequested,
 		Provenance: AnswerValueProvenance{Origin: origin, EditedAt: now,
 			EditedBy: Actor{Kind: actor.Kind, ID: actor.ID}},
 		UpdatedAt: now}
@@ -333,7 +342,8 @@ func (s *Store) SaveAnswerValue(ctx context.Context, actor Actor, opportunityID,
 }
 
 // CommitRoleAnswers verifies every required question of the latest checked
-// check has a non-blank saved value and advances the role to answered.
+// check has a non-blank saved value or an explicit draft request (C4),
+// then advances the role to answered.
 // Roles still at checked advance through answering when nothing needed
 // saving; already-answered roles re-verify and succeed unchanged, so lost
 // acknowledgments resolve by state instead of repeating work. Missing
@@ -386,7 +396,8 @@ func (s *Store) CommitRoleAnswers(ctx context.Context, actor Actor, opportunityI
 		return RoleWorkflow{}, nil, ErrConflict
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT q.id FROM job_check_questions q
-	  LEFT JOIN answer_values v ON v.question_id=q.id AND v.check_id=q.check_id AND trim(v.text) <> ''
+	  LEFT JOIN answer_values v ON v.question_id=q.id AND v.check_id=q.check_id
+	  AND (trim(v.text) <> '' OR v.draft_requested=1)
 	  WHERE q.check_id=? AND q.required=? AND v.question_id IS NULL ORDER BY q.ordinal`, checkID, CheckRequired)
 	if err != nil {
 		return RoleWorkflow{}, nil, err
@@ -471,7 +482,7 @@ func (s *Store) CurrentQuestionAnswers(ctx context.Context, opportunityID string
 		return QuestionAnswerList{}, err
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT q.id,q.text_sha256,
-	  v.required,v.version,v.state,v.text,v.text_sha256,v.origin,
+	  v.required,v.version,v.state,v.text,v.text_sha256,v.draft_requested,v.origin,
 	  v.match_run_id,v.match_answer_id,v.match_answer_version,v.match_answer_text_sha256,
 	  v.edited_at,v.edited_by_kind,v.edited_by_id,v.updated_at,v.question_text_sha256
 	  FROM job_check_questions q LEFT JOIN answer_values v ON v.question_id=q.id
@@ -485,11 +496,12 @@ func (s *Store) CurrentQuestionAnswers(ctx context.Context, opportunityID string
 		var questionID, questionSHA string
 		var version sql.NullInt64
 		var required, state, text, textSHA, origin, boundSHA sql.NullString
+		var draftRequested sql.NullInt64
 		var matchRun, matchID, matchSHA sql.NullString
 		var matchVersion sql.NullInt64
 		var editedAt, editedKind, editedID, updatedAt sql.NullString
 		if err := rows.Scan(&questionID, &questionSHA,
-			&required, &version, &state, &text, &textSHA, &origin,
+			&required, &version, &state, &text, &textSHA, &draftRequested, &origin,
 			&matchRun, &matchID, &matchVersion, &matchSHA,
 			&editedAt, &editedKind, &editedID, &updatedAt, &boundSHA); err != nil {
 			return QuestionAnswerList{}, err
@@ -502,7 +514,7 @@ func (s *Store) CurrentQuestionAnswers(ctx context.Context, opportunityID string
 		}
 		value := QuestionAnswerValue{QuestionID: questionID, QuestionTextSHA256: questionSHA,
 			Required: required.String, Version: version.Int64, State: state.String, Text: text.String,
-			TextSHA256: textSHA.String,
+			TextSHA256: textSHA.String, DraftRequested: draftRequested.Valid && draftRequested.Int64 == 1,
 			Provenance: AnswerValueProvenance{Origin: origin.String, EditedAt: editedAt.String,
 				EditedBy: Actor{Kind: editedKind.String, ID: editedID.String}},
 			UpdatedAt: updatedAt.String}

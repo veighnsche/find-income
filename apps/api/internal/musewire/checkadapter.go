@@ -219,7 +219,9 @@ func (a *CheckAdapter) Adapt(ctx context.Context, observedAt, text string) (Adap
 			required = store.CheckRequired
 		}
 		out.Questions = append(out.Questions, store.CheckQuestionInput{
-			Text: claim.PromptText, Required: required, SourceSpan: span, SourceExcerpt: excerpt})
+			Text: claim.PromptText, Required: required,
+			Kind:       publicresearch.ClassifyQuestionKind(claim.PromptText),
+			SourceSpan: span, SourceExcerpt: excerpt})
 	}
 	return out, nil
 }

@@ -123,6 +123,7 @@ const (
 	ApiErrorCodeInternalError   ApiErrorCode = "internal_error"
 	ApiErrorCodeNotFound        ApiErrorCode = "not_found"
 	ApiErrorCodeRateLimited     ApiErrorCode = "rate_limited"
+	ApiErrorCodeRunNotFound     ApiErrorCode = "run_not_found"
 	ApiErrorCodeUnauthenticated ApiErrorCode = "unauthenticated"
 	ApiErrorCodeUnavailable     ApiErrorCode = "unavailable"
 	ApiErrorCodeValidationError ApiErrorCode = "validation_error"
@@ -142,6 +143,8 @@ func (e ApiErrorCode) Valid() bool {
 	case ApiErrorCodeNotFound:
 		return true
 	case ApiErrorCodeRateLimited:
+		return true
+	case ApiErrorCodeRunNotFound:
 		return true
 	case ApiErrorCodeUnauthenticated:
 		return true
@@ -2454,6 +2457,7 @@ const (
 	All          GetLatestCompletedRoundParamsOutcome = "all"
 	Prepare      GetLatestCompletedRoundParamsOutcome = "prepare"
 	ProcessInput GetLatestCompletedRoundParamsOutcome = "process_input"
+	ResearchRun  GetLatestCompletedRoundParamsOutcome = "research_run"
 )
 
 // Valid indicates whether the value is a known member of the GetLatestCompletedRoundParamsOutcome enum.
@@ -2464,6 +2468,8 @@ func (e GetLatestCompletedRoundParamsOutcome) Valid() bool {
 	case Prepare:
 		return true
 	case ProcessInput:
+		return true
+	case ResearchRun:
 		return true
 	default:
 		return false
@@ -2613,6 +2619,8 @@ type AnswerMatchViewStatus string
 
 // AnswerValueSave defines model for AnswerValueSave.
 type AnswerValueSave struct {
+	// DraftRequested C4 explicit owner choice to leave a required answer blank for Standard drafting from verified facts.
+	DraftRequested        *bool  `json:"draftRequested,omitempty"`
 	ExpectedAnswerVersion int64  `json:"expectedAnswerVersion"`
 	Text                  string `json:"text"`
 }
@@ -3808,7 +3816,8 @@ type QuestionAnswerList struct {
 
 // QuestionAnswerValue defines model for QuestionAnswerValue.
 type QuestionAnswerValue struct {
-	Provenance struct {
+	DraftRequested *bool `json:"draftRequested,omitempty"`
+	Provenance     struct {
 		EditedAt time.Time `json:"editedAt"`
 		EditedBy struct {
 			ActorId   string `json:"actorId"`
@@ -4442,6 +4451,25 @@ type RoundSourceOpportunity struct {
 	SourceOpeningId string                   `json:"sourceOpeningId"`
 }
 
+// RunHistoryItem defines model for RunHistoryItem.
+type RunHistoryItem struct {
+	CompletedAt *string `json:"completedAt,omitempty"`
+	CreatedAt   string  `json:"createdAt"`
+	Intent      string  `json:"intent"`
+	Outcome     string  `json:"outcome"`
+	RequestKey  string  `json:"requestKey"`
+	RunId       string  `json:"runId"`
+	State       string  `json:"state"`
+	StopReason  string  `json:"stopReason"`
+	UpdatedAt   string  `json:"updatedAt"`
+}
+
+// RunHistoryPage defines model for RunHistoryPage.
+type RunHistoryPage struct {
+	Items      []RunHistoryItem `json:"items"`
+	NextCursor *string          `json:"nextCursor,omitempty"`
+}
+
 // RuntimeStatus defines model for RuntimeStatus.
 type RuntimeStatus struct {
 	IngestionAvailable    bool `json:"ingestionAvailable"`
@@ -4529,6 +4557,22 @@ type SessionResponse struct {
 
 // SessionResponseActorKind defines model for SessionResponse.ActorKind.
 type SessionResponseActorKind string
+
+// SourcedOwnerContext defines model for SourcedOwnerContext.
+type SourcedOwnerContext struct {
+	Owner struct {
+		Id   string `json:"id"`
+		Kind string `json:"kind"`
+	} `json:"owner"`
+	Sources []struct {
+		Approved bool   `json:"approved"`
+		Body     string `json:"body"`
+		Id       string `json:"id"`
+		Name     string `json:"name"`
+		Sha256   string `json:"sha256"`
+	} `json:"sources"`
+	SourcesConnected bool `json:"sourcesConnected"`
+}
 
 // StatementSourceInput defines model for StatementSourceInput.
 type StatementSourceInput struct {
@@ -4824,6 +4868,19 @@ type ExplainResearchIdentityParams struct {
 // ExplainResearchIdentityParamsSubjectKind defines parameters for ExplainResearchIdentity.
 type ExplainResearchIdentityParamsSubjectKind string
 
+// ListResearchRunsParams defines parameters for ListResearchRuns.
+type ListResearchRunsParams struct {
+	Outcome *string   `form:"outcome,omitempty" json:"outcome,omitempty"`
+	State   *[]string `form:"state,omitempty" json:"state,omitempty"`
+	Limit   *int      `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor  *string   `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetLatestTerminalResearchRunParams defines parameters for GetLatestTerminalResearchRun.
+type GetLatestTerminalResearchRunParams struct {
+	Outcome *string `form:"outcome,omitempty" json:"outcome,omitempty"`
+}
+
 // ListResearchActivityParams defines parameters for ListResearchActivity.
 type ListResearchActivityParams struct {
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -4839,6 +4896,14 @@ type ListRunFindingsParams struct {
 
 // ListRunFindingsParamsGroup defines parameters for ListRunFindings.
 type ListRunFindingsParamsGroup string
+
+// ListRoundsParams defines parameters for ListRounds.
+type ListRoundsParams struct {
+	Outcome *string   `form:"outcome,omitempty" json:"outcome,omitempty"`
+	State   *[]string `form:"state,omitempty" json:"state,omitempty"`
+	Limit   *int      `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor  *string   `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
 
 // GetLatestCompletedRoundParams defines parameters for GetLatestCompletedRound.
 type GetLatestCompletedRoundParams struct {

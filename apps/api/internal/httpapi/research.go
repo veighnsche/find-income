@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
 	"github.com/veighnsche/find-income-dashboard/api/internal/musewire"
 	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
@@ -61,6 +62,49 @@ type SteerResearchInput struct {
 	RunID          string
 	Body           string
 	IdempotencyKey string
+}
+
+// RunHistoryOptions filters the server run-recovery list. Empty Outcome
+// matches every outcome; empty States matches every run state; empty
+// Cursor starts from the newest run.
+type RunHistoryOptions struct {
+	Outcome string
+	States  []string
+	Limit   int
+	Cursor  string
+}
+
+// RunHistoryItem is one durable run for server-backed recovery: enough to
+// restore deep links (`#/search?run=<id>`), offer the valid Stop/Resume/
+// Find-more actions per state, and tell terminal runs apart. Reads make
+// zero model calls.
+type RunHistoryItem struct {
+	RunID       string `json:"runId"`
+	RequestKey  string `json:"requestKey"`
+	Intent      string `json:"intent"`
+	Outcome     string `json:"outcome"`
+	State       string `json:"state"`
+	StopReason  string `json:"stopReason"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+	CompletedAt string `json:"completedAt,omitempty"`
+}
+
+// RunHistoryPage is one newest-first recovery page. NextCursor is empty on
+// the last page; passing it back resumes strictly older runs.
+type RunHistoryPage struct {
+	Items      []RunHistoryItem `json:"items"`
+	NextCursor string           `json:"nextCursor,omitempty"`
+}
+
+// ResearchRecoveryService serves the C1/D3 server run-recovery reads:
+// relevant-run lookup across states, latest terminal run, and history.
+// It is optional: handlers type-assert the wired ResearchService and
+// report honest unavailable when the implementation predates it, so older
+// doubles keep compiling and serving their own surface.
+type ResearchRecoveryService interface {
+	ListResearchRuns(ctx context.Context, actor store.Actor, opts RunHistoryOptions) (RunHistoryPage, error)
+	LatestTerminalResearchRun(ctx context.Context, actor store.Actor, outcome string) (RunHistoryItem, error)
 }
 
 func validID(value string, max int) bool {
@@ -162,6 +206,21 @@ func (h *Handler) commissionResearchRun(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		in.IdempotencyKey = *body.IdempotencyKey
+	}
+	// C2/D1: the first explicit commission authors the reason catalog for
+	// the current saved goal version; later commissions reuse it. This is
+	// the only authoring point: passive reads never call it, and the
+	// derivation is deterministic, so concurrent/retried commissions
+	// converge on one accepted version per brief.
+	brief, err := codexservice.CurrentOwnerBrief(r.Context(), h.database)
+	if err != nil {
+		failResearch(w, err)
+		return
+	}
+	if _, err := h.database.EnsureReasonCatalog(r.Context(),
+		store.Actor{Kind: p.Kind, ID: p.ID}, brief.ProfileVersion); err != nil {
+		failResearch(w, err)
+		return
 	}
 	out, err := svc.CommissionResearch(r.Context(), in)
 	if err != nil {
@@ -291,6 +350,94 @@ func (h *Handler) getResearchReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
+}
+
+// recoveryService resolves the optional run-recovery surface behind the
+// wired research service. Older doubles predate it and honestly report
+// unavailable instead of failing to compile.
+func (h *Handler) recoveryService(w http.ResponseWriter, svc ResearchService) (ResearchRecoveryService, bool) {
+	rec, ok := svc.(ResearchRecoveryService)
+	if !ok {
+		fail(w, http.StatusServiceUnavailable, generated.ApiErrorCodeUnavailable, "Run recovery reads are not connected yet.")
+		return nil, false
+	}
+	return rec, true
+}
+
+// listResearchRuns serves the C1 relevant-run lookup (active, paused,
+// stopped, failed, completed and empty runs) plus newest-first history
+// for server-backed restoration. Pure read: it starts, resumes and
+// commissions nothing. Route registration is I-owned (proposed:
+// GET /api/v1/research/runs with outcome/state/limit/cursor).
+func (h *Handler) listResearchRuns(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.owner(w, r)
+	if !ok {
+		return
+	}
+	svc, ok := h.researchService(w)
+	if !ok {
+		return
+	}
+	rec, ok := h.recoveryService(w, svc)
+	if !ok {
+		return
+	}
+	query := r.URL.Query()
+	opts := RunHistoryOptions{
+		Outcome: query.Get("outcome"),
+		States:  query["state"],
+		Cursor:  query.Get("cursor"),
+	}
+	if len(opts.Outcome) > 100 || len(opts.Cursor) > 512 {
+		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Invalid research request.")
+		return
+	}
+	opts.Limit = 25
+	if raw := query.Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 100 {
+			fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Invalid research request.")
+			return
+		}
+		opts.Limit = parsed
+	}
+	page, err := rec.ListResearchRuns(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, opts)
+	if err != nil {
+		failResearch(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+// getLatestTerminalResearchRun serves the newest completed/failed run for
+// one outcome (or every outcome when omitted) so a fresh context restores
+// the latest terminal work without guessing its id. Pure read. Route
+// registration is I-owned (proposed:
+// GET /api/v1/research/runs/latest-terminal with outcome).
+func (h *Handler) getLatestTerminalResearchRun(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.owner(w, r)
+	if !ok {
+		return
+	}
+	svc, ok := h.researchService(w)
+	if !ok {
+		return
+	}
+	rec, ok := h.recoveryService(w, svc)
+	if !ok {
+		return
+	}
+	outcome := r.URL.Query().Get("outcome")
+	if len(outcome) > 100 {
+		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Invalid research request.")
+		return
+	}
+	item, err := rec.LatestTerminalResearchRun(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, outcome)
+	if err != nil {
+		failResearch(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
 }
 
 func (h *Handler) getResearchCapture(w http.ResponseWriter, r *http.Request) {

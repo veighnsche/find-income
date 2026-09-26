@@ -458,3 +458,106 @@ func TestSameTimeAuditEventsHaveDistinctSequences(t *testing.T) {
 		t.Fatalf("change history was mutable: %v", err)
 	}
 }
+
+// D2: recollecting the same verified vacancy (same source URL) keeps ONE
+// identity: the second create reconciles to the first row unchanged, the
+// saved owner decision stays linked, and the list shows one job. A
+// genuinely different vacancy (different URL) stays distinct even when
+// the title and company resemble the first.
+func TestCreateOpportunityReconcilesVerifiedSource(t *testing.T) {
+	ctx := context.Background()
+	s := openJobTestStore(t)
+	owner := ownerActor()
+
+	firstCompany := createFixtureCompany(t, s)
+	firstInput := fixtureOpportunity(firstCompany.ID)
+	first, firstChange, err := s.CreateOpportunity(ctx, owner, firstInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstChange == "" {
+		t.Fatal("fresh create returned no change id")
+	}
+	if _, _, err := s.SetOwnerOpportunityDecision(ctx, owner, first.ID, OwnerDecisionInput{
+		RequestKey: "d2-select", ExpectedOpportunityRevision: first.Revision,
+		ExpectedDecisionRevision: 0, Decision: "selected"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Find more recollects the same verified vacancy under another company
+	// row and a retitled sighting: the identity reconciles anyway.
+	secondCompany, _, err := s.CreateCompany(ctx, owner, CompanyInput{Name: "Harbour Systems"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondInput := fixtureOpportunity(secondCompany.ID)
+	secondInput.Title = "Backend Engineer (refreshed title)"
+	second, secondChange, err := s.CreateOpportunity(ctx, owner, secondInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.ID != first.ID || secondChange != "" {
+		t.Fatalf("resighting forked the identity: %q change %q, want %q with no new write", second.ID, secondChange, first.ID)
+	}
+	if second.Title != first.Title || second.Revision != first.Revision {
+		t.Fatalf("reconcile rewrote the record: %+v vs %+v", second, first)
+	}
+	decision, err := s.OwnerOpportunityDecision(ctx, first.ID)
+	if err != nil || decision.Decision != "selected" {
+		t.Fatalf("owner decision lost across recollection: %+v err=%v", decision, err)
+	}
+	resolved, err := s.OpportunityBySourceURL(ctx, firstInput.SourceURL)
+	if err != nil || resolved.ID != first.ID {
+		t.Fatalf("source lookup: %+v err=%v", resolved, err)
+	}
+	page, err := s.ListOpportunities(ctx, OpportunityListOptions{Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || page.Items[0].ID != first.ID {
+		t.Fatalf("list shows %d jobs, want the one recollected identity", len(page.Items))
+	}
+
+	// A different vacancy stays distinct despite resembling title/company.
+	otherInput := fixtureOpportunity(secondCompany.ID)
+	otherInput.SourceURL = "https://harbour.example/jobs/2"
+	otherInput.Title = "backend engineer"
+	other, _, err := s.CreateOpportunity(ctx, owner, otherInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.ID == first.ID {
+		t.Fatal("different vacancy merged into the first identity")
+	}
+
+	// URL matching is case-insensitive (mirroring the duplicate warning);
+	// an empty URL carries no verified identity and never reconciles.
+	cased, _, err := s.CreateOpportunity(ctx, owner, OpportunityInput{
+		CompanyID: secondCompany.ID, Title: "Cased", Kind: "employment",
+		SourceURL: "HTTPS://HARBOUR.EXAMPLE/JOBS/1", Stage: "new",
+	})
+	if err != nil || cased.ID != first.ID {
+		t.Fatalf("case-variant URL forked: %+v err=%v", cased, err)
+	}
+	textOnly := func(title string) OpportunityInput {
+		return OpportunityInput{CompanyID: secondCompany.ID, Title: title, Kind: "employment",
+			OriginalText: "Same pasted text.", Stage: "new"}
+	}
+	textFirst, _, err := s.CreateOpportunity(ctx, owner, textOnly("Text A"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	textSecond, _, err := s.CreateOpportunity(ctx, owner, textOnly("Text B"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if textFirst.ID == textSecond.ID {
+		t.Fatal("URL-less rows merged without a verified source identity")
+	}
+	if _, err := s.OpportunityBySourceURL(ctx, ""); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("empty source lookup: got %v, want ErrNotFound", err)
+	}
+	if _, err := s.OpportunityBySourceURL(ctx, "https://harbour.example/jobs/missing"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown source lookup: got %v, want ErrNotFound", err)
+	}
+}

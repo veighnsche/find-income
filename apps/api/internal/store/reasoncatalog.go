@@ -304,14 +304,277 @@ func (s *Store) AuthorReasonCatalog(ctx context.Context, actor Actor, in ReasonC
 			EntityID: fmt.Sprintf("v%d", in.ProfileVersion), RevisionAfter: &profile}, nil
 	})
 	if err != nil {
+		// A conflict may be a lost insert race: a concurrent commission
+		// may have committed the identical authoring first. Replay the
+		// stored row when it matches exactly; divergent content keeps
+		// conflicting because rows are immutable.
+		if errors.Is(err, ErrConflict) {
+			if replay, rerr := s.authorConflictReplay(ctx, in); rerr == nil {
+				return replay, nil
+			}
+		}
 		return ReasonCatalog{}, err
 	}
 	return result, nil
 }
 
+// authorConflictReplay returns the stored catalog when it holds exactly
+// the conflicting authoring, so concurrent identical commissions converge
+// instead of failing. Any difference (or a still-missing row) is an error
+// and the caller keeps the original conflict.
+func (s *Store) authorConflictReplay(ctx context.Context, in ReasonCatalogInput) (ReasonCatalog, error) {
+	existing, err := s.ReasonCatalog(ctx, in.ProfileVersion)
+	if err != nil {
+		return ReasonCatalog{}, err
+	}
+	rubricVersion, err := CriteriaRubricVersion(in.ProfileVersion, mustMarshalCriteria(existing.RoleCriteria))
+	if err != nil {
+		return ReasonCatalog{}, err
+	}
+	catalogVersion, err := ReasonCatalogVersion(in.ProfileVersion, in.Positive, in.Negative, in.MissingInformation)
+	if err != nil {
+		return ReasonCatalog{}, err
+	}
+	if !catalogMatches(existing, rubricVersion, catalogVersion, in.Rubric, in) {
+		return ReasonCatalog{}, ErrConflict
+	}
+	return existing, nil
+}
+
 func mustMarshalCriteria(criteria []RoleCriterion) string {
 	raw, _ := json.Marshal(criteria)
 	return string(raw)
+}
+
+// CatalogInputForBrief derives the deterministic commission-time catalog
+// input for one saved brief version (C2/D1). Every choice preserves the
+// owner's actual requirements: require/prefer criteria become positive
+// reasons, avoid criteria become negative reasons, and missing-information
+// reasons cover only the pay/location/arrangement facts the brief sets.
+// No model call happens here; concurrent commissions compute identical
+// input, so AuthorReasonCatalog converges them on one accepted version.
+// A brief with zero role criteria is ErrInvalid: there are no
+// requirements to preserve, and inventing reasons is never allowed.
+func CatalogInputForBrief(prefs Preferences) (ReasonCatalogInput, error) {
+	if prefs.Version < 1 {
+		return ReasonCatalogInput{}, fmt.Errorf("%w: brief profile version required", ErrInvalid)
+	}
+	var wants, avoids []RoleCriterion
+	for _, c := range prefs.RoleCriteria {
+		switch c.Mode {
+		case "require", "prefer":
+			wants = append(wants, c)
+		case "avoid":
+			avoids = append(avoids, c)
+		default:
+			return ReasonCatalogInput{}, fmt.Errorf("%w: role criterion %q has unknown mode %q", ErrInvalid, c.ID, c.Mode)
+		}
+	}
+	if len(wants) == 0 && len(avoids) == 0 {
+		return ReasonCatalogInput{}, fmt.Errorf("%w: brief v%d has no role criteria; save search wants before commissioning", ErrInvalid, prefs.Version)
+	}
+	positive := make([]ReasonChoice, 0, len(wants)+len(avoids))
+	for _, c := range wants {
+		positive = append(positive, ReasonChoice{
+			ID:     catalogReasonID("want-", c.ID),
+			Label:  c.Label,
+			Detail: "Listing satisfies this " + wantAdjective(c.Mode) + " pattern: " + criterionDetailText(c),
+		})
+	}
+	// A brief with only don't-wants still needs positive choices: restating
+	// each exclusion as a supported absence preserves the requirement
+	// without inventing a new one.
+	for _, c := range avoids {
+		if len(wants) > 0 {
+			break
+		}
+		positive = append(positive, ReasonChoice{
+			ID:     catalogReasonID("clear-", c.ID),
+			Label:  "No " + c.Label,
+			Detail: "Listing avoids this excluded pattern: " + criterionDetailText(c),
+		})
+	}
+	negative := make([]ReasonChoice, 0, len(avoids)+len(wants))
+	for _, c := range avoids {
+		negative = append(negative, ReasonChoice{
+			ID:     catalogReasonID("avoid-", c.ID),
+			Label:  c.Label,
+			Detail: "Listing shows this excluded pattern: " + criterionDetailText(c),
+		})
+	}
+	// A brief with only wants still needs negative choices: the negation
+	// of each want is exactly what a negative reason means.
+	for _, c := range wants {
+		if len(avoids) > 0 {
+			break
+		}
+		negative = append(negative, ReasonChoice{
+			ID:     catalogReasonID("miss-", c.ID),
+			Label:  "No " + c.Label,
+			Detail: "Listing lacks this " + wantAdjective(c.Mode) + " pattern: " + criterionDetailText(c),
+		})
+	}
+	missing := catalogMissingChoices(prefs)
+	in := ReasonCatalogInput{
+		ProfileVersion: prefs.Version, Rubric: catalogRubric(prefs, wants, avoids),
+		Positive: positive, Negative: negative, MissingInformation: missing,
+	}
+	if err := validateReasonCatalogInput(in); err != nil {
+		return ReasonCatalogInput{}, err
+	}
+	return in, nil
+}
+
+// wantAdjective renders a want mode as an adjective. Callers only pass the
+// validated want modes; anything else fails closed as "saved".
+func wantAdjective(mode string) string {
+	switch mode {
+	case "require":
+		return "required"
+	case "prefer":
+		return "preferred"
+	default:
+		return "saved"
+	}
+}
+
+// criterionDetailText renders the owner's own description (or label when no
+// description was saved). Stored descriptions are untrimmed and unbounded
+// in length, so the text is trimmed; the rubric truncates separately.
+func criterionDetailText(c RoleCriterion) string {
+	if desc := strings.TrimSpace(c.Description); desc != "" {
+		return desc
+	}
+	return c.Label
+}
+
+// catalogReasonID prefixes a criterion id while keeping a valid reason id
+// (1..80 chars of [a-z0-9-]). Overlong ids truncate with a digest suffix so
+// distinct criteria keep distinct deterministic ids.
+func catalogReasonID(prefix, criterionID string) string {
+	if len(prefix)+len(criterionID) <= 80 {
+		return prefix + criterionID
+	}
+	sum := sha256.Sum256([]byte(criterionID))
+	keep := 80 - len(prefix) - 9
+	if keep < 1 {
+		keep = 1
+	}
+	if keep > len(criterionID) {
+		keep = len(criterionID)
+	}
+	return prefix + criterionID[:keep] + "-" + hex.EncodeToString(sum[:])[:8]
+}
+
+// catalogMissingChoices covers the brief's pay/location/arrangement facts.
+// Each reason is conditional on its fact being set; an unset fact yields no
+// reason rather than a generic filler.
+func catalogMissingChoices(prefs Preferences) []ReasonChoice {
+	var missing []ReasonChoice
+	if prefs.MinMonthlyBaseCents > 0 {
+		missing = append(missing, ReasonChoice{
+			ID: "pay-unstated", Label: "Pay unstated",
+			Detail: fmt.Sprintf("Listing states no base pay, so the owner's minimum of %d %s/month cannot be checked.",
+				prefs.MinMonthlyBaseCents, prefs.SalaryCurrency),
+		})
+	}
+	if strings.TrimSpace(prefs.PreferredLocation) != "" {
+		missing = append(missing, ReasonChoice{
+			ID: "location-unstated", Label: "Location unstated",
+			Detail: "Listing states no work location, so the " +
+				truncateRunes(strings.TrimSpace(prefs.PreferredLocation), 200) + " preference cannot be checked.",
+		})
+	}
+	if prefs.AllowRemote || prefs.AllowHybrid {
+		missing = append(missing, ReasonChoice{
+			ID: "arrangement-unstated", Label: "Arrangement unstated",
+			Detail: "Listing states no remote/hybrid/onsite arrangement, so the work-location preference cannot be checked.",
+		})
+	}
+	return missing
+}
+
+// catalogRubric renders the deterministic matching rubric: brief identity,
+// the saved wants and don't-wants in saved order, and the saved facts.
+// Criterion descriptions truncate to 160 runes so 32 maximal criteria stay
+// far below the 20000-char rubric limit.
+func catalogRubric(prefs Preferences, wants, avoids []RoleCriterion) string {
+	var out strings.Builder
+	fmt.Fprintf(&out, "Search rubric for saved brief v%d (%d wants, %d don't-wants).\n",
+		prefs.Version, len(wants), len(avoids))
+	out.WriteString("Wants, in saved order:\n")
+	for _, c := range wants {
+		fmt.Fprintf(&out, "- %s (%s): %s\n", c.Label, c.Mode, truncateRunes(criterionDetailText(c), 160))
+	}
+	out.WriteString("Don't-wants, in saved order:\n")
+	for _, c := range avoids {
+		fmt.Fprintf(&out, "- %s (%s): %s\n", c.Label, c.Mode, truncateRunes(criterionDetailText(c), 160))
+	}
+	location := "unset"
+	if loc := strings.TrimSpace(prefs.PreferredLocation); loc != "" {
+		location = truncateRunes(loc, 200)
+	}
+	fmt.Fprintf(&out, "Saved facts: location %s; remote %s; hybrid %s; %.2f h/wk target; minimum %d %s/month; timezone %s.\n",
+		location, allowedText(prefs.AllowRemote), allowedText(prefs.AllowHybrid),
+		float64(prefs.TargetHoursHundredths)/100, prefs.MinMonthlyBaseCents, prefs.SalaryCurrency,
+		truncateRunes(strings.TrimSpace(prefs.Timezone), 100))
+	out.WriteString("Judge each listing against these saved requirements only; " +
+		"select the verbatim catalog reason best supported by the cited vacancy capture, or abstain.")
+	return out.String()
+}
+
+func allowedText(allowed bool) string {
+	if allowed {
+		return "allowed"
+	}
+	return "not allowed"
+}
+
+func truncateRunes(value string, max int) string {
+	if max < 1 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= max {
+		return value
+	}
+	return string(runes[:max])
+}
+
+// EnsureReasonCatalog returns the brief version's catalog, authoring the
+// deterministic commission-time catalog when none exists yet. Reads stay
+// pure: only explicit commissions call this, never passive GETs.
+// First-accepted wins: a concurrent or earlier authoring is reused as-is,
+// so retried/concurrent commissions converge on one accepted version even
+// when another author (a seed or a future drafting pass) wrote different
+// content for the same brief. Direct AuthorReasonCatalog callers keep the
+// strict identical-or-conflict rule.
+func (s *Store) EnsureReasonCatalog(ctx context.Context, actor Actor, profileVersion int64) (ReasonCatalog, error) {
+	if existing, err := s.ReasonCatalog(ctx, profileVersion); err == nil {
+		return existing, nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return ReasonCatalog{}, err
+	}
+	prefs, err := s.PreferenceVersion(ctx, profileVersion)
+	if err != nil {
+		return ReasonCatalog{}, err
+	}
+	in, err := CatalogInputForBrief(prefs)
+	if err != nil {
+		return ReasonCatalog{}, err
+	}
+	catalog, err := s.AuthorReasonCatalog(ctx, actor, in)
+	if err == nil {
+		return catalog, nil
+	}
+	if errors.Is(err, ErrConflict) {
+		if existing, rerr := s.ReasonCatalog(ctx, profileVersion); rerr == nil {
+			return existing, nil
+		} else if !errors.Is(rerr, ErrNotFound) {
+			return ReasonCatalog{}, rerr
+		}
+	}
+	return ReasonCatalog{}, err
 }
 
 // ReasonCatalog reads the authored catalog for one brief version. Pure

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/veighnsche/find-income-dashboard/api/internal/applicationpacks"
 	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
@@ -96,6 +97,81 @@ func (h *Handler) getReasonCatalog(w http.ResponseWriter, r *http.Request) {
 		Negative:           reasonChoiceViews(catalog.Negative),
 		MissingInformation: reasonChoiceViews(catalog.MissingInformation),
 	})
+}
+
+// OwnerIdentityView is the authenticated owner behind a sourced-context
+// read. The backend stores no display name, so kind/id is the full
+// supported identity.
+type OwnerIdentityView struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
+}
+
+// OwnerCareerSourceView is one approved private career source (CV or
+// supporting career document) with its provenance. It is served
+// separately from the reusable answer library: sources ground drafts and
+// panels, answers never silently become wants.
+type OwnerCareerSourceView struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	SHA256   string `json:"sha256"`
+	Approved bool   `json:"approved"`
+	Body     string `json:"body"`
+}
+
+// SourcedOwnerContextView is the D4 owner-context read: owner identity
+// plus the approved career sources with provenance. SourcesConnected is
+// false when the server has no career loader wired; the owner identity
+// still serves.
+type SourcedOwnerContextView struct {
+	Owner            OwnerIdentityView       `json:"owner"`
+	SourcesConnected bool                    `json:"sourcesConnected"`
+	Sources          []OwnerCareerSourceView `json:"sources"`
+}
+
+// ownerCareerLoader supplies the approved career sources through the
+// existing pinned source loading. Server wiring connects it once at
+// startup; nil means career sources are not connected on this server.
+var ownerCareerLoader func() ([]applicationpacks.Source, error)
+
+// SetOwnerCareerLoader connects the approved career sources read. Production
+// passes a loader over applicationpacks.LoadApprovedCareerSources; tests
+// swap in fakes and restore afterwards.
+func SetOwnerCareerLoader(loader func() ([]applicationpacks.Source, error)) {
+	ownerCareerLoader = loader
+}
+
+// getSourcedOwnerContext serves the D4 sourced owner context: approved
+// CV/source experience with provenance plus the supported owner identity.
+// Pure GET-only read with zero model calls: bodies serve verbatim from the
+// pinned loader, and no summary extraction happens on panel reads. Route
+// registration is I-owned (proposed: GET /api/v1/research/owner-context).
+func (h *Handler) getSourcedOwnerContext(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.owner(w, r)
+	if !ok {
+		return
+	}
+	view := SourcedOwnerContextView{
+		Owner:   OwnerIdentityView{Kind: p.Kind, ID: p.ID},
+		Sources: []OwnerCareerSourceView{},
+	}
+	if ownerCareerLoader == nil {
+		writeJSON(w, http.StatusOK, view)
+		return
+	}
+	sources, err := ownerCareerLoader()
+	if err != nil {
+		fail(w, http.StatusServiceUnavailable, generated.ApiErrorCodeUnavailable, "Approved career sources failed to load.")
+		return
+	}
+	view.SourcesConnected = true
+	for _, source := range sources {
+		view.Sources = append(view.Sources, OwnerCareerSourceView{
+			ID: source.ID, Name: source.Name, SHA256: source.SHA256,
+			Approved: source.Approved, Body: source.Body,
+		})
+	}
+	writeJSON(w, http.StatusOK, view)
 }
 
 // reasonChoiceViews renders saved catalog text verbatim (never null: an

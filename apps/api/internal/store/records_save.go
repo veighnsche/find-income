@@ -1167,6 +1167,38 @@ func recheckSaveKeys(ctx context.Context, db ResearchDB, itemIndex int, plan *sa
 	return kept, nil, nil
 }
 
+// archiveSupersededReuseOpportunities retires the prior unarchived
+// opportunity rows whose strong keys this explicit-reuse create
+// supersedes (R02/R03). The retired rows keep their historical content,
+// keys, and sightings; only URL resolution moves on, so one active
+// identity holds each verified source URL (D2) while reuse history
+// stays readable. Runs before the reuse insert.
+func archiveSupersededReuseOpportunities(ctx context.Context, db ResearchDB, keys []plannedKey) error {
+	seen := map[string]bool{}
+	for _, key := range keys {
+		if key.supersedeOld == "" || seen[key.supersedeOld] {
+			continue
+		}
+		seen[key.supersedeOld] = true
+		var opportunityID sql.NullString
+		if err := db.QueryRowContext(ctx, `SELECT opportunity_id FROM entity_identity_keys
+		  WHERE id=?`, key.supersedeOld).Scan(&opportunityID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
+			return err
+		}
+		if !opportunityID.Valid || opportunityID.String == "" {
+			continue
+		}
+		if _, err := db.ExecContext(ctx, `UPDATE opportunities SET archived_at=?,updated_at=?
+		  WHERE id=? AND archived_at IS NULL`, utcNow(), utcNow(), opportunityID.String); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // classifySaveSightings labels each evidence link: reused_identifier under
 // the reuse signal, else first/unchanged/changed against the record's
 // prior sightings by content sha.
@@ -1278,6 +1310,11 @@ func executeSavePlan(ctx context.Context, db ResearchDB, actor Actor, runID stri
 			}
 		}
 		plan.opportunity.CompanyID = companyID
+		if plan.reuse {
+			if err := archiveSupersededReuseOpportunities(ctx, db, plan.keys); err != nil {
+				return researchcontract.SavedRecord{}, saveItemDetail{}, err
+			}
+		}
 		inserted, err := db.ExecContext(ctx, `INSERT INTO opportunities
   (id,company_id,title,kind,source_url,original_text,notes,stage,work_pattern,location_text,
    posted_on,deadline_on,revision,created_at,updated_at)

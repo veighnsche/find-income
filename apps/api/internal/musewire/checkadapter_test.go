@@ -160,3 +160,62 @@ func TestCheckAdapterRejectsMalformed(t *testing.T) {
 		t.Fatal("adapter without fetch/vacancy adapted")
 	}
 }
+
+// Verified questions carry their field/upload kind: upload instructions
+// map to attachment so preparation never renders them as pasteable text,
+// while plain questions stay free text.
+func TestCheckAdapterMapsQuestionKinds(t *testing.T) {
+	ctx := context.Background()
+	page := "<html><body><p>Why do you want this role?</p><p>Please upload your CV as a PDF.</p></body></html>"
+	captures := &fakeCaptures{
+		receipts: map[string]researchcontract.ExecutionReceipt{
+			"rc-kind": {ID: "rc-kind", Status: researchcontract.ReceiptOK, CaptureID: "cap-kind"},
+		},
+		blobs: map[string][]byte{"cap-kind": []byte(page)},
+	}
+	server, err := publicresearch.NewServer(publicresearch.Deps{
+		Executor: &fakeExecutor{}, Captures: captures,
+		Bounds: musecode.Bounds{MaxWallClock: 60000000000, MaxModelSteps: 10, MaxToolCalls: 100,
+			MaxBytesPerOp: 1 << 20, MaxBytesTotal: 10 << 20},
+		RunID: "round-kind", Generation: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seeded, err := server.SeedVacancies([]publicresearch.SeedVacancy{{
+		PageURL: "https://jobs.example.invalid/kind", EmployerName: "Example BV",
+		Title: "Support Engineer", ReceiptRef: "rc-kind",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter := &CheckAdapter{Captures: captures, Saved: server,
+		Fetch: func(_ context.Context, sourceURL string) (string, error) {
+			if sourceURL == "https://jobs.example.invalid/kind" {
+				return "cap-kind", nil
+			}
+			return "", errors.New("fixture: unknown source " + sourceURL)
+		},
+		VacancyRef: seeded[0].VacancyRef}
+	text := `{"requirements":[],` +
+		`"route":{"kind":"direct","destination":"jobs@example.invalid","source":"https://jobs.example.invalid/kind"},` +
+		`"documents":[],` +
+		`"questions":[{"prompt_text":"Why do you want this role?","required":true,"source":"https://jobs.example.invalid/kind"},` +
+		`{"prompt_text":"Please upload your CV as a PDF.","required":true,"source":"https://jobs.example.invalid/kind"}],` +
+		`"gaps":[]}`
+	adapted, err := adapter.Adapt(ctx, "2026-09-26T10:00:00Z", text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(adapted.Questions) != 2 {
+		t.Fatalf("questions: %+v gaps: %v", adapted.Questions, adapted.Gaps)
+	}
+	// The route destination is not on this page, so the route drops while
+	// the verified questions persist with their kinds.
+	if adapted.Questions[0].Kind != store.CheckQuestionFreeText {
+		t.Fatalf("text question kind: %+v", adapted.Questions[0])
+	}
+	if adapted.Questions[1].Kind != store.CheckQuestionAttachment {
+		t.Fatalf("upload question kind: %+v", adapted.Questions[1])
+	}
+}

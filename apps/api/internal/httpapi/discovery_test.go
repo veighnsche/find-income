@@ -3,9 +3,13 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/veighnsche/find-income-dashboard/api/internal/applicationpacks"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
@@ -72,5 +76,77 @@ func TestSearchBriefAndCatalogReads(t *testing.T) {
 	response = h.request("GET", "/api/v1/research/briefs/"+fmt.Sprint(brief.ProfileVersion)+"/catalog", "", cookie, "", "", "")
 	if response.Code != 200 {
 		t.Fatalf("catalog: %d %s", response.Code, response.Body.String())
+	}
+}
+
+// D4: the sourced owner-context read serves approved CV/source experience
+// with provenance plus the supported owner identity, separately from the
+// reusable answer library (this DB holds zero answers and the read still
+// serves). Route registration stays I-owned, so this calls the handler
+// method directly. No model call happens on the read path by construction:
+// the handler only runs the pinned file loader.
+func TestSourcedOwnerContextRead(t *testing.T) {
+	h := newHarness(t)
+	cookie, _ := h.login()
+	handler := &Handler{database: h.db, auth: h.service}
+	t.Cleanup(func() { SetOwnerCareerLoader(nil) })
+
+	call := func(target string, cookie *http.Cookie) *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodGet, target, nil)
+		request.RemoteAddr = "127.0.0.1:12345"
+		if cookie != nil {
+			request.AddCookie(cookie)
+		}
+		response := httptest.NewRecorder()
+		handler.getSourcedOwnerContext(response, request)
+		return response
+	}
+
+	SetOwnerCareerLoader(func() ([]applicationpacks.Source, error) {
+		return []applicationpacks.Source{
+			{ID: "cv", Name: "cv-vince-liem.md", SHA256: "sha-cv", Approved: true, Body: "Senior support engineer, ten years."},
+			{ID: "cases", Name: "portfolio-case-studies.md", SHA256: "sha-cases", Approved: true, Body: "Case studies."},
+		}, nil
+	})
+	response := call("/api/v1/research/owner-context", cookie)
+	if response.Code != http.StatusOK {
+		t.Fatalf("owner context: got %d %s, want 200", response.Code, response.Body.String())
+	}
+	var view SourcedOwnerContextView
+	if err := json.Unmarshal(response.Body.Bytes(), &view); err != nil {
+		t.Fatal(err)
+	}
+	if view.Owner.Kind != "administrator" || view.Owner.ID != "owner" {
+		t.Fatalf("owner identity: %+v", view.Owner)
+	}
+	if !view.SourcesConnected || len(view.Sources) != 2 ||
+		view.Sources[0].Name != "cv-vince-liem.md" || view.Sources[0].SHA256 != "sha-cv" ||
+		!view.Sources[0].Approved || view.Sources[0].Body != "Senior support engineer, ten years." {
+		t.Fatalf("career sources: %+v", view)
+	}
+
+	SetOwnerCareerLoader(func() ([]applicationpacks.Source, error) {
+		return nil, errors.New("approved source changed: cv-vince-liem.md")
+	})
+	if response := call("/api/v1/research/owner-context", cookie); response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("broken loader: got %d, want honest 503", response.Code)
+	}
+
+	SetOwnerCareerLoader(nil)
+	response = call("/api/v1/research/owner-context", cookie)
+	if response.Code != http.StatusOK {
+		t.Fatalf("unwired loader: got %d, want 200 with connected=false", response.Code)
+	}
+	view = SourcedOwnerContextView{}
+	if err := json.Unmarshal(response.Body.Bytes(), &view); err != nil {
+		t.Fatal(err)
+	}
+	if view.SourcesConnected || len(view.Sources) != 0 || view.Owner.ID != "owner" {
+		t.Fatalf("unwired owner context: %+v", view)
+	}
+
+	if response := call("/api/v1/research/owner-context", nil); response.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated owner context: got %d, want 401", response.Code)
 	}
 }

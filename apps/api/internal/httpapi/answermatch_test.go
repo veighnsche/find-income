@@ -22,7 +22,7 @@ func completeMatchCheck(t *testing.T, h *harness, selectKey string) (store.Oppor
 	}
 	opportunity, _, err := h.db.CreateOpportunity(ctx, owner, store.OpportunityInput{
 		CompanyID: company.ID, Title: "Backend Engineer", Kind: "employment",
-		SourceURL: "https://harbour.example/jobs/1", OriginalText: "Build Go services.",
+		SourceURL: "https://harbour.example/jobs/match-" + selectKey, OriginalText: "Build Go services.",
 		Stage: "new", WorkPattern: "hybrid",
 	})
 	if err != nil {

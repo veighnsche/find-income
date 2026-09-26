@@ -71,6 +71,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/preferences", h.preferences)
 	// No interview, correspondence, or reply routes: the downstream
 	// lifecycle after manual handoff is out of scope.
+	mux.HandleFunc("GET /api/v1/rounds", h.listRounds)
 	mux.HandleFunc("GET /api/v1/rounds/active", h.activeRound)
 	mux.HandleFunc("GET /api/v1/rounds/latest-completed", h.latestCompletedRound)
 	// No offer-comparison routes: the downstream lifecycle after manual
@@ -83,6 +84,9 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("POST /api/v1/rounds/{id}/resume", h.resumeAnyRound)
 	mux.HandleFunc("POST /api/v1/rounds/{id}/mutations", h.roundMutation)
 	mux.HandleFunc("POST /api/v1/research/runs", h.commissionResearchRun)
+	mux.HandleFunc("GET /api/v1/research/runs", h.listResearchRuns)
+	mux.HandleFunc("GET /api/v1/research/runs/latest-terminal", h.getLatestTerminalResearchRun)
+	mux.HandleFunc("GET /api/v1/research/owner-context", h.getSourcedOwnerContext)
 	mux.HandleFunc("GET /api/v1/research/runs/{id}", h.getResearchRun)
 	mux.HandleFunc("POST /api/v1/research/runs/{id}/steer", h.steerResearchRun)
 	mux.HandleFunc("GET /api/v1/research/runs/{id}/activity", h.listResearchActivity)
