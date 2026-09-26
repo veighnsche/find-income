@@ -121,6 +121,7 @@ func (s *Server) saveVacancyTool(ctx context.Context, args saveVacancyArgs) (map
 	}
 	s.vacancies[vac.VacancyRef] = vac
 	s.vacOrder = append(s.vacOrder, vac.VacancyRef)
+	s.vacByURL[vacancyURLKey(page)] = vac.VacancyRef
 	if args.IdempotencyKey != "" {
 		s.idemVac[args.IdempotencyKey] = vac.VacancyRef
 	}

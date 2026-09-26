@@ -1,9 +1,19 @@
 // Package publicresearch isolates adaptive public-only vacancy discovery
-// (lane R, task E03) behind the five frozen Contributor MCP tools.
+// behind deterministic evidence primitives plus a retained harness-only
+// MCP registry.
 //
-// The server owns a fresh MCP tool registry serving exactly the frozen
-// allowlist (see musecode.ContributorToolNames): inherited host tools,
-// plugins and the legacy private context_read tool are never registered.
+// Production path (R1, direct.go): the Contributor CLI runs with its own
+// native web tools and returns structured sightings with source URLs; the
+// app fetches every cited URL itself (FetchURL) and saves only what its
+// own captures verify (SaveVacancy/SaveQuestion). The model never calls
+// this server.
+//
+// The server also owns a frozen five-tool MCP registry serving exactly
+// the legacy allowlist (see musecode.ContributorToolNames): inherited
+// host tools, plugins and the legacy private context_read tool are never
+// registered. Only the stop/resume harness drives saves through it; R2
+// removes it with the harness.
+//
 // Every return is a musecode public DTO or a public-only envelope, so
 // private owner, Jev and session fields are dropped by construction.
 //

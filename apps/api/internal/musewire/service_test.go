@@ -85,16 +85,71 @@ func (s scriptTransport) Run(ctx context.Context, _ musecode.SessionSpec, _ muse
 	return s.err
 }
 
-type fakeExecutor struct {
-	mu    sync.Mutex
-	calls int
+// fetchScript answers one deterministic fixture fetch: the executor
+// records the receipt/blob into the linked captures and returns the OK
+// output. Unscripted URLs keep the closed behavior.
+type fetchScript struct {
+	ReceiptID string
+	CaptureID string
+	Body      []byte
+	FinalURL  string
 }
 
-func (f *fakeExecutor) Execute(context.Context, researchcontract.ExecuteInput) (researchcontract.ExecuteOutput, error) {
+type fakeExecutor struct {
+	mu       sync.Mutex
+	calls    int
+	captures *fakeCaptures
+	fetches  map[string]fetchScript
+}
+
+func (f *fakeExecutor) Execute(_ context.Context, in researchcontract.ExecuteInput) (researchcontract.ExecuteOutput, error) {
+	f.mu.Lock()
+	f.calls++
+	script, ok := f.fetches[in.Request.URLOrQuery]
+	captures := f.captures
+	f.mu.Unlock()
+	if !ok || in.Kind != researchcontract.ExecuteFetch {
+		return researchcontract.ExecuteOutput{}, errors.New("fixture: no retrieval expected")
+	}
+	if captures != nil {
+		captures.mu.Lock()
+		if captures.receipts == nil {
+			captures.receipts = map[string]researchcontract.ExecutionReceipt{}
+		}
+		if captures.blobs == nil {
+			captures.blobs = map[string][]byte{}
+		}
+		captures.receipts[script.ReceiptID] = researchcontract.ExecutionReceipt{
+			ID: script.ReceiptID, Status: researchcontract.ReceiptOK,
+			CaptureID: script.CaptureID, FinalURL: script.FinalURL}
+		if script.Body != nil {
+			captures.blobs[script.CaptureID] = script.Body
+		}
+		captures.mu.Unlock()
+	}
+	finalURL := script.FinalURL
+	if finalURL == "" {
+		finalURL = in.Request.URLOrQuery
+	}
+	return researchcontract.ExecuteOutput{
+		Outcome:       researchcontract.OutcomeOK,
+		ObservationID: "obs-" + script.ReceiptID,
+		CaptureID:     script.CaptureID,
+		Receipt: researchcontract.ExecutionReceipt{ID: script.ReceiptID,
+			Status: researchcontract.ReceiptOK, CaptureID: script.CaptureID, FinalURL: finalURL},
+		Usage: researchcontract.ExecuteUsage{Requests: 1, Bytes: int64(len(script.Body))},
+	}, nil
+}
+
+// scriptFetch answers a deterministic GET of url with the given receipt,
+// capture and body.
+func (f *fakeExecutor) scriptFetch(url, receiptID, captureID string, body []byte) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.calls++
-	return researchcontract.ExecuteOutput{}, errors.New("fixture: no retrieval expected")
+	if f.fetches == nil {
+		f.fetches = map[string]fetchScript{}
+	}
+	f.fetches[url] = fetchScript{ReceiptID: receiptID, CaptureID: captureID, Body: body, FinalURL: url}
 }
 
 func (f *fakeExecutor) count() int {
@@ -424,7 +479,7 @@ func newConnectedFixture(t *testing.T, transport musecode.Transport, scripts []m
 			ID: receiptID, Status: researchcontract.ReceiptOK, CaptureID: capture.ID}
 		captures.blobs[capture.ID] = body
 	}
-	executor := &fakeExecutor{}
+	executor := &fakeExecutor{captures: captures}
 	provider := &fixtureProvider{scripts: scripts}
 	assessor := buildFixtureAssessor(t, db, captures, provider, prefs.Version, catalog.RubricVersion)
 	service, err := NewService(Deps{

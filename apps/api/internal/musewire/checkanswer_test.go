@@ -13,22 +13,23 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
+	"github.com/veighnsche/find-income-dashboard/api/internal/publicresearch"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-// checkTurn scripts one fixture check turn: question prompts saved through
-// the live check tools, and the final findings text built from the saved
-// refs once the transport assigns them.
+// checkTurn scripts one fixture check turn: the turn emits native
+// retrieval events plus its structured findings text citing source URLs,
+// and the checker fetches and verifies everything itself. Extra prompts
+// save directly as saved-but-uncited questions to exercise that gap.
 type checkTurn struct {
-	prompts  []string
-	required []bool
-	text     func(refs []string) string
-	err      error
+	text  string
+	extra []string
+	err   error
 }
 
-// checkScriptTransport plays one scripted check turn against the checker's
-// live tool server: saves land in the server like a real turn, then the
-// turn emits them plus its structured findings text.
+// checkScriptTransport plays one scripted check turn like the direct
+// CLI: structured findings text only, no saves. The checker performs
+// the deterministic fetch-and-verify behind it.
 type checkScriptTransport struct {
 	t       *testing.T
 	checker *Checker
@@ -36,7 +37,7 @@ type checkScriptTransport struct {
 	turn    checkTurn
 }
 
-func (f *checkScriptTransport) Run(_ context.Context, _ musecode.SessionSpec, input musecode.SessionInput, _ musecode.Cursor, sink musecode.EventSink) error {
+func (f *checkScriptTransport) Run(ctx context.Context, _ musecode.SessionSpec, input musecode.SessionInput, _ musecode.Cursor, sink musecode.EventSink) error {
 	check, ok := input.(musecode.CheckInput)
 	if !ok {
 		return errors.New("fixture: check turn needs CheckInput")
@@ -55,31 +56,18 @@ func (f *checkScriptTransport) Run(_ context.Context, _ musecode.SessionSpec, in
 	if len(vacancies) != 1 {
 		return fmt.Errorf("fixture: %d seeded vacancies, want 1", len(vacancies))
 	}
-	session := mcpSession(f.t, server)
-	refs := make([]string, 0, len(f.turn.prompts))
-	for i, prompt := range f.turn.prompts {
-		required := true
-		if i < len(f.turn.required) {
-			required = f.turn.required[i]
+	for _, prompt := range f.turn.extra {
+		if _, err := server.SaveQuestion(ctx, publicresearch.SaveQuestionInput{
+			VacancyRef: vacancies[0], PromptText: prompt, SourceURL: check.PageURL,
+		}); err != nil {
+			return fmt.Errorf("fixture: save extra question: %w", err)
 		}
-		payload := callTool(f.t, session, "public_save_question", map[string]any{
-			"vacancy_ref": vacancies[0], "prompt_text": prompt, "required": required,
-			"source_url": check.PageURL,
-		})
-		question, ok := payload["question"].(map[string]any)
-		if !ok {
-			return fmt.Errorf("fixture: no question in %+v", payload)
-		}
-		ref, _ := question["question_ref"].(string)
-		refs = append(refs, ref)
 	}
 	sink.Emit(musecode.Event{Kind: musecode.EventModelStep})
-	for _, ref := range refs {
-		sink.Emit(musecode.Event{Kind: musecode.EventToolCall, Tool: "public_save_question"})
-		sink.Emit(musecode.Event{Kind: musecode.EventSaved, SaveRef: ref})
-	}
-	if f.turn.text != nil {
-		sink.Emit(musecode.Event{Kind: musecode.EventModelText, Text: f.turn.text(refs)})
+	sink.Emit(musecode.Event{Kind: musecode.EventToolCall, Tool: "web_fetch"})
+	sink.Emit(musecode.Event{Kind: musecode.EventToolResult, Tool: "web_fetch", BytesOut: 64})
+	if f.turn.text != "" {
+		sink.Emit(musecode.Event{Kind: musecode.EventModelText, Text: f.turn.text, BytesOut: int64(len(f.turn.text))})
 	}
 	sink.Emit(musecode.Event{Kind: musecode.EventFinished})
 	return nil
@@ -258,15 +246,14 @@ func TestCheckAnswerConnectedFlow(t *testing.T) {
 	transport := &checkScriptTransport{t: t, checkID: pending.ID}
 	checker := newCheckFixture(t, fix, transport)
 	captureID := finding.EvidenceLinks[0].CaptureID
+	pageURL := "https://jobs.example.invalid/1"
+	fix.executor.scriptFetch(pageURL, "rc-check-fetch", captureID, fix.captures.blobs[captureID])
 	transport.turn = checkTurn{
-		prompts:  []string{"Why do you want this support role?", "Are you available for night shifts (required)?"},
-		required: []bool{false, true},
-		text: func(refs []string) string {
-			return fmt.Sprintf(`{"requirements":[{"text":"Base pay unstated.","capture":%q}],`+
-				`"route":{"kind":"direct","destination":"","capture":%q},"documents":[],`+
-				`"questions":[{"ref":%q,"capture":%q},{"ref":%q,"capture":%q}]}`,
-				captureID, captureID, refs[0], captureID, refs[1], captureID)
-		},
+		text: fmt.Sprintf(`{"requirements":[{"text":"Base pay unstated.","source":%q}],`+
+			`"route":{"kind":"direct","destination":"","source":""},"documents":[],`+
+			`"questions":[{"prompt_text":"Why do you want this support role?","required":false,"source":%q},`+
+			`{"prompt_text":"Are you available for night shifts (required)?","required":true,"source":%q}],"gaps":[]}`,
+			pageURL, pageURL, pageURL),
 	}
 	started, err := checker.PerformCheck(ctx, opportunityID, pending.ID)
 	if err != nil {
@@ -315,8 +302,8 @@ func TestCheckAnswerConnectedFlow(t *testing.T) {
 		reloaded.Questions[1].Text != view.Questions[1].Text {
 		t.Fatalf("reloaded = %+v, want stable sourced questions", reloaded)
 	}
-	if fix.executor.count() != 0 {
-		t.Fatalf("executor calls = %d, want pure reuse", fix.executor.count())
+	if fix.executor.count() != 1 {
+		t.Fatalf("executor calls = %d, want the one deterministic listing fetch", fix.executor.count())
 	}
 
 	// Answer: one saved owner answer, one Jev choice batch, deterministic
@@ -405,8 +392,8 @@ func TestCheckAnswerConnectedFlow(t *testing.T) {
 	if len(values.Values) != 1 || values.Values[0].Version != 2 {
 		t.Fatalf("values = %+v, want only the edited v2", values)
 	}
-	if fix.executor.count() != 0 {
-		t.Fatalf("executor calls after answer = %d, want zero retrieval in Answer", fix.executor.count())
+	if fix.executor.count() != 1 {
+		t.Fatalf("executor calls after answer = %d, want frozen at the check fetch (zero retrieval in Answer)", fix.executor.count())
 	}
 	if fix.provider.count() != 1 {
 		t.Fatalf("screening calls = %d, want frozen at 1", fix.provider.count())
@@ -432,15 +419,14 @@ func TestCheckBlockedOnUnverifiable(t *testing.T) {
 	transport := &checkScriptTransport{t: t, checkID: pending.ID}
 	checker := newCheckFixture(t, fix, transport)
 	captureID := finding.EvidenceLinks[0].CaptureID
+	pageURL := "https://jobs.example.invalid/1"
+	fix.executor.scriptFetch(pageURL, "rc-check-fetch", captureID, fix.captures.blobs[captureID])
 	transport.turn = checkTurn{
-		prompts: []string{"Why do you want this support role?"},
-		text: func(refs []string) string {
-			_ = refs
-			return fmt.Sprintf(`{"requirements":[{"text":"Five years of Go are mandatory.","capture":%q}],`+
-				`"route":{"kind":"direct","destination":"","capture":%q},"documents":[],`+
-				`"questions":[{"ref":"q-absent","capture":%q}]}`,
-				captureID, captureID, captureID)
-		},
+		extra: []string{"Why do you want this support role?"},
+		text: fmt.Sprintf(`{"requirements":[{"text":"Five years of Go are mandatory.","source":%q}],`+
+			`"route":{"kind":"direct","destination":"","source":""},"documents":[],`+
+			`"questions":[{"prompt_text":"What is your quest?","required":true,"source":"https://jobs.example.invalid/gone"}],"gaps":[]}`,
+			pageURL),
 	}
 	if _, err := checker.PerformCheck(ctx, opportunityID, pending.ID); err != nil {
 		t.Fatal(err)
@@ -450,7 +436,7 @@ func TestCheckBlockedOnUnverifiable(t *testing.T) {
 		view.BlockedReason.Code != store.CheckBlockedQuestionsUnresolved {
 		t.Fatalf("view = %+v, want blocked/questions-unresolved", view)
 	}
-	for _, want := range []string{"requirement 1 dropped", `unknown saved ref "q-absent"`, "was not cited"} {
+	for _, want := range []string{"requirement 1 dropped", "question 1 dropped", "was not cited"} {
 		if !strings.Contains(view.BlockedReason.Detail, want) {
 			t.Errorf("blocked detail misses %q: %q", want, view.BlockedReason.Detail)
 		}
@@ -474,14 +460,9 @@ func TestCheckBlockedWithoutQuestions(t *testing.T) {
 	pending := startFixtureCheck(t, fix.db, opportunityID, finding.OpportunityRevision)
 	transport := &checkScriptTransport{t: t, checkID: pending.ID}
 	checker := newCheckFixture(t, fix, transport)
-	captureID := finding.EvidenceLinks[0].CaptureID
 	transport.turn = checkTurn{
-		text: func(refs []string) string {
-			_ = refs
-			return fmt.Sprintf(`{"requirements":[],"route":{"kind":"direct","destination":"","capture":%q},`+
-				`"documents":[],"questions":[]}`,
-				captureID)
-		},
+		text: `{"requirements":[],"route":{"kind":"direct","destination":"","source":""},` +
+			`"documents":[],"questions":[],"gaps":[]}`,
 	}
 	if _, err := checker.PerformCheck(ctx, opportunityID, pending.ID); err != nil {
 		t.Fatal(err)

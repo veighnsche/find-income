@@ -84,7 +84,8 @@ type StandardInput struct {
 func (StandardInput) inputTier() Tier { return TierStandard }
 
 // Transport conducts one local CLI session to transport-terminal state.
-// Production implementations speak to `muse serve`; tests replay scripts.
+// Production implementations invoke `muse exec` directly; tests and the
+// stop/resume harness replay scripts.
 type Transport interface {
 	Run(ctx context.Context, spec SessionSpec, input SessionInput, resume Cursor, sink EventSink) error
 }

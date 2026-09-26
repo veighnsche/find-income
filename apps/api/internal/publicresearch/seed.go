@@ -150,6 +150,9 @@ func (s *Server) commitSeeds(vacancies []SeedVacancy, hosts []string) ([]musecod
 		s.vacSeq++
 		s.vacancies[vac.VacancyRef] = vac
 		s.vacOrder = append(s.vacOrder, vac.VacancyRef)
+		if parsed, err := url.Parse(vac.PageURL); err == nil && parsed.Hostname() != "" {
+			s.vacByURL[vacancyURLKey(parsed)] = vac.VacancyRef
+		}
 	}
 	s.toolCalls += len(saved)
 	s.bytesOut = total

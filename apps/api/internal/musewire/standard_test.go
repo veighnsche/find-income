@@ -67,31 +67,43 @@ func TestStandardPromptGuards(t *testing.T) {
 	}
 }
 
-func TestWriteStandardHomePinsModelWithoutTools(t *testing.T) {
-	workspace := t.TempDir()
-	home, err := writeStandardHome(workspace, "muse-spark-1.3")
-	if err != nil {
-		t.Fatal(err)
+func TestStandardSchemasMirrorDisciplines(t *testing.T) {
+	for purpose, key := range map[string]string{
+		standardDraftPurpose:    "drafts",
+		standardRewritePurpose:  "texts",
+		standardArtifactPurpose: "artifacts",
+	} {
+		raw, err := standardSchemaJSON(purpose)
+		if err != nil {
+			t.Fatalf("%s schema: %v", purpose, err)
+		}
+		var schema struct {
+			Properties map[string]any `json:"properties"`
+			Required   []string       `json:"required"`
+		}
+		if err := json.Unmarshal([]byte(raw), &schema); err != nil {
+			t.Fatalf("%s schema is not JSON: %v", purpose, err)
+		}
+		if _, ok := schema.Properties[key]; !ok {
+			t.Errorf("%s schema misses %q", purpose, key)
+		}
+		found := false
+		for _, req := range schema.Required {
+			found = found || req == key
+		}
+		if !found {
+			t.Errorf("%s schema does not require %q", purpose, key)
+		}
+		discipline, err := standardDiscipline(purpose)
+		if err != nil {
+			t.Fatalf("%s discipline: %v", purpose, err)
+		}
+		if !strings.Contains(discipline, `"`+key+`"`) {
+			t.Errorf("%s discipline does not name its schema root %q", purpose, key)
+		}
 	}
-	raw, err := os.ReadFile(filepath.Join(home, "config", "muse", "settings.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var settings struct {
-		Model         string         `json:"model"`
-		Reasoning     string         `json:"reasoning_effort"`
-		MCPServers    map[string]any `json:"mcp_servers"`
-		SchemaVersion int            `json:"schema_version"`
-	}
-	if err := json.Unmarshal(raw, &settings); err != nil {
-		t.Fatal(err)
-	}
-	if settings.Model != "muse-spark-1.3" || len(settings.MCPServers) != 0 {
-		t.Fatalf("settings = %s, want pinned standard model and no MCP servers", raw)
-	}
-	info, err := os.Stat(filepath.Join(home, "config", "muse", "settings.json"))
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("settings perms = %v, want 0600", info)
+	if _, err := standardSchemaJSON("discover-jobs"); err == nil {
+		t.Fatal("unknown purpose accepted a schema")
 	}
 }
 

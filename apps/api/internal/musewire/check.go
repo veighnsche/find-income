@@ -90,7 +90,9 @@ func NewChecker(deps CheckDeps) (*Checker, error) {
 // Authorized reports whether this performer may retrieve.
 func (c *Checker) Authorized() bool { return c.authorized }
 
-// ServerForCheck returns the live tool server of one conducting check.
+// ServerForCheck returns the retained run server of one conducting check.
+// The live CLI never touches it (direct seam); fixtures observe the
+// seeded vacancy through it. R2 removes this with the harness.
 func (c *Checker) ServerForCheck(checkRef string) (*publicresearch.Server, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -237,8 +239,19 @@ func (c *Checker) conductCheck(ctx context.Context, opportunity store.Opportunit
 			text = candidate
 		}
 	}
-	adapted, err := (&CheckAdapter{Captures: c.captures, Saved: server}).Adapt(ctx,
-		time.Now().UTC().Format(time.RFC3339), text)
+	// The adapter re-fetches every cited source URL through the run
+	// server and verifies each quote verbatim; verified questions save
+	// under the checked vacancy via the deterministic saver.
+	adapted, err := (&CheckAdapter{Captures: c.captures, Saved: server,
+		Fetch: func(fetchCtx context.Context, sourceURL string) (string, error) {
+			fetched, err := server.FetchURL(fetchCtx, sourceURL)
+			if err != nil {
+				return "", err
+			}
+			return fetched.CaptureID, nil
+		},
+		VacancyRef: input.VacancyRef,
+	}).Adapt(ctx, time.Now().UTC().Format(time.RFC3339), text)
 	if err != nil {
 		blocked(store.CheckBlockedOther, "check turn returned malformed findings: "+err.Error())
 		return

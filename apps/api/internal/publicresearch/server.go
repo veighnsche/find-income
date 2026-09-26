@@ -62,6 +62,9 @@ type Server struct {
 	vacSeq    int
 	vacancies map[string]musecode.PublicVacancy
 	vacOrder  []string
+	// vacByURL dedupes deterministic saves by normalized page URL across
+	// turns of one run; every vacancy write path maintains it.
+	vacByURL  map[string]string
 	qSeq      int
 	questions map[string]musecode.PublicQuestion
 	qOrder    []string
@@ -92,6 +95,7 @@ func NewServer(deps Deps) (*Server, error) {
 		bounds: deps.Bounds, runID: deps.RunID, generation: deps.Generation,
 		now: now, startedAt: now(),
 		vacancies: map[string]musecode.PublicVacancy{},
+		vacByURL:  map[string]string{},
 		questions: map[string]musecode.PublicQuestion{},
 		idemVac:   map[string]string{},
 	}

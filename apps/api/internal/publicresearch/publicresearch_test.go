@@ -251,16 +251,19 @@ func TestServedInventoryEqualsFrozenAllowlist(t *testing.T) {
 			t.Errorf("served tool %q has no description", tool.Name)
 		}
 	}
-	frozen := musecode.ContributorToolNames()
-	if len(served) != len(frozen) {
-		t.Fatalf("served %d tools, frozen allowlist has %d", len(served), len(frozen))
+	// The registry serves exactly the five legacy harness names: the
+	// live CLI uses its native web_search/web_fetch tools directly and
+	// never calls this server. Every served name stays inside the
+	// frozen allowlist; R2 removes the registry with the harness.
+	if len(served) != len(ToolNames()) {
+		t.Fatalf("served %d tools, want exactly the %d legacy harness tools", len(served), len(ToolNames()))
 	}
-	for _, name := range frozen {
+	for _, name := range ToolNames() {
 		if !served[name] {
-			t.Errorf("frozen tool %q is not served", name)
+			t.Errorf("legacy tool %q is not served", name)
 		}
 		if !musecode.ContributorToolAllowed(name) {
-			t.Errorf("served tool %q fails the frozen allowlist", name)
+			t.Errorf("legacy tool %q fails the frozen allowlist", name)
 		}
 	}
 	for name := range served {

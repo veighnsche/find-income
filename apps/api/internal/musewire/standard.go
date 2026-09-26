@@ -1,20 +1,14 @@
 package musewire
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
-	"syscall"
-	"time"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
 )
@@ -61,12 +55,111 @@ func standardDiscipline(purpose string) (string, error) {
 	}
 }
 
-// StandardTransport conducts private Standard preparation sessions on the
-// live CLI. It accepts StandardInput only: verified owner facts travel in
-// the prompt (allowed for Standard), while discovery criteria can never
-// arrive because PublicInput is refused. The session gets no MCP tools,
-// makes no retrieval calls, and any tool call fails the run closed;
-// collected model texts return via EventModelText for adapter validation.
+// standardSchemaJSON renders the --output-schema document for one
+// purpose, mirroring the discipline's exact JSON shape. Unknown purposes
+// are refused, like the discipline itself.
+func standardSchemaJSON(purpose string) (string, error) {
+	switch purpose {
+	case standardDraftPurpose:
+		return `{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "drafts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "questionId": {"type": "string"},
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": {"type": "string"},
+                "citations": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "sourceId": {"type": "string"},
+                      "excerpt": {"type": "string"}
+                    },
+                    "required": ["sourceId", "excerpt"],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": ["text", "citations"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["questionId", "lines"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["drafts"],
+  "additionalProperties": false
+}`, nil
+	case standardRewritePurpose:
+		return `{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "texts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "questionId": {"type": "string"},
+          "text": {"type": "string"}
+        },
+        "required": ["questionId", "text"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["texts"],
+  "additionalProperties": false
+}`, nil
+	case standardArtifactPurpose:
+		return `{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string"},
+          "content": {"type": "string"},
+          "facts": {"type": "array", "items": {"type": "string"}},
+          "answers": {"type": "array", "items": {"type": "string"}}
+        },
+        "required": ["type", "content", "facts", "answers"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["artifacts"],
+  "additionalProperties": false
+}`, nil
+	default:
+		return "", fmt.Errorf("musewire: unknown standard purpose %q", purpose)
+	}
+}
+
+// StandardTransport conducts private Standard preparation turns on the
+// live CLI through the same direct `muse exec` invocation as
+// Contributor, with web tools disabled. It accepts StandardInput only:
+// verified owner facts travel in the prompt (allowed for Standard),
+// while discovery criteria can never arrive because PublicInput is
+// refused. The turn makes no retrieval calls and any tool call fails the
+// run closed; the collected model text returns via EventModelText for
+// adapter validation.
 type StandardTransport struct {
 	CLIPath    string
 	ModelID    string
@@ -126,31 +219,17 @@ func (t *StandardTransport) Run(ctx context.Context, spec musecode.SessionSpec, 
 	if !validRunRef(runRef) {
 		return fmt.Errorf("musewire: workspace %q names no run", spec.Workspace)
 	}
-	trace := &traceWriter{w: t.Trace}
+	traceSink, traceCloser, err := openRunTrace(t.Trace, spec.Workspace)
+	if err != nil {
+		return err
+	}
+	if traceCloser != nil {
+		defer traceCloser.Close()
+	}
+	trace := &traceWriter{w: traceSink}
 	trace.note("run %s workspace %s model %s provider %s backend %s purpose %s targets %d bundle %s",
 		runRef, spec.Workspace, t.ModelID, t.ProviderID, provider, standard.Purpose, len(standard.Targets), standard.BundleRef)
 
-	home, err := writeStandardHome(spec.Workspace, t.ModelID)
-	if err != nil {
-		return err
-	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	// The meta provider reads auth.json next to the active settings file.
-	// Copy the owner's credential file into the isolated home unread: its
-	// bytes are never parsed, printed, or proxied, and the copy lives and
-	// dies with the 0700 run workspace.
-	if provider == "meta" {
-		credential, err := os.ReadFile(filepath.Join(homeDir, ".config", "muse", "auth.json"))
-		if err != nil {
-			return fmt.Errorf("musewire: owner CLI credentials unavailable: %w", err)
-		}
-		if err := os.WriteFile(filepath.Join(home, "config", "muse", "auth.json"), credential, 0o600); err != nil {
-			return err
-		}
-	}
 	prompt, err := standardPrompt(standard)
 	if err != nil {
 		return err
@@ -159,75 +238,25 @@ func (t *StandardTransport) Run(ctx context.Context, spec musecode.SessionSpec, 
 		prompt = t.ValidationPrompt
 		trace.note("validation prompt override active")
 	}
+	schema, err := standardSchemaJSON(standard.Purpose)
+	if err != nil {
+		return err
+	}
 	promptFile := filepath.Join(spec.Workspace, "prompt.txt")
 	if err := os.WriteFile(promptFile, []byte(prompt), 0o600); err != nil {
 		return err
 	}
-	maxSteps := spec.Bounds.MaxModelSteps
-	if maxSteps > 100 {
-		maxSteps = 100
+	schemaFile := filepath.Join(spec.Workspace, "schema.json")
+	if err := os.WriteFile(schemaFile, []byte(schema), 0o600); err != nil {
+		return err
 	}
-	args := []string{"exec", "--json", "--prompt-file", promptFile,
-		"--provider", provider}
-	if provider == "meta" {
-		args = append(args, "--model", t.ModelID, "--reasoning-effort", "high")
-	}
-	args = append(args,
-		"--max-model-steps", fmt.Sprintf("%d", maxSteps),
-		"--max-tool-output-bytes", fmt.Sprintf("%d", spec.Bounds.MaxBytesPerOp),
-		"--workspace", spec.Workspace,
-		"--approval-mode", "never",
-		"--disable-shell", "--disable-write", "--disable-web-tools",
-		"--no-foreign-personal-context")
-	cmd := exec.Command(t.CLIPath, args...)
-	cmd.Dir = spec.Workspace
-	cmd.Env = append(os.Environ(),
-		"XDG_CONFIG_HOME="+filepath.Join(home, "config"),
-		"XDG_DATA_HOME="+filepath.Join(home, "data"),
-	)
-	stdout, err := cmd.StdoutPipe()
+	args := execArgsFor(promptFile, schemaFile, provider, t.ModelID, "high",
+		spec.Bounds.MaxModelSteps, spec.Bounds.MaxBytesPerOp, spec.Workspace, false)
+	proc, reader, err := startExec(t.CLIPath, args, spec.Workspace, trace)
 	if err != nil {
 		return err
 	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-	go func() {
-		slurp, _ := io.ReadAll(stderr)
-		if len(strings.TrimSpace(string(slurp))) > 0 {
-			trace.note("host stderr: %s", strings.TrimSpace(string(slurp)))
-		}
-	}()
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	waited := make(chan error, 1)
-	go func() { waited <- cmd.Wait() }()
-	var stopMu sync.Mutex
-	stopped := false
-	var waitErr error
-	stop := func() error {
-		stopMu.Lock()
-		defer stopMu.Unlock()
-		if stopped {
-			return waitErr
-		}
-		stopped = true
-		select {
-		case waitErr = <-waited:
-		default:
-			_ = cmd.Process.Signal(syscall.SIGTERM)
-			select {
-			case waitErr = <-waited:
-			case <-time.After(30 * time.Second):
-				_ = cmd.Process.Kill()
-				waitErr = <-waited
-			}
-		}
-		return waitErr
-	}
-	defer stop()
+	defer proc.stop()
 
 	folder := newExecFolder(t.ModelID, t.ProviderID)
 	var deltas strings.Builder
@@ -237,12 +266,11 @@ func (t *StandardTransport) Run(ctx context.Context, spec musecode.SessionSpec, 
 	finished := false
 	terminal := ""
 	detail := ""
-	reader := bufio.NewReader(stdout)
 loop:
 	for {
 		select {
 		case <-ctx.Done():
-			stop()
+			proc.stop()
 			return ctx.Err()
 		default:
 		}
@@ -253,7 +281,7 @@ loop:
 				deltaBytes += int64(len(text))
 				if deltaBytes > spec.Bounds.MaxBytesTotal {
 					detail = "standard turn exceeded the total text bound"
-					stop()
+					proc.stop()
 					break loop
 				}
 				deltas.WriteString(text)
@@ -264,21 +292,21 @@ loop:
 			switch {
 			case terr != "":
 				detail = terr
-				stop()
+				proc.stop()
 				break loop
 			case step:
 				sink.Emit(musecode.Event{Kind: musecode.EventModelStep})
 			case kind == "toolCall":
-				detail = "standard session called a tool: " + tool
-				stop()
+				detail = "standard session called a tool: " + bareToolName(tool)
+				proc.stop()
 				break loop
 			case kind == "toolResult":
-				detail = "standard session observed a tool result: " + tool
-				stop()
+				detail = "standard session observed a tool result: " + bareToolName(tool)
+				proc.stop()
 				break loop
 			case kind == "forbidden":
 				detail = "forbidden item kind " + tool
-				stop()
+				proc.stop()
 				break loop
 			case done:
 				terminal = kind
@@ -291,7 +319,7 @@ loop:
 			break
 		}
 	}
-	detail = exitDetail(detail, terminal, stop())
+	detail = exitDetail(detail, terminal, proc.stop())
 	if detail != "" {
 		runErr := errors.New("musewire: " + detail)
 		sink.Emit(musecode.Event{Kind: musecode.EventFailed, Detail: runErr.Error()})
@@ -319,47 +347,4 @@ loop:
 	sink.Emit(musecode.Event{Kind: musecode.EventModelText, Text: text, BytesOut: int64(len(text))})
 	sink.Emit(musecode.Event{Kind: musecode.EventFinished})
 	return nil
-}
-
-// execText extracts the payload type and text of one --json line for the
-// model-text return path. The folder stays authoritative for control flow;
-// this only reads run.output.delta and run.terminal.* texts.
-func execText(line []byte) (string, string) {
-	trimmed := strings.TrimSpace(string(line))
-	if !strings.HasPrefix(trimmed, "{") {
-		return "", ""
-	}
-	var event execEvent
-	if err := json.Unmarshal([]byte(trimmed), &event); err != nil {
-		return "", ""
-	}
-	return event.PayloadType, event.Payload.Text
-}
-
-// writeStandardHome builds an isolated XDG home under the run workspace: a
-// config home whose settings pin only the Standard model with no MCP
-// servers, tools, or foreign context, and an empty data home. The owner's
-// configuration is never touched.
-func writeStandardHome(workspace, modelID string) (string, error) {
-	home := filepath.Join(workspace, "mushome")
-	configDir := filepath.Join(home, "config", "muse")
-	if err := os.MkdirAll(configDir, 0o700); err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(filepath.Join(home, "data"), 0o700); err != nil {
-		return "", err
-	}
-	settings := map[string]any{
-		"schema_version":   1,
-		"model":            modelID,
-		"reasoning_effort": "high",
-	}
-	raw, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(filepath.Join(configDir, "settings.json"), raw, 0o600); err != nil {
-		return "", err
-	}
-	return home, nil
 }

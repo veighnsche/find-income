@@ -14,13 +14,12 @@ import (
 // confirms the lane, and an expired or revoked credential fails that run
 // closed with the host's detail instead of admitting blindly.
 //
-// The protocol and workspace flags rest on verified construction: exec
-// JSONL routing and terminal semantics observed live against CLI 1.4.0 on
-// 26 September 2026 (isolated XDG home, Bearer [REDACTED] MCP settings
-// shape, --model flag precedence, model.meta.response task kinds), with
-// the run MCP tool leg proven by live discovery runs and every failure
-// failing closed; per-run 0700 XDG homes are built by writeExecHome and
-// writeStandardHome and covered by the transport tests. Anything
+// The protocol and workspace flags rest on verified construction: direct
+// exec JSONL routing and terminal semantics observed live against CLI
+// 1.4.0 on 26 September 2026 (--json events, --output-schema structured
+// answers, --model flag precedence, model.* task kinds, native web_search
+// and web_fetch tool identifiers), with every failure failing closed;
+// per-run 0700 workspaces hold the prompt, schema and trace. Anything
 // unverifiable here (missing CLI, version mismatch, absent credentials)
 // stays unset so Check fails closed with the exact missing piece.
 func LiveFacts(cliPath, modelID string) musecode.Facts {

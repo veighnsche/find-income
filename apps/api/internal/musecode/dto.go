@@ -33,10 +33,19 @@ type PublicQuestion struct {
 	SourceURL   string `json:"source_url"`
 }
 
-// contributorTools is the frozen initial public-only MCP tool allowlist for
-// Contributor sessions. E03 implements these tools; any addition needs an M
-// contract change. The legacy private context_read tool is never listed.
+// contributorTools is the frozen public-only tool allowlist for
+// Contributor sessions. The live CLI is invoked directly (R1): its native
+// retrieval tools web_search and web_fetch are the only live names,
+// observed as server tool identifiers in the installed 1.4.0 binary. The
+// five public_* names are retained only for the stop/resume harness
+// transports, which emit them as synthetic events; no live turn can call
+// them (no MCP server is served). R2 removes them with the harness. Any
+// other addition needs a contract change. Shell, write, browser,
+// subagent, memory and private tools are never listed.
 var contributorTools = map[string]bool{
+	"web_search": true,
+	"web_fetch":  true,
+
 	"public_search":        true,
 	"public_fetch":         true,
 	"public_save_vacancy":  true,
@@ -45,7 +54,7 @@ var contributorTools = map[string]bool{
 }
 
 // ContributorToolAllowed reports whether a Contributor session may call the
-// named MCP tool. Unknown names fail closed.
+// named tool. Unknown names fail closed.
 func ContributorToolAllowed(name string) bool {
 	return contributorTools[name]
 }

@@ -49,7 +49,7 @@ func Check(tier Tier, facts Facts) Status {
 		return Status{Tier: tier, Code: CodeLaneUnverified, Detail: "effective model/subscription lane is not verified"}
 	}
 	if !facts.SessionProtocolProved {
-		return Status{Tier: tier, Code: CodeProtocolUnverified, Detail: SessionMCPNegotiation + " is not verified"}
+		return Status{Tier: tier, Code: CodeProtocolUnverified, Detail: SessionDirectExec + " is not verified"}
 	}
 	if !facts.WorkspaceIsolatedProved {
 		return Status{Tier: tier, Code: CodeWorkspaceUnverified, Detail: "tier workspace isolation is not verified"}

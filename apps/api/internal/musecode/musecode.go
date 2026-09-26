@@ -24,18 +24,19 @@ const PinnedModelID = "muse-spark-1.3"
 // PinnedProviderID is the only model provider recruitment sessions use.
 const PinnedProviderID = "meta"
 
-// SessionTransport pins how recruitment sessions reach the CLI. Verified from
-// installed `--help` output: `muse serve` hosts MSP sessions over stdio with
-// sandbox posture fixed at host start, while `muse exec` exposes no
-// per-invocation MCP options and is therefore not a tool-capable path.
-const SessionTransport = "muse serve stdio MSP session host"
+// SessionTransport pins how recruitment sessions reach the CLI. Verified
+// from installed `--help` output and live echo runs: `muse exec --json`
+// conducts one bounded headless turn with native web tools on by default,
+// --output-schema structured answers (meta provider) and --max-model-steps
+// as the host-side backstop. No session server or MCP scoping is used.
+const SessionTransport = "muse exec direct headless invocation"
 
-// SessionMCPNegotiation names the per-session MCP scoping the supervisor must
-// establish before any input: initialize with sessionMcp and a narrow
-// config.mcpServers. E10 observed sessionMcp as a grantable client
-// capability in the installed 1.4.0 schema export; live negotiation is
-// proven at E11 prerequisite P3.
-const SessionMCPNegotiation = "initialize sessionMcp + config.mcpServers"
+// SessionDirectExec names the direct exec protocol the supervisor relies
+// on: one `muse exec --json` turn whose JSONL folds to model steps, native
+// retrieval-tool usage and one structured final text. Readiness proves the
+// pinned CLI release plus owner credential presence; anything else fails
+// the turn closed with the host's detail.
+const SessionDirectExec = "direct muse exec JSONL + output-schema protocol"
 
 // Tier selects which model route a session may use. Contributor sessions are
 // public-only; Standard sessions are private preparation-only.

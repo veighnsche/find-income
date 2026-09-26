@@ -61,12 +61,15 @@ func TestContributorDTOsExposeNoPrivateFields(t *testing.T) {
 }
 
 func TestContributorToolAllowlistFailsClosed(t *testing.T) {
-	for _, name := range []string{"public_search", "public_fetch", "public_save_vacancy", "public_save_question", "public_list_saved"} {
+	for _, name := range []string{"web_search", "web_fetch",
+		"public_search", "public_fetch", "public_save_vacancy", "public_save_question", "public_list_saved"} {
 		if !ContributorToolAllowed(name) {
 			t.Errorf("allowlisted tool %q rejected", name)
 		}
 	}
-	for _, name := range []string{"", "context_read", "exec", "shell", "read_memory", "PUBLIC_SEARCH", "public_search_extra"} {
+	for _, name := range []string{"", "context_read", "exec", "shell", "read_memory", "PUBLIC_SEARCH",
+		"public_search_extra", "browser_open", "write", "subagent", "delegate", "request_user_input",
+		"WEB_SEARCH", "tool.web_search", "mcp__find_income_public__public_search"} {
 		if ContributorToolAllowed(name) {
 			t.Errorf("non-allowlisted tool %q admitted", name)
 		}

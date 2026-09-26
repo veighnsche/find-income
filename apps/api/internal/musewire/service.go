@@ -87,6 +87,12 @@ type retainedRun struct {
 	supervisor *musecode.Supervisor
 	server     *publicresearch.Server
 	terminal   musecode.TerminalResult
+	// texts collects the turn's structured final texts (direct CLI
+	// seam); consumed counts how many materialization already saved.
+	// Resume re-conducts into the same slice and materializes only the
+	// new tail, so re-reported sightings converge instead of refetching.
+	texts    []string
+	consumed int
 	// done closes when the latest background conduction (conduct plus
 	// finalization) settles. Resume waits on it so a late stop-time
 	// report can never overwrite the resumed terminal record.
@@ -162,8 +168,9 @@ func CommissionedRunRef(round store.Round) (string, bool) {
 	return ref, true
 }
 
-// ServerForRun returns the live public tool server of a retained run so the
-// session host can connect its MCP tools while the session runs.
+// ServerForRun returns the retained run server behind a discovery run.
+// The live CLI never touches it (direct seam); the stop/resume harness
+// drives saves through it. R2 removes this with the harness.
 func (s *Service) ServerForRun(runRef string) (*publicresearch.Server, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -216,6 +223,7 @@ type conductSetup struct {
 	supervisor *musecode.Supervisor
 	server     *publicresearch.Server
 	round      store.Round
+	retained   *retainedRun
 }
 
 // runBounds resolves per-run bounds: zero selects the service ceiling,
@@ -338,21 +346,29 @@ func (s *Service) admitDiscovery(ctx context.Context, runRef string, criteria mu
 	if err != nil {
 		return nil, nil, err
 	}
-	supervisor := musecode.NewSupervisor(s.transport, s.cursors, saveValidator(server), s.facts.EffectiveModel)
+	retained := &retainedRun{server: server}
+	// The supervisor conducts through a capturing transport so the
+	// direct seam's structured final texts survive for app-side
+	// fetch-and-verify after the terminal result lands.
+	supervisor := musecode.NewSupervisor(&captureTransport{next: s.transport, texts: &retained.texts},
+		s.cursors, saveValidator(server), s.facts.EffectiveModel)
+	retained.supervisor = supervisor
 	s.mu.Lock()
-	s.runs[runRef] = &retainedRun{supervisor: supervisor, server: server}
+	s.runs[runRef] = retained
 	s.mu.Unlock()
 	return &conductSetup{spec: spec, input: musecode.PublicInput{Criteria: criteria},
-		supervisor: supervisor, server: server, round: round}, nil, nil
+		supervisor: supervisor, server: server, round: round, retained: retained}, nil, nil
 }
 
 // finalizeConducted classifies a conducted run's saves and persists the
-// round and report rows. A stopped run pauses its round instead of
-// finishing it, so the owner can resume the same bounded run; every
-// other non-completed outcome finishes the round as failed and can only
-// start over with a new commission.
-func (s *Service) finalizeConducted(ctx context.Context, setup *conductSetup, runRef string, profileVersion int64, rubricVersion string, terminal musecode.TerminalResult) ([]store.Finding, []string, error) {
+// round and report rows. Materialize gaps (sightings the app could not
+// verify) join the classification gaps in the durable report. A stopped
+// run pauses its round instead of finishing it, so the owner can resume
+// the same bounded run; every other non-completed outcome finishes the
+// round as failed and can only start over with a new commission.
+func (s *Service) finalizeConducted(ctx context.Context, setup *conductSetup, runRef string, profileVersion int64, rubricVersion string, terminal musecode.TerminalResult, materialGaps []string) ([]store.Finding, []string, error) {
 	findings, classifyErrs := s.classifySaved(ctx, setup, profileVersion, rubricVersion, terminal.SavedRefs)
+	classifyErrs = append(append([]string(nil), materialGaps...), classifyErrs...)
 	if terminal.Outcome == musecode.OutcomeStopped {
 		if err := s.pauseStoppedRound(ctx, setup.round.ID); err != nil {
 			classifyErrs = append(classifyErrs, "musewire: pause stopped round: "+err.Error())
@@ -484,12 +500,40 @@ func (s *Service) CommissionDiscovery(ctx context.Context, runRef string, criter
 		s.persistConductFailure(context.WithoutCancel(ctx), runRef, setup.round.ID, "admitted run has no terminal result")
 		return CommissionResult{}, errors.New("musewire: admitted run has no terminal result")
 	}
-	findings, classifyErrs, err := s.finalizeConducted(ctx, setup, runRef, profileVersion, rubricVersion, terminal)
+	terminal, materialGaps := s.materializeConducted(ctx, setup, terminal)
+	findings, classifyErrs, err := s.finalizeConducted(ctx, setup, runRef, profileVersion, rubricVersion, terminal, materialGaps)
 	if err != nil {
 		return CommissionResult{}, err
 	}
 	return CommissionResult{Admission: admission, Terminal: terminal, RoundID: setup.round.ID,
 		Findings: findings, ClassifyErrors: classifyErrs}, nil
+}
+
+// materializeConducted saves a completed turn's structured sightings via
+// the app's own fetch-and-verify and merges the new refs into the
+// terminal set. Only completed turns materialize: partial texts from a
+// stopped or failed turn are never evidence. Harness turns emit no texts
+// and pass through untouched.
+func (s *Service) materializeConducted(ctx context.Context, setup *conductSetup, terminal musecode.TerminalResult) (musecode.TerminalResult, []string) {
+	if terminal.Outcome != musecode.OutcomeCompleted || setup.retained == nil {
+		return terminal, nil
+	}
+	s.mu.Lock()
+	retained := setup.retained
+	var fresh []string
+	if retained.consumed < len(retained.texts) {
+		fresh = append([]string(nil), retained.texts[retained.consumed:]...)
+	}
+	s.mu.Unlock()
+	if len(fresh) == 0 {
+		return terminal, nil
+	}
+	refs, gaps := materializeDiscovery(ctx, setup.server, fresh)
+	s.mu.Lock()
+	retained.consumed += len(fresh)
+	terminal.SavedRefs = mergeSavedRefs(terminal.SavedRefs, refs)
+	s.mu.Unlock()
+	return terminal, gaps
 }
 
 // CommissionDiscoveryAsync admits one bounded Contributor discovery run and
@@ -568,6 +612,7 @@ func (s *Service) finishConduct(ctx context.Context, runRef string, setup *condu
 		s.persistConductFailure(ctx, runRef, setup.round.ID, "admitted run has no terminal result")
 		return
 	}
+	terminal, materialGaps := s.materializeConducted(ctx, setup, terminal)
 	// The session is done conducting even while classification and
 	// report persistence still run; publish that before finalizing so
 	// Resume never misreads a settling run as still conducting.
@@ -576,7 +621,7 @@ func (s *Service) finishConduct(ctx context.Context, runRef string, setup *condu
 		retained.terminal = terminal
 	}
 	s.mu.Unlock()
-	_, _, _ = s.finalizeConducted(ctx, setup, runRef, profileVersion, rubricVersion, terminal)
+	_, _, _ = s.finalizeConducted(ctx, setup, runRef, profileVersion, rubricVersion, terminal, materialGaps)
 }
 
 // saveValidator accepts exactly the refs the live tool server holds.
@@ -720,8 +765,10 @@ func (s *Service) ResumeDiscoveryAsync(ctx context.Context, runRef string) (Asyn
 	}
 	var supervisor *musecode.Supervisor
 	var server *publicresearch.Server
+	var setupRetained *retainedRun
 	if retainedOK {
 		supervisor, server = retained.supervisor, retained.server
+		setupRetained = retained
 		// The revive rotated the round generation; move the retained
 		// tool server with it while no conduction is active, or
 		// post-resume retrieval presents stale and fences.
@@ -737,13 +784,16 @@ func (s *Service) ResumeDiscoveryAsync(ctx context.Context, runRef string) (Asyn
 		if err != nil {
 			return AsyncAdmission{}, err
 		}
-		supervisor = musecode.NewSupervisor(s.transport, s.cursors, saveValidator(server), s.facts.EffectiveModel)
+		setupRetained = &retainedRun{server: server, roundID: round.ID}
+		supervisor = musecode.NewSupervisor(&captureTransport{next: s.transport, texts: &setupRetained.texts},
+			s.cursors, saveValidator(server), s.facts.EffectiveModel)
+		setupRetained.supervisor = supervisor
 		s.mu.Lock()
-		s.runs[runRef] = &retainedRun{supervisor: supervisor, server: server, roundID: round.ID}
+		s.runs[runRef] = setupRetained
 		s.mu.Unlock()
 	}
 	setup := &conductSetup{spec: spec, input: musecode.PublicInput{Criteria: criteria},
-		supervisor: supervisor, server: server, round: round}
+		supervisor: supervisor, server: server, round: round, retained: setupRetained}
 	done := s.installSettle(runRef)
 	go s.resumeAsync(context.WithoutCancel(ctx), runRef, setup, cp.ProfileVersion, cp.RubricVersion, done)
 	return AsyncAdmission{RunRef: runRef, RoundID: round.ID}, nil
