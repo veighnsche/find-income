@@ -2,6 +2,8 @@
 
 26 September 2026 · Planning only. This document authorizes no app edits, code deletion, paid service call, employer contact or deployment.
 
+**Superseded implementation handoff:** use [Implementation tasks and concurrent lanes](current-code-implementation-lanes-2026-09-26.md), based on the full review of the current code. This document records earlier baseline planning; its missing/completed descriptions and complete subtraction backlog are not the current work queue.
+
 ## Target and current-code baseline
 
 The owner's [current product definition](product-vision.md) sets **seven owner-visible steps**: **Your goals → Find jobs → Select jobs → Check job details → Answer questions → Prepare materials → Handoff**. “Handoff” is a working label for the separate final saved-artifacts/how-to-apply page, **not** the prototype's Review & send stage. The app never fills or autofills an employer-site form, attaches files there, emails, submits a portal or contacts an employer. The owner personally opens the site, enters form values, attaches files or sends email. The [acceptance document](connected-prototype-ux-acceptance.md) makes the screen/state result checkable. The owner's [prototype screenshot](assets/connected-prototype-first-use-2026-09-25.png) anchors the opening layout and information hierarchy; its seventh chip changes meaning. Match UI structure, controls, navigation and usability, **not** colors, fonts, borders, rounded corners, shadows or pixel spacing.
