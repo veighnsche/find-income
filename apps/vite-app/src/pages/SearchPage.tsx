@@ -62,11 +62,11 @@ export function newestRunState(items: RunHistoryItem[]): string | null {
 }
 
 /**
- * My-search stage orientation from actual state (F2/R17): saved goals
- * complete step 1, a running/paused/failed search rests on Find jobs,
- * and completed results move to Select jobs. Unknown goals keep the
- * conservative Your-goals marker; unknown runs keep Find jobs as the
- * next step once goals exist.
+ * My-search stage orientation from actual state (F2/R17, Q2/F02): saved
+ * goals complete step 1 but the before-run marker stays on Your goals
+ * (the screenshot state); a running/paused/failed search rests on Find
+ * jobs, and completed results move to Select jobs. Unknown goals keep
+ * the conservative Your-goals marker.
  */
 export function searchStageView({
   goalsSaved,
@@ -81,6 +81,9 @@ export function searchStageView({
     if (runState === "completed") {
       active = "select"
       completedThrough = 1
+    } else if (runState === null) {
+      active = "goals"
+      completedThrough = 0
     } else {
       active = "find"
       completedThrough = 0

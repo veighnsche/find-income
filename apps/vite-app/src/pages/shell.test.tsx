@@ -457,11 +457,12 @@ describe("frame sidebar and work-status strip (B1/F2)", () => {
     expect(labels[1]).toContain("Contributor")
     expect(labels[1]).toContain("Jev")
     expect(labels[5]).toContain("Standard")
-    // Saved goals with no known run rest on Find jobs, the next step.
+    // Saved goals with no known run rest on Your goals (screenshot
+    // state, F02); Find jobs stays the prominent commission action.
     await waitFor(() =>
       expect(
         journey.querySelector('[aria-current="step"]')?.textContent
-      ).toContain("Find jobs")
+      ).toContain("Your goals")
     )
     expect(screen.queryByText(/Review & send/)).toBeNull()
   })
@@ -523,6 +524,9 @@ describe("search stage derivation (F2)", () => {
     expect(
       searchStageView({ goalsSaved: null, runState: null }).activeStageId
     ).toBe("goals")
+    const idle = searchStageView({ goalsSaved: true, runState: null })
+    expect(idle.activeStageId).toBe("goals")
+    expect(idle.stages[0]?.state).toBe("complete")
     const find = searchStageView({ goalsSaved: true, runState: "running" })
     expect(find.activeStageId).toBe("find")
     expect(find.stages[0]?.state).toBe("complete")
