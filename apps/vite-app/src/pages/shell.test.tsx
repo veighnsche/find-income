@@ -104,11 +104,14 @@ describe("read-only shell", () => {
     window.location.hash = "#/jobs"
     render(<App />)
 
+    fireEvent.click(
+      await screen.findByRole("tab", { name: /Not yet classified/ })
+    )
     const link = (await screen.findByRole("link", {
       name: "Backend Engineer",
     })) as HTMLAnchorElement
     expect(link.getAttribute("href")).toBe("#/jobs/job-1")
-    expect(await screen.findByText(/Not yet classified \(2\)/)).toBeDefined()
+    expect(await screen.findByText("Not yet classified (2)")).toBeDefined()
   })
 
   it("renders a job detail with decision, pay and live stage", async () => {

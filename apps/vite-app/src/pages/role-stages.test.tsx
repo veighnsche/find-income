@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react"
 import App from "@/App"
 import type { RoleWorkflowState } from "@/api/client"
 import { roleWorkflowFixture, stubFetch } from "@/pages/fixtures"
@@ -311,6 +317,9 @@ describe("reload persistence and record independence", () => {
     window.location.hash = "#/jobs"
     render(<App />)
 
+    fireEvent.click(
+      await screen.findByRole("tab", { name: /Not yet classified/ })
+    )
     const checking = (await screen.findByRole("link", {
       name: "Open Backend Engineer at stage Checking",
     })) as HTMLAnchorElement
@@ -341,6 +350,9 @@ describe("reload persistence and record independence", () => {
     window.location.hash = "#/jobs"
     render(<App />)
 
+    fireEvent.click(
+      await screen.findByRole("tab", { name: /Not yet classified/ })
+    )
     expect(
       await screen.findByRole("link", { name: "Backend Engineer" })
     ).toBeDefined()

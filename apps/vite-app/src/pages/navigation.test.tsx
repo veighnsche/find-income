@@ -64,6 +64,7 @@ describe("deep links and history", () => {
     window.location.hash = "#/jobs"
     render(<App />)
 
+    await user.click(await screen.findByRole("tab", { name: /Not yet classified/ }))
     const link = await screen.findByRole("link", { name: "Backend Engineer" })
     await user.click(link)
 
