@@ -68,4 +68,5 @@ Verification: meaningful focused checks per checkpoint before commit; Q gates re
 
 Remaining limits: full 40-task scope open; live Contributor/Jev/Standard gates require configured services and implementation-run authorization — fixture success cannot close them; no employer contact authorized.
 
-Next ready actions: finish I0 ledger commit; freeze I1 contracts + failing connected regression cases; dispatch R1+M1.
+Next ready actions: integrate Wave 1 worker outputs (R1, M1, Q0) per file set with focused checks, then R2/I2/I3.
+R2 candidate surface (read-only map, cut only after R1/M1 consumer trace): codex/*, codexrunner/*, codexservice/*, rounds/*, researchwire, cmd/codex-runner, httpapi/codex.go + rounds.go (+research/discovery dead paths), store/round_supervision.go, researchexecute, agency engine/input (pack parts via M1), runtimeaccept/doc.go. External importers outside those dirs: cmd/server/main.go, materialprep/standard.go (R1 seam), researchservice.go, reasoncatalog.go. Frontend: run/check activity feeds, actor-label, client.ts codex/round methods, fixtures. Keep: needed run persistence for D3, public evidence, Jev, bounded direct invocation, auth.
