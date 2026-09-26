@@ -415,6 +415,25 @@ func (h *Handler) saveQuestionAnswer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, questionAnswerValueModel(value))
 }
 
+func (h *Handler) commitRoleAnswers(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.owner(w, r)
+	if !ok || !h.mutationAllowed(w, r, p) {
+		return
+	}
+	workflow, missing, err := h.database.CommitRoleAnswers(r.Context(),
+		store.Actor{Kind: p.Kind, ID: p.ID}, r.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, store.ErrConflict) && len(missing) > 0 {
+			fail(w, http.StatusConflict, generated.ApiErrorCodeConflict,
+				"Required answers are missing; answer them before committing.")
+			return
+		}
+		failAnswerValue(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, workflow)
+}
+
 func failAnswerValue(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrRoleNotSelected), errors.Is(err, store.ErrNotFound):

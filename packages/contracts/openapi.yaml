@@ -1128,6 +1128,21 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/answers/commit:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: commitRoleAnswers
+      summary: Commit saved answers after every required question is answered
+      description: Verifies required values and advances the role to answered. Idempotent by state.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Committed role stage
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/RoleWorkflowState' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /opportunities/{id}/materials/prepare:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     post:

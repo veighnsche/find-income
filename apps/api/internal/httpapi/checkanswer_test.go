@@ -31,6 +31,22 @@ func createCheckedOpportunity(t *testing.T, h *harness, key string) store.Opport
 	return opportunity
 }
 
+func TestCommitRoleAnswersEndpoint(t *testing.T) {
+	h := newHarness(t)
+	cookie, csrf := h.login()
+	for _, id := range []string{"synthetic-role"} {
+		response := h.request("POST", "/api/v1/opportunities/"+id+"/answers/commit", "", cookie, "", csrf, origin)
+		if response.Code != 404 {
+			t.Fatalf("missing commit: got %d, want honest 404", response.Code)
+		}
+	}
+	opportunity := createCheckedOpportunity(t, h, "answer-commit-1")
+	response := h.request("POST", "/api/v1/opportunities/"+opportunity.ID+"/answers/commit", "", cookie, "", csrf, origin)
+	if response.Code != 404 {
+		t.Fatalf("unchecked commit: got %d, want honest 404", response.Code)
+	}
+}
+
 func TestCheckAnswerValuesLiveHonestNotFound(t *testing.T) {
 	h := newHarness(t)
 	cookie, csrf := h.login()

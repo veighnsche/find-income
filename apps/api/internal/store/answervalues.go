@@ -293,6 +293,29 @@ func (s *Store) SaveAnswerValue(ctx context.Context, actor Actor, opportunityID,
 	if err != nil {
 		return QuestionAnswerValue{}, err
 	}
+	var stage string
+	var workflowRev int64
+	if err := tx.QueryRowContext(ctx, `SELECT stage,revision FROM role_workflow WHERE opportunity_id=?`,
+		opportunityID).Scan(&stage, &workflowRev); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return QuestionAnswerValue{}, err
+	}
+	if stage == RoleStageChecked {
+		if _, err := tx.ExecContext(ctx, `UPDATE role_workflow SET stage=?,revision=?,blocked_reason='',updated_at=?
+		  WHERE opportunity_id=? AND revision=?`, RoleStageAnswering, workflowRev+1, now,
+			opportunityID, workflowRev); err != nil {
+			return QuestionAnswerValue{}, err
+		}
+		stageAuditID, err := randomID()
+		if err != nil {
+			return QuestionAnswerValue{}, err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO audit_changes
+		  (id,actor_kind,actor_id,operation,entity_kind,entity_id,revision_before,revision_after,occurred_at)
+		  VALUES (?,?,?,?,?,?,?,?,?)`, stageAuditID, actor.Kind, actor.ID, "role."+RoleStageAnswering,
+			"role_workflow", opportunityID, workflowRev, workflowRev+1, now); err != nil {
+			return QuestionAnswerValue{}, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return QuestionAnswerValue{}, err
 	}
@@ -307,6 +330,118 @@ func (s *Store) SaveAnswerValue(ctx context.Context, actor Actor, opportunityID,
 		value.Provenance.MatchChoice = &choice
 	}
 	return value, nil
+}
+
+// CommitRoleAnswers verifies every required question of the latest checked
+// check has a non-blank saved value and advances the role to answered.
+// Roles still at checked advance through answering when nothing needed
+// saving; already-answered roles re-verify and succeed unchanged, so lost
+// acknowledgments resolve by state instead of repeating work. Missing
+// required values (including answers blanked after a commit) conflict,
+// reporting the missing question ids.
+func (s *Store) CommitRoleAnswers(ctx context.Context, actor Actor, opportunityID string) (RoleWorkflow, []string, error) {
+	if !ownerRoundActor(actor) || opportunityID == "" {
+		return RoleWorkflow{}, nil, ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return RoleWorkflow{}, nil, err
+	}
+	defer tx.Rollback()
+	decision, err := selectedDecisionTx(ctx, tx, opportunityID)
+	if err != nil {
+		return RoleWorkflow{}, nil, err
+	}
+	var currentRevision int64
+	err = tx.QueryRowContext(ctx, `SELECT revision FROM opportunities WHERE id=? AND archived_at IS NULL`,
+		opportunityID).Scan(&currentRevision)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RoleWorkflow{}, nil, ErrNotFound
+	}
+	if err != nil {
+		return RoleWorkflow{}, nil, err
+	}
+	var checkID, status string
+	var pinnedRevision int64
+	err = tx.QueryRowContext(ctx, `SELECT id,status,opportunity_revision FROM job_checks
+	  WHERE opportunity_id=? ORDER BY created_at DESC, id DESC LIMIT 1`, opportunityID).
+		Scan(&checkID, &status, &pinnedRevision)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RoleWorkflow{}, nil, ErrNotFound
+	}
+	if err != nil {
+		return RoleWorkflow{}, nil, err
+	}
+	if status != CheckStatusChecked || pinnedRevision != currentRevision {
+		return RoleWorkflow{}, nil, ErrConflict
+	}
+	workflow, err := scanRoleWorkflow(tx.QueryRowContext(ctx, `SELECT stage,revision,blocked_reason,updated_at
+	  FROM role_workflow WHERE opportunity_id=?`, opportunityID), opportunityID, currentRevision, decision.CreatedAt)
+	if err != nil {
+		return RoleWorkflow{}, nil, err
+	}
+	switch workflow.Stage {
+	case RoleStageChecked, RoleStageAnswering, RoleStageAnswered:
+	default:
+		return RoleWorkflow{}, nil, ErrConflict
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT q.id FROM job_check_questions q
+	  LEFT JOIN answer_values v ON v.question_id=q.id AND v.check_id=q.check_id AND trim(v.text) <> ''
+	  WHERE q.check_id=? AND q.required=? AND v.question_id IS NULL ORDER BY q.ordinal`, checkID, CheckRequired)
+	if err != nil {
+		return RoleWorkflow{}, nil, err
+	}
+	missing := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return RoleWorkflow{}, nil, err
+		}
+		missing = append(missing, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return RoleWorkflow{}, nil, err
+	}
+	if len(missing) > 0 {
+		return workflow, missing, ErrConflict
+	}
+	now := utcNow()
+	for _, toStage := range commitTransitions(workflow.Stage) {
+		workflow.Revision++
+		workflow.Stage = toStage
+		workflow.UpdatedAt = now
+		if _, err := tx.ExecContext(ctx, `INSERT INTO role_workflow
+		  (opportunity_id,stage,revision,blocked_reason,updated_at) VALUES (?,?,?,?,?)
+		  ON CONFLICT(opportunity_id) DO UPDATE SET stage=excluded.stage,
+		  revision=excluded.revision, blocked_reason=excluded.blocked_reason, updated_at=excluded.updated_at`,
+			opportunityID, workflow.Stage, workflow.Revision, "", now); err != nil {
+			return RoleWorkflow{}, nil, err
+		}
+		auditID, err := randomID()
+		if err != nil {
+			return RoleWorkflow{}, nil, err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO audit_changes
+		  (id,actor_kind,actor_id,operation,entity_kind,entity_id,revision_before,revision_after,occurred_at)
+		  VALUES (?,?,?,?,?,?,?,?,?)`, auditID, actor.Kind, actor.ID, "role."+toStage,
+			"role_workflow", opportunityID, workflow.Revision-1, workflow.Revision, now); err != nil {
+			return RoleWorkflow{}, nil, err
+		}
+	}
+	return workflow, nil, tx.Commit()
+}
+
+func commitTransitions(stage string) []string {
+	switch stage {
+	case RoleStageChecked:
+		return []string{RoleStageAnswering, RoleStageAnswered}
+	case RoleStageAnswering:
+		return []string{RoleStageAnswered}
+	default:
+		return nil
+	}
 }
 
 // CurrentQuestionAnswers reads the saved values for one selected role's
