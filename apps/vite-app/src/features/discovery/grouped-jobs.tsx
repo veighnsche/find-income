@@ -189,6 +189,27 @@ function JobCard({
       <p className="mt-1 text-xs wrap-break-word text-muted-foreground">
         {`${job.kind} · ${job.workPattern}${job.locationText === "" ? "" : ` · ${job.locationText}`}${archived ? " · archived" : ""}`}
       </p>
+      {finding === null || expanded ? null : (
+        <div className="mt-1 flex min-w-0 flex-col gap-1">
+          {finding.reasons.length === 0 ? null : (
+            <p className="text-sm wrap-break-word">
+              {`${reasonKindLabel(finding.reasons[0]!.kind)}: ${finding.reasons[0]!.label}`}
+            </p>
+          )}
+          {finding.conflict === undefined ? null : (
+            <p className="text-sm wrap-break-word">
+              {`Conflicting consideration: ${finding.conflict.label}`}
+            </p>
+          )}
+          {finding.group === "unknown" ? (
+            <p className="text-sm wrap-break-word">
+              {finding.unknownBasis === undefined
+                ? "Jev could not place this role and recorded no basis."
+                : `Jev could not place this role: ${finding.unknownBasis}`}
+            </p>
+          ) : null}
+        </div>
+      )}
 
       {finding === null ? (
         <p className="mt-2 text-sm text-muted-foreground">
@@ -606,11 +627,34 @@ export function GroupedJobs({
       list.push(view)
       grouped.set(key, list)
     }
-    return jobsBucketOrder.map((bucket) => ({
-      bucket,
-      items: grouped.get(bucket) ?? [],
-    }))
-  }, [load])
+    return jobsBucketOrder.map((bucket) => {
+      const items = grouped.get(bucket) ?? []
+      let chosen = 0
+      for (const view of items) {
+        const decision =
+          selections[view.opportunity.id]?.saved ??
+          load.data.decisions.get(view.opportunity.id)
+        if (decision?.decision === "selected") chosen += 1
+      }
+      return { bucket, items, chosen }
+    })
+  }, [load, selections])
+
+  const [activeBucket, setActiveBucket] = useState<JobsBucket>("recommended")
+  // The four main groups always render as switchable views; Unknown and
+  // Not-yet-classified appear only when populated.
+  const switchedBuckets = useMemo(
+    () =>
+      buckets.filter(
+        ({ bucket, items }) =>
+          (bucket !== "unknown" && bucket !== "unclassified") ||
+          items.length > 0
+      ),
+    [buckets]
+  )
+  const active =
+    switchedBuckets.find(({ bucket }) => bucket === activeBucket) ??
+    switchedBuckets[0] ?? { bucket: activeBucket, items: [], chosen: 0 }
 
   // Chosen roles for the C5 fixed action: opportunities with a saved server
   // workflow (selected decision). Computing this list starts nothing; only an
@@ -822,52 +866,67 @@ export function GroupedJobs({
           description="The server returned an empty opportunity list."
         />
       ) : (
-        buckets.map(({ bucket, items }) => {
-          const headingId = `grouped-jobs-${bucket}`
-          return (
-            <section
-              key={bucket}
-              aria-labelledby={headingId}
-              className="flex min-w-0 flex-col gap-2"
-            >
-              <h3 id={headingId} className="text-sm font-medium">
-                {`${jevGroupLabel(bucket)} (${items.length})`}
-              </h3>
-              {items.length === 0 ? (
-                <p className="text-sm text-muted-foreground">None.</p>
-              ) : (
-                <ol className="flex min-w-0 flex-col gap-2">
-                  {items.map((view) => (
-                    <JobCard
-                      key={view.opportunity.id}
-                      view={view}
-                      tracked={data.findings.get(view.opportunity.id) ?? null}
-                      runId={data.runId}
-                      workflow={data.workflows.get(view.opportunity.id) ?? null}
-                      decision={
-                        data.decisions.get(view.opportunity.id) ?? null
-                      }
-                      captureUrls={data.captureUrls}
-                      expanded={open.has(view.opportunity.id)}
-                      onToggleWhy={() => toggleWhy(view.opportunity.id)}
-                      selection={selections[view.opportunity.id]}
-                      onDecide={(decision) =>
-                        void changeSelection(
-                          view.opportunity.id,
-                          view.opportunity.revision,
-                          selections[view.opportunity.id]?.saved?.revision ??
-                            data.decisions.get(view.opportunity.id)?.revision ??
-                            0,
-                          decision
-                        )
-                      }
-                    />
-                  ))}
-                </ol>
-              )}
-            </section>
-          )
-        })
+        <>
+          <div
+            role="tablist"
+            aria-label="Recommendation groups"
+            className="flex min-w-0 flex-wrap gap-2"
+          >
+            {switchedBuckets.map(({ bucket, items, chosen }) => (
+              <Button
+                key={bucket}
+                type="button"
+                role="tab"
+                aria-selected={active.bucket === bucket}
+                variant={active.bucket === bucket ? "default" : "outline"}
+                size="sm"
+                onClick={() => setActiveBucket(bucket)}
+              >
+                {`${jevGroupLabel(bucket)} (${items.length} · ${chosen} chosen)`}
+              </Button>
+            ))}
+          </div>
+          <section
+            key={active.bucket}
+            role="tabpanel"
+            aria-label={jevGroupLabel(active.bucket)}
+            className="flex min-w-0 flex-col gap-2"
+          >
+            <h3 className="text-sm font-medium">
+              {`${jevGroupLabel(active.bucket)} (${active.items.length})`}
+            </h3>
+            {active.items.length === 0 ? (
+              <p className="text-sm text-muted-foreground">None.</p>
+            ) : (
+              <ol className="flex min-w-0 flex-col gap-2">
+                {active.items.map((view) => (
+                  <JobCard
+                    key={view.opportunity.id}
+                    view={view}
+                    tracked={data.findings.get(view.opportunity.id) ?? null}
+                    runId={data.runId}
+                    workflow={data.workflows.get(view.opportunity.id) ?? null}
+                    decision={data.decisions.get(view.opportunity.id) ?? null}
+                    captureUrls={data.captureUrls}
+                    expanded={open.has(view.opportunity.id)}
+                    onToggleWhy={() => toggleWhy(view.opportunity.id)}
+                    selection={selections[view.opportunity.id]}
+                    onDecide={(decision) =>
+                      void changeSelection(
+                        view.opportunity.id,
+                        view.opportunity.revision,
+                        selections[view.opportunity.id]?.saved?.revision ??
+                          data.decisions.get(view.opportunity.id)?.revision ??
+                          0,
+                        decision
+                      )
+                    }
+                  />
+                ))}
+              </ol>
+            )}
+          </section>
+        </>
       )}
 
       <CheckChosenJobs roles={chosenRoles} contributor={muse.contributor} />

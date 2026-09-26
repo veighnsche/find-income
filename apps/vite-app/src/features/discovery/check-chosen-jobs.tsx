@@ -154,6 +154,13 @@ export function CheckChosenJobs({
           >
             {`Check chosen jobs (${roles.length})`}
           </Button>
+          <a
+            href="#/applications"
+            aria-label={`View selection (${roles.length} chosen)`}
+            className="text-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            {`View selection (${roles.length})`}
+          </a>
         </div>
         <p className="text-xs wrap-break-word text-muted-foreground">
           Starts checks only for the chosen roles below — one independent

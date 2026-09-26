@@ -131,6 +131,11 @@ describe("CheckChosenJobs", () => {
     expect(
       screen.getByRole("button", { name: "Check chosen jobs (2)" })
     ).toBeDefined()
+    const viewSelection = screen.getByRole("link", {
+      name: "View selection (2 chosen)",
+    }) as HTMLAnchorElement
+    expect(viewSelection.getAttribute("href")).toBe("#/applications")
+    expect(viewSelection.textContent).toBe("View selection (2)")
     expect(calls.filter((call) => call.method === "POST")).toEqual([])
   })
 

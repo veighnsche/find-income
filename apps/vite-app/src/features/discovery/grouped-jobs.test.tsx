@@ -405,6 +405,13 @@ function cardFor(title: string): HTMLElement {
   return card as HTMLElement
 }
 
+function switchTab(label: string): void {
+  const tab = screen.getByRole("tab", {
+    name: new RegExp(`^${label} \\(`),
+  })
+  fireEvent.click(tab)
+}
+
 beforeEach(() => {
   window.localStorage.clear()
 })
@@ -520,12 +527,28 @@ describe("GroupedJobs", () => {
     renderJobs()
 
     await screen.findByText("Recommended (1)")
+    // Tabs carry total and chosen counts; only Backend Engineer is chosen.
+    screen.getByRole("tab", { name: "Recommended (1 · 1 chosen)" })
+    screen.getByRole("tab", { name: "Might recommend (1 · 0 chosen)" })
+    screen.getByRole("tab", { name: "Might not recommend (1 · 0 chosen)" })
+    screen.getByRole("tab", { name: "Not recommended (1 · 0 chosen)" })
+    screen.getByRole("tab", {
+      name: "Unknown — exceptional, needs a basis (1 · 0 chosen)",
+    })
+    screen.getByRole("tab", { name: "Not yet classified (1 · 0 chosen)" })
+
+    switchTab("Might recommend")
     await screen.findByText("Might recommend (1)")
+    switchTab("Might not recommend")
     await screen.findByText("Might not recommend (1)")
+    switchTab("Not recommended")
     await screen.findByText("Not recommended (1)")
+    switchTab("Unknown — exceptional, needs a basis")
     await screen.findByText("Unknown — exceptional, needs a basis (1)")
+    switchTab("Not yet classified")
     await screen.findByText("Not yet classified (1)")
 
+    switchTab("Unknown — exceptional, needs a basis")
     const unknownCard = cardFor("Mystery Role")
     fireEvent.click(
       within(unknownCard).getByRole("button", { name: "Why this job" })
@@ -535,19 +558,66 @@ describe("GroupedJobs", () => {
     )
 
     // Run findings covered two roles; the rest resolved per-role.
-    expect(
-      screen.getAllByText("Latest saved finding from outside the tracked run.")
-    ).toHaveLength(3)
+    switchTab("Might recommend")
+    await screen.findByText(
+      "Latest saved finding from outside the tracked run."
+    )
+    switchTab("Might not recommend")
+    await screen.findByText(
+      "Latest saved finding from outside the tracked run."
+    )
+    switchTab("Not recommended")
+    await screen.findByText(
+      "Latest saved finding from outside the tracked run."
+    )
     // B3 stage pill still shows for the chosen role.
+    switchTab("Recommended")
     expect(
       within(cardFor("Backend Engineer")).getByText("Selected")
     ).toBeDefined()
     // Unclassified roles get no explanation toggle.
+    switchTab("Not yet classified")
     expect(
       within(cardFor("Fresh Listing")).queryByRole("button", {
         name: "Why this job",
       })
     ).toBeNull()
+  })
+
+  it("keeps choices visible while switching views", async () => {
+    window.localStorage.setItem("jobseek.research-run-id", "run-7")
+    stubGroupedFetch()
+    renderJobs()
+
+    await screen.findByText("Recommended (1)")
+    switchTab("Might not recommend")
+    fireEvent.click(
+      screen.getByRole("button", { name: "Select Weekend Project" })
+    )
+    await screen.findByText("Selected — decision rev 1.")
+    screen.getByRole("tab", { name: "Might not recommend (1 · 1 chosen)" })
+
+    switchTab("Recommended")
+    await screen.findByText("Recommended (1)")
+    switchTab("Might not recommend")
+    await screen.findByText("Selected — decision rev 1.")
+  })
+
+  it("leads cards with the principal saved reason, conflict and unknown basis", async () => {
+    window.localStorage.setItem("jobseek.research-run-id", "run-7")
+    stubGroupedFetch()
+    renderJobs()
+
+    await screen.findByText("Recommended (1)")
+    const card = cardFor("Backend Engineer")
+    within(card).getByText("Strength: Loves “quoted” labelling ✓")
+    within(card).getByText("Conflicting consideration: Hybrid expectation")
+
+    switchTab("Unknown — exceptional, needs a basis")
+    const unknownCard = cardFor("Mystery Role")
+    await within(unknownCard).findByText(
+      "Jev could not place this role: Evidence conflicted across sources."
+    )
   })
 
   it("renders saved reason text verbatim with signal, conflict and missing info", async () => {
@@ -581,18 +651,31 @@ describe("GroupedJobs", () => {
     const { calls } = stubGroupedFetch()
     renderJobs()
 
-    await screen.findByText("Not yet classified (1)")
+    await screen.findByText("Recommended (1)")
     expect(calls.filter((call) => call.method === "POST")).toEqual([])
     const before = calls.length
 
-    for (const button of screen.getAllByRole("button", {
-      name: "Why this job",
-    })) {
-      fireEvent.click(button)
+    for (const label of [
+      "Recommended",
+      "Might recommend",
+      "Might not recommend",
+      "Not recommended",
+      "Unknown — exceptional, needs a basis",
+      "Not yet classified",
+    ]) {
+      switchTab(label)
+      const buttons = screen.queryAllByRole("button", {
+        name: "Why this job",
+      })
+      for (const button of buttons) {
+        fireEvent.click(button)
+      }
+      if (buttons.length > 0) {
+        await screen.findByText(
+          "Support signals record Jev's assessment strength; they are not verified correctness."
+        )
+      }
     }
-    await screen.findAllByText(
-      "Support signals record Jev's assessment strength; they are not verified correctness."
-    )
     const after = calls.slice(before)
     expect(after).toEqual([])
     expect(calls.filter((call) => call.method === "POST")).toEqual([])
@@ -604,6 +687,7 @@ describe("GroupedJobs", () => {
     renderJobs()
 
     await screen.findByText("Recommended (1)")
+    switchTab("Might not recommend")
     fireEvent.click(
       screen.getByRole("button", {
         name: "Select Weekend Project",
@@ -655,7 +739,8 @@ describe("GroupedJobs", () => {
     })
     renderJobs()
 
-    await screen.findByText("Might recommend (1)")
+    await screen.findByText("Recommended (1)")
+    switchTab("Might recommend")
     fireEvent.click(
       screen.getByRole("button", {
         name: "Select Support Engineer",
@@ -693,7 +778,8 @@ describe("GroupedJobs", () => {
     })
     renderJobs()
 
-    await screen.findByText("Might recommend (1)")
+    await screen.findByText("Recommended (1)")
+    switchTab("Might recommend")
     expect(
       within(cardFor("Support Engineer")).getByText(
         "Shortlisted — decision rev 4."
@@ -706,6 +792,7 @@ describe("GroupedJobs", () => {
     renderJobs()
 
     await screen.findByRole("button", { name: "Check chosen jobs (1)" })
+    switchTab("Might not recommend")
     fireEvent.click(
       screen.getByRole("button", { name: "Shortlist Weekend Project" })
     )
@@ -729,12 +816,16 @@ describe("GroupedJobs", () => {
     stubGroupedFetch()
     renderJobs()
 
-    await screen.findByText("Not yet classified (1)")
-    expect(
-      screen.getByText("Stale — brief_changed,catalog_changed")
-    ).toBeDefined()
-    expect(screen.getByText("Stale — opportunity_revised")).toBeDefined()
-    expect(screen.getAllByText("Current")).toHaveLength(3)
+    await screen.findByText("Recommended (1)")
+    expect(screen.getByText("Current")).toBeDefined()
+    switchTab("Might recommend")
+    await screen.findByText("Current")
+    switchTab("Might not recommend")
+    await screen.findByText("Stale — opportunity_revised")
+    switchTab("Not recommended")
+    await screen.findByText("Current")
+    switchTab("Unknown — exceptional, needs a basis")
+    await screen.findByText("Stale — brief_changed,catalog_changed")
   })
 
   it("shows brief and catalog versions", async () => {
@@ -745,9 +836,18 @@ describe("GroupedJobs", () => {
     await screen.findByText(
       "Search brief: profile v3 · rubric rubric-1 · catalog cat-7"
     )
-    expect(
-      screen.getAllByText("Brief profile v3 · rubric rubric-1 · catalog cat-7")
-    ).toHaveLength(5)
+    for (const label of [
+      "Recommended",
+      "Might recommend",
+      "Might not recommend",
+      "Not recommended",
+      "Unknown — exceptional, needs a basis",
+    ]) {
+      switchTab(label)
+      await screen.findByText(
+        "Brief profile v3 · rubric rubric-1 · catalog cat-7"
+      )
+    }
     await screen.findByText("Tracked research run: run-7")
   })
 
@@ -756,7 +856,7 @@ describe("GroupedJobs", () => {
     const { calls } = stubGroupedFetch()
     renderJobs()
 
-    await screen.findByText("Not yet classified (1)")
+    await screen.findByText("Recommended (1)")
     await screen.findByText(
       "Search brief: profile v3 · rubric rubric-1 · catalog cat-7"
     )
@@ -787,17 +887,25 @@ describe("GroupedJobs", () => {
 
     await screen.findByText("Recommended (1)")
     // Every saved group still renders: nothing is erased by the version move.
-    await screen.findByText("Might recommend (1)")
-    await screen.findByText("Might not recommend (1)")
-    await screen.findByText("Not recommended (1)")
-    await screen.findByText("Unknown — exceptional, needs a basis (1)")
-    await screen.findByText("Not yet classified (1)")
+    for (const label of [
+      "Might recommend",
+      "Might not recommend",
+      "Not recommended",
+      "Unknown — exceptional, needs a basis",
+      "Not yet classified",
+    ]) {
+      switchTab(label)
+      await screen.findByText(`${label} (1)`)
+    }
     // Stale findings keep their saved basis labels.
-    screen.getByText("Stale — opportunity_revised")
-    screen.getByText("Stale — brief_changed,catalog_changed")
-    expect(
-      screen.getAllByText("Brief profile v3 · rubric rubric-1 · catalog cat-7")
-    ).toHaveLength(5)
+    switchTab("Might not recommend")
+    await screen.findByText("Stale — opportunity_revised")
+    switchTab("Unknown — exceptional, needs a basis")
+    await screen.findByText("Stale — brief_changed,catalog_changed")
+    switchTab("Recommended")
+    await screen.findByText(
+      "Brief profile v3 · rubric rubric-1 · catalog cat-7"
+    )
     // The header shows the current identity plus the stale-brief note.
     await screen.findByText(
       "Search brief: profile v5 · rubric rubric-2 · catalog cat-8"
@@ -816,6 +924,7 @@ describe("GroupedJobs", () => {
       "No saved search brief yet — the first Find jobs run authors one from profile v3."
     )
     await screen.findByText("Recommended (1)")
+    switchTab("Unknown — exceptional, needs a basis")
     await screen.findByText("Unknown — exceptional, needs a basis (1)")
   })
 
@@ -839,6 +948,7 @@ describe("GroupedJobs", () => {
     renderJobs()
 
     await screen.findByText("Recommended (1)")
+    switchTab("Unknown — exceptional, needs a basis")
     await screen.findByText("Unknown — exceptional, needs a basis (1)")
     expect(screen.getByText(/No tracked research run/)).toBeDefined()
     expect(
@@ -880,6 +990,7 @@ describe("GroupedJobs", () => {
     expect(sourceLink.getAttribute("href")).toBe("https://example.com/posting")
 
     // Unresolvable captures stay visible as bare ids.
+    switchTab("Might recommend")
     const couldCard = cardFor("Support Engineer")
     await within(couldCard).findByText("Evidence (1)")
     expect(
@@ -901,6 +1012,7 @@ describe("GroupedJobs", () => {
     expect(calls.filter((call) => call.url.includes("/checks"))).toEqual([])
 
     // Selecting another role updates the count but starts no check.
+    switchTab("Might not recommend")
     fireEvent.click(
       screen.getByRole("button", {
         name: "Select Weekend Project",
@@ -952,7 +1064,8 @@ describe("GroupedJobs", () => {
     const { calls } = stubGroupedFetch({ decisionConflict: true })
     renderJobs()
 
-    await screen.findByText("Not recommended (1)")
+    await screen.findByText("Recommended (1)")
+    switchTab("Not recommended")
     fireEvent.click(
       screen.getByRole("button", {
         name: "Select Night Shift Ops",
