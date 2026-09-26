@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -12,32 +13,108 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
-	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-// cannedExecutor answers one fetch shape without touching the network and
-// records every input for honesty assertions.
-type cannedExecutor struct {
-	mu     sync.Mutex
-	calls  int
-	inputs []researchcontract.ExecuteInput
-	output researchcontract.ExecuteOutput
-	err    error
+// checkTurn scripts one fixture check turn: question prompts saved through
+// the live check tools, and the final findings text built from the saved
+// refs once the transport assigns them.
+type checkTurn struct {
+	prompts  []string
+	required []bool
+	text     func(refs []string) string
+	err      error
 }
 
-func (f *cannedExecutor) Execute(_ context.Context, in researchcontract.ExecuteInput) (researchcontract.ExecuteOutput, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.calls++
-	f.inputs = append(f.inputs, in)
-	return f.output, f.err
+// checkScriptTransport plays one scripted check turn against the checker's
+// live tool server: saves land in the server like a real turn, then the
+// turn emits them plus its structured findings text.
+type checkScriptTransport struct {
+	t       *testing.T
+	checker *Checker
+	checkID string
+	turn    checkTurn
 }
 
-func (f *cannedExecutor) count() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.calls
+func (f *checkScriptTransport) Run(_ context.Context, _ musecode.SessionSpec, input musecode.SessionInput, _ musecode.Cursor, sink musecode.EventSink) error {
+	check, ok := input.(musecode.CheckInput)
+	if !ok {
+		return errors.New("fixture: check turn needs CheckInput")
+	}
+	if check.VacancyRef == "" || check.PageURL == "" || check.ReceiptRef == "" {
+		return errors.New("fixture: check input incomplete")
+	}
+	if f.turn.err != nil {
+		return f.turn.err
+	}
+	server, ok := f.checker.ServerForCheck(checkRefOf(f.checkID))
+	if !ok {
+		return errors.New("fixture: no live check server")
+	}
+	vacancies := server.SavedVacancyRefs()
+	if len(vacancies) != 1 {
+		return fmt.Errorf("fixture: %d seeded vacancies, want 1", len(vacancies))
+	}
+	session := mcpSession(f.t, server)
+	refs := make([]string, 0, len(f.turn.prompts))
+	for i, prompt := range f.turn.prompts {
+		required := true
+		if i < len(f.turn.required) {
+			required = f.turn.required[i]
+		}
+		payload := callTool(f.t, session, "public_save_question", map[string]any{
+			"vacancy_ref": vacancies[0], "prompt_text": prompt, "required": required,
+			"source_url": check.PageURL,
+		})
+		question, ok := payload["question"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("fixture: no question in %+v", payload)
+		}
+		ref, _ := question["question_ref"].(string)
+		refs = append(refs, ref)
+	}
+	sink.Emit(musecode.Event{Kind: musecode.EventModelStep})
+	for _, ref := range refs {
+		sink.Emit(musecode.Event{Kind: musecode.EventToolCall, Tool: "public_save_question"})
+		sink.Emit(musecode.Event{Kind: musecode.EventSaved, SaveRef: ref})
+	}
+	if f.turn.text != nil {
+		sink.Emit(musecode.Event{Kind: musecode.EventModelText, Text: f.turn.text(refs)})
+	}
+	sink.Emit(musecode.Event{Kind: musecode.EventFinished})
+	return nil
+}
+
+func newCheckFixture(t *testing.T, fix *connectedFixture, transport *checkScriptTransport) *Checker {
+	t.Helper()
+	checker, err := NewChecker(CheckDeps{DB: fix.db, Actor: fixtureActor,
+		Executor: fix.executor, Captures: fix.captures,
+		Bounds: musecode.DefaultBounds(), Transport: transport,
+		Cursors: StoreCursors{DB: fix.db}, Facts: fixtureFacts(),
+		Workspaces: t.TempDir(), Authorized: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport.checker = checker
+	return checker
+}
+
+func waitCheckDone(t *testing.T, db *store.Store, opportunityID, checkID string) store.CheckView {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		view, err := db.GetJobCheck(context.Background(), opportunityID, checkID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if view.Status != store.CheckStatusChecking {
+			return view
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("check still pending: %+v", view)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // fakeMatchClient judges answer batches from a per-question script with no
@@ -156,10 +233,11 @@ func startFixtureCheck(t *testing.T, db *store.Store, opportunityID string, revi
 	return view
 }
 
-// Discovery yields a classified role, the explicit check retrieves its
-// actual employer questions into a sourced persisted body, and Answer
-// matches saved owner answers with zero generative or retrieval calls:
-// exactly one Jev classifier batch, nothing else.
+// Discovery yields a classified role, the explicit check conducts one
+// bounded turn that saves the actual employer questions and returns
+// span-verified findings, and Answer matches saved owner answers with
+// zero generative or retrieval calls: exactly one Jev classifier batch,
+// nothing else.
 func TestCheckAnswerConnectedFlow(t *testing.T) {
 	ctx := context.Background()
 	gate := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
@@ -177,17 +255,32 @@ func TestCheckAnswerConnectedFlow(t *testing.T) {
 	selectFixtureRole(t, fix.db, opportunityID, finding.OpportunityRevision)
 	pending := startFixtureCheck(t, fix.db, opportunityID, finding.OpportunityRevision)
 
-	checker, err := NewChecker(CheckDeps{DB: fix.db, Actor: fixtureActor,
-		Executor: fix.executor, Captures: fix.captures, Bounds: musecode.DefaultBounds(), Authorized: true})
+	transport := &checkScriptTransport{t: t, checkID: pending.ID}
+	checker := newCheckFixture(t, fix, transport)
+	captureID := finding.EvidenceLinks[0].CaptureID
+	transport.turn = checkTurn{
+		prompts:  []string{"Why do you want this support role?", "Are you available for night shifts (required)?"},
+		required: []bool{false, true},
+		text: func(refs []string) string {
+			return fmt.Sprintf(`{"requirements":[{"text":"Base pay unstated.","capture":%q}],`+
+				`"route":{"kind":"direct","destination":"","capture":%q},"documents":[],`+
+				`"questions":[{"ref":%q,"capture":%q},{"ref":%q,"capture":%q}]}`,
+				captureID, captureID, refs[0], captureID, refs[1], captureID)
+		},
+	}
+	started, err := checker.PerformCheck(ctx, opportunityID, pending.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	view, err := checker.PerformCheck(ctx, opportunityID, pending.ID)
-	if err != nil {
-		t.Fatal(err)
+	if started.Status != store.CheckStatusChecking {
+		t.Fatalf("start = %+v, want the checking view while the turn conducts", started)
 	}
+	view := waitCheckDone(t, fix.db, opportunityID, pending.ID)
 	if view.Status != store.CheckStatusChecked || len(view.Questions) != 2 {
 		t.Fatalf("check = %+v, want checked with 2 sourced questions", view)
+	}
+	if len(view.Requirements) != 1 || view.Requirements[0].Statement != "Base pay unstated." {
+		t.Fatalf("requirements = %+v, want the verified statement", view.Requirements)
 	}
 	if view.Questions[0].Text != "Why do you want this support role?" || view.Questions[0].Required != store.CheckOptional {
 		t.Fatalf("question 0 = %+v, want verbatim optional", view.Questions[0])
@@ -195,7 +288,6 @@ func TestCheckAnswerConnectedFlow(t *testing.T) {
 	if view.Questions[1].Text != "Are you available for night shifts (required)?" || view.Questions[1].Required != store.CheckRequired {
 		t.Fatalf("question 1 = %+v, want verbatim required", view.Questions[1])
 	}
-	captureID := finding.EvidenceLinks[0].CaptureID
 	blob := fix.captures.blobs[captureID]
 	for _, question := range view.Questions {
 		span := question.SourceSpan
@@ -206,8 +298,8 @@ func TestCheckAnswerConnectedFlow(t *testing.T) {
 			t.Fatalf("span text %q != prompt %q", string(blob[span.Start:span.End]), question.Text)
 		}
 	}
-	if view.QuestionSetSHA256 == "" || view.Route.Judgment != "unresolved" || len(view.Gaps) != 1 {
-		t.Fatalf("view = %+v, want set hash, unresolved route and one gap", view)
+	if view.QuestionSetSHA256 == "" || view.Route.Judgment != "unresolved" || len(view.Gaps) != 0 {
+		t.Fatalf("view = %+v, want set hash, unresolved route and no gaps", view)
 	}
 	if view.Vacancy.CaptureIDs[0] != captureID {
 		t.Fatalf("vacancy captures = %v, want the reused capture", view.Vacancy.CaptureIDs)
@@ -321,53 +413,52 @@ func TestCheckAnswerConnectedFlow(t *testing.T) {
 	}
 }
 
-func TestCheckFetchPathRetrievesBounded(t *testing.T) {
+// An invented requirement, an unknown question ref and a saved-but-uncited
+// question all drop as gaps; with zero verified questions the check
+// completes as blocked/questions-unresolved with the gaps disclosed.
+func TestCheckBlockedOnUnverifiable(t *testing.T) {
 	ctx := context.Background()
 	gate := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
 	fix := newConnectedFixture(t, gate, []map[string]string{
 		{"reason-positive": "hybrid-ok", "reason-negative": "abstain", "reason-missing": "abstain"},
 	})
-	commissioned := commissionForCheck(t, fix, gate, "run-fetch", []vacancySeed{
+	commissioned := commissionForCheck(t, fix, gate, "run-unverifiable", []vacancySeed{
 		{"https://jobs.example.invalid/1", "Example BV", "Senior support engineer", "rc-1"},
 	})
 	finding := commissioned.Findings[0]
-	// The saved capture becomes unreadable after discovery, forcing the
-	// bounded fetch path for exactly one retrieval.
-	fix.captures.breakOpen(finding.EvidenceLinks[0].CaptureID)
-	fetchBody := []byte("<html><body>\nFetched detail page.\nWhat on-call rotation do you cover?\n</body></html>")
-	fetchCapture := insertFixtureCapture(t, fix.db, "https://jobs.example.invalid/1", fetchBody)
-	fix.captures.blobs[fetchCapture.ID] = fetchBody
-	executor := &cannedExecutor{output: researchcontract.ExecuteOutput{
-		Outcome: researchcontract.OutcomeOK, CaptureID: fetchCapture.ID,
-		Receipt: researchcontract.ExecutionReceipt{ID: "rc-fetch", Status: researchcontract.ReceiptOK, CaptureID: fetchCapture.ID},
-	}}
 	opportunityID := finding.OpportunityID
 	selectFixtureRole(t, fix.db, opportunityID, finding.OpportunityRevision)
 	pending := startFixtureCheck(t, fix.db, opportunityID, finding.OpportunityRevision)
-	checker, err := NewChecker(CheckDeps{DB: fix.db, Actor: fixtureActor,
-		Executor: executor, Captures: fix.captures, Bounds: musecode.DefaultBounds(), Authorized: true})
-	if err != nil {
+	transport := &checkScriptTransport{t: t, checkID: pending.ID}
+	checker := newCheckFixture(t, fix, transport)
+	captureID := finding.EvidenceLinks[0].CaptureID
+	transport.turn = checkTurn{
+		prompts: []string{"Why do you want this support role?"},
+		text: func(refs []string) string {
+			_ = refs
+			return fmt.Sprintf(`{"requirements":[{"text":"Five years of Go are mandatory.","capture":%q}],`+
+				`"route":{"kind":"direct","destination":"","capture":%q},"documents":[],`+
+				`"questions":[{"ref":"q-absent","capture":%q}]}`,
+				captureID, captureID, captureID)
+		},
+	}
+	if _, err := checker.PerformCheck(ctx, opportunityID, pending.ID); err != nil {
 		t.Fatal(err)
 	}
-	view, err := checker.PerformCheck(ctx, opportunityID, pending.ID)
-	if err != nil {
-		t.Fatal(err)
+	view := waitCheckDone(t, fix.db, opportunityID, pending.ID)
+	if view.Status != store.CheckStatusBlocked || view.BlockedReason == nil ||
+		view.BlockedReason.Code != store.CheckBlockedQuestionsUnresolved {
+		t.Fatalf("view = %+v, want blocked/questions-unresolved", view)
 	}
-	if view.Status != store.CheckStatusChecked || len(view.Questions) != 1 ||
-		view.Questions[0].Text != "What on-call rotation do you cover?" {
-		t.Fatalf("view = %+v, want one fetched question", view)
-	}
-	if len(view.Vacancy.CaptureIDs) != 1 || view.Vacancy.CaptureIDs[0] != fetchCapture.ID {
-		t.Fatalf("vacancy captures = %v, want the fetched capture", view.Vacancy.CaptureIDs)
-	}
-	if executor.count() != 1 {
-		t.Fatalf("executor calls = %d, want exactly 1 bounded fetch", executor.count())
-	}
-	if len(executor.inputs) != 1 || executor.inputs[0].Request.URLOrQuery != "https://jobs.example.invalid/1" {
-		t.Fatalf("fetch inputs = %+v, want the vacancy page only", executor.inputs)
+	for _, want := range []string{"requirement 1 dropped", `unknown saved ref "q-absent"`, "was not cited"} {
+		if !strings.Contains(view.BlockedReason.Detail, want) {
+			t.Errorf("blocked detail misses %q: %q", want, view.BlockedReason.Detail)
+		}
 	}
 }
 
+// A turn that saves nothing and returns empty findings completes as
+// blocked/questions-unresolved with no questions and no captures.
 func TestCheckBlockedWithoutQuestions(t *testing.T) {
 	ctx := context.Background()
 	gate := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
@@ -378,27 +469,30 @@ func TestCheckBlockedWithoutQuestions(t *testing.T) {
 		{"https://jobs.example.invalid/1", "Example BV", "Senior support engineer", "rc-1"},
 	})
 	finding := commissioned.Findings[0]
-	// The capture holds prose but no interrogative lines: a checked role
-	// with zero questions completes as blocked/questions-unresolved.
-	fix.captures.blobs[finding.EvidenceLinks[0].CaptureID] = []byte("<html><body>\nSenior role, no questions listed.\nApply by email.\n</body></html>")
 	opportunityID := finding.OpportunityID
 	selectFixtureRole(t, fix.db, opportunityID, finding.OpportunityRevision)
 	pending := startFixtureCheck(t, fix.db, opportunityID, finding.OpportunityRevision)
-	checker, err := NewChecker(CheckDeps{DB: fix.db, Actor: fixtureActor,
-		Executor: fix.executor, Captures: fix.captures, Bounds: musecode.DefaultBounds(), Authorized: true})
-	if err != nil {
+	transport := &checkScriptTransport{t: t, checkID: pending.ID}
+	checker := newCheckFixture(t, fix, transport)
+	captureID := finding.EvidenceLinks[0].CaptureID
+	transport.turn = checkTurn{
+		text: func(refs []string) string {
+			_ = refs
+			return fmt.Sprintf(`{"requirements":[],"route":{"kind":"direct","destination":"","capture":%q},`+
+				`"documents":[],"questions":[]}`,
+				captureID)
+		},
+	}
+	if _, err := checker.PerformCheck(ctx, opportunityID, pending.ID); err != nil {
 		t.Fatal(err)
 	}
-	view, err := checker.PerformCheck(ctx, opportunityID, pending.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	view := waitCheckDone(t, fix.db, opportunityID, pending.ID)
 	if view.Status != store.CheckStatusBlocked || view.BlockedReason == nil ||
 		view.BlockedReason.Code != store.CheckBlockedQuestionsUnresolved {
 		t.Fatalf("view = %+v, want blocked/questions-unresolved", view)
 	}
-	if len(view.Questions) != 0 || len(view.Vacancy.CaptureIDs) != 1 {
-		t.Fatalf("view = %+v, want no questions with retrieved capture", view)
+	if len(view.Questions) != 0 || len(view.Vacancy.CaptureIDs) != 0 {
+		t.Fatalf("view = %+v, want no questions and no captures", view)
 	}
 }
 
@@ -406,7 +500,9 @@ func TestCheckerGuards(t *testing.T) {
 	ctx := context.Background()
 	db := openFixtureDB(t)
 	deps := CheckDeps{DB: db, Actor: fixtureActor, Executor: &fakeExecutor{},
-		Captures: &fakeCaptures{}, Bounds: musecode.DefaultBounds(), Authorized: true}
+		Captures: &fakeCaptures{}, Bounds: musecode.DefaultBounds(),
+		Transport: &checkScriptTransport{}, Cursors: StoreCursors{DB: db},
+		Facts: fixtureFacts(), Workspaces: t.TempDir(), Authorized: true}
 	if _, err := NewChecker(deps); err != nil {
 		t.Fatalf("valid deps rejected: %v", err)
 	}
@@ -415,16 +511,23 @@ func TestCheckerGuards(t *testing.T) {
 	if _, err := NewChecker(badBounds); err == nil {
 		t.Error("zero bounds admitted")
 	}
+	badWorkspaces := deps
+	badWorkspaces.Workspaces = "relative/root"
+	if _, err := NewChecker(badWorkspaces); err == nil {
+		t.Error("relative workspaces admitted")
+	}
 	closed, err := NewChecker(CheckDeps{DB: db, Actor: fixtureActor, Executor: &fakeExecutor{},
-		Captures: &fakeCaptures{}, Bounds: musecode.DefaultBounds()})
+		Captures: &fakeCaptures{}, Bounds: musecode.DefaultBounds(),
+		Transport: &checkScriptTransport{}, Cursors: StoreCursors{DB: db},
+		Facts: fixtureFacts(), Workspaces: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if closed.Authorized() {
 		t.Error("default checker authorized")
 	}
-	if _, err := closed.PerformCheck(ctx, "opp-1", "check-1"); err == nil || !strings.Contains(err.Error(), "E12") {
-		t.Fatalf("unauthorized perform err = %v, want E12 gate", err)
+	if _, err := closed.PerformCheck(ctx, "opp-1", "check-1"); err == nil || !strings.Contains(err.Error(), "live authorization") {
+		t.Fatalf("unauthorized perform err = %v, want live-authorization gate", err)
 	}
 	company, _, err := db.CreateCompany(ctx, fixtureActor, store.CompanyInput{Name: "Manual Co"})
 	if err != nil {

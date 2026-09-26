@@ -54,13 +54,16 @@ type checkFindings struct {
 
 // AdaptedCheck is the verified payload plus per-item verification gaps.
 // Gaps name dropped claims; the checker maps them into check gaps or a
-// blocked verdict.
+// blocked verdict. CitedQuestions lists the saved question refs the turn
+// cited, verified or not, so the checker can disclose saved-but-uncited
+// questions instead of dropping them silently.
 type AdaptedCheck struct {
-	Requirements []store.CheckRequirementInput
-	Route        store.CheckRouteInput
-	Documents    []store.RequestedDocumentInput
-	Questions    []store.CheckQuestionInput
-	Gaps         []string
+	Requirements   []store.CheckRequirementInput
+	Route          store.CheckRouteInput
+	Documents      []store.RequestedDocumentInput
+	Questions      []store.CheckQuestionInput
+	CitedQuestions []string
+	Gaps           []string
 }
 
 const (
@@ -163,6 +166,9 @@ func (a *CheckAdapter) Adapt(ctx context.Context, observedAt, text string) (Adap
 		if i >= maxAdaptedQuestions {
 			out.Gaps = append(out.Gaps, fmt.Sprintf("question %d dropped over the %d-item gate", i+1, maxAdaptedQuestions))
 			continue
+		}
+		if claim.Ref != "" {
+			out.CitedQuestions = append(out.CitedQuestions, claim.Ref)
 		}
 		question, ok := a.Saved.Question(claim.Ref)
 		if !ok {

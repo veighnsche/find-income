@@ -246,22 +246,39 @@ func wireResearch(database *store.Store, runtime *codexservice.Lazy, options *ht
 	runtime.SetResearchWiring(stack.Toolchain, stack.Supervisor)
 	go sweepResearchLeases(stack)
 	log.Printf("research wired: artifacts=%s agent=%s", artifactRoot, stack.AgentID)
-	wireMuseCheck(database, options, stack)
+	wireMuseCheck(database, options, stack, dataDir)
 	return stack
 }
 
-// wireMuseCheck composes the deterministic selected-role check performer.
-// It stays unauthorized until the check live authorization; checks remain
-// pending through the existing path meanwhile.
-func wireMuseCheck(database *store.Store, options *httpapi.Options, stack *researchwire.Stack) {
+// wireMuseCheck composes the model-driven selected-role check performer
+// on the direct Contributor CLI. Without a proved Contributor lane the
+// performer stays unauthorized and checks keep their honest 503.
+func wireMuseCheck(database *store.Store, options *httpapi.Options, stack *researchwire.Stack, dataDir string) {
+	museBin := os.Getenv("JOBSEEK_MUSE_BIN")
+	if museBin == "" {
+		museBin = "muse"
+	}
+	facts := musewire.LiveFacts(museBin, musecode.PinnedModelID)
+	transport := &musewire.LiveTransport{CLIPath: museBin,
+		ModelID: musecode.PinnedModelID, ProviderID: musecode.PinnedProviderID}
+	checkBounds := musecode.DefaultBounds()
+	checkBounds.MaxWallClock = 10 * time.Minute
+	checkBounds.MaxModelSteps = 20
+	checkBounds.MaxToolCalls = 30
+	checkBounds.MaxBytesPerOp = 2 << 20
+	checkBounds.MaxBytesTotal = 20 << 20
 	checker, err := musewire.NewChecker(musewire.CheckDeps{
 		DB: database, Actor: researchwire.OwnerActor(),
 		Executor: stack.Executor, Captures: stack.Captures,
-		Bounds: musecode.DefaultBounds(), Authorized: false,
+		Bounds: checkBounds, Transport: transport,
+		Cursors: musewire.StoreCursors{DB: database}, Facts: facts,
+		Workspaces: filepath.Join(dataDir, "muse-sessions"),
+		Authorized: musecode.Check(musecode.TierContributor, facts).Available,
 	})
 	if err != nil {
 		log.Printf("muse check unavailable: %v", err)
 	} else {
+		transport.Servers = checker.ServerForCheck
 		options.MuseCheck = checker
 	}
 }

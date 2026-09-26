@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
@@ -15,65 +17,98 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-// CheckPerformer runs one explicit selected-role check to a persisted body.
+// ErrCheckNotMuse reports a check for a role no Muse finding backs.
+// Other performers own those paths; the bridge never blocks them.
+var ErrCheckNotMuse = errors.New("musewire: check is not Muse-backed")
+
+// CheckPerformer runs the selected-role check behind the Check action.
 type CheckPerformer interface {
 	Authorized() bool
 	PerformCheck(ctx context.Context, opportunityID, checkID string) (store.CheckView, error)
 }
 
-// ErrCheckNotMuse reports an opportunity without Muse vacancy evidence. The
-// caller leaves the check pending for other performers.
-var ErrCheckNotMuse = errors.New("musewire: opportunity has no Muse vacancy evidence")
-
-// CheckDeps binds one deterministic check performer. Retrieval runs only
-// when Authorized is set; production stays unauthorized until the E12 live
-// authorization, and fixtures authorize explicitly.
+// CheckDeps composes the model-driven selected-role check performer. The
+// transport conducts one bounded Contributor check turn per started
+// check; tests replay scripts while production runs the live CLI.
 type CheckDeps struct {
-	DB         *store.Store
-	Actor      store.Actor
-	Executor   researchcontract.Executor
-	Captures   researchcontract.CaptureReader
-	Bounds     musecode.Bounds
+	DB       *store.Store
+	Actor    store.Actor
+	Executor researchcontract.Executor
+	Captures researchcontract.CaptureReader
+	Bounds   musecode.Bounds
+	// Transport conducts check turns. Facts pins the session; Workspaces
+	// roots the per-check session dirs. Cursors persists crash-recovery
+	// cursors under check refs.
+	Transport  musecode.Transport
+	Cursors    musecode.CursorStore
+	Facts      musecode.Facts
+	Workspaces string
+	// Authorized gates retrieval. Production wires it from the
+	// Contributor lane readiness; fixtures set it directly.
 	Authorized bool
 }
 
-// Checker performs selected-role checks through E07's service and persists
-// the sourced body. No session, model or Jev call is involved: retrieval is
-// deterministic and bounded, and the E12 gate keeps it explicit.
+// Checker conducts one bounded Contributor check turn per started check
+// and persists the adapter-verified body. PerformCheck returns the
+// checking view immediately; the turn conducts behind it and the owner
+// polls the check.
 type Checker struct {
 	db         *store.Store
 	actor      store.Actor
 	executor   researchcontract.Executor
 	captures   researchcontract.CaptureReader
 	bounds     musecode.Bounds
+	transport  musecode.Transport
+	cursors    musecode.CursorStore
+	facts      musecode.Facts
+	workspaces string
 	authorized bool
+
+	mu      sync.Mutex
+	servers map[string]*publicresearch.Server
 }
 
-// NewChecker validates one performer composition.
 func NewChecker(deps CheckDeps) (*Checker, error) {
+	if deps.DB == nil || deps.Executor == nil || deps.Captures == nil {
+		return nil, errors.New("musewire: checker needs database, executor and captures")
+	}
 	if err := deps.Bounds.Validate(); err != nil {
 		return nil, err
 	}
-	if deps.DB == nil || deps.Executor == nil || deps.Captures == nil {
-		return nil, errors.New("musewire: store, executor and capture reader required")
+	if deps.Transport == nil || deps.Cursors == nil {
+		return nil, errors.New("musewire: checker needs a check transport and cursors")
 	}
-	if deps.Actor.Kind == "" || deps.Actor.ID == "" {
-		return nil, errors.New("musewire: check actor required")
+	if deps.Workspaces == "" || !filepath.IsAbs(deps.Workspaces) {
+		return nil, errors.New("musewire: checker needs an absolute workspaces root")
 	}
 	return &Checker{db: deps.DB, actor: deps.Actor, executor: deps.Executor,
-		captures: deps.Captures, bounds: deps.Bounds, authorized: deps.Authorized}, nil
+		captures: deps.Captures, bounds: deps.Bounds, transport: deps.Transport,
+		cursors: deps.Cursors, facts: deps.Facts, workspaces: deps.Workspaces,
+		authorized: deps.Authorized, servers: map[string]*publicresearch.Server{}}, nil
 }
 
 // Authorized reports whether this performer may retrieve.
 func (c *Checker) Authorized() bool { return c.authorized }
 
-// PerformCheck runs E07 over the opportunity's saved vacancy evidence and
-// persists the sourced body. Without authorization it refuses before any
-// retrieval; without saved evidence it completes as blocked instead of
-// inventing questions.
+// ServerForCheck returns the live tool server of one conducting check.
+func (c *Checker) ServerForCheck(checkRef string) (*publicresearch.Server, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	server, ok := c.servers[checkRef]
+	return server, ok
+}
+
+// checkRefOf names the session, workspace and cursor of one check.
+func checkRefOf(checkID string) string { return "check-" + checkID }
+
+// PerformCheck starts the bounded check turn behind one started check
+// and returns the checking view. Without authorization it refuses
+// before any retrieval; without saved evidence it completes as blocked
+// instead of inventing questions. A repeated start while the turn is
+// conducting replays the current view instead of conducting twice.
 func (c *Checker) PerformCheck(ctx context.Context, opportunityID, checkID string) (store.CheckView, error) {
 	if !c.authorized {
-		return store.CheckView{}, errors.New("musewire: check retrieval needs the E12 live authorization")
+		return store.CheckView{}, errors.New("musewire: check retrieval needs the Contributor live authorization")
 	}
 	opportunity, err := c.db.Opportunity(ctx, opportunityID)
 	if err != nil {
@@ -96,14 +131,15 @@ func (c *Checker) PerformCheck(ctx context.Context, opportunityID, checkID strin
 		return c.saveBlocked(ctx, opportunityID, checkID, store.CheckBlockedSourceUnavailable,
 			"saved finding carries no vacancy receipt")
 	}
-	seedServer, err := publicresearch.NewServer(publicresearch.Deps{
+	checkRef := checkRefOf(checkID)
+	server, err := publicresearch.NewServer(publicresearch.Deps{
 		Executor: c.executor, Captures: c.captures, Bounds: c.bounds,
 		RunID: checkID, Generation: 1,
 	})
 	if err != nil {
 		return store.CheckView{}, err
 	}
-	seeded, err := seedServer.SeedVacancies([]publicresearch.SeedVacancy{{
+	seeded, err := server.SeedVacancies([]publicresearch.SeedVacancy{{
 		PageURL: strings.TrimSpace(opportunity.SourceURL), EmployerName: company.Name,
 		Title: strings.TrimSpace(opportunity.Title), LocationText: strings.TrimSpace(opportunity.LocationText),
 		ReceiptRef: finding.SourceRef.SourceRevision,
@@ -129,47 +165,228 @@ func (c *Checker) PerformCheck(ctx context.Context, opportunityID, checkID strin
 		return store.CheckView{}, fmt.Errorf("musewire: start check round: %w", err)
 	}
 	if !created {
-		return store.CheckView{}, fmt.Errorf("musewire: check %q was already attempted", checkID)
+		// A turn is already conducting (or converged) behind this
+		// check: replay the current view instead of conducting twice.
+		return c.db.GetJobCheck(ctx, opportunityID, checkID)
 	}
 	if _, err := c.db.ActivateRound(ctx, c.actor, round.ID); err != nil {
 		return store.CheckView{}, fmt.Errorf("musewire: activate check round: %w", err)
 	}
-	view, err := c.runCheck(ctx, opportunity, checkID, round.ID, seedServer, seeded[0].VacancyRef)
-	state := store.RoundCompleted
-	reason := "check completed"
-	if err != nil {
-		state = store.RoundFailed
-		reason = "check failed: " + err.Error()
-	}
-	if len(reason) > 100 {
-		reason = reason[:100]
-	}
-	summary, summaryErr := json.Marshal(map[string]any{"checkID": checkID, "opportunityID": opportunityID})
-	if summaryErr != nil {
-		return store.CheckView{}, summaryErr
-	}
-	if _, finishErr := c.db.FinishRound(ctx, c.actor, round.ID, state, reason, reason, summary); finishErr != nil {
-		return store.CheckView{}, fmt.Errorf("musewire: finish check round: %w", finishErr)
-	}
-	return view, err
+	c.mu.Lock()
+	c.servers[checkRef] = server
+	c.mu.Unlock()
+	input := musecode.CheckInput{VacancyRef: seeded[0].VacancyRef,
+		PageURL: strings.TrimSpace(opportunity.SourceURL), ReceiptRef: finding.SourceRef.SourceRevision}
+	go c.conductCheck(context.WithoutCancel(ctx), opportunity, checkID, checkRef, round.ID, server, input)
+	return c.db.GetJobCheck(ctx, opportunityID, checkID)
 }
 
-func (c *Checker) runCheck(ctx context.Context, opportunity store.Opportunity, checkID, roundID string, server *publicresearch.Server, vacancyRef string) (store.CheckView, error) {
-	checkService, err := publicresearch.NewCheckService(publicresearch.CheckDeps{
-		Executor: c.executor, Captures: c.captures, Saved: server,
-		Bounds: c.bounds, RunID: roundID, Generation: 1,
+// conductCheck runs one check turn to its verdict in the background. A
+// verified body completes the check; unverifiable turns complete as
+// blocked with the coded reason. Only infrastructure failures fail the
+// round: a blocked verdict is the delivered product.
+func (c *Checker) conductCheck(ctx context.Context, opportunity store.Opportunity, checkID, checkRef, roundID string, server *publicresearch.Server, input musecode.CheckInput) {
+	finish := func(state store.RoundState, reason string) {
+		if len(reason) > 100 {
+			reason = reason[:100]
+		}
+		summary, _ := json.Marshal(map[string]any{"checkID": checkID, "opportunityID": opportunity.ID})
+		_, _ = c.db.FinishRound(ctx, c.actor, roundID, state, reason, reason, summary)
+	}
+	blocked := func(code, detail string) {
+		if _, err := c.saveBlocked(ctx, opportunity.ID, checkID, code, detail); err != nil {
+			finish(store.RoundFailed, "check failed: "+err.Error())
+			return
+		}
+		finish(store.RoundCompleted, "check completed")
+	}
+	status := musecode.Check(musecode.TierContributor, c.facts)
+	if !status.Available {
+		blocked(store.CheckBlockedOther, "contributor lane unavailable ("+status.Code+"): "+status.Detail)
+		return
+	}
+	workspace := filepath.Join(c.workspaces, "checks", checkRef)
+	if err := os.MkdirAll(workspace, 0o700); err != nil {
+		blocked(store.CheckBlockedOther, "check workspace unavailable: "+err.Error())
+		return
+	}
+	spec, err := musecode.NewSession(status, workspace, c.bounds, nil)
+	if err != nil {
+		blocked(store.CheckBlockedOther, "check session refused: "+err.Error())
+		return
+	}
+	var texts []string
+	supervisor := musecode.NewSupervisor(&captureTransport{next: c.transport, texts: &texts},
+		c.cursors, saveValidator(server), c.facts.EffectiveModel)
+	if _, err := supervisor.StartRun(ctx, checkRef, spec, input, c.facts); err != nil {
+		blocked(store.CheckBlockedOther, "check turn refused: "+err.Error())
+		return
+	}
+	terminal, ok := supervisor.Result(checkRef)
+	if !ok {
+		blocked(store.CheckBlockedOther, "check turn has no terminal result")
+		return
+	}
+	if terminal.Outcome != musecode.OutcomeCompleted {
+		blocked(store.CheckBlockedOther, "check turn ended "+string(terminal.Outcome)+": "+terminal.Detail)
+		return
+	}
+	text := ""
+	for _, candidate := range texts {
+		if strings.TrimSpace(candidate) != "" {
+			text = candidate
+		}
+	}
+	adapted, err := (&CheckAdapter{Captures: c.captures, Saved: server}).Adapt(ctx,
+		time.Now().UTC().Format(time.RFC3339), text)
+	if err != nil {
+		blocked(store.CheckBlockedOther, "check turn returned malformed findings: "+err.Error())
+		return
+	}
+	adapted.Gaps = append(adapted.Gaps, uncitedQuestionGaps(server, adapted.CitedQuestions)...)
+	if len(adapted.Questions) == 0 {
+		detail := "check verified no employer questions"
+		if len(adapted.Gaps) > 0 {
+			shown := adapted.Gaps
+			if len(shown) > 3 {
+				shown = shown[:3]
+			}
+			detail += ": " + strings.Join(shown, "; ")
+			if len(detail) > 2000 {
+				detail = detail[:2000]
+			}
+		}
+		blocked(store.CheckBlockedQuestionsUnresolved, detail)
+		return
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	captures := verifiedCaptures(adapted)
+	_, err = c.db.SaveJobCheckBody(ctx, c.actor, store.CheckSaveInput{
+		OpportunityID: opportunity.ID, CheckID: checkID,
+		Vacancy: store.CheckVacancyInput{CaptureIDs: captures,
+			Completeness: store.CaptureComplete, SourceURL: strings.TrimSpace(opportunity.SourceURL),
+			RetrievedAt: now},
+		RequestedDocuments: nonNilDocuments(adapted.Documents),
+		Requirements:       nonNilRequirements(adapted.Requirements),
+		Route:              orUnresolvedRoute(adapted),
+		Gaps:               checkGaps(adapted.Gaps),
+		Questions:          adapted.Questions,
+		Activity: []store.CheckActivityInput{{Kind: "muse.check_performed",
+			Outcome: string(researchcontract.OutcomeOK), CaptureID: firstCapture(captures),
+			Payload: checkActivityPayload(adapted)}},
 	})
 	if err != nil {
-		return store.CheckView{}, err
+		finish(store.RoundFailed, "check failed: "+err.Error())
+		return
 	}
-	report, err := checkService.Check(ctx, publicresearch.NewSelection(vacancyRef))
-	if err != nil {
-		return store.CheckView{}, err
+	finish(store.RoundCompleted, "check completed")
+}
+
+// uncitedQuestionGaps names server-saved questions the turn never cited.
+// Saved but unverifiable questions stay disclosed instead of silently
+// dropped.
+func uncitedQuestionGaps(server *publicresearch.Server, cited []string) []string {
+	seen := map[string]bool{}
+	for _, ref := range cited {
+		seen[ref] = true
 	}
-	if len(report.Roles) != 1 {
-		return store.CheckView{}, fmt.Errorf("musewire: check returned %d roles, want 1", len(report.Roles))
+	gaps := []string{}
+	for _, ref := range server.SavedQuestionRefs() {
+		if seen[ref] {
+			continue
+		}
+		if _, ok := server.Question(ref); !ok {
+			continue
+		}
+		gaps = append(gaps, "saved question "+ref+" was not cited by the check turn")
 	}
-	return c.complete(ctx, opportunity, checkID, report.Roles[0])
+	return gaps
+}
+
+func verifiedCaptures(adapted AdaptedCheck) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	add := func(id string) {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	for _, requirement := range adapted.Requirements {
+		add(requirement.SourceSpan.CaptureID)
+	}
+	for _, document := range adapted.Documents {
+		add(document.SourceSpan.CaptureID)
+	}
+	for _, question := range adapted.Questions {
+		add(question.SourceSpan.CaptureID)
+	}
+	return out
+}
+
+func firstCapture(captures []string) string {
+	if len(captures) == 0 {
+		return ""
+	}
+	return captures[0]
+}
+
+func nonNilDocuments(in []store.RequestedDocumentInput) []store.RequestedDocumentInput {
+	if in == nil {
+		return []store.RequestedDocumentInput{}
+	}
+	return in
+}
+
+func nonNilRequirements(in []store.CheckRequirementInput) []store.CheckRequirementInput {
+	if in == nil {
+		return []store.CheckRequirementInput{}
+	}
+	return in
+}
+
+// orUnresolvedRoute keeps the verified route, or an explicitly
+// unresolved one anchored on the first verified excerpt when the turn's
+// route claim dropped.
+func orUnresolvedRoute(adapted AdaptedCheck) store.CheckRouteInput {
+	if adapted.Route.Judgment != "" {
+		return adapted.Route
+	}
+	excerpt := ""
+	if len(adapted.Requirements) > 0 {
+		excerpt = adapted.Requirements[0].SourceExcerpt
+	} else if len(adapted.Documents) > 0 {
+		excerpt = adapted.Documents[0].SourceExcerpt
+	} else if len(adapted.Questions) > 0 {
+		excerpt = adapted.Questions[0].SourceExcerpt
+	}
+	return store.CheckRouteInput{Judgment: store.CheckRouteJudgmentUnresolved,
+		SourceExcerpt: excerpt, ObservedAt: time.Now().UTC().Format(time.RFC3339)}
+}
+
+// checkGaps maps adapter diagnostics into check gaps, bounded by the
+// store gate with an honest overflow note.
+func checkGaps(diagnostics []string) []store.CheckGapInput {
+	gaps := make([]store.CheckGapInput, 0, len(diagnostics)+1)
+	for _, diagnostic := range diagnostics {
+		if len(gaps) >= 100 {
+			break
+		}
+		gaps = append(gaps, store.CheckGapInput{Description: diagnostic, Kind: store.CheckGapOther})
+	}
+	if len(diagnostics) > len(gaps) {
+		gaps = append(gaps[:99], store.CheckGapInput{
+			Description: fmt.Sprintf("%d further verification gaps withheld over the gate", len(diagnostics)-99),
+			Kind:        store.CheckGapOther})
+	}
+	return gaps
+}
+
+func checkActivityPayload(adapted AdaptedCheck) json.RawMessage {
+	raw, _ := json.Marshal(map[string]any{"questions": len(adapted.Questions),
+		"requirements": len(adapted.Requirements), "documents": len(adapted.Documents),
+		"gaps": len(adapted.Gaps)})
+	return raw
 }
 
 func (c *Checker) saveBlocked(ctx context.Context, opportunityID, checkID, code, detail string) (store.CheckView, error) {
@@ -177,115 +394,4 @@ func (c *Checker) saveBlocked(ctx context.Context, opportunityID, checkID, code,
 		OpportunityID: opportunityID, CheckID: checkID,
 		Blocked: &store.CheckBlockedInput{Code: code, Detail: detail},
 	})
-}
-
-// complete translates one E07 role into the check body. Checked roles with
-// zero questions complete as blocked/question-unresolved: the store gate
-// needs at least one sourced question and the bridge never invents one.
-func (c *Checker) complete(ctx context.Context, opportunity store.Opportunity, checkID string, role publicresearch.RoleCheck) (store.CheckView, error) {
-	now := time.Now().UTC().Format(time.RFC3339)
-	if role.Outcome == publicresearch.RoleBlocked {
-		if role.BlockReason == "unknown_vacancy" {
-			return store.CheckView{}, fmt.Errorf("musewire: seeded vacancy %q not found", role.VacancyRef)
-		}
-		return c.saveBlocked(ctx, opportunity.ID, checkID, store.CheckBlockedSourceUnavailable, blockDetail(role))
-	}
-	if len(role.Questions) == 0 {
-		save := store.CheckSaveInput{OpportunityID: opportunity.ID, CheckID: checkID,
-			Blocked: &store.CheckBlockedInput{Code: store.CheckBlockedQuestionsUnresolved,
-				Detail: "retrieved capture held no employer questions"}}
-		if len(role.CaptureIDs) > 0 && strings.TrimSpace(opportunity.SourceURL) != "" {
-			save.Vacancy = c.vacancyInput(opportunity, role, now)
-		}
-		return c.db.SaveJobCheckBody(ctx, c.actor, save)
-	}
-	questions := make([]store.CheckQuestionInput, 0, len(role.Questions))
-	for _, question := range role.Questions {
-		mapped, err := mapQuestion(role, question)
-		if err != nil {
-			return store.CheckView{}, err
-		}
-		questions = append(questions, mapped)
-	}
-	excerpt, err := c.routeExcerpt(ctx, role, opportunity)
-	if err != nil {
-		return store.CheckView{}, err
-	}
-	payload, err := json.Marshal(map[string]any{"reused": role.ReusedCapture, "questions": len(questions)})
-	if err != nil {
-		return store.CheckView{}, err
-	}
-	activity := []store.CheckActivityInput{}
-	if len(role.CaptureIDs) > 0 {
-		activity = append(activity, store.CheckActivityInput{Kind: "muse.check_performed",
-			Outcome: string(researchcontract.OutcomeOK), CaptureID: role.CaptureIDs[0], Payload: payload})
-	}
-	return c.db.SaveJobCheckBody(ctx, c.actor, store.CheckSaveInput{
-		OpportunityID: opportunity.ID, CheckID: checkID,
-		Vacancy:            c.vacancyInput(opportunity, role, now),
-		RequestedDocuments: []store.RequestedDocumentInput{},
-		Requirements:       []store.CheckRequirementInput{},
-		Route: store.CheckRouteInput{Judgment: store.CheckRouteJudgmentUnresolved,
-			SourceExcerpt: excerpt, ObservedAt: now},
-		Gaps: []store.CheckGapInput{{Kind: store.CheckGapOther, Consequential: false,
-			Description: "Requested documents and requirements are not assessed; this check covers sourced questions only."}},
-		Questions: questions,
-		Activity:  activity,
-	})
-}
-
-func (c *Checker) vacancyInput(opportunity store.Opportunity, role publicresearch.RoleCheck, now string) store.CheckVacancyInput {
-	return store.CheckVacancyInput{
-		CaptureIDs: role.CaptureIDs, Completeness: store.CaptureComplete,
-		SourceURL: strings.TrimSpace(opportunity.SourceURL), RetrievedAt: now,
-	}
-}
-
-func blockDetail(role publicresearch.RoleCheck) string {
-	if strings.TrimSpace(role.Detail) != "" {
-		return role.Detail
-	}
-	return "check blocked: " + role.BlockReason
-}
-
-// mapQuestion converts one verbatim question with its recorded capture span.
-// A missing span or an out-of-gate prompt fails the check instead of
-// persisting an unsourced question.
-func mapQuestion(role publicresearch.RoleCheck, question musecode.PublicQuestion) (store.CheckQuestionInput, error) {
-	if len(question.PromptText) < 1 || len(question.PromptText) > 2000 {
-		return store.CheckQuestionInput{}, fmt.Errorf("musewire: question %q prompt fails the text gate", question.QuestionRef)
-	}
-	for _, source := range role.Sources {
-		if source.QuestionRef != question.QuestionRef {
-			continue
-		}
-		required := store.CheckOptional
-		if question.Required {
-			required = store.CheckRequired
-		}
-		return store.CheckQuestionInput{Text: question.PromptText, Required: required,
-			SourceSpan:    store.CheckSourceSpan{CaptureID: source.CaptureID, Start: source.Start, End: source.End},
-			SourceExcerpt: question.PromptText}, nil
-	}
-	return store.CheckQuestionInput{}, fmt.Errorf("musewire: question %q has no recorded source span", question.QuestionRef)
-}
-
-// routeExcerpt cites the head of the first retrieved capture. The
-// deterministic check judges no routes; the excerpt keeps the route section
-// honestly sourced to observed bytes.
-func (c *Checker) routeExcerpt(ctx context.Context, role publicresearch.RoleCheck, opportunity store.Opportunity) (string, error) {
-	if len(role.CaptureIDs) > 0 {
-		_, reader, err := c.captures.OpenCapture(ctx, role.CaptureIDs[0])
-		if err == nil {
-			defer reader.Close()
-			if head, err := io.ReadAll(io.LimitReader(reader, 501)); err == nil && strings.TrimSpace(string(head)) != "" {
-				return string(head), nil
-			}
-		}
-	}
-	fallback := strings.TrimSpace(opportunity.Title)
-	if fallback == "" {
-		return "", fmt.Errorf("musewire: no sourced text for route excerpt")
-	}
-	return fallback, nil
 }
