@@ -186,35 +186,6 @@ def asset_bytes(root, expected):
     return result
 
 
-def pack_hash(manifest, source, pdf):
-    body = json.dumps({"Manifest": base64.b64encode(manifest).decode(), "Source": base64.b64encode(source).decode(), "PDF": base64.b64encode(pdf).decode()}, separators=(",", ":")).encode()
-    return digest(body)
-
-
-def check_packs(db, assets):
-    count = 0
-    for row in db.execute("SELECT opportunity_id,opportunity_revision,profile_revision,content_sha256,manifest_json,typst_source,pdf FROM application_packs"):
-        opportunity, revision, profile, sha, manifest, source, pdf = row
-        manifest = manifest.encode() if isinstance(manifest, str) else manifest
-        source = source.encode() if isinstance(source, str) else source
-        pdf = pdf.encode() if isinstance(pdf, str) else pdf
-        if not pdf.startswith(b"%PDF-") or pack_hash(manifest, source, pdf) != sha:
-            fail("application pack content digest or PDF is invalid")
-        item = json.loads(manifest)
-        role = item.get("role") or {}
-        if (role.get("opportunityId"), role.get("opportunityRevision"), role.get("profileRevision")) != (opportunity, revision, profile):
-            fail("application pack manifest references a different role revision")
-        sources = item.get("sources") or []
-        if not sources:
-            fail("application pack has no immutable career sources")
-        for source_item in sources:
-            name = source_item.get("id")
-            if name not in assets or source_item.get("sha256") != digest(assets[name]) or source_item.get("body", "").encode() != assets[name] or source_item.get("approved") is not True:
-                fail("application pack career source differs from backed-up approved asset")
-        count += 1
-    return count
-
-
 def require_space(path, needed, what):
     try:
         free = shutil.disk_usage(path).free
@@ -443,7 +414,7 @@ def verify_archive(archive, expected_manifest_sha, approved=ASSETS):
     if file_digest(manifest_path) != expected_manifest_sha:
         fail("backup manifest hash differs from the separately recorded pin")
     manifest = json.loads(manifest_path.read_bytes())
-    required = {"format", "files", "schemaSha256", "packCount", "captureCount",
+    required = {"format", "files", "schemaSha256", "captureCount",
                 "receiptCount", "runEventCount", "runCheckpointCount", "captures", "receipts"}
     if manifest.get("format") != FORMAT or any(key not in manifest for key in required):
         fail("backup manifest is not current format")
@@ -463,11 +434,10 @@ def verify_archive(archive, expected_manifest_sha, approved=ASSETS):
         fail("archive captures differ from the manifest file list")
     with closing(open_ro(db_path)) as db:
         schema = check_db(db)
-        packs = check_packs(db, assets)
         live_captures, live_receipts, live_executors = check_captures(db, captures_root)
         events, checkpoints = check_run_history(db)
-        if schema != manifest["schemaSha256"] or packs != manifest.get("packCount"):
-            fail("backup schema or pack count differs from manifest")
+        if schema != manifest["schemaSha256"]:
+            fail("backup schema differs from manifest")
         if live_captures != manifest["captures"] or live_receipts != sorted(manifest["receipts"]):
             fail("backup capture manifest differs from the database snapshot")
         if len(live_captures) != manifest.get("captureCount") or len(live_receipts) != manifest.get("receiptCount"):
@@ -510,7 +480,6 @@ def create(data_dir, assets_root, artifact_root, output, approved=ASSETS, known_
             os.chmod(raw, 0o600)
             with closing(sqlite3.connect(raw)) as db:
                 schema = check_db(db)
-                check_packs(db, assets)
                 live_captures, live_receipts, live_executors = check_captures(db, artifacts)
                 sanitize(db)
                 final = output / DB_NAME
@@ -539,7 +508,6 @@ def create(data_dir, assets_root, artifact_root, output, approved=ASSETS, known_
         write_new_private(output / EXECUTOR_RECORD, executor_body)
         with closing(open_ro(final)) as db:
             check_db(db)
-            count = check_packs(db, assets)
             final_captures, final_receipts, final_executors = check_captures(db, captures_out)
             if final_captures != live_captures or final_receipts != live_receipts or final_executors != live_executors:
                 fail("sanitization altered capture evidence")
@@ -553,7 +521,7 @@ def create(data_dir, assets_root, artifact_root, output, approved=ASSETS, known_
             rel = CAPTURES_DIR + "/receipts/" + name + ".json"
             files[rel] = file_digest(captures_out / "receipts" / (name + ".json"))
         manifest = {"format": FORMAT, "createdAt": datetime.now(timezone.utc).isoformat(), "schemaSha256": schema,
-                    "packCount": count, "captureCount": len(live_captures), "receiptCount": len(live_receipts),
+                    "captureCount": len(live_captures), "receiptCount": len(live_receipts),
                     "runEventCount": events, "runCheckpointCount": checkpoints,
                     "captures": live_captures, "receipts": live_receipts,
                     "skippedOrphanBlobs": orphan_blobs, "skippedOrphanReceipts": orphan_receipts,

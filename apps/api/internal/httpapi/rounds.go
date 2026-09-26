@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
@@ -12,86 +11,6 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
-
-type prepareRoundRequest struct {
-	RequestKey    string                        `json:"requestKey"`
-	OpportunityID string                        `json:"opportunityId"`
-	ReplacePaused *generated.ReplacePausedRound `json:"replacePaused,omitempty"`
-}
-
-func (h *Handler) prepareRound(w http.ResponseWriter, r *http.Request) {
-	p, ok := h.owner(w, r)
-	if !ok || !h.mutationAllowed(w, r, p) {
-		return
-	}
-	var body prepareRoundRequest
-	if !decodeRecordJSON(w, r, &body) {
-		return
-	}
-	if body.RequestKey == "" || len(body.RequestKey) > 200 || strings.TrimSpace(body.RequestKey) != body.RequestKey || body.OpportunityID == "" || len(body.OpportunityID) > 128 || strings.TrimSpace(body.OpportunityID) != body.OpportunityID || body.ReplacePaused != nil && (body.ReplacePaused.RoundId == "" || body.ReplacePaused.ExpectedRevision < 1) {
-		failRound(w, store.ErrInvalid)
-		return
-	}
-	actor := store.Actor{Kind: p.Kind, ID: p.ID}
-	previous, err := h.database.RoundByRequest(r.Context(), actor, body.RequestKey)
-	if err == nil {
-		if previous.Outcome != "prepare" || len(previous.Scope.Resources) != 2 || previous.Scope.Resources[0] != "opportunity:"+body.OpportunityID || previous.Scope.Resources[1] != "campaign:active" || !replacementMatches(previous.Scope.InputRefs, body.ReplacePaused) {
-			failRound(w, store.ErrRoundIdempotencyConflict)
-			return
-		}
-		writeJSON(w, http.StatusOK, roundModel(previous))
-		return
-	}
-	if !errors.Is(err, store.ErrNotFound) {
-		failRound(w, err)
-		return
-	}
-	opportunity, err := h.database.Opportunity(r.Context(), body.OpportunityID)
-	if err != nil {
-		failRound(w, err)
-		return
-	}
-	if opportunity.ArchivedAt != "" || opportunity.SourceURL == "" || strings.TrimSpace(opportunity.OriginalText) == "" {
-		failRound(w, store.ErrInvalid)
-		return
-	}
-	selection, err := h.database.OwnerOpportunityDecision(r.Context(), opportunity.ID)
-	if errors.Is(err, store.ErrNotFound) || err == nil && (selection.Decision != "selected" || selection.OpportunityRevision != opportunity.Revision) {
-		failRound(w, store.ErrFenced)
-		return
-	}
-	if err != nil {
-		failRound(w, err)
-		return
-	}
-	profile, err := h.database.CurrentPreferences(r.Context())
-	if err != nil {
-		failRound(w, err)
-		return
-	}
-	input := store.StartRoundInput{RequestKey: body.RequestKey, Intent: "Prepare a private application pack for the selected sourced opportunity.", Outcome: "prepare", ProfileVersion: profile.Version,
-		Scope:  store.RoundScope{InputRefs: []string{"profile:current", "opportunity:" + opportunity.ID}, Resources: []string{"opportunity:" + opportunity.ID, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundJevRequest, store.RoundPrepareApplicationPack, store.RoundContextTool}, Delegates: []string{"codex-runner"}},
-		Limits: store.RoundAllowance{Requests: 9, Items: 1, Tools: 3, Turns: 1}, Deadline: time.Now().Add(30 * time.Minute).UTC()}
-	if body.ReplacePaused != nil {
-		input.Scope.InputRefs = append(input.Scope.InputRefs, replacementRef(body.ReplacePaused.RoundId, body.ReplacePaused.ExpectedRevision))
-	}
-	var round store.Round
-	var created bool
-	if body.ReplacePaused == nil {
-		round, created, err = h.rounds.Start(r.Context(), actor, input)
-	} else {
-		round, created, err = h.rounds.ReplacePaused(r.Context(), actor, body.ReplacePaused.RoundId, body.ReplacePaused.ExpectedRevision, input)
-	}
-	if err != nil {
-		failRound(w, err)
-		return
-	}
-	status := http.StatusOK
-	if created {
-		status = http.StatusCreated
-	}
-	writeJSON(w, status, roundModel(round))
-}
 
 type roundResponse struct {
 	RequestKey              string               `json:"requestKey"`
@@ -332,10 +251,6 @@ func (h *Handler) roundMutation(w http.ResponseWriter, r *http.Request) {
 	}
 	var body store.RoundMutationInput
 	if !decodeRecordJSON(w, r, &body) {
-		return
-	}
-	if body.Operation == store.RoundPrepareApplicationPack || body.ApplicationPack != nil {
-		fail(w, http.StatusForbidden, generated.ApiErrorCodeForbidden, "Application packs require the commissioned preparation tool.")
 		return
 	}
 	body.Capability = r.Header.Get("X-Round-Capability")

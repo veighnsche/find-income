@@ -39,7 +39,7 @@ func recommendationOpportunityRevision(revision int64, decision store.OwnerDecis
 // unknown read is unavailable, while a proven changed snapshot is stale.
 func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, round store.Round) HomeRecommendationCurrentness {
 	verdict := HomeRecommendationCurrentness{Status: "unavailable", Code: "no_saved_recommendation", CheckedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-	if db == nil || ctx == nil || round.ID == "" || round.Outcome != "process_input" && round.Outcome != "prepare" {
+	if db == nil || ctx == nil || round.ID == "" || round.Outcome != "process_input" {
 		return verdict
 	}
 	var saved struct {
@@ -177,15 +177,7 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 				verdict.Status, verdict.Code = "stale", "owner_decision_changed"
 				return verdict
 			}
-			packs, packErr := db.ListApplicationPacks(ctx, id)
-			if packErr != nil {
-				verdict.Code = "pack_read_unavailable"
-				return verdict
-			}
 			packID, packHash, packVersion := "", "", int64(0)
-			if len(packs) > 0 && packs[0].OpportunityRevision == opportunity.Revision && packs[0].ProfileRevision == profile.Version {
-				packID, packHash, packVersion = packs[0].ID, packs[0].ContentSHA256, packs[0].Version
-			}
 			if ref.PackID != packID || ref.PackVersion != packVersion || ref.PackContentSHA256 != packHash {
 				verdict.Status, verdict.Code = "stale", "pack_changed"
 				return verdict
@@ -240,28 +232,6 @@ func ReadHomeRecommendationCurrentness(ctx context.Context, db *store.Store, rou
 			verdict.Code = "target_read_unavailable"
 		}
 		return verdict
-	}
-	if advice.Action == "prepare" {
-		packs, packErr := db.ListApplicationPacks(ctx, advice.Target.ID)
-		if packErr != nil {
-			verdict.Code = "pack_read_unavailable"
-			return verdict
-		}
-		if len(packs) > 0 && packs[0].OpportunityRevision == advice.Target.Revision && packs[0].ProfileRevision == profile.Version {
-			verdict.Status, verdict.Code = "stale", "current_pack_now_exists"
-			return verdict
-		}
-	}
-	if advice.Action == "review_pack" {
-		packs, packErr := db.ListApplicationPacks(ctx, advice.Target.OpportunityID)
-		if packErr != nil {
-			verdict.Code = "pack_read_unavailable"
-			return verdict
-		}
-		if len(packs) == 0 || packs[0].ID != advice.Target.ID {
-			verdict.Status, verdict.Code = "stale", "newer_pack_available"
-			return verdict
-		}
 	}
 	verdict.Status, verdict.Code = "current", "verified"
 	return verdict

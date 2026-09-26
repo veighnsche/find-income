@@ -12,7 +12,6 @@ const (
 	RoundCorrectPreferences             = "preferences.correct"
 	RoundCorrectEvidence                = "evidence.correct"
 	RoundCorrectOpportunity             = "opportunity.owner_correction"
-	RoundPrepareApplicationPack         = "application_pack.prepare"
 	RoundPrepareOfferComparison         = "offer_comparison.prepare"
 	RoundRelationshipCounterpartyCreate = "relationship.counterparty_create"
 	RoundRelationshipEventCreate        = "relationship.event_create"
@@ -71,7 +70,7 @@ func RoundOperationCost(operation string) (RoundAllowance, bool) {
 		return RoundAllowance{Requests: 1}, true
 	case RoundDeliverApplication:
 		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
-	case RoundPrepareApplicationPack, RoundPrepareOfferComparison:
+	case RoundPrepareOfferComparison:
 		return RoundAllowance{Requests: 1, Items: 1, Tools: 1}, true
 	default:
 		return RoundAllowance{}, false

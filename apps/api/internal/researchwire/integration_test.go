@@ -673,7 +673,7 @@ func TestBridgeServesRealToolchain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(listed.Tools) != 12 {
+	if len(listed.Tools) != 11 {
 		t.Fatalf("bridge tool count: %d", len(listed.Tools))
 	}
 	seen := map[string]bool{}

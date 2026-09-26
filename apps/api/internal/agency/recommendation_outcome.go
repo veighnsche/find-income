@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevservice"
@@ -30,9 +29,7 @@ type outcomeRecommendationFacts struct {
 func (f outcomeRecommendationFacts) useful() bool {
 	switch f.Outcome {
 	case "process_input":
-		return f.AppliedChanges > 0 || f.ResultID != "" && f.Code == "pack_ready"
-	case "prepare":
-		return f.ResultID != ""
+		return f.AppliedChanges > 0
 	default:
 		return false
 	}
@@ -141,8 +138,6 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 	input := jev.DecisionInput{Kind: jev.DecisionNextOutcome, CampaignIntent: round.Intent, MaxReportedTokens: decisionReportedTokenLimit,
 		Capabilities: []jev.DecisionCapability{
 			{ID: "home_review_result", Description: "Review the saved result of this commissioned work."},
-			{ID: "home_prepare", Description: "Suggest owner-clicked preparation for one exact current owner-selected role."},
-			{ID: "home_review_pack", Description: "Review one exact current saved application pack."},
 		}, Sources: profileSources,
 		RemainingAllowance: []jev.DecisionAllowance{{Operation: store.RoundJevRequest, Remaining: round.Limits.Requests - round.Used.Requests},
 			{Operation: store.RoundSaveSourceOpportunity, Remaining: round.Limits.Items - round.Used.Items},
@@ -191,17 +186,9 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 		if selected > 8 {
 			return jev.DecisionInput{}, nil, refs, nil, errDecisionContextTooLarge
 		}
-		packs, err := e.Store.ListApplicationPacks(ctx, opportunity.ID)
-		if err != nil {
-			return jev.DecisionInput{}, nil, refs, nil, err
-		}
-		currentPack := len(packs) > 0 && packs[0].OpportunityRevision == opportunity.Revision && packs[0].ProfileRevision == profile.Version
 		roleID := "opportunity:" + opportunity.ID
-		roleSummary := fmt.Sprintf("owner-selected sourced role id=%s revision=%d; owner decision revision=%d; source present=%t; current pack=%t", opportunity.ID, opportunity.Revision, decision.Revision, opportunity.SourceURL != "" && opportunity.OriginalText != "", currentPack)
+		roleSummary := fmt.Sprintf("owner-selected sourced role id=%s revision=%d; owner decision revision=%d; source present=%t", opportunity.ID, opportunity.Revision, decision.Revision, opportunity.SourceURL != "" && opportunity.OriginalText != "")
 		packID, packHash := "", ""
-		if currentPack {
-			packID, packHash = packs[0].ID, packs[0].ContentSHA256
-		}
 		assessed := recommendationAssessments{}
 		screen, screenPresent, screenErr := e.currentRecommendationAssessment(ctx, opportunity, profile.Version, "screening")
 		organisation, organisationPresent, organisationErr := e.currentRecommendationAssessment(ctx, opportunity, profile.Version, "organisation")
@@ -218,23 +205,7 @@ func (e *Engine) buildOutcomeRecommendationInput(ctx context.Context, round stor
 		input.Sources = append(input.Sources, jev.DecisionSource{ID: roleID, SourceRevision: revision, SourceKind: "current_opportunity_state", Excerpt: roleSummary})
 		ref := recommendationSourceRef{ID: roleID, Kind: "current_opportunity_state", Revision: revision, OpportunityRevision: opportunity.Revision, OwnerDecisionRevision: decision.Revision,
 			ScreeningAssessmentID: assessed.ScreeningAssessmentID, OrganisationAssessmentID: assessed.OrganisationAssessmentID}
-		if currentPack {
-			ref.PackID, ref.PackVersion, ref.PackContentSHA256 = packs[0].ID, packs[0].Version, packs[0].ContentSHA256
-		}
 		refs = append(refs, ref)
-		roleRefs := append(append([]string{}, baseRefs...), roleID)
-		if currentPack {
-			id := "review-pack:" + packID
-			add(id, "home_review_pack", "Review the current saved application pack for an owner-selected role.", "Open immutable pack only; no send authority.", roleRefs,
-				recommendationChoice{Action: "review_pack", Target: recommendationTarget{Kind: "application_pack", ID: packID, Revision: packs[0].Version, ContentSHA256: packHash,
-					OpportunityID: opportunity.ID, OpportunityRevision: opportunity.Revision, OwnerDecisionRevision: decision.Revision}, Reason: "A current saved pack is ready for owner review."})
-		} else if opportunity.SourceURL != "" && opportunity.OriginalText != "" && e.checkPrepare(ctx) == nil {
-			id := "prepare:" + opportunity.ID
-			add(id, "home_prepare", "Prepare a reviewable pack for this current owner-selected sourced role.", "An owner click starts a new bounded prepare round; no send authority.", roleRefs,
-				recommendationChoice{Action: "prepare", Target: recommendationTarget{Kind: "opportunity", ID: opportunity.ID, Revision: opportunity.Revision, OwnerDecisionRevision: decision.Revision}, Reason: "A current owner-selected sourced role has no matching application pack."})
-		} else {
-			unavailable = append(unavailable, "prepare_inputs_unavailable:"+strconv.Itoa(selected))
-		}
 	}
 	if len(input.Sources) > 12 || len(input.Candidates) > 16 {
 		return jev.DecisionInput{}, nil, refs, unavailable, errDecisionContextTooLarge
@@ -248,26 +219,12 @@ func savedOutcomeRecommendationFacts(ctx context.Context, db *store.Store, round
 	facts := outcomeRecommendationFacts{Outcome: round.Outcome}
 	switch round.Outcome {
 	case "process_input":
-		var pack packReport
-		if json.Unmarshal(round.Report, &pack) != nil {
-			return facts, store.ErrInvalid
-		}
-		if pack.PackID != "" {
-			facts.Code, facts.ResultID, facts.ResultRevision = pack.Code, pack.PackID, pack.Version
-			return facts, nil
-		}
 		var input inputReport
 		if json.Unmarshal(round.Report, &input) != nil {
 			return facts, store.ErrInvalid
 		}
 		facts.Code, facts.ResultID = input.Code, round.ID
 		facts.AppliedChanges, facts.UnresolvedCount = len(input.AppliedChanges), len(input.Unresolved)
-	case "prepare":
-		var pack packReport
-		if json.Unmarshal(round.Report, &pack) != nil {
-			return facts, store.ErrInvalid
-		}
-		facts.Code, facts.ResultID, facts.ResultRevision = pack.Code, pack.PackID, pack.Version
 	default:
 		return facts, store.ErrInvalid
 	}

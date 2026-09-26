@@ -87,15 +87,18 @@ func TestRuntimeDiscoversOnlyRoundTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Tools) != 5 {
+	if len(result.Tools) != 4 {
 		t.Fatalf("unexpected tool count: %d", len(result.Tools))
 	}
 	names := map[string]bool{}
 	for _, tool := range result.Tools {
 		names[tool.Name] = true
 	}
-	if !names["round_context"] || !names["round_mutation"] || !names["round_evidence_correction"] || !names["source_links"] || !names["application_pack_prepare"] {
+	if !names["round_context"] || !names["round_mutation"] || !names["round_evidence_correction"] || !names["source_links"] {
 		t.Fatal("required round tools not discoverable")
+	}
+	if names["application_pack_prepare"] {
+		t.Fatal("removed pack tool is still exposed")
 	}
 	for _, removed := range []string{"source_discovery", "discovery_candidate_stage", "discovery_official_links", "discovery_board_register"} {
 		if names[removed] {

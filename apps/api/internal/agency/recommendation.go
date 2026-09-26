@@ -107,22 +107,10 @@ func (e *Engine) checkRecommendationTarget(ctx context.Context, round store.Roun
 			return store.ErrConflict
 		}
 		return nil
-	case "prepare", "review_pack":
+	case "prepare":
 		opportunityID := target.ID
-		if choice.Action == "review_pack" {
-			pack, packErr := e.Store.ApplicationPack(ctx, target.ID)
-			if packErr != nil || pack.Version != target.Revision || pack.ContentSHA256 != target.ContentSHA256 || pack.ProfileRevision != profile.Version || pack.OpportunityRevision != target.OpportunityRevision {
-				return store.ErrConflict
-			}
-			opportunityID = pack.OpportunityID
-		}
 		opportunity, opportunityErr := e.Store.Opportunity(ctx, opportunityID)
-		if opportunityErr != nil || opportunity.ArchivedAt != "" || opportunity.Revision != func() int64 {
-			if choice.Action == "prepare" {
-				return target.Revision
-			}
-			return target.OpportunityRevision
-		}() {
+		if opportunityErr != nil || opportunity.ArchivedAt != "" || opportunity.Revision != target.Revision {
 			return store.ErrConflict
 		}
 		decision, decisionErr := e.Store.OwnerOpportunityDecision(ctx, opportunityID)

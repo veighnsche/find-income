@@ -76,15 +76,6 @@ func (h *Handler) processInputScope(ctx context.Context, kind, id string, profil
 	case "relationship":
 		input.Scope.Resources = []string{"relationship:" + id}
 		input.Scope.Operations = append(common, store.RoundRelationshipCorrect)
-	case "application_pack":
-		pack, err := h.database.ApplicationPack(ctx, id)
-		if err != nil {
-			return store.StartRoundInput{}, err
-		}
-		input.Intent = "Correct the one owner selected immutable application pack version."
-		input.Scope.Resources = []string{"opportunity:" + pack.OpportunityID}
-		input.Scope.Operations = append(common, store.RoundPrepareApplicationPack)
-		input.Limits = store.RoundAllowance{Requests: 7, Items: 1, Tools: 3, Turns: 1}
 	default:
 		return store.StartRoundInput{}, store.ErrInvalid
 	}

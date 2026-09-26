@@ -87,14 +87,11 @@ func runWithContext(ctx context.Context, args []string) error {
 		return err
 	}
 	var decisions agency.Decisions
-	var packSources agency.PackSourceLoader
 	var prepService *materialprep.Service
 	if jevConfig.Enabled {
 		decisions = jevservice.Service{Store: database, Client: jevClient}
 		options.AnswerMatcher = jevservice.Service{Store: database, Client: jevClient}
-		if root, typst := os.Getenv("JOBSEEK_APPROVED_CAREER_ROOT"), os.Getenv("JOBSEEK_TYPST_PATH"); root != "" && typst != "" {
-			packSources = &agency.LocalPackSources{ProjectRoot: root}
-			runtime.SetApplicationPackConfig(codexservice.ApplicationPackRuntimeConfig{ProjectRoot: root, TypstPath: typst, PrivateTempDir: filepath.Join(dataDir, "application-pack-tmp"), RenderTimeout: 20 * time.Second, Relevance: jevservice.Service{Store: database, Client: jevClient}})
+		if root := os.Getenv("JOBSEEK_APPROVED_CAREER_ROOT"); root != "" {
 			// Grounded preparation: required+unset drafting through one
 			// bounded private Standard turn per operation. Without a
 			// proved Standard lane the drafter stays nil and drafting
@@ -124,18 +121,13 @@ func runWithContext(ctx context.Context, args []string) error {
 				Career: func() ([]applicationpacks.Source, []byte, error) {
 					return applicationpacks.LoadApprovedCareerSources(root, []string{"cv-vince-liem.typ", "cv-vince-liem.md", "github-evidence-review.md"})
 				},
-				Draft:     drafter,
 				Artifacts: drafter,
-				Relevance: materialprep.JevRelevance{Evaluator: jevClient},
-				Render: applicationpacks.Renderer{TypstPath: typst,
-					PrivateTempDir: filepath.Join(dataDir, "material-prep-tmp"), Timeout: 10 * time.Second},
 			}
 			options.Materials = materials
 			prepService = materials
 		}
 	}
-	worker := &agency.Engine{Store: database, Runtime: runtime, Decisions: decisions, PackSources: packSources, Context: ctx}
-	options.Codex = runtime
+	worker := &agency.Engine{Store: database, Runtime: runtime, Decisions: decisions, Context: ctx}
 	options.Rounds = &rounds.Service{Store: database, Readiness: worker, Canceller: runtime, Reconciler: runtime, Worker: worker}
 	if stack := wireResearch(database, runtime, &options, dataDir, jevClient, jevConfig.Enabled); stack != nil && prepService != nil {
 		// Discovery-saved roles carry no opportunity text; the capture
@@ -279,7 +271,6 @@ func wireMuseCheck(database *store.Store, options *httpapi.Options, stack *resea
 	if err != nil {
 		log.Printf("muse check unavailable: %v", err)
 	} else {
-		transport.Servers = checker.ServerForCheck
 		options.MuseCheck = checker
 	}
 }

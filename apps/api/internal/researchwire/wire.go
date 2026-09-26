@@ -257,8 +257,5 @@ func wireMuseDiscovery(db *store.Store, owner store.Actor, cfg Config, exec *res
 	if err != nil {
 		return nil, err
 	}
-	if live, ok := transport.(*musewire.LiveTransport); ok {
-		live.Servers = service.ServerForRun
-	}
 	return service, nil
 }

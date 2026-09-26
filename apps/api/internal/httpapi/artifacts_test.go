@@ -108,6 +108,18 @@ func TestPrepareActivityEndpoint(t *testing.T) {
 	}
 }
 
+type stubPreparer struct {
+	draftSet     store.ArtifactReadinessSet
+	draftCreated bool
+	draftErr     error
+	draftCalls   int
+}
+
+func (s *stubPreparer) DraftOpportunityArtifacts(context.Context, store.Actor, string, string, string, string, int64) (store.ArtifactReadinessSet, bool, error) {
+	s.draftCalls++
+	return s.draftSet, s.draftCreated, s.draftErr
+}
+
 func TestArtifactDraftEndpoint(t *testing.T) {
 	h := newHarness(t)
 	cookie, csrf := h.login()

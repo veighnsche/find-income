@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,7 +12,6 @@ import (
 	"time"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
-	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
 	"github.com/veighnsche/find-income-dashboard/api/internal/musewire"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
@@ -25,7 +23,6 @@ type Options struct {
 	SecureCookies         bool
 	IngestionAvailable    bool
 	OrganisationAvailable bool
-	Codex                 CodexControl
 	Rounds                *rounds.Service
 	Research              ResearchService
 	ResearchControl       ResearchRunControl
@@ -35,13 +32,6 @@ type Options struct {
 	MuseCheck             musewire.CheckPerformer
 }
 
-type CodexControl interface {
-	Status(context.Context) codexservice.Status
-	Connect(context.Context) (codexservice.Connection, error)
-	CancelConnect(context.Context) error
-	MCPHandler() http.Handler
-}
-
 type Handler struct {
 	auth                  *auth.Service
 	database              *store.Store
@@ -49,7 +39,6 @@ type Handler struct {
 	secureCookies         bool
 	ingestionAvailable    bool
 	organisationAvailable bool
-	codex                 CodexControl
 	rounds                *rounds.Service
 	research              ResearchService
 	researchControl       ResearchRunControl
@@ -63,7 +52,6 @@ type Handler struct {
 func NewHandler(database *store.Store, service *auth.Service, options Options) http.Handler {
 	h := &Handler{auth: service, database: database, origins: map[string]bool{}, secureCookies: options.SecureCookies,
 		ingestionAvailable: options.IngestionAvailable, organisationAvailable: options.OrganisationAvailable,
-		codex:           options.Codex,
 		rounds:          options.Rounds,
 		research:        options.Research,
 		researchControl: options.ResearchControl,
@@ -85,7 +73,6 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	// lifecycle after manual handoff is out of scope.
 	mux.HandleFunc("GET /api/v1/rounds/active", h.activeRound)
 	mux.HandleFunc("GET /api/v1/rounds/latest-completed", h.latestCompletedRound)
-	mux.HandleFunc("POST /api/v1/rounds/prepare", h.prepareRound)
 	// No offer-comparison routes: the downstream lifecycle after manual
 	// handoff is out of scope.
 	mux.HandleFunc("POST /api/v1/rounds/process-input", h.processInput)
@@ -110,11 +97,8 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/muse/checkpoints", h.museCheckpoints)
 	mux.HandleFunc("GET /api/v1/muse/report", h.museReport)
 	mux.HandleFunc("GET /api/v1/muse/commissions", h.museCommissions)
-	mux.HandleFunc("GET /api/v1/codex/status", h.codexStatus)
-	mux.HandleFunc("POST /api/v1/codex/connect", h.codexConnect)
-	mux.HandleFunc("POST /api/v1/codex/connect/cancel", h.codexCancelConnect)
-	mux.HandleFunc("/api/v1/codex/mcp", h.codexMCP)
-	mux.HandleFunc("/api/v1/codex/mcp/", h.codexMCP)
+	// No Codex session endpoints: Contributor/Standard CLIs are invoked
+	// directly without connect/cancel/MCP ceremony.
 	mux.HandleFunc("GET /api/v1/organisation/categories", h.organisationCategories)
 	mux.HandleFunc("PUT /api/v1/organisation/categories", h.unsupportedRecruitmentMutation)
 	mux.HandleFunc("GET /api/v1/organisation/summaries", h.organisationSummaries)
@@ -138,13 +122,9 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/decision", h.setOwnerOpportunityDecision)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/organisation", h.opportunityOrganisation)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/screening", h.opportunityScreening)
-	mux.HandleFunc("GET /api/v1/opportunities/{id}/application-packs", h.listApplicationPacks)
 	mux.HandleFunc("GET /api/v1/relationships/counterparties", h.listRelationshipCounterparties)
 	mux.HandleFunc("GET /api/v1/relationships/events", h.listRelationshipEvents)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/routes", h.listOpportunityRoutes)
-	mux.HandleFunc("GET /api/v1/application-packs/{id}", h.getApplicationPack)
-	mux.HandleFunc("GET /api/v1/application-packs/{id}/pdf", h.applicationPackPDF)
-	mux.HandleFunc("GET /api/v1/application-packs/{id}/source.zip", h.applicationPackSourceArchive)
 	// No delivery routes: this app never emails, submits, attaches, or
 	// autofills on an employer site. Handoff is manual and owner-driven.
 	mux.HandleFunc("PATCH /api/v1/opportunities/{id}", h.unsupportedRecruitmentMutation)
@@ -189,11 +169,6 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/answers/current", h.getCurrentQuestionAnswers)
 	mux.HandleFunc("PUT /api/v1/opportunities/{id}/questions/{questionId}/answer", h.saveQuestionAnswer)
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/answers/commit", h.commitRoleAnswers)
-	mux.HandleFunc("POST /api/v1/opportunities/{id}/materials/prepare", h.prepareOpportunityMaterials)
-	mux.HandleFunc("GET /api/v1/opportunities/{id}/materials/current", h.getCurrentOpportunityMaterials)
-	mux.HandleFunc("PUT /api/v1/opportunities/{id}/materials/current", h.editOpportunityMaterials)
-	mux.HandleFunc("POST /api/v1/opportunities/{id}/materials/rewrite", h.rewriteOpportunityMaterials)
-	mux.HandleFunc("GET /api/v1/opportunities/{id}/materials/versions/{version}", h.getOpportunityMaterialVersion)
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/artifacts/draft", h.draftOpportunityArtifacts)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/artifacts/activity", h.listPrepareActivity)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/artifacts", h.listArtifactReadiness)

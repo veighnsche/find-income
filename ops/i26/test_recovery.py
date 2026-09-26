@@ -79,11 +79,6 @@ class RecoveryTest(unittest.TestCase):
             db.execute("INSERT INTO preferences_current VALUES (1,1)")
             db.execute("INSERT INTO companies(id,name,created_at,updated_at) VALUES ('company-1','Synthetic employer',?,?)", (NOW, NOW))
             db.execute("INSERT INTO opportunities(id,company_id,title,kind,stage,created_at,updated_at) VALUES ('role-1','company-1','Synthetic role','employment','discovered',?,?)", (NOW, NOW))
-            manifest = json.dumps({"role": {"opportunityId": "role-1", "opportunityRevision": 1, "profileRevision": 1}, "sources": [{"id": name, "sha256": self.digests[name], "body": body.decode(), "approved": True} for name, body in self.approved.items()]}, separators=(",", ":")).encode()
-            source = b"#let synthetic = true\n"
-            pdf = b"%PDF-1.7\n" + b"synthetic fixture\n" * 10
-            self.pdf = pdf
-            db.execute("INSERT INTO application_packs VALUES (?,?,?,?,?,?,?,?,?,?)", ("pack-1", "role-1", 1, 1, 1, recovery.pack_hash(manifest, source, pdf), manifest, source, pdf, NOW))
             db.execute("INSERT INTO administrator VALUES (1,?,1,?,?)", (CANARY.decode(), NOW, NOW))
             db.execute("INSERT INTO auth_sessions(token_hash,csrf_hash,created_at,expires_at) VALUES (?,?,?,?)", (CANARY.decode() + "-session", CANARY.decode() + "-csrf", NOW, NOW))
             db.execute("INSERT INTO agent_credentials(id,name,token_hash,scopes_json,created_at,expires_at) VALUES ('agent-1','synthetic',?,'[]',?,?)", (CANARY.decode() + "-agent", NOW, NOW))
@@ -104,7 +99,7 @@ class RecoveryTest(unittest.TestCase):
             db.execute("INSERT INTO delivery_reviews(id,owner_id,request_key,pack_ids_json,material_sha256,approved_sha256,approved_at,created_at) VALUES ('review-1','owner','delivery-review-key','[\"pack-1\"]',?,?,?,?)", ("a" * 64, "a" * 64, NOW, NOW))
             self.mime = b"From: sender@example.invalid\r\nTo: apply@example.invalid\r\nSubject: Synthetic application\r\n\r\nSynthetic body\r\n"
             db.execute("""INSERT INTO delivery_items(id,review_id,pack_id,opportunity_id,opportunity_revision,source_sha256,profile_revision,pack_content_sha256,route_id,route_revision,route_sha256,title,company_name,route_excerpt,recipient,sender,subject,body,attachment_sha256,mime_sha256,mime_bytes,message_id,state,round_id,attempt_id,created_at,updated_at)
-                          VALUES ('delivery-1','review-1','pack-1','role-1',1,?,1,?,'route-1',1,?,'Synthetic role','Synthetic employer','Apply by email to apply@example.invalid','apply@example.invalid','sender@example.invalid','Synthetic application','Synthetic body',?,?,?,'<synthetic@example.invalid>','sending','round-1','attempt-1',?,?)""", ("b" * 64, recovery.pack_hash(manifest, source, pdf), "d" * 64, recovery.digest(pdf), recovery.digest(self.mime), self.mime, NOW, NOW))
+                          VALUES ('delivery-1','review-1','pack-1','role-1',1,?,1,?,'route-1',1,?,'Synthetic role','Synthetic employer','Apply by email to apply@example.invalid','apply@example.invalid','sender@example.invalid','Synthetic application','Synthetic body',?,?,?,'<synthetic@example.invalid>','sending','round-1','attempt-1',?,?)""", ("b" * 64, "c" * 64, "d" * 64, "e" * 64, recovery.digest(self.mime), self.mime, NOW, NOW))
             self.interview_context = "Complete synthetic invitation and role context"
             self.interview_brief = json.dumps({"input": {"sources": [{"name": "invitation", "body": self.interview_context}]}, "summary": "Synthetic prepared brief"}, separators=(",", ":"))
             db.execute("INSERT INTO interviews(id,opportunity_id,opportunity_revision,profile_version,actor_id,request_key,request_sha256,context_text,context_sha256,round_id,brief_json,brief_sha256,focus_json,created_at,updated_at) VALUES ('interview-1','role-1',1,1,'owner','interview-key',?,?,?,?,? ,?,?,?,?)", ("1" * 64, self.interview_context, recovery.digest(self.interview_context.encode()), "round-interview", self.interview_brief, "2" * 64, '{"selection":{"disposition":"selected","selected_id":"focus-1"}}', NOW, NOW))
@@ -172,10 +167,10 @@ class RecoveryTest(unittest.TestCase):
             db.execute("UPDATE opportunities SET notes='' WHERE id='role-1'")
         db_path.chmod(0o600)
 
-    def test_round_trip_sanitizes_credentials_and_preserves_pack_history(self):
+    def test_round_trip_sanitizes_credentials_and_preserves_history(self):
         archive = self.backups / "archive"
         pin = recovery.create(self.data, self.assets, self.artifacts, archive, self.digests)
-        self.assertEqual(recovery.verify_archive(archive, pin, self.digests)["packCount"], 1)
+        self.assertEqual(recovery.verify_archive(archive, pin, self.digests)["captureCount"], 1)
         self.assertNotIn(CANARY, (archive / recovery.DB_NAME).read_bytes())
         self.assertEqual({p.name for p in archive.iterdir()}, {"jobseek.sqlite", "assets", "manifest.json", "captures", "executor-identity.json"})
         restored_data = private_dir(self.root, "restored-data")
@@ -184,7 +179,6 @@ class RecoveryTest(unittest.TestCase):
         recovery.restore(archive, pin, restored_data, restored_assets, restored_artifacts, self.digests)
         self.assertEqual((restored_assets / "cv-vince-liem.typ").read_bytes(), self.approved["cv-vince-liem.typ"])
         with closing(sqlite3.connect(restored_data / recovery.DB_NAME)) as db:
-            self.assertEqual(db.execute("SELECT pdf FROM application_packs WHERE id='pack-1'").fetchone()[0], self.pdf)
             self.assertEqual(db.execute("SELECT state,reconciliation_required FROM rounds WHERE id='round-1'").fetchone(), ("failed", 1))
             self.assertEqual(db.execute("SELECT state FROM round_attempts WHERE id='attempt-1'").fetchone()[0], "uncertain")
             self.assertEqual(db.execute("SELECT thread_id,turn_id FROM round_remote_dispatches").fetchone(), ("thread-1", "turn-1"))

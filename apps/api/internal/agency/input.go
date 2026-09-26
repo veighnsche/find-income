@@ -34,17 +34,12 @@ func (e *Engine) CheckRoundInput(ctx context.Context, owner store.Actor, input s
 	if instructionID == "" {
 		return nil
 	}
-	// A pack correction has a stricter renderer and approved-source readiness
-	// gate. Check it before a paused predecessor can be closed.
 	instruction, err := e.Store.OwnerInstruction(ctx, owner, instructionID)
 	if err != nil {
 		return err
 	}
 	if instruction.RevokedAt != "" {
 		return store.ErrFenced
-	}
-	if instruction.TargetKind == "application_pack" {
-		return e.checkPrepare(ctx)
 	}
 	return nil
 }
@@ -70,18 +65,8 @@ func (e *Engine) launchInput(r store.Round) error {
 	if r.State != store.RoundRunning || r.Outcome != "process_input" {
 		return store.ErrFenced
 	}
-	instructionID, _, ok := inputReference(r.Scope)
-	if !ok {
+	if _, _, ok := inputReference(r.Scope); !ok {
 		return store.ErrInvalid
-	}
-	if instructionID != "" {
-		instruction, err := e.Store.OwnerInstruction(context.Background(), r.Actor, instructionID)
-		if err != nil {
-			return err
-		}
-		if instruction.TargetKind == "application_pack" {
-			return e.LaunchPackCorrection(r, instruction.TargetID, instruction.ID)
-		}
 	}
 	if err := e.CheckRound(context.Background(), r.Outcome); err != nil {
 		return err
@@ -147,7 +132,7 @@ func (e *Engine) inputHistory(ctx context.Context, roundID string) ([]store.Roun
 	for _, event := range history {
 		switch event.Operation {
 		case store.RoundCreateCompany, store.RoundSaveSourceOpportunity, "opportunity.source_create", "opportunity.source_refresh", store.RoundCorrectPreferences, store.RoundCorrectOpportunity,
-			store.RoundCorrectEvidence, store.RoundRelationshipCorrect, store.RoundPrepareApplicationPack:
+			store.RoundCorrectEvidence, store.RoundRelationshipCorrect:
 			changes = append(changes, event)
 		}
 	}

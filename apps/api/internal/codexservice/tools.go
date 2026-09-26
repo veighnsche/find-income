@@ -46,7 +46,6 @@ func (s *Service) newBridge() http.Handler {
 	registerTool(server, "round_mutation", "Create a company or opportunity in a delegated running round with an exact resource, revision and idempotency key.", s.roundMutationTool)
 	registerTool(server, "round_evidence_correction", "Supersede one owner-selected evidence claim with an exact source quote and round authority.", s.roundEvidenceCorrectionTool)
 	registerTool(server, "source_links", "Inspect bounded public career links from a scoped company's saved website.", s.sourceLinksTool)
-	registerTool(server, "application_pack_prepare", "Prepare a private application pack from a current sourced opportunity after recorded relevance review.", s.applicationPackPrepareTool)
 	if s.research != nil {
 		registerResearchTools(server, s)
 	}
@@ -156,9 +155,6 @@ func scopeContains(items []string, value string) bool {
 }
 
 func (s *Service) roundMutationTool(ctx context.Context, args roundMutationArgs) (map[string]any, error) {
-	if args.Operation == store.RoundPrepareApplicationPack || args.ApplicationPack != nil {
-		return nil, store.ErrFenced
-	}
 	authority, err := s.db.VerifyRoundToolCapability(ctx, args.Capability, args.RoundID)
 	if err != nil {
 		return nil, err

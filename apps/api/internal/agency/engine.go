@@ -34,7 +34,6 @@ type Engine struct {
 	Runtime     Runtime
 	Decisions   Decisions
 	InputReader OwnerSourceReader
-	PackSources PackSourceLoader
 	Context     context.Context
 	mu          sync.Mutex
 	active      map[string]*activeWorker
@@ -72,9 +71,6 @@ func (e *Engine) WaitRoundStopped(ctx context.Context, id string) error {
 }
 
 func (e *Engine) CheckRound(ctx context.Context, outcome string) error {
-	if outcome == "prepare" {
-		return e.checkPrepare(ctx)
-	}
 	if e == nil || e.Store == nil || e.Runtime == nil || e.Decisions == nil || outcome != "process_input" {
 		return errors.New("commissioned input processing unavailable")
 	}
@@ -85,9 +81,6 @@ func (e *Engine) CheckRound(ctx context.Context, outcome string) error {
 }
 
 func (e *Engine) LaunchRound(_ context.Context, r store.Round) error {
-	if r.Outcome == "prepare" {
-		return e.launchPrepare(r)
-	}
 	if r.Outcome == "process_input" {
 		return e.launchInput(r)
 	}

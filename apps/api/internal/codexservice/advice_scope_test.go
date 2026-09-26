@@ -19,7 +19,7 @@ func TestCommissionedAdviceScopeReachesActualRoundTools(t *testing.T) {
 	}
 	resource := "opportunity:fixture"
 	round, _, err := db.StartRound(ctx, owner, store.StartRoundInput{RequestKey: "tool-scope-prepare", Intent: "Use the commissioned tool scope", Outcome: "prepare", ProfileVersion: profile.Version,
-		Scope:  store.RoundScope{InputRefs: []string{resource}, Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool, store.RoundPrepareApplicationPack, store.RoundJevRequest}, Delegates: []string{agent.ID}},
+		Scope:  store.RoundScope{InputRefs: []string{resource}, Resources: []string{resource, "campaign:active"}, Operations: []string{store.RoundCodexTurn, store.RoundContextTool, store.RoundJevRequest}, Delegates: []string{agent.ID}},
 		Limits: store.RoundAllowance{Requests: 5, Items: 1, Tools: 5, Turns: 1}, Deadline: time.Now().Add(time.Minute)})
 	if err != nil {
 		t.Fatal(err)

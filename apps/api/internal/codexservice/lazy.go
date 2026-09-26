@@ -18,20 +18,11 @@ type Lazy struct {
 	service         *Service
 	err             error
 	closed          bool
-	packConfig  *ApplicationPackRuntimeConfig
 	researchTC  *ResearchToolchain
 	researchSup *rounds.Supervisor
 }
 
 func NewLazy(ctx context.Context, db *store.Store) *Lazy { return &Lazy{ctx: ctx, db: db} }
-
-func (l *Lazy) SetApplicationPackConfig(cfg ApplicationPackRuntimeConfig) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if !l.closed && l.service == nil {
-		l.packConfig = &cfg
-	}
-}
 
 // SetResearchWiring stages the T23 research toolchain plus the supervisor
 // that needs the service-bound turn deps. Like the config setters it is
@@ -82,9 +73,6 @@ func (l *Lazy) get() (*Service, error) {
 	}
 	if l.service == nil && l.err == nil {
 		l.service, l.err = NewFromEnvironment(l.ctx, l.db)
-		if l.err == nil && l.packConfig != nil {
-			_ = l.service.ConfigureApplicationPacks(*l.packConfig)
-		}
 		if l.err == nil && (l.researchTC != nil || l.researchSup != nil) {
 			tc, sup := l.researchTC, l.researchSup
 			l.researchTC, l.researchSup = nil, nil
