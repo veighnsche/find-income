@@ -583,6 +583,12 @@ export function useOwnerContext(): OwnerContextValue {
         ready: false,
         reason: `The search brief is behind profile version ${context.profileVersion}. Reload the saved context before finding jobs.`,
       }
+    if (context.requirements.length === 0)
+      return {
+        ready: false,
+        reason:
+          "No wants or don't-wants are saved yet. Save at least one explicit choice above before finding jobs.",
+      }
     switch (correction.kind) {
       case "idle":
       case "saved":

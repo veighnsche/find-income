@@ -7,6 +7,7 @@ import type {
   RoleWorkflowState,
   Round,
   RuntimeStatus,
+  SavedAnswerList,
   Session,
 } from "@/api/client"
 
@@ -171,6 +172,8 @@ export interface FetchStubOptions {
   workflowsByOpportunity?: Record<string, RoleWorkflowState | null>
   runtime?: RuntimeStatus
   activeRound?: Round | null
+  savedAnswers?: SavedAnswerList
+  preferencesConflict?: boolean
 }
 
 export interface FetchCall {
@@ -189,6 +192,7 @@ export function stubFetch(options: FetchStubOptions = {}): {
   calls: FetchCall[]
 } {
   const calls: FetchCall[] = []
+  let currentPreferences = options.preferences ?? preferencesFixture
   const opportunities = options.opportunities ?? [jobOneFixture, jobTwoFixture]
   const byId = new Map<string, OpportunityView>(
     opportunities.map((view) => [view.opportunity.id, view])
@@ -223,8 +227,29 @@ export function stubFetch(options: FetchStubOptions = {}): {
           : jsonResponse(200, options.session ?? sessionFixture)
       if (path === "/api/v1/auth/login" && method === "POST")
         return jsonResponse(200, sessionFixture)
+      if (path === "/api/v1/preferences" && method === "PUT") {
+        if (options.preferencesConflict === true)
+          return jsonResponse(409, {
+            error: { code: "conflict", message: "Profile version moved." },
+          })
+        const body = JSON.parse((init?.body as string | null) ?? "{}") as Record<
+          string,
+          unknown
+        >
+        currentPreferences = {
+          ...currentPreferences,
+          ...body,
+          version: currentPreferences.version + 1,
+        }
+        return jsonResponse(200, {
+          preferences: currentPreferences,
+          changeId: "change-stub",
+        })
+      }
       if (path === "/api/v1/preferences")
-        return jsonResponse(200, options.preferences ?? preferencesFixture)
+        return jsonResponse(200, currentPreferences)
+      if (path === "/api/v1/answers")
+        return jsonResponse(200, options.savedAnswers ?? { items: [] })
       if (path === "/api/v1/opportunities")
         return jsonResponse(200, { items: opportunities })
       if (path === "/api/v1/runtime-status")

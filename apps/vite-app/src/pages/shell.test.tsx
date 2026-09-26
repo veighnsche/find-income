@@ -93,10 +93,10 @@ describe("read-only shell", () => {
     expect(
       await screen.findByRole("heading", { name: "Let's find your next role" })
     ).toBeDefined()
-    expect(await screen.findByText("Profile version 3")).toBeDefined()
+    expect(await screen.findByText(/Saved profile version 3/)).toBeDefined()
     expect(await screen.findByText("Backend engineer")).toBeDefined()
-    expect(await screen.findByText("role · require")).toBeDefined()
-    expect(await screen.findByText("EUR 4500.00")).toBeDefined()
+    expect(await screen.findByText("Role · Must have")).toBeDefined()
+    expect(await screen.findByText(/4,500\.00 EUR\/mo/)).toBeDefined()
   })
 
   it("renders grouped Jobs with deep links", async () => {
@@ -364,9 +364,9 @@ describe("owner corrections (RW-B1)", () => {
     expect(
       await screen.findByRole("heading", { name: "Let's find your next role" })
     ).toBeDefined()
-    expect(await screen.findByText("Profile version 3")).toBeDefined()
+    expect(await screen.findByText(/Saved profile version 3/)).toBeDefined()
     expect(
-      await screen.findByRole("heading", { name: "Your goals" })
+      await screen.findByRole("heading", { name: "What you want next" })
     ).toBeDefined()
     expect(
       await screen.findByRole("heading", { name: "Change my search" })
@@ -375,7 +375,7 @@ describe("owner corrections (RW-B1)", () => {
       await screen.findByLabelText("Describe the correction in your own words")
     ).toBeDefined()
     expect(
-      screen.getByRole("button", { name: "Correct preferred location" })
+      screen.getByRole("button", { name: "Edit goals" })
     ).toBeDefined()
     expect(
       screen.getByRole("button", {
@@ -435,7 +435,7 @@ describe("owner corrections (RW-B1)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Check again" }))
 
     expect(await screen.findByText("Saved as profile version 4.")).toBeDefined()
-    expect(await screen.findByText("Profile version 4")).toBeDefined()
+    expect(await screen.findByText(/Saved profile version 4/)).toBeDefined()
     await waitFor(() =>
       expect(
         (
@@ -504,6 +504,6 @@ describe("owner corrections (RW-B1)", () => {
       )
     ).toBeDefined()
     expect(screen.queryByText(/Saved as profile version/)).toBeNull()
-    expect(await screen.findByText("Profile version 5")).toBeDefined()
+    expect(await screen.findByText(/Saved profile version 5/)).toBeDefined()
   })
 })

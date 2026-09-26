@@ -410,7 +410,7 @@ export function DiscoverySection({
           Find jobs
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Codex collects listings from sources it chooses, then Jev classifies
+          Muse Contributor collects listings from sources it chooses, then Jev classifies
           them. Reading this section starts nothing; a run begins only from an
           explicit action below.
         </p>
@@ -459,7 +459,7 @@ export function DiscoverySection({
               {`Find jobs is blocked: Muse Contributor is ${muse.contributor.state} (${muse.contributor.code}) — ${muse.contributor.detail}.`}
             </p>
           )}
-          <div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Button
               type="button"
               disabled={busy || !readiness.ready || !contributorReady}
@@ -467,6 +467,12 @@ export function DiscoverySection({
             >
               {busy ? "Starting…" : "Find jobs"}
             </Button>
+            <a
+              href="#/search"
+              className="inline-flex h-8 items-center justify-center gap-1 rounded-4xl border border-border bg-input/30 px-3 text-sm font-medium whitespace-nowrap transition-all outline-none select-none hover:bg-input/50 hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              Change goals
+            </a>
           </div>
           <details className="min-w-0">
             <summary className="cursor-pointer text-sm text-muted-foreground">
