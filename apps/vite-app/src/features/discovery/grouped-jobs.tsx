@@ -487,7 +487,7 @@ function GroupedJobsBody({ museScenario }: { museScenario: MuseScenario }) {
   const loadAll = useCallback(
     async (signal: AbortSignal) => {
       setLoad({ kind: "loading" })
-      let runId: string | null = null
+      let runId: string | null
       try {
         // Server-tracked run first (D3): newest research run when the
         // server exposes history; null (per-role latest) otherwise.
@@ -766,8 +766,9 @@ function GroupedJobsBody({ museScenario }: { museScenario: MuseScenario }) {
         next = switchedBuckets.length - 1
         break
       default:
-        return
+        break
     }
+    if (next === null) return
     event.preventDefault()
     const target = switchedBuckets[next]
     if (target === undefined) return

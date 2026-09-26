@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useEffect } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import { SessionProvider } from "@/api/session"
@@ -91,7 +92,10 @@ describe("scoped invalidation", () => {
     stubFetch()
     let invalidate: ((...scopes: ["check"]) => void) | null = null
     function Capture() {
-      invalidate = useInvalidate()
+      const value = useInvalidate()
+      useEffect(() => {
+        invalidate = value
+      }, [value])
       return null
     }
     render(

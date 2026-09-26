@@ -71,17 +71,7 @@ paths:
         - in: query
           name: outcome
           required: true
-          schema:
-            {
-              type: string,
-              enum:
-                [
-                  all,
-                  process_input,
-                  prepare,
-                  research_run,
-                ],
-            }
+          schema: { type: string, enum: [all, process_input, prepare, research_run] }
       responses:
         '200':
           description: Latest matching saved result with transient next-action currentness, or null when none exists
@@ -1307,7 +1297,9 @@ paths:
         '200':
           description: Artifact readiness entry
           content:
-            { application/json: { schema: { $ref: '#/components/schemas/ArtifactReadinessEntry' } } }
+            {
+              application/json: { schema: { $ref: '#/components/schemas/ArtifactReadinessEntry' } },
+            }
         '400': { $ref: '#/components/responses/ValidationError' }
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -1323,12 +1315,10 @@ paths:
       responses:
         '200':
           description: Edited version saved
-          content:
-            { application/json: { schema: { $ref: '#/components/schemas/ArtifactView' } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ArtifactView' } } }
         '201':
           description: First version saved
-          content:
-            { application/json: { schema: { $ref: '#/components/schemas/ArtifactView' } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ArtifactView' } } }
         '400': { $ref: '#/components/responses/ValidationError' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -1421,8 +1411,7 @@ paths:
       responses:
         '200':
           description: Handoff basis
-          content:
-            { application/json: { schema: { $ref: '#/components/schemas/HandoffView' } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/HandoffView' } } }
         '404': { $ref: '#/components/responses/NotFound' }
     post:
       operationId: saveOpportunityHandoff
@@ -1431,8 +1420,7 @@ paths:
       security: [{ cookieAuth: [] }]
       requestBody:
         required: true
-        content:
-          { application/json: { schema: { $ref: '#/components/schemas/HandoffSave' } } }
+        content: { application/json: { schema: { $ref: '#/components/schemas/HandoffSave' } } }
       responses:
         '200':
           description: Exact replay
@@ -4277,7 +4265,8 @@ components:
         id: { type: string }
     Clarification:
       type: object
-      required: [id, opportunityId, checkId, origin, requirement, prompt, affectedWork, status, createdAt]
+      required:
+        [id, opportunityId, checkId, origin, requirement, prompt, affectedWork, status, createdAt]
       properties:
         id: { type: string }
         opportunityId: { type: string }
@@ -4324,7 +4313,11 @@ components:
       properties:
         expectedAnswerVersion: { type: integer, format: int64, minimum: 0 }
         text: { type: string, maxLength: 20000 }
-        draftRequested: { type: boolean, description: C4 explicit owner choice to leave a required answer blank for Standard drafting from verified facts. }
+        draftRequested:
+          {
+            type: boolean,
+            description: C4 explicit owner choice to leave a required answer blank for Standard drafting from verified facts.,
+          }
     MaterialAnswerRef:
       type: object
       required: [questionId, questionTextSha256, answerVersion, textSha256]

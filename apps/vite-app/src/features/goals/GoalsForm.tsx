@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import {
   RequestError,
   updatePreferences,
@@ -118,7 +118,6 @@ export function GoalsForm({
   // Dirty tracking compares the live draft against the last saved shape.
   // After an accepted save the baseline moves to the saved draft, so the
   // form reads clean without a remount; a parent remount resets both.
-  const baselineRef = useRef<string | null>(null)
   const signature = JSON.stringify([
     location,
     timezone,
@@ -129,8 +128,8 @@ export function GoalsForm({
     currency,
     rows.map((row) => [row.id, row.label, row.description, row.kind, row.mode]),
   ])
-  if (baselineRef.current === null) baselineRef.current = signature
-  const dirty = signature !== baselineRef.current
+  const [baseline, setBaseline] = useState(signature)
+  const dirty = signature !== baseline
   useEffect(() => {
     onDirtyChange?.(dirty)
   }, [dirty, onDirtyChange])
@@ -253,7 +252,7 @@ export function GoalsForm({
         },
         csrfToken
       )
-      baselineRef.current = signature
+      setBaseline(signature)
       setStatus({ kind: "saved", version: saved.preferences.version })
       onSaved()
     } catch (cause) {

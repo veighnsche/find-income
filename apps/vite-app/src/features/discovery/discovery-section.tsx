@@ -155,6 +155,7 @@ export function DiscoverySection({
 
   // A new tracked run drops the previous run's activity/report/steering.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- identity-keyed cache reset, equivalent to a key remount without splitting the run view
     setShownRun(null)
     setEvents([])
     setNextCursor("")
@@ -176,6 +177,7 @@ export function DiscoverySection({
   const serverRunData = serverRun.status === "ready" ? serverRun.data : null
   useEffect(() => {
     if (serverRunStatus === "ready" && serverRunData !== null)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- adopts the server snapshot into view state once per ready transition
       setShownRun(serverRunData)
   }, [serverRunStatus, serverRunData])
 
@@ -228,6 +230,7 @@ export function DiscoverySection({
   useEffect(() => {
     if (restoredRunId === null) return
     const controller = new AbortController()
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- read-only fetch with abort cleanup; state settles in the async continuation, never commissions
     void refreshActivity(restoredRunId, controller.signal)
     return () => controller.abort()
   }, [restoredRunId, refreshActivity])
@@ -247,6 +250,7 @@ export function DiscoverySection({
   useEffect(() => {
     if (restoredRunId === null) return
     if (!terminal) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clears the terminal report cache when the run leaves terminal state; the fetch below settles async
       setReport(null)
       setReportError(null)
       return
