@@ -233,6 +233,8 @@ func wireResearch(database *store.Store, runtime *codexservice.Lazy, options *ht
 		PythonPath:           os.Getenv("JOBSEEK_RESEARCH_PYTHON_PATH"),
 		SandboxBinary:        os.Getenv("JOBSEEK_RESEARCH_SANDBOX_BINARY"),
 		JevProvider:          jevClient,
+		MuseBin:              os.Getenv("JOBSEEK_MUSE_BIN"),
+		MuseWorkspaces:       filepath.Join(dataDir, "muse-sessions"),
 	})
 	if err != nil {
 		log.Printf("research unavailable: %v", err)
@@ -240,36 +242,18 @@ func wireResearch(database *store.Store, runtime *codexservice.Lazy, options *ht
 	}
 	options.Research = stack.Research
 	options.ResearchControl = stack.Supervisor
+	options.Muse = stack.Muse
 	runtime.SetResearchWiring(stack.Toolchain, stack.Supervisor)
 	go sweepResearchLeases(stack)
 	log.Printf("research wired: artifacts=%s agent=%s", artifactRoot, stack.AgentID)
-	wireMuse(database, options, dataDir, stack)
+	wireMuseCheck(database, options, stack)
 	return stack
 }
 
-// wireMuse composes the discovery slice behind the research stack: session
-// supervision, public tools and Jev classification with durable run records.
-// The session transport stays provider-disabled until the E11-authorized live
-// run, so commissions fail closed while readiness and run reads stay honest.
-func wireMuse(database *store.Store, options *httpapi.Options, dataDir string, stack *researchwire.Stack) {
-	bin := os.Getenv("JOBSEEK_MUSE_BIN")
-	if bin == "" {
-		bin = "muse"
-	}
-	service, err := musewire.NewService(musewire.Deps{
-		Facts: musecode.ProbeLocalFacts(bin), Bounds: musecode.DefaultBounds(),
-		Transport: musecode.UnavailableTransport{}, Cursors: musewire.StoreCursors{DB: database},
-		DB: database, Actor: researchwire.OwnerActor(),
-		Executor: stack.Executor, Captures: stack.Captures, Assessor: stack.Assessor,
-		Workspaces: filepath.Join(dataDir, "muse-sessions"),
-	})
-	if err != nil {
-		log.Printf("muse unavailable: %v", err)
-		return
-	}
-	options.Muse = service
-	// The deterministic check performer stays unauthorized until the E12
-	// live authorization; checks remain pending through the existing path.
+// wireMuseCheck composes the deterministic selected-role check performer.
+// It stays unauthorized until the check live authorization; checks remain
+// pending through the existing path meanwhile.
+func wireMuseCheck(database *store.Store, options *httpapi.Options, stack *researchwire.Stack) {
 	checker, err := musewire.NewChecker(musewire.CheckDeps{
 		DB: database, Actor: researchwire.OwnerActor(),
 		Executor: stack.Executor, Captures: stack.Captures,
@@ -280,7 +264,6 @@ func wireMuse(database *store.Store, options *httpapi.Options, dataDir string, s
 	} else {
 		options.MuseCheck = checker
 	}
-	log.Printf("muse wired: cli=%s", bin)
 }
 
 func sweepResearchLeases(stack *researchwire.Stack) {

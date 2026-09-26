@@ -26,7 +26,7 @@ import (
 
 func TestRecordsSaveToolRecordsCheckpoint(t *testing.T) {
 	h := newHarness(t)
-	h.commission(t)
+	h.commissionSupervisor(t)
 	_, capID := h.fetch(t, "noted-fetch-1", h.board.URL+"/roles/1")
 	body := captureBytes(t, h, capID)
 	s1s, s1e := spanOf(t, body, "REQ-NW-101")

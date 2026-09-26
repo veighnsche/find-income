@@ -512,6 +512,58 @@ func TestAssessMalformedInputs(t *testing.T) {
 	}
 }
 
+// A reuse-key hit returns the stored answers without any reservation,
+// dispatch or provider call: nothing is spent on an answered ask.
+func TestAssessReusesStoredAssessment(t *testing.T) {
+	h, auth, _, _, provider, exchanges, _ := fixture(t)
+	h.Reuse = func(context.Context, string, string) (store.DynamicAssessment, error) {
+		return store.DynamicAssessment{ID: "jda_reused", Status: "succeeded",
+			AnswersJSON:      `[{"questionId":"q-location","answerId":"yes","abstained":false,"uncertainty":"confidence 0.9000","sourceBindings":[{"captureId":"cap-alpha","spanStart":20,"spanEnd":37}]}]`,
+			EvidenceRefsJSON: `[{"captureId":"cap-alpha","spanStart":0,"spanEnd":48}]`}, nil
+	}
+	got, err := h.Assess(context.Background(), validInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "jda_reused" || len(got.Results) != 1 || got.Results[0].AnswerID != "yes" {
+		t.Fatalf("reused assessment: %+v", got)
+	}
+	if got.Usage.Requests != 0 || got.Usage.Bytes != 0 {
+		t.Fatalf("reused usage must be zero: %+v", got.Usage)
+	}
+	if provider.calls != 0 || len(auth.reserves) != 0 || len(exchanges.begins) != 0 {
+		t.Fatalf("reuse spent: provider=%d reserves=%d begins=%d",
+			provider.calls, len(auth.reserves), len(exchanges.begins))
+	}
+}
+
+// A miss, a non-succeeded row or undecodable JSON falls through to a
+// fresh assessment; reuse never fails the ask.
+func TestAssessReuseMissAssessesFresh(t *testing.T) {
+	h, _, _, _, provider, _, _ := fixture(t)
+	provider.result = choiceResult(map[string]string{"q-location": "yes", "q-seniority": AbstainID})
+	h.Reuse = func(context.Context, string, string) (store.DynamicAssessment, error) {
+		return store.DynamicAssessment{}, errors.New("no stored row")
+	}
+	got, err := h.Assess(context.Background(), validInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID == "" || got.ID == "jda_reused" || provider.calls != 1 {
+		t.Fatalf("miss must assess fresh: %+v calls=%d", got, provider.calls)
+	}
+	h.Reuse = func(context.Context, string, string) (store.DynamicAssessment, error) {
+		return store.DynamicAssessment{ID: "jda_partial", Status: "partial_abstain",
+			AnswersJSON: `[]`, EvidenceRefsJSON: `[]`}, nil
+	}
+	if _, err := h.Assess(context.Background(), validInput()); err != nil {
+		t.Fatal(err)
+	}
+	if provider.calls != 2 {
+		t.Fatalf("partial row must not satisfy reuse: calls=%d", provider.calls)
+	}
+}
+
 func TestReuseKey(t *testing.T) {
 	key := func(in researchcontract.AssessInput) string {
 		bound, err := validateInput(in)

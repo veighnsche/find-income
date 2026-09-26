@@ -801,3 +801,243 @@ func TestReadinessReflectsContributorTransport(t *testing.T) {
 		t.Errorf("enabled fixture transport status = %+v", status)
 	}
 }
+
+type fakeSavedRecorder struct {
+	mu      sync.Mutex
+	batches map[string][]string
+}
+
+func (f *fakeSavedRecorder) NoteSavedRecords(_ context.Context, runID, batchKey string, recordIDs []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.batches == nil {
+		f.batches = map[string][]string{}
+	}
+	f.batches[runID+":"+batchKey] = append([]string{}, recordIDs...)
+	return nil
+}
+
+// Finalize journals classified opportunity ids through the saved
+// recorder so run views and reports list them; a run without findings
+// notes nothing.
+func TestFinalizeNotesSavedOpportunities(t *testing.T) {
+	ctx := context.Background()
+	transport := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
+	fix := newConnectedFixture(t, transport, []map[string]string{
+		{"reason-positive": "hybrid-ok", "reason-negative": "abstain", "reason-missing": "abstain"},
+	})
+	recorder := &fakeSavedRecorder{}
+	fix.service.saved = recorder
+	admitted, err := fix.service.CommissionDiscoveryAsync(ctx, "run-note-saved",
+		musecode.PublicCriteria{RoleKeywords: []string{"support"}}, fix.profile, fix.rubric, musecode.Bounds{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-transport.started
+	server, ok := fix.service.ServerForRun("run-note-saved")
+	if !ok {
+		t.Fatal("live tool server unavailable during the session")
+	}
+	session := mcpSession(t, server)
+	ref := saveFixtureVacancy(t, session, "https://jobs.example.invalid/1", "Example BV", "Senior support engineer", "rc-1")
+	transport.saves = []string{ref}
+	close(transport.proceed)
+	row := waitMuseReport(t, fix.db, "run-note-saved")
+	if row.Outcome != string(musecode.OutcomeCompleted) {
+		t.Fatalf("report = %+v, want completed", row)
+	}
+	page, err := fix.db.ListRunFindings(ctx, admitted.RoundID, "", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("findings = %d, want 1", len(page.Items))
+	}
+	findings := page.Items
+	recorder.mu.Lock()
+	defer recorder.mu.Unlock()
+	got := recorder.batches[admitted.RoundID+":run-note-saved"]
+	if len(got) != 1 || got[0] != findings[0].OpportunityID {
+		t.Fatalf("noted ids = %v, want [%s]", got, findings[0].OpportunityID)
+	}
+}
+
+func waitMuseReport(t *testing.T, db *store.Store, runRef string) store.MuseRunReport {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		row, err := db.LoadMuseRunReport(context.Background(), runRef)
+		if err == nil {
+			return row
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no terminal report for %q: %v", runRef, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// Async admission returns before the session conducts; the run completes
+// in the background with classified findings, and a same-key replay
+// returns the existing run's identity without re-conducting.
+func TestCommissionDiscoveryAsyncConductsInBackground(t *testing.T) {
+	ctx := context.Background()
+	transport := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
+	fix := newConnectedFixture(t, transport, []map[string]string{
+		{"reason-positive": "hybrid-ok", "reason-negative": "abstain", "reason-missing": "abstain"},
+	})
+	admitted, err := fix.service.CommissionDiscoveryAsync(ctx, "run-async-1",
+		musecode.PublicCriteria{RoleKeywords: []string{"support"}}, fix.profile, fix.rubric, musecode.Bounds{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !admitted.Created || admitted.RoundID == "" || admitted.RunRef != "run-async-1" {
+		t.Fatalf("admission = %+v, want created run with round", admitted)
+	}
+	round, err := fix.db.Round(ctx, admitted.RoundID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if round.Intent != CommissionIntent || round.Outcome != "research_run" || round.State != store.RoundRunning {
+		t.Fatalf("round = %+v, want muse research run", round)
+	}
+	<-transport.started
+	server, ok := fix.service.ServerForRun("run-async-1")
+	if !ok {
+		t.Fatal("live tool server unavailable during the session")
+	}
+	session := mcpSession(t, server)
+	ref := saveFixtureVacancy(t, session, "https://jobs.example.invalid/1", "Example BV", "Senior support engineer", "rc-1")
+	transport.saves = []string{ref}
+	close(transport.proceed)
+	row := waitMuseReport(t, fix.db, "run-async-1")
+	if row.Outcome != string(musecode.OutcomeCompleted) || len(row.SavedRefs) != 1 {
+		t.Fatalf("report = %+v, want completed with one save", row)
+	}
+	replayed, err := fix.service.CommissionDiscoveryAsync(ctx, "run-async-1",
+		musecode.PublicCriteria{RoleKeywords: []string{"support"}}, fix.profile, fix.rubric, musecode.Bounds{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayed.Created || replayed.RoundID != admitted.RoundID {
+		t.Fatalf("replay = %+v, want identity of %+v", replayed, admitted)
+	}
+	if n := fix.service.Commissions(); n != 1 {
+		t.Fatalf("commissions = %d, want 1", n)
+	}
+}
+
+// A same-key commission while the run conducts returns the admitted
+// identity instead of an error; the single run still completes once.
+func TestCommissionDiscoveryAsyncReplaysIdentityWhileInProgress(t *testing.T) {
+	ctx := context.Background()
+	transport := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
+	fix := newConnectedFixture(t, transport, nil)
+	first, err := fix.service.CommissionDiscoveryAsync(ctx, "run-async-2",
+		musecode.PublicCriteria{RoleKeywords: []string{"support"}}, fix.profile, fix.rubric, musecode.Bounds{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-transport.started
+	second, err := fix.service.CommissionDiscoveryAsync(ctx, "run-async-2",
+		musecode.PublicCriteria{RoleKeywords: []string{"support"}}, fix.profile, fix.rubric, musecode.Bounds{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Created || second.RoundID != first.RoundID {
+		t.Fatalf("in-progress replay = %+v, want identity of %+v", second, first)
+	}
+	close(transport.proceed)
+	row := waitMuseReport(t, fix.db, "run-async-2")
+	if row.Outcome != string(musecode.OutcomeCompleted) {
+		t.Fatalf("report = %+v, want completed", row)
+	}
+	if n := fix.service.Commissions(); n != 1 {
+		t.Fatalf("commissions = %d, want 1", n)
+	}
+}
+
+// Per-run bounds narrow the service ceiling (round limits and deadline
+// follow); oversize requests clamp instead of widening, and inconsistent
+// bounds fail before admission.
+func TestCommissionDiscoveryAsyncNarrowsBoundsToCeiling(t *testing.T) {
+	ctx := context.Background()
+	finished := scriptTransport{events: []musecode.Event{{Kind: musecode.EventFinished}}}
+	fix := newConnectedFixture(t, finished, nil)
+	narrow := musecode.DefaultBounds()
+	narrow.MaxWallClock = 5 * time.Minute
+	narrow.MaxModelSteps = 7
+	narrow.MaxToolCalls = 9
+	admitted, err := fix.service.CommissionDiscoveryAsync(ctx, "run-async-3",
+		musecode.PublicCriteria{RoleKeywords: []string{"support"}}, fix.profile, fix.rubric, narrow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	round, err := fix.db.Round(ctx, admitted.RoundID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if round.Limits.Turns != 7 || round.Limits.Tools != 9 {
+		t.Fatalf("limits = %+v, want narrowed turns/tools", round.Limits)
+	}
+	if remaining := time.Until(round.Deadline); remaining <= 4*time.Minute || remaining > 5*time.Minute {
+		t.Fatalf("deadline in %v, want about 5 minutes", remaining)
+	}
+	if row := waitMuseReport(t, fix.db, "run-async-3"); row.Outcome != string(musecode.OutcomeCompleted) {
+		t.Fatalf("report = %+v, want completed", row)
+	}
+	wide := musecode.DefaultBounds()
+	wide.MaxModelSteps = 1000000
+	wide.MaxWallClock = 72 * time.Hour
+	clamped, err := fix.service.CommissionDiscoveryAsync(ctx, "run-async-4",
+		musecode.PublicCriteria{RoleKeywords: []string{"support"}}, fix.profile, fix.rubric, wide)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wideRound, err := fix.db.Round(ctx, clamped.RoundID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ceiling := musecode.DefaultBounds()
+	if wideRound.Limits.Turns != int64(ceiling.MaxModelSteps) {
+		t.Fatalf("limits = %+v, want ceiling turns %d", wideRound.Limits, ceiling.MaxModelSteps)
+	}
+	if remaining := time.Until(wideRound.Deadline); remaining > ceiling.MaxWallClock {
+		t.Fatalf("deadline in %v, want at most the ceiling", remaining)
+	}
+	if row := waitMuseReport(t, fix.db, "run-async-4"); row.Outcome != string(musecode.OutcomeCompleted) {
+		t.Fatalf("report = %+v, want completed", row)
+	}
+	bad := musecode.DefaultBounds()
+	bad.MaxBytesTotal = 1
+	if _, err := fix.service.CommissionDiscoveryAsync(ctx, "run-async-bad",
+		musecode.PublicCriteria{}, fix.profile, fix.rubric, bad); err == nil {
+		t.Error("inconsistent bounds admitted, want failure before admission")
+	}
+}
+
+// A background conduct failure persists as a terminal failed run so
+// polling reads the failure instead of hanging on an active round.
+func TestCommissionDiscoveryAsyncPersistsConductFailure(t *testing.T) {
+	ctx := context.Background()
+	fix := newConnectedFixture(t, scriptTransport{err: errors.New("fixture: transport boom")}, nil)
+	admitted, err := fix.service.CommissionDiscoveryAsync(ctx, "run-async-fail",
+		musecode.PublicCriteria{RoleKeywords: []string{"support"}}, fix.profile, fix.rubric, musecode.Bounds{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !admitted.Created {
+		t.Fatalf("admission = %+v, want created", admitted)
+	}
+	row := waitMuseReport(t, fix.db, "run-async-fail")
+	if row.Outcome != string(musecode.OutcomeFailed) || !strings.Contains(row.Detail, "transport boom") {
+		t.Fatalf("report = %+v, want failed with transport detail", row)
+	}
+	round, err := fix.db.Round(ctx, admitted.RoundID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if round.State != store.RoundFailed {
+		t.Fatalf("round state = %q, want failed", round.State)
+	}
+}

@@ -10,8 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
+	"github.com/veighnsche/find-income-dashboard/api/internal/jevassess"
+	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
+	"github.com/veighnsche/find-income-dashboard/api/internal/musewire"
 	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
@@ -116,6 +120,29 @@ func (c *closeTracker) Close() error {
 	return nil
 }
 
+// gateTransport holds the background session until the test releases it,
+// so commissioned runs stay active deterministically for the whole test.
+// Cleanup releases the gate; the session then finishes on its own.
+type gateTransport struct {
+	proceed chan struct{}
+}
+
+func (g *gateTransport) Run(ctx context.Context, _ musecode.SessionSpec, _ musecode.SessionInput, _ musecode.Cursor, sink musecode.EventSink) error {
+	select {
+	case <-g.proceed:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	sink.Emit(musecode.Event{Kind: musecode.EventFinished})
+	return nil
+}
+
+func fixtureFacts() musecode.Facts {
+	return musecode.Facts{CLIPath: "/fixture/muse", CLIReportVersion: "1.4.0",
+		EffectiveModel: "fixture-model", SubscriptionLaneProved: true,
+		SessionProtocolProved: true, WorkspaceIsolatedProved: true}
+}
+
 type adapterHarness struct {
 	db     *store.Store
 	sup    *rounds.Supervisor
@@ -154,9 +181,20 @@ func newAdapterHarness(t *testing.T) *adapterHarness {
 	}
 	h.sup = sup
 	t.Cleanup(sup.Close)
+	gate := &gateTransport{proceed: make(chan struct{})}
+	t.Cleanup(func() { close(gate.proceed) })
+	museSvc, err := musewire.NewService(musewire.Deps{
+		Facts: fixtureFacts(), Bounds: musecode.DefaultBounds(), Transport: gate,
+		Cursors: musewire.StoreCursors{DB: db}, DB: db, Actor: testOwner,
+		Executor: h.exec, Captures: h.caps, Assessor: &jevassess.Handler{},
+		Workspaces: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	var counter int
 	svc, err := New(Deps{DB: db, Supervisor: sup, Journal: journal, Captures: h.caps,
-		AgentID: testAgent.ID, NewKey: func(prefix string) string {
+		AgentID: testAgent.ID, Muse: museSvc, NewKey: func(prefix string) string {
 			counter++
 			return prefix + "-auto"
 		}})
@@ -305,16 +343,26 @@ func TestActivitySummariesAreRedacted(t *testing.T) {
 	ctx := context.Background()
 	brief := "SECRET brief text that must never surface"
 	run := h.commission(t, brief, "run-activity", nil).View.RunId
-	body := "SECRET steering body that must never surface"
-	if _, err := h.svc.SteerResearch(ctx, httpapi.SteerResearchInput{
-		Actor: testOwner, RunID: run, Body: body, IdempotencyKey: "steer-1"}); err != nil {
+	// The service refuses steering on muse runs; journal one steering
+	// record directly so the redaction assertions still cover a body.
+	now := time.Now()
+	steerPayload, err := json.Marshal(map[string]any{"revision": 1,
+		"body": "SECRET steering body that must never surface"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.svc.journal.Append(ctx, researchcontract.Event{
+		ID: "steer-test." + run + ".1", RunID: run, Kind: "run.steer_received",
+		Outcome: researchcontract.OutcomeOK, Payload: steerPayload,
+		ObservedAt: now, RecordedAt: now,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	page, err := h.svc.ResearchActivity(ctx, testOwner, run, "", 25)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Events) < 3 {
+	if len(page.Events) < 2 {
 		t.Fatalf("activity events: %+v", page.Events)
 	}
 	joined, _ := json.Marshal(page)
@@ -328,7 +376,7 @@ func TestActivitySummariesAreRedacted(t *testing.T) {
 			t.Fatalf("event shape: %+v", e)
 		}
 	}
-	if !strings.Contains(kinds["run.commissioned"], testAgent.ID) {
+	if !strings.Contains(kinds["run.commissioned"], museAgentID) {
 		t.Fatalf("commissioned summary: %q", kinds["run.commissioned"])
 	}
 	if !strings.Contains(kinds["run.steer_received"], "revision 1") {
@@ -351,46 +399,69 @@ func TestActivitySummariesAreRedacted(t *testing.T) {
 	}
 }
 
-func TestSteerAcknowledgments(t *testing.T) {
+func TestSteerMuseRunsConflict(t *testing.T) {
 	h := newAdapterHarness(t)
 	ctx := context.Background()
-	run := h.commission(t, "Steered run.", "run-steer", nil).View.RunId
-	queued, err := h.svc.SteerResearch(ctx, httpapi.SteerResearchInput{
+	run := h.commission(t, "Unsteerable run.", "run-steer", nil).View.RunId
+	_, err := h.svc.SteerResearch(ctx, httpapi.SteerResearchInput{
 		Actor: testOwner, RunID: run, Body: "Prefer platform teams.", IdempotencyKey: "steer-q"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if queued.Ack != generated.SteeringMessageAckPending || queued.Revision != 1 ||
-		!strings.HasPrefix(queued.MessageId, "steer."+run+".") {
-		t.Fatalf("queued steer: %+v", queued)
-	}
-	duplicate, err := h.svc.SteerResearch(ctx, httpapi.SteerResearchInput{
-		Actor: testOwner, RunID: run, Body: "Prefer platform teams.", IdempotencyKey: "steer-q"})
-	if err != nil || duplicate.Ack != generated.SteeringMessageAckAcknowledged || duplicate.Revision != 1 {
-		t.Fatalf("duplicate steer: %+v %v", duplicate, err)
-	}
-	// A live dispatched turn with a wired conversation applies immediately.
-	cost, _ := store.RoundOperationCost(store.RoundCodexTurn)
-	attempt, _, err := h.db.ReserveRoundAttempt(ctx, testAgent, run, store.RoundAttemptInput{
-		RequestKey: "turn-live", Operation: store.RoundCodexTurn,
-		ResourceID: store.ResearchAuthorityResource, Cost: cost})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := h.db.MarkRoundDispatched(ctx, run, attempt.ID); err != nil {
-		t.Fatal(err)
-	}
-	applied, err := h.svc.SteerResearch(ctx, httpapi.SteerResearchInput{
-		Actor: testOwner, RunID: run, Body: "Also check hybrid.", IdempotencyKey: "steer-live"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if applied.Ack != generated.SteeringMessageAckApplied || applied.Revision != 2 {
-		t.Fatalf("applied steer: %+v", applied)
+	if contractCode(t, err) != researchcontract.OutcomeConflict {
+		t.Fatalf("muse steer: %v", err)
 	}
 	if _, err := h.svc.SteerResearch(ctx, httpapi.SteerResearchInput{
 		Actor: testAgent, RunID: run, Body: "No.", IdempotencyKey: "steer-forbidden"}); contractCode(t, err) != researchcontract.OutcomeForbidden {
 		t.Fatalf("non-owner steer: %v", err)
+	}
+}
+
+func TestCommissionWithoutMuseReportsNotReady(t *testing.T) {
+	h := newAdapterHarness(t)
+	h.svc.muse = nil
+	_, err := h.svc.CommissionResearch(context.Background(), httpapi.CommissionResearchInput{
+		Actor: testOwner, BriefText: "No commissioner.", IdempotencyKey: "run-nomuse"})
+	if !errors.Is(err, rounds.ErrNotReady) {
+		t.Fatalf("commission without muse: %v", err)
+	}
+}
+
+func TestDiscoveryCriteriaMapsBrief(t *testing.T) {
+	brief := codexservice.OwnerBrief{ProfileVersion: 3, RubricVersion: "criteria-v3-abc", Source: "s",
+		Facts: []codexservice.BriefFact{
+			{Key: "preferredLocation", Value: "Amsterdam"},
+			{Key: "allowRemote", Value: "true"},
+			{Key: "allowHybrid", Value: "false"},
+			{Key: "minMonthlyBase", Value: "500000 EUR"},
+			{Key: "timezone", Value: "Europe/Amsterdam"},
+		},
+		Preferences: []codexservice.BriefFact{
+			{Key: "c1", Value: "must: senior support"},
+			{Key: "c2", Value: "want: hybrid friendly"},
+		}}
+	criteria := discoveryCriteria(brief, "night shifts excluded")
+	if criteria.RegionText != "Amsterdam" {
+		t.Fatalf("region: %q", criteria.RegionText)
+	}
+	joined := strings.Join(criteria.RoleKeywords, "\n")
+	for _, want := range []string{"must: senior support", "want: hybrid friendly",
+		"night shifts excluded", "remote work acceptable"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("keywords %q miss %q", joined, want)
+		}
+	}
+	for _, leak := range []string{"500000", "Europe/Amsterdam", "hybrid work acceptable"} {
+		if strings.Contains(joined, leak) || strings.Contains(criteria.RegionText, leak) {
+			t.Fatalf("criteria leak %q: %+v", leak, criteria)
+		}
+	}
+	long := strings.Repeat("word ", 100)
+	capped := discoveryCriteria(codexservice.OwnerBrief{}, long)
+	if len(capped.RoleKeywords) == 0 || len(capped.RoleKeywords) > 20 {
+		t.Fatalf("chunked keywords: %d", len(capped.RoleKeywords))
+	}
+	for _, keyword := range capped.RoleKeywords {
+		if len(keyword) > 200 {
+			t.Fatalf("keyword over 200 chars: %q", keyword)
+		}
 	}
 }
 
@@ -438,7 +509,7 @@ func TestIdentityView(t *testing.T) {
 		t.Fatal(err)
 	}
 	jevCost, _ := store.RoundOperationCost(store.RoundJevRequest)
-	jevRes, _, err := h.db.ReserveRoundAttempt(ctx, testAgent, run, store.RoundAttemptInput{
+	jevRes, _, err := h.db.ReserveRoundAttempt(ctx, testOwner, run, store.RoundAttemptInput{
 		RequestKey: "jev-res", Operation: store.RoundJevRequest,
 		ResourceID: store.ResearchAuthorityResource, Cost: jevCost})
 	if err != nil {

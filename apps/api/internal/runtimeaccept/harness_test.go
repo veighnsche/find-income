@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
+	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevassess"
@@ -164,9 +164,12 @@ func wireStack(t *testing.T, ctx context.Context, db *store.Store, dir string, p
 	return stack
 }
 
-// newHarness wires one isolated stack and commissions one run through the
-// real research service adapter. A nil allowance selects the canary
-// defaults; mutate adjusts the wire config (executor binaries) before Wire.
+// newHarness wires one isolated stack and commissions one codex-scoped run
+// directly through the run supervisor. These tests pin the runtime
+// machinery (dispatch, egress, turns, stop, reconnect), not discovery
+// commissioning, and need the codex turn/record scope plus delegation.
+// A nil allowance selects the canary defaults; mutate adjusts the wire
+// config (executor binaries) before Wire.
 func newHarness(t *testing.T, allow *generated.ResearchAllowance, brief, key string, mutate func(*researchwire.Config)) *harness {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -185,18 +188,30 @@ func newHarness(t *testing.T, allow *generated.ResearchAllowance, brief, key str
 		agent:    store.Actor{Kind: "agent", ID: researchwire.DefaultAgentID},
 		provider: provider, scratch: filepath.Join(dir, "scratch"),
 	}
-	out, err := stack.Research.CommissionResearch(ctx, httpapi.CommissionResearchInput{
-		Actor: h.owner, BriefText: brief, Allowance: allow, IdempotencyKey: key,
+	ownerBrief, err := codexservice.CurrentOwnerBrief(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var allowance *rounds.AllowanceInput
+	if allow != nil {
+		allowance = &rounds.AllowanceInput{TimeMs: int64(allow.TimeMs),
+			MaxActions: int64(allow.MaxActions), MaxJev: int64(allow.MaxJev),
+			MaxTurns: int64(allow.MaxTurns), MaxConcurrent: int64(allow.MaxConcurrent)}
+	}
+	out, err := stack.Supervisor.Commission(ctx, rounds.CommissionInput{
+		Actor: h.owner, BriefText: brief, AgentID: h.agent.ID,
+		ProfileVersion: ownerBrief.ProfileVersion, RubricVersion: ownerBrief.RubricVersion,
+		RubricSource: ownerBrief.Source, Allowance: allowance, IdempotencyKey: key,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !out.Created || out.View.RunId == "" {
+	if !out.Created || out.RunID == "" {
 		t.Fatalf("commission: %+v", out)
 	}
-	h.runID = out.View.RunId
-	h.profile = int64(out.View.BriefVersion.ProfileVersion)
-	h.rubric = out.View.BriefVersion.RubricVersion
+	h.runID = out.RunID
+	h.profile = out.ProfileVersion
+	h.rubric = out.RubricVersion
 	return h
 }
 

@@ -425,9 +425,10 @@ func TestSaveVacancyRequiresTrustedReceipt(t *testing.T) {
 	s := testServer(t, testBounds(), exec, caps)
 	session := testSession(t, s)
 	unknown := call(t, session, "public_save_vacancy", map[string]any{
-		"page_url": "https://careers.novel-example.invalid/jobs/9",
-		"title":    "Harbor Pilot",
-		"receipt":  "rc-forged",
+		"page_url":      "https://careers.novel-example.invalid/jobs/9",
+		"title":         "Harbor Pilot",
+		"employer_name": "Novel Port",
+		"receipt":       "rc-forged",
 	})
 	if unknown["outcome"] != string(researchcontract.OutcomeNotFound) {
 		t.Fatalf("forged receipt outcome: %+v", unknown)
@@ -465,6 +466,7 @@ func TestSaveVacancyRequiresTrustedReceipt(t *testing.T) {
 	replay := call(t, session, "public_save_vacancy", map[string]any{
 		"page_url":        "https://careers.novel-example.invalid/jobs/9",
 		"title":           "Harbor Pilot",
+		"employer_name":   "Novel Port",
 		"receipt":         "rc-fixture-1",
 		"idempotency_key": "save-1",
 	})
@@ -485,6 +487,89 @@ func TestSaveVacancyRequiresTrustedReceipt(t *testing.T) {
 	}
 }
 
+// captureFallbackCaptures models a backend that resolves capture ids
+// through recorded observations, like the production capture reader.
+type captureFallbackCaptures struct {
+	*fakeCaptures
+	byCapture map[string]string
+}
+
+func (f *captureFallbackCaptures) ResolveReceiptByCapture(_ context.Context, captureID string) (researchcontract.ExecutionReceipt, error) {
+	receiptID, ok := f.byCapture[captureID]
+	if !ok {
+		return researchcontract.ExecutionReceipt{}, researchcontract.NewError(
+			researchcontract.OutcomeNotFound, "receipt", "no recorded observation captured "+captureID)
+	}
+	return f.ResolveReceipt(context.Background(), receiptID)
+}
+
+// A capture id passed as the receipt resolves through the recorded
+// observation and the vacancy binds the resolved receipt, not the
+// passed identifier.
+func TestSaveVacancyRepairsCaptureIdReceipt(t *testing.T) {
+	exec, caps := testFixtures()
+	capped := &captureFallbackCaptures{fakeCaptures: caps,
+		byCapture: map[string]string{"cap-fixture-1": "rc-fixture-1"}}
+	s, err := NewServer(Deps{Executor: exec, Captures: capped, Bounds: testBounds(),
+		RunID: "run-1", Generation: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := testSession(t, s)
+	saved := call(t, session, "public_save_vacancy", map[string]any{
+		"page_url":      "https://careers.fixture.invalid/jobs/1",
+		"title":         "Harbor Pilot",
+		"employer_name": "Novel Port",
+		"receipt":       "cap-fixture-1",
+	})
+	if saved["outcome"] != "ok" {
+		t.Fatalf("capture-id save outcome: %+v", saved)
+	}
+	raw, _ := json.Marshal(saved["vacancy"])
+	var vac musecode.PublicVacancy
+	if err := json.Unmarshal(raw, &vac); err != nil {
+		t.Fatal(err)
+	}
+	if vac.ReceiptRef != "rc-fixture-1" {
+		t.Fatalf("vacancy receipt ref = %q, want the resolved receipt", vac.ReceiptRef)
+	}
+}
+
+// A nameless employer is refused at save time so the caller retries with
+// the listed employer instead of burning a vacancy classification rejects.
+func TestSaveVacancyRequiresEmployerName(t *testing.T) {
+	exec, caps := testFixtures()
+	session := testSession(t, testServer(t, testBounds(), exec, caps))
+	nameless := call(t, session, "public_save_vacancy", map[string]any{
+		"page_url": "https://careers.fixture.invalid/jobs/7",
+		"title":    "Harbor Pilot",
+		"receipt":  "rc-fixture-1",
+	})
+	if nameless["outcome"] != string(researchcontract.OutcomeInvalid) {
+		t.Fatalf("nameless employer outcome: %+v", nameless)
+	}
+}
+
+// An unresolvable receipt names the expected identifier so the caller
+// can retry with the receipt_id instead of the capture_id.
+func TestSaveVacancyUnknownReceiptHintsReceiptId(t *testing.T) {
+	exec, caps := testFixtures()
+	session := testSession(t, testServer(t, testBounds(), exec, caps))
+	unknown := call(t, session, "public_save_vacancy", map[string]any{
+		"page_url":      "https://careers.novel-example.invalid/jobs/9",
+		"title":         "Harbor Pilot",
+		"employer_name": "Novel Port",
+		"receipt":       "rc-forged",
+	})
+	if unknown["outcome"] != string(researchcontract.OutcomeNotFound) {
+		t.Fatalf("forged receipt outcome: %+v", unknown)
+	}
+	detail, _ := unknown["detail"].(string)
+	if !strings.Contains(detail, "receipt_id") || !strings.Contains(detail, "rc-forged") {
+		t.Fatalf("hint detail = %q", detail)
+	}
+}
+
 func TestSaveQuestionLinksSavedVacancy(t *testing.T) {
 	exec, caps := testFixtures()
 	session := testSession(t, testServer(t, testBounds(), exec, caps))
@@ -497,9 +582,10 @@ func TestSaveQuestionLinksSavedVacancy(t *testing.T) {
 		t.Fatalf("unknown vacancy outcome: %+v", missing)
 	}
 	saved := call(t, session, "public_save_vacancy", map[string]any{
-		"page_url": "https://careers.novel-example.invalid/jobs/9",
-		"title":    "Harbor Pilot",
-		"receipt":  "rc-fixture-1",
+		"page_url":      "https://careers.novel-example.invalid/jobs/9",
+		"title":         "Harbor Pilot",
+		"employer_name": "Novel Port",
+		"receipt":       "rc-fixture-1",
 	})
 	raw, _ := json.Marshal(saved["vacancy"])
 	var vac musecode.PublicVacancy
@@ -555,9 +641,10 @@ func TestListSavedPages(t *testing.T) {
 	session := testSession(t, testServer(t, testBounds(), exec, caps))
 	for _, title := range []string{"Pilot", "Mate"} {
 		payload := call(t, session, "public_save_vacancy", map[string]any{
-			"page_url": "https://careers.novel-example.invalid/jobs/" + strings.ToLower(title),
-			"title":    title,
-			"receipt":  "rc-fixture-1",
+			"page_url":      "https://careers.novel-example.invalid/jobs/" + strings.ToLower(title),
+			"title":         title,
+			"employer_name": "Novel Port",
+			"receipt":       "rc-fixture-1",
 		})
 		if payload["outcome"] != "ok" {
 			t.Fatal(payload)
@@ -678,9 +765,10 @@ func TestByteLimitsEnforced(t *testing.T) {
 	probe := testServer(t, testBounds(), probeExec, probeCaps)
 	probeSession := testSession(t, probe)
 	probeSave := call(t, probeSession, "public_save_vacancy", map[string]any{
-		"page_url": "https://careers.novel-example.invalid/jobs/t",
-		"title":    "Harbor Pilot",
-		"receipt":  "rc-fixture-1",
+		"page_url":      "https://careers.novel-example.invalid/jobs/t",
+		"title":         "Harbor Pilot",
+		"employer_name": "Novel Port",
+		"receipt":       "rc-fixture-1",
 	})
 	if probeSave["outcome"] != "ok" {
 		t.Fatalf("probe save: %+v", probeSave)
@@ -699,9 +787,10 @@ func TestByteLimitsEnforced(t *testing.T) {
 	exhausted := false
 	for i := 0; i < 5; i++ {
 		payload := call(t, session2, "public_save_vacancy", map[string]any{
-			"page_url": "https://careers.novel-example.invalid/jobs/t",
-			"title":    "Harbor Pilot",
-			"receipt":  "rc-fixture-1",
+			"page_url":      "https://careers.novel-example.invalid/jobs/t",
+			"title":         "Harbor Pilot",
+			"employer_name": "Novel Port",
+			"receipt":       "rc-fixture-1",
 		})
 		if payload["outcome"] == string(researchcontract.OutcomeBudgetExhausted) {
 			if payload["field"] != "bytes_total" {

@@ -36,11 +36,22 @@ func (museStubAssessor) Assess(context.Context, researchcontract.AssessInput) (r
 	return researchcontract.Assessment{}, nil
 }
 
+type museStubTransport struct{}
+
+func (museStubTransport) Run(_ context.Context, _ musecode.SessionSpec, _ musecode.SessionInput, _ musecode.Cursor, _ musecode.EventSink) error {
+	return nil
+}
+
 func museWiredHarness(t *testing.T, facts musecode.Facts) *harness {
+	t.Helper()
+	return museWiredHarnessWithTransport(t, facts, museStubTransport{})
+}
+
+func museWiredHarnessWithTransport(t *testing.T, facts musecode.Facts, transport musecode.Transport) *harness {
 	t.Helper()
 	h := newHarness(t)
 	service, err := musewire.NewService(musewire.Deps{
-		Facts: facts, Bounds: musecode.DefaultBounds(), Transport: musecode.UnavailableTransport{},
+		Facts: facts, Bounds: musecode.DefaultBounds(), Transport: transport,
 		Cursors: musewire.StoreCursors{DB: h.db}, DB: h.db,
 		Actor:    store.Actor{Kind: "administrator", ID: "owner"},
 		Executor: museStubExecutor{}, Captures: museStubCaptures{}, Assessor: museStubAssessor{},
@@ -113,6 +124,20 @@ func TestMuseReadinessHonesty(t *testing.T) {
 	}
 	if blocked.State != "unavailable" || blocked.Code != musecode.CodeLaneUnverified || blocked.Tier != "standard" {
 		t.Fatalf("lane readiness = %+v, want unavailable/lane-unverified", blocked)
+	}
+
+	disabled := museWiredHarnessWithTransport(t, readyFacts(), musecode.UnavailableTransport{})
+	cookie, _ = disabled.login()
+	response = disabled.request("GET", "/api/v1/muse/readiness?tier=contributor", "", cookie, "", "", "")
+	var transportBlocked struct {
+		State string `json:"state"`
+		Code  string `json:"code"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &transportBlocked); err != nil {
+		t.Fatal(err)
+	}
+	if transportBlocked.State != "unavailable" || transportBlocked.Code != musecode.CodeProtocolUnverified {
+		t.Fatalf("disabled transport readiness = %+v, want unavailable/protocol-unverified", transportBlocked)
 	}
 }
 

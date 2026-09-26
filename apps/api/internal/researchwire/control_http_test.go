@@ -10,22 +10,25 @@ package researchwire
 // honest 503 instead of half-built behavior.
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
+	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
 	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 )
 
 func TestHTTPStopResumeResearchRun(t *testing.T) {
 	h := newHarness(t)
-	h.commission(t)
+	h.commissionSupervisor(t)
 	authSvc := auth.NewService(h.db)
 	const password = "t27-control-password"
 	if err := authSvc.SetupAdministrator(h.ctx, []byte(password)); err != nil {
@@ -203,5 +206,110 @@ func TestHTTPStopResumeResearchRun(t *testing.T) {
 	presp.Body.Close()
 	if presp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("unwired research stop: %d, want 503", presp.StatusCode)
+	}
+}
+
+// Stopping a muse discovery run over HTTP fences the round and the live
+// Contributor session behind it; resuming answers 409 because stopped
+// discovery runs never resume.
+func TestHTTPStopFencesMuseSession(t *testing.T) {
+	h := newHarness(t)
+	h.commission(t)
+	// Wait until the session sits inside the transport: stopping earlier
+	// would fence a run the supervisor has not started conducting yet.
+	select {
+	case <-h.gate.started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("discovery session never entered the transport")
+	}
+	authSvc := auth.NewService(h.db)
+	const password = "t27-muse-control-password"
+	if err := authSvc.SetupAdministrator(h.ctx, []byte(password)); err != nil {
+		t.Fatal(err)
+	}
+	const origin = "http://127.0.0.1:9"
+	server := httptest.NewServer(httpapi.NewHandler(h.db, authSvc, httpapi.Options{
+		AllowedOrigins:  []string{origin},
+		Rounds:          &rounds.Service{Store: h.db},
+		Research:        h.stack.Research,
+		ResearchControl: h.stack.Supervisor,
+		Muse:            h.stack.Muse,
+	}))
+	t.Cleanup(server.Close)
+	loginReq, _ := http.NewRequest(http.MethodPost, server.URL+"/api/v1/auth/login",
+		strings.NewReader(`{"password":"`+password+`"}`))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginReq.Header.Set("Origin", origin)
+	loginResp, err := server.Client().Do(loginReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loginResp.Body.Close()
+	if len(loginResp.Cookies()) != 1 {
+		t.Fatalf("login cookies: %d", len(loginResp.Cookies()))
+	}
+	cookie := loginResp.Cookies()[0]
+	sessionReq, _ := http.NewRequest(http.MethodGet, server.URL+"/api/v1/auth/session", nil)
+	sessionReq.Header.Set("Accept", "application/json")
+	sessionReq.AddCookie(cookie)
+	sessionResp, err := server.Client().Do(sessionReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessionRaw, _ := io.ReadAll(sessionResp.Body)
+	sessionResp.Body.Close()
+	var session struct {
+		CSRFToken string `json:"csrfToken"`
+	}
+	if err := json.Unmarshal(sessionRaw, &session); err != nil {
+		t.Fatal(err)
+	}
+	post := func(path string) (int, []byte) {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodPost, server.URL+"/api/v1"+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Origin", origin)
+		req.Header.Set("X-CSRF-Token", session.CSRFToken)
+		req.AddCookie(cookie)
+		resp, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		raw, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, raw
+	}
+	status, raw := post("/rounds/" + h.runID + "/stop")
+	if status != http.StatusOK {
+		t.Fatalf("HTTP stop: %d %s", status, raw)
+	}
+	var stopped struct {
+		State string `json:"state"`
+	}
+	if err := json.Unmarshal(raw, &stopped); err != nil {
+		t.Fatal(err)
+	}
+	if stopped.State != "paused" {
+		t.Fatalf("stopped round: %+v", stopped)
+	}
+	if status, raw := post("/rounds/" + h.runID + "/resume"); status != http.StatusConflict {
+		t.Fatalf("HTTP resume: %d %s, want 409", status, raw)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		report, err := h.stack.Muse.Report(context.Background(), "t23-run-1")
+		if err == nil {
+			if report.Outcome != musecode.OutcomeStopped {
+				t.Fatalf("muse outcome = %q, want stopped", report.Outcome)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no terminal muse report: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

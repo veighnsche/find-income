@@ -61,8 +61,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
-	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
+	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/identity"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevassess"
@@ -320,25 +319,32 @@ func newT26Harness(t *testing.T) *t26Harness {
 		board: newT26Board(t, t26BoardBodies(t)), provider: provider, saver: saver}
 }
 
+// commission opens a codex-scoped run directly through the run
+// supervisor. T26 pins the saver/identity machinery, not discovery
+// commissioning, and the scoped saver needs the codex turn/record scope
+// plus agent delegation that discovery runs deliberately lack.
 func (h *t26Harness) commission(t *testing.T, key, brief string) t26Run {
 	t.Helper()
-	out, err := h.stack.Research.CommissionResearch(h.ctx, httpapi.CommissionResearchInput{
-		Actor: h.owner, BriefText: brief, IdempotencyKey: key,
-		Allowance: &generated.ResearchAllowance{
+	ownerBrief, err := codexservice.CurrentOwnerBrief(h.ctx, h.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := h.stack.Supervisor.Commission(h.ctx, rounds.CommissionInput{
+		Actor: h.owner, BriefText: brief, AgentID: h.agent.ID,
+		ProfileVersion: ownerBrief.ProfileVersion, RubricVersion: ownerBrief.RubricVersion,
+		RubricSource: ownerBrief.Source,
+		Allowance: &rounds.AllowanceInput{
 			TimeMs: 600000, MaxActions: 200, MaxJev: 100, MaxTurns: 50, MaxConcurrent: 2},
+		IdempotencyKey: key,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !out.Created || out.View.RunId == "" {
+	if !out.Created || out.RunID == "" {
 		t.Fatalf("commission: %+v", out)
 	}
-	round, err := h.db.Round(h.ctx, out.View.RunId)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return t26Run{id: out.View.RunId, gen: round.Generation,
-		profile: int64(out.View.BriefVersion.ProfileVersion), rubric: out.View.BriefVersion.RubricVersion}
+	return t26Run{id: out.RunID, gen: out.Generation,
+		profile: out.ProfileVersion, rubric: out.RubricVersion}
 }
 
 // fetch dispatches one real fetch through the supervisor and returns the

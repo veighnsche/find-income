@@ -144,6 +144,13 @@ type Handler struct {
 	// It runs only when Sink is set; a resolution failure after a
 	// computed assessment reports outcome_uncertain for reconciliation.
 	Supersedes func(context.Context, researchcontract.AssessInput) (string, error)
+	// Reuse optionally resolves a persisted succeeded assessment by reuse
+	// key before any reservation or provider call. It runs only when Sink
+	// is set; nil disables reuse and every assessment calls the provider
+	// and persists fresh. A hit returns the stored answers without
+	// spending: the reuse key binds evidence, questions, brief, model and
+	// purpose, so the stored verdicts answer the new ask identically.
+	Reuse func(ctx context.Context, runID, reuseKey string) (store.DynamicAssessment, error)
 }
 
 var (
@@ -207,6 +214,11 @@ func (h *Handler) Assess(ctx context.Context, in researchcontract.AssessInput) (
 	}
 	requestedModel := h.Provider.RequestedModel()
 	reuseKey := reuseKey(bound, in.ProfileVersion, in.RubricVersion, requestedModel, in.Purpose)
+	if h.Sink != nil && h.Reuse != nil {
+		if reused, ok := h.reusedAssessment(ctx, in.RunID, reuseKey, requestedModel); ok {
+			return reused, nil
+		}
+	}
 	request := buildRequest(in, bound, excerpts)
 	logical, err := json.Marshal(struct {
 		State     any                     `json:"state"`
@@ -902,6 +914,29 @@ func bindAnswers(questions []researchcontract.AssessQuestion, result jev.Result)
 // meaning; the raw confidence travels with the exact exchange instead.
 func uncertainty(confidence float64) string {
 	return fmt.Sprintf("confidence %.4f", confidence)
+}
+
+// reusedAssessment returns the stored answers for a reuse-key hit. A miss,
+// a non-succeeded row or undecodable JSON falls through to a fresh
+// assessment; reuse never fails the ask. Usage stays zero: nothing was
+// spent. ModelVersion falls back to the requested model because the
+// persisted row does not record the provider's returned version.
+func (h *Handler) reusedAssessment(ctx context.Context, runID, reuseKey, requestedModel string) (researchcontract.Assessment, bool) {
+	stored, err := h.Reuse(ctx, runID, reuseKey)
+	if err != nil || stored.Status != "succeeded" {
+		return researchcontract.Assessment{}, false
+	}
+	var answers []researchcontract.AssessAnswer
+	if err := json.Unmarshal([]byte(stored.AnswersJSON), &answers); err != nil || len(answers) == 0 {
+		return researchcontract.Assessment{}, false
+	}
+	var refs []researchcontract.EvidenceRef
+	if err := json.Unmarshal([]byte(stored.EvidenceRefsJSON), &refs); err != nil {
+		return researchcontract.Assessment{}, false
+	}
+	return researchcontract.Assessment{ID: stored.ID, Results: answers,
+		Model: requestedModel, ModelVersion: requestedModel,
+		ReuseKey: reuseKey, EvidenceRefs: refs}, true
 }
 
 func buildAssessment(in researchcontract.AssessInput, bound boundInput, attemptID, requestedModel string,

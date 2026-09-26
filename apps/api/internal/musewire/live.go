@@ -83,6 +83,7 @@ func discoveryPrompt(criteria musecode.PublicCriteria) string {
 	b.WriteString("public_search and public_fetch take full public https:// URLs only, never bare keywords: ")
 	b.WriteString("use job-board search pages, company career pages, public API endpoints, or search-engine result URLs you construct. ")
 	b.WriteString("Rules: at most 12 public_search/public_fetch calls total; save every real vacancy you verify with public_save_vacancy before moving on; ")
+	b.WriteString("pass the receipt_id from the search/fetch output as the save receipt, never the capture_id; search criteria must be an object, never a JSON string; ")
 	b.WriteString("every saved field must come from captured evidence; never invent vacancies, employers, questions, or reasons; ")
 	b.WriteString("when the evidence is thin, save what you verified and report coverage and gaps honestly. ")
 	b.WriteString("End with a short summary of sources searched, vacancies saved, and gaps.")
@@ -209,7 +210,19 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 	if !ok || server == nil {
 		return fmt.Errorf("musewire: no live tool server for run %q", runRef)
 	}
-	trace := &traceWriter{w: t.Trace}
+	// The exec JSONL is the only record of host-side terminals: without a
+	// configured trace sink, persist it to the run workspace so failed
+	// runs stay debuggable after the host exits.
+	traceSink := t.Trace
+	if traceSink == nil {
+		traceFile, err := os.Create(filepath.Join(spec.Workspace, "trace.jsonl"))
+		if err != nil {
+			return err
+		}
+		defer traceFile.Close()
+		traceSink = traceFile
+	}
+	trace := &traceWriter{w: traceSink}
 	trace.note("run %s workspace %s model %s provider %s backend %s", runRef, spec.Workspace, t.ModelID, t.ProviderID, provider)
 
 	tokenBytes := make([]byte, 32)

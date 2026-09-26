@@ -263,6 +263,29 @@ func TestLiveTransportEchoPlumbing(t *testing.T) {
 	if !strings.Contains(trace.String(), "run.terminal.completed") {
 		t.Errorf("trace misses terminal completion")
 	}
+	// Without a configured sink the transport persists the exec JSONL to
+	// the run workspace, so failed runs stay debuggable after exit.
+	fallbackWorkspace := filepath.Join(t.TempDir(), "ws", "run-live-echo-fallback")
+	if err := os.MkdirAll(fallbackWorkspace, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fallback := &LiveTransport{CLIPath: cli, ModelID: "muse-spark-1.3-contributor",
+		ProviderID: "meta", Provider: "echo",
+		Servers: func(string) (*publicresearch.Server, bool) { return server, true }}
+	fallbackSink := &collectSink{}
+	if err := fallback.Run(ctx, musecode.SessionSpec{Tier: musecode.TierContributor,
+		Workspace: fallbackWorkspace, Public: true, Bounds: liveFixtureBounds()},
+		musecode.PublicInput{Criteria: musecode.PublicCriteria{RoleKeywords: []string{"support"}}},
+		musecode.Cursor{}, fallbackSink); err != nil {
+		t.Fatalf("fallback echo run: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(fallbackWorkspace, "trace.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "run.terminal.completed") {
+		t.Errorf("workspace trace misses terminal completion")
+	}
 }
 
 // TestLiveTransportValidationTurn drives one trivial turn against the real

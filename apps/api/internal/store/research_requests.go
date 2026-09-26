@@ -222,6 +222,24 @@ func NextResearchAttemptNo(ctx context.Context, r Reader, requestID string) (int
 	return next.Int64, nil
 }
 
+// GetResearchObservationByCapture loads the latest observation that
+// captured a retrieval row id. Models sometimes pass the capture id
+// where a receipt is required; resolving through the recorded
+// observation keeps the save bound to the same trusted bytes instead
+// of failing on the identifier mix-up.
+func GetResearchObservationByCapture(ctx context.Context, r Reader, captureID string) (ResearchObservation, error) {
+	if captureID == "" {
+		return ResearchObservation{}, fmt.Errorf("%w: capture id required", ErrInvalid)
+	}
+	row := r.QueryRowContext(ctx, `SELECT `+researchObservationColumns+`
+  FROM research_observations WHERE capture_id=? ORDER BY rowid DESC LIMIT 1`, captureID)
+	obs, err := scanResearchObservationRow(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ResearchObservation{}, ErrNotFound
+	}
+	return obs, err
+}
+
 // GetResearchObservationByReceipt loads the observation carrying an executor
 // receipt ref, for server-side receipt resolution (T11). Receipt refs are
 // unique by writer discipline (checked inside the T-observe txn); the frozen

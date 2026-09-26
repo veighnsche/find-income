@@ -14,6 +14,16 @@ const PinnedCLIVersion = "1.4.0"
 // `muse --version` (metadata only, no model call): 1.4.0-R4161.1.
 const ObservedCLIFullVersion = "1.4.0-R4161.1"
 
+// PinnedModelID is the only Meta model id recruitment sessions may run.
+// Verified live 26 September 2026: `muse exec --provider meta --model
+// muse-spark-1.3` reports provider_id meta / model_id muse-spark-1.3 on
+// run.model.configured and completes; the --model flag wins over the
+// settings-file model, and the route folder rejects anything else.
+const PinnedModelID = "muse-spark-1.3"
+
+// PinnedProviderID is the only model provider recruitment sessions use.
+const PinnedProviderID = "meta"
+
 // SessionTransport pins how recruitment sessions reach the CLI. Verified from
 // installed `--help` output: `muse serve` hosts MSP sessions over stdio with
 // sandbox posture fixed at host start, while `muse exec` exposes no

@@ -88,6 +88,30 @@ func (c *Captures) ResolveReceipt(ctx context.Context, receiptID string) (resear
 	return rec, nil
 }
 
+// ResolveReceiptByCapture resolves the receipt behind a retrieval capture
+// id through its latest recorded observation. It runs the same
+// cross-checks as ResolveReceipt: the fallback only repairs the
+// identifier, never the trust.
+func (c *Captures) ResolveReceiptByCapture(ctx context.Context, captureID string) (researchcontract.ExecutionReceipt, error) {
+	var receiptRef string
+	err := c.db.Read(ctx, func(r store.Reader) error {
+		obs, err := store.GetResearchObservationByCapture(ctx, r, captureID)
+		if errors.Is(err, store.ErrNotFound) {
+			return researchcontract.NewError(researchcontract.OutcomeNotFound,
+				"receipt", "no recorded observation captured "+captureID)
+		}
+		if err != nil {
+			return err
+		}
+		receiptRef = obs.ReceiptRef
+		return nil
+	})
+	if err != nil {
+		return researchcontract.ExecutionReceipt{}, err
+	}
+	return c.ResolveReceipt(ctx, receiptRef)
+}
+
 // OpenCapture returns the capture descriptor and a reader over the stored
 // bytes. The id accepts either the retrieval row id or the content sha256
 // (storage is row-per-retrieval; the contract view is content-addressed).

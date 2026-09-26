@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/veighnsche/find-income-dashboard/api/internal/codexservice"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevassess"
@@ -277,20 +278,30 @@ func wireComposed(t *testing.T, dataDir, artifactRoot, scratchRoot string) *comp
 	}
 }
 
+// commission opens a codex-scoped run directly through the run
+// supervisor. Recovery tests pin restore mechanics over composed state,
+// not discovery commissioning, and need the codex scope plus a
+// steerable run.
 func (h *composed) commission(t *testing.T) {
 	t.Helper()
-	out, err := h.stack.Research.CommissionResearch(h.ctx, httpapi.CommissionResearchInput{
-		Actor: h.owner, BriefText: "Find backend roles in Berlin.", IdempotencyKey: "t25-run-1",
+	ownerBrief, err := codexservice.CurrentOwnerBrief(h.ctx, h.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := h.stack.Supervisor.Commission(h.ctx, rounds.CommissionInput{
+		Actor: h.owner, BriefText: "Find backend roles in Berlin.", AgentID: h.agent.ID,
+		ProfileVersion: ownerBrief.ProfileVersion, RubricVersion: ownerBrief.RubricVersion,
+		RubricSource: ownerBrief.Source, IdempotencyKey: "t25-run-1",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !out.Created || out.View.RunId == "" {
+	if !out.Created || out.RunID == "" {
 		t.Fatalf("commission: %+v", out)
 	}
-	h.runID = out.View.RunId
-	h.profile = int64(out.View.BriefVersion.ProfileVersion)
-	h.rubric = out.View.BriefVersion.RubricVersion
+	h.runID = out.RunID
+	h.profile = out.ProfileVersion
+	h.rubric = out.RubricVersion
 	h.refreshGen(t)
 }
 

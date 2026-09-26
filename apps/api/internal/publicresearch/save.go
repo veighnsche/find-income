@@ -2,6 +2,7 @@ package publicresearch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -9,12 +10,23 @@ import (
 	"time"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
+	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
 )
+
+// receiptByCapture resolves a receipt through a retrieval capture id for
+// callers that mix up the two identifiers. *researchmemory.Captures
+// implements it; the CaptureReader interface stays unchanged.
+type receiptByCapture interface {
+	ResolveReceiptByCapture(ctx context.Context, captureID string) (researchcontract.ExecutionReceipt, error)
+}
 
 // saveVacancyArgs is the public_save_vacancy tool input. Only public
 // listing fields exist; there is no slot for private owner, Jev or
 // session data. Receipt binds the vacancy to trusted captured evidence.
 type saveVacancyArgs struct {
+	// EmployerName stays schema-optional so a missing employer reaches
+	// server validation, which answers a guided invalid outcome instead
+	// of a bare schema rejection.
 	PageURL        string `json:"page_url"`
 	EmployerName   string `json:"employer_name,omitempty"`
 	Title          string `json:"title"`
@@ -41,6 +53,10 @@ type listSavedArgs struct {
 }
 
 func (s *Server) saveVacancyTool(ctx context.Context, args saveVacancyArgs) (map[string]any, error) {
+	if strings.TrimSpace(args.EmployerName) == "" {
+		return s.admit(invalidOutcome("employer_name",
+			"employer_name is required; record the employer exactly as the listing names it")), nil
+	}
 	if strings.TrimSpace(args.PageURL) == "" {
 		return invalidOutcome("page_url", "page_url is required"), nil
 	}
@@ -61,12 +77,24 @@ func (s *Server) saveVacancyTool(ctx context.Context, args saveVacancyArgs) (map
 	if reject, ok := s.reserve(); !ok {
 		return reject, nil
 	}
-	receipt, err := s.captures.ResolveReceipt(ctx, args.Receipt)
+	receiptID := args.Receipt
+	receipt, err := s.captures.ResolveReceipt(ctx, receiptID)
 	if err != nil {
-		if out, ok := contractOutcome(err); ok {
-			return s.admit(out), nil
+		if fallback, ok := s.receiptFallback(ctx, receiptID, err); ok {
+			receipt, receiptID = fallback, fallback.ID
+		} else {
+			var cerr *researchcontract.Error
+			if errors.As(err, &cerr) && cerr.Code == researchcontract.OutcomeNotFound {
+				return s.admit(map[string]any{"outcome": string(researchcontract.OutcomeNotFound),
+					"field": "receipt",
+					"detail": fmt.Sprintf("unknown receipt id %q; pass the receipt_id from the search/fetch output, not the capture_id",
+						shortRef(receiptID))}), nil
+			}
+			if out, ok := contractOutcome(err); ok {
+				return s.admit(out), nil
+			}
+			return nil, err
 		}
-		return nil, err
 	}
 	if receipt.CaptureID == "" {
 		return s.admit(invalidOutcome("receipt", "receipt carries no capture; a vacancy needs captured evidence")), nil
@@ -89,7 +117,7 @@ func (s *Server) saveVacancyTool(ctx context.Context, args saveVacancyArgs) (map
 		LocationText: args.LocationText,
 		PostedText:   args.PostedText,
 		CapturedAt:   s.now().UTC().Format(time.RFC3339),
-		ReceiptRef:   args.Receipt,
+		ReceiptRef:   receiptID,
 	}
 	s.vacancies[vac.VacancyRef] = vac
 	s.vacOrder = append(s.vacOrder, vac.VacancyRef)
@@ -98,6 +126,35 @@ func (s *Server) saveVacancyTool(ctx context.Context, args saveVacancyArgs) (map
 	}
 	s.mu.Unlock()
 	return s.admit(map[string]any{"outcome": "ok", "vacancy": vac}), nil
+}
+
+// receiptFallback repairs the observed model mix-up of passing the
+// capture id where the receipt is required. Only a not_found receipt
+// error falls through, and only to a backend that resolves capture ids
+// through recorded observations; anything else keeps its original error.
+func (s *Server) receiptFallback(ctx context.Context, receiptID string, resolveErr error) (researchcontract.ExecutionReceipt, bool) {
+	var cerr *researchcontract.Error
+	if !errors.As(resolveErr, &cerr) || cerr.Code != researchcontract.OutcomeNotFound {
+		return researchcontract.ExecutionReceipt{}, false
+	}
+	lookup, ok := s.captures.(receiptByCapture)
+	if !ok {
+		return researchcontract.ExecutionReceipt{}, false
+	}
+	resolved, err := lookup.ResolveReceiptByCapture(ctx, receiptID)
+	if err != nil {
+		return researchcontract.ExecutionReceipt{}, false
+	}
+	return resolved, true
+}
+
+// shortRef caps an echoed caller id so a hostile receipt value cannot
+// bloat the outcome envelope.
+func shortRef(ref string) string {
+	if len(ref) > 64 {
+		return ref[:64]
+	}
+	return ref
 }
 
 func (s *Server) saveQuestionTool(_ context.Context, args saveQuestionArgs) (map[string]any, error) {

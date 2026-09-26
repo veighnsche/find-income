@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
+	"github.com/veighnsche/find-income-dashboard/api/internal/musewire"
+	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
@@ -247,11 +249,22 @@ func (h *Handler) stopResearchRun(w http.ResponseWriter, r *http.Request, id str
 		fail(w, http.StatusServiceUnavailable, generated.ApiErrorCodeUnavailable, "Research supervision is not connected yet.")
 		return
 	}
+	// Resolve the muse run before fencing: stopping the round must also
+	// fence the live Contributor session behind a discovery run.
+	round, err := h.database.Round(r.Context(), id)
+	if err != nil {
+		failResearch(w, err)
+		return
+	}
+	runRef, isMuse := musewire.CommissionedRunRef(round)
 	if _, err := h.researchControl.Stop(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, id, "owner stop"); err != nil {
 		failResearch(w, err)
 		return
 	}
-	round, err := h.database.Round(r.Context(), id)
+	if isMuse && h.muse != nil {
+		h.muse.Stop(runRef, "owner stop")
+	}
+	round, err = h.database.Round(r.Context(), id)
 	if err != nil {
 		failResearch(w, err)
 		return
@@ -267,6 +280,13 @@ func (h *Handler) resumeResearchRun(w http.ResponseWriter, r *http.Request, id s
 	if h.researchControl == nil {
 		fail(w, http.StatusServiceUnavailable, generated.ApiErrorCodeUnavailable, "Research supervision is not connected yet.")
 		return
+	}
+	if round, err := h.database.Round(r.Context(), id); err == nil {
+		if _, isMuse := musewire.CommissionedRunRef(round); isMuse {
+			failResearch(w, researchcontract.NewError(researchcontract.OutcomeConflict,
+				"run", "muse discovery runs cannot resume after stop; commission a new run"))
+			return
+		}
 	}
 	if _, err := h.researchControl.Resume(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, id); err != nil {
 		failResearch(w, err)

@@ -309,3 +309,24 @@ func TestArtifactStoreDiscipline(t *testing.T) {
 		t.Fatal("receipt overwrite accepted")
 	}
 }
+
+func TestResolveReceiptByCapture(t *testing.T) {
+	env := newTestEnv(t, time.Minute)
+	ctx := context.Background()
+	_, captureID := observeFull(t, env, "rcpt-cap", "<html>by capture</html>")
+	rec, err := env.caps.ResolveReceiptByCapture(ctx, captureID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.ID != "rcpt-cap" {
+		t.Fatalf("resolved receipt = %q, want rcpt-cap", rec.ID)
+	}
+	if _, err := env.caps.ResolveReceiptByCapture(ctx, "cap-unknown"); err == nil {
+		t.Fatal("unknown capture resolved")
+	} else {
+		mustContractCode(t, err, researchcontract.OutcomeNotFound)
+	}
+	if _, err := env.caps.ResolveReceiptByCapture(ctx, ""); err == nil {
+		t.Fatal("empty capture resolved")
+	}
+}

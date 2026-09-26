@@ -98,6 +98,7 @@ func TestAccessorsMissesAndOrder(t *testing.T) {
 		out, err := s.saveVacancyTool(ctx, saveVacancyArgs{
 			PageURL: "https://careers.novel-example.invalid/" + page,
 			Title:   "Role " + page, Receipt: "rc-fixture-1",
+			EmployerName: "Novel Port",
 		})
 		if err != nil || out["outcome"] != "ok" {
 			t.Fatalf("save %s: %+v %v", page, out, err)

@@ -21,10 +21,40 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jev"
 	"github.com/veighnsche/find-income-dashboard/api/internal/jevassess"
+	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
 	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
+
+// gateTransport holds discovery sessions until the test releases the gate,
+// so commissioned runs stay active deterministically and no test ever
+// spawns the live CLI. started closes when a session enters the transport.
+type gateTransport struct {
+	started chan struct{}
+	proceed chan struct{}
+}
+
+func (g *gateTransport) Run(ctx context.Context, _ musecode.SessionSpec, _ musecode.SessionInput, _ musecode.Cursor, sink musecode.EventSink) error {
+	select {
+	case <-g.started:
+	default:
+		close(g.started)
+	}
+	select {
+	case <-g.proceed:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	sink.Emit(musecode.Event{Kind: musecode.EventFinished})
+	return nil
+}
+
+func fixtureFacts() musecode.Facts {
+	return musecode.Facts{CLIPath: "/fixture/muse", CLIReportVersion: "1.4.0",
+		EffectiveModel: "fixture-model", SubscriptionLaneProved: true,
+		SessionProtocolProved: true, WorkspaceIsolatedProved: true}
+}
 
 // scriptedProvider is a zero-spend jevassess.Provider: verdicts are scripted
 // per question id, pinning the binding machinery (capture refs, brief match,
@@ -115,6 +145,7 @@ type harness struct {
 	agent    store.Actor
 	board    *httptest.Server
 	provider *scriptedProvider
+	gate     *gateTransport
 	runID    string
 	gen      int64
 	profile  int64
@@ -132,12 +163,17 @@ func newHarness(t *testing.T) *harness {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	provider := &scriptedProvider{model: "fixture-jev-1", verdicts: map[string]string{}}
+	gate := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
+	t.Cleanup(func() { close(gate.proceed) })
+	facts := fixtureFacts()
 	cfg := Config{
 		ArtifactRoot:   filepath.Join(dir, "research-artifacts"),
 		ScratchRoot:    filepath.Join(dir, "scratch"),
 		AgentID:        DefaultAgentID,
 		PermitLoopback: true, // test-only: controlled fixture servers
 		JevProvider:    provider,
+		MuseTransport:  gate,
+		MuseFacts:      &facts,
 	}
 	if shell := isolatedShellPath(); shell != "" {
 		cfg.ChromePath = shell // lazy-verified; construction launches nothing
@@ -151,6 +187,7 @@ func newHarness(t *testing.T) *harness {
 		agent:    store.Actor{Kind: "agent", ID: DefaultAgentID},
 		board:    fixtureBoard(t),
 		provider: provider,
+		gate:     gate,
 	}
 }
 
@@ -173,6 +210,29 @@ func (h *harness) commission(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.gen = round.Generation
+}
+
+// commissionSupervisor commissions a codex-scoped run directly through the
+// run supervisor for toolchain tests (saver, bridge, browse, stop/resume
+// routing): those pin the record/dispatch/control machinery, not discovery
+// commissioning, and need the codex turn/record scope plus delegation.
+func (h *harness) commissionSupervisor(t *testing.T) {
+	t.Helper()
+	brief, err := codexservice.CurrentOwnerBrief(h.ctx, h.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := h.stack.Supervisor.Commission(h.ctx, rounds.CommissionInput{
+		Actor: h.owner, BriefText: "Find backend roles in Berlin.", AgentID: h.agent.ID,
+		ProfileVersion: brief.ProfileVersion, RubricVersion: brief.RubricVersion,
+		RubricSource: brief.Source, IdempotencyKey: "t23-run-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.runID = out.RunID
+	h.gen = out.Generation
+	h.profile = out.ProfileVersion
+	h.rubric = out.RubricVersion
 }
 
 func (h *harness) fetch(t *testing.T, key, url string) (obsID, capID string) {
@@ -253,7 +313,7 @@ func spanOf(t *testing.T, body, needle string) (int64, int64) {
 
 func TestIntegratedControlledSourceRun(t *testing.T) {
 	h := newHarness(t)
-	h.commission(t)
+	h.commissionSupervisor(t)
 	saver, err := h.stack.NewSaverFor(h.agent)
 	if err != nil {
 		t.Fatal(err)
@@ -559,7 +619,7 @@ func (b bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 func TestBridgeServesRealToolchain(t *testing.T) {
 	h := newHarness(t)
-	h.commission(t)
+	h.commissionSupervisor(t)
 	token := strings.Repeat("t", 64)
 	svc, err := codexservice.New(h.ctx, h.db, codexservice.Config{
 		Host: "isolated.test", User: "runner", IdentityFile: "/key", KnownHostsFile: "/known",
@@ -723,9 +783,11 @@ func TestHTTPResearchAPIOnRealStack(t *testing.T) {
 	if !strings.Contains(string(reportRaw), h.runID) {
 		t.Fatalf("report: %s", reportRaw)
 	}
+	// Muse discovery runs are not steerable: the owner commissions a new
+	// run instead, and the API says so with a conflict.
 	status, steerRaw := do(http.MethodPost, "/research/runs/"+h.runID+"/steer", `{"body":"http steer check"}`, cookie, session.CSRFToken)
-	if status != http.StatusOK || !strings.Contains(string(steerRaw), "messageId") {
-		t.Fatalf("steer: %d %s", status, steerRaw)
+	if status != http.StatusConflict {
+		t.Fatalf("steer: %d %s, want 409", status, steerRaw)
 	}
 }
 
@@ -738,9 +800,13 @@ func TestContinuationAcrossRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := &scriptedProvider{model: "fixture-jev-1", verdicts: map[string]string{}}
+	gate := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
+	t.Cleanup(func() { close(gate.proceed) })
+	facts := fixtureFacts()
 	stack, err := Wire(db, Config{
 		ArtifactRoot: filepath.Join(dir, "research-artifacts"), AgentID: DefaultAgentID,
 		PermitLoopback: true, JevProvider: provider,
+		MuseTransport: gate, MuseFacts: &facts,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -781,9 +847,12 @@ func TestContinuationAcrossRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db2.Close() })
+	gate2 := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
+	t.Cleanup(func() { close(gate2.proceed) })
 	stack2, err := Wire(db2, Config{
 		ArtifactRoot: filepath.Join(dir, "research-artifacts"), AgentID: DefaultAgentID,
 		PermitLoopback: true, JevProvider: provider,
+		MuseTransport: gate2, MuseFacts: &facts,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -862,7 +931,7 @@ func TestBrowseKindThroughIntegratedStack(t *testing.T) {
 		t.Skip("isolated headless shell unavailable; T16 covers the browser kind")
 	}
 	h := newHarness(t)
-	h.commission(t)
+	h.commissionSupervisor(t)
 	out, err := h.stack.Supervisor.Dispatch(h.ctx, rounds.DispatchInput{
 		RunID: h.runID, Generation: h.gen, Kind: researchcontract.ExecuteBrowse,
 		Request: researchcontract.RequestDescriptor{

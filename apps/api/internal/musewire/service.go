@@ -25,8 +25,23 @@ const CommissionIntent = "muse_contributor_discovery"
 // ErrUnknownRun reports a run ref with no terminal row or cursor.
 var ErrUnknownRun = errors.New("musewire: unknown run")
 
-// Deps wires one discovery service. Transport is provider-disabled until
-// the E11-authorized live transport exists; commissions fail closed meanwhile.
+// ErrRunInProgress reports a same-key commission for a run that is still
+// conducting. The admission already happened; poll the run instead of
+// recommissioning.
+var ErrRunInProgress = errors.New("musewire: run already in progress")
+
+// Deps wires one discovery service. Production passes the live exec
+// transport; unready facts or a disabled transport fail commissions
+// closed at admission while reads stay honest. Saved journals saved
+// records and merges them into the run checkpoint (nil skips: fixture
+// services without a run supervisor); production passes the supervisor
+// so run views and reports list classified opportunities.
+// SavedRecorder journals saved records and merges them into the run
+// checkpoint. *rounds.Supervisor satisfies it.
+type SavedRecorder interface {
+	NoteSavedRecords(ctx context.Context, runID, batchKey string, recordIDs []string) error
+}
+
 type Deps struct {
 	Facts      musecode.Facts
 	Bounds     musecode.Bounds
@@ -38,6 +53,7 @@ type Deps struct {
 	Captures   researchcontract.CaptureReader
 	Assessor   researchcontract.Assessor
 	Classifier Classifier
+	Saved      SavedRecorder
 	Workspaces string
 }
 
@@ -54,6 +70,7 @@ type Service struct {
 	captures   researchcontract.CaptureReader
 	assessor   researchcontract.Assessor
 	classifier Classifier
+	saved      SavedRecorder
 	workspaces string
 
 	mu           sync.Mutex
@@ -92,7 +109,8 @@ func NewService(deps Deps) (*Service, error) {
 		facts: deps.Facts, bounds: deps.Bounds, transport: deps.Transport,
 		cursors: deps.Cursors, db: deps.DB, actor: deps.Actor,
 		executor: deps.Executor, captures: deps.Captures, assessor: deps.Assessor,
-		classifier: classifier, workspaces: deps.Workspaces, runs: map[string]*retainedRun{},
+		classifier: classifier, saved: deps.Saved,
+		workspaces: deps.Workspaces, runs: map[string]*retainedRun{},
 	}, nil
 }
 
@@ -115,6 +133,25 @@ func (s *Service) Readiness(tier musecode.Tier) musecode.Status {
 // Commissions counts admitted discovery runs. Reads never increment it.
 func (s *Service) Commissions() int64 {
 	return atomic.LoadInt64(&s.commissioned)
+}
+
+// DiscoveryCeiling reports the service bounds ceiling. Per-run bounds can
+// only narrow it, never widen it.
+func (s *Service) DiscoveryCeiling() musecode.Bounds {
+	return s.bounds
+}
+
+// CommissionedRunRef resolves the discovery run ref behind a muse round:
+// muse rounds carry the CommissionIntent and a "muse:"+runRef request key.
+func CommissionedRunRef(round store.Round) (string, bool) {
+	if round.Intent != CommissionIntent {
+		return "", false
+	}
+	ref, ok := strings.CutPrefix(round.RequestKey, "muse:")
+	if !ok || !validRunRef(ref) {
+		return "", false
+	}
+	return ref, true
 }
 
 // ServerForRun returns the live public tool server of a retained run so the
@@ -155,36 +192,89 @@ func validRunRef(runRef string) bool {
 		!strings.Contains(runRef, "\\") && !strings.Contains(runRef, "..")
 }
 
-// CommissionDiscovery admits one bounded Contributor discovery run, conducts
-// it to a terminal result, classifies saved vacancies and persists the
-// terminal row. Same-key replays return the stored result without
-// re-conducting; unknown prior state fails closed instead of replaying blind.
-func (s *Service) CommissionDiscovery(ctx context.Context, runRef string, criteria musecode.PublicCriteria, profileVersion int64, rubricVersion string) (CommissionResult, error) {
+// AsyncAdmission acknowledges an admitted discovery run that conducts in
+// the background. Created=false replays the existing run's identity:
+// the caller polls the run instead of conducting again.
+type AsyncAdmission struct {
+	RunRef  string
+	RoundID string
+	Created bool
+}
+
+// conductSetup carries one admitted run from admission to conduction.
+type conductSetup struct {
+	spec       musecode.SessionSpec
+	input      musecode.PublicInput
+	supervisor *musecode.Supervisor
+	server     *publicresearch.Server
+	round      store.Round
+}
+
+// runBounds resolves per-run bounds: zero selects the service ceiling,
+// otherwise each dimension clamps down to the ceiling and the result
+// must validate. Bounds can only narrow, never widen.
+func (s *Service) runBounds(bounds musecode.Bounds) (musecode.Bounds, error) {
+	if bounds == (musecode.Bounds{}) {
+		return s.bounds, nil
+	}
+	eff := s.bounds
+	if bounds.MaxWallClock > 0 && bounds.MaxWallClock < eff.MaxWallClock {
+		eff.MaxWallClock = bounds.MaxWallClock
+	}
+	if bounds.MaxModelSteps > 0 && bounds.MaxModelSteps < eff.MaxModelSteps {
+		eff.MaxModelSteps = bounds.MaxModelSteps
+	}
+	if bounds.MaxToolCalls > 0 && bounds.MaxToolCalls < eff.MaxToolCalls {
+		eff.MaxToolCalls = bounds.MaxToolCalls
+	}
+	if bounds.MaxBytesPerOp > 0 && bounds.MaxBytesPerOp < eff.MaxBytesPerOp {
+		eff.MaxBytesPerOp = bounds.MaxBytesPerOp
+	}
+	if bounds.MaxBytesTotal > 0 && bounds.MaxBytesTotal < eff.MaxBytesTotal {
+		eff.MaxBytesTotal = bounds.MaxBytesTotal
+	}
+	if err := eff.Validate(); err != nil {
+		return musecode.Bounds{}, err
+	}
+	return eff, nil
+}
+
+// admitDiscovery runs the synchronous admission preamble shared by sync and
+// async commissions: availability, workspace, session, round, checkpoint,
+// tools and retained registration. A same-key replay returns its stored
+// result instead of a setup; callers must not conduct twice.
+func (s *Service) admitDiscovery(ctx context.Context, runRef string, criteria musecode.PublicCriteria, profileVersion int64, rubricVersion string, bounds musecode.Bounds) (*conductSetup, *CommissionResult, error) {
 	if !validRunRef(runRef) {
-		return CommissionResult{}, fmt.Errorf("%w: invalid run ref", ErrUnknownRun)
+		return nil, nil, fmt.Errorf("%w: invalid run ref", ErrUnknownRun)
 	}
 	status := musecode.Check(musecode.TierContributor, s.facts)
 	if !status.Available {
-		return CommissionResult{}, fmt.Errorf("musewire: contributor unavailable (%s): %s", status.Code, status.Detail)
+		return nil, nil, fmt.Errorf("musewire: contributor unavailable (%s): %s", status.Code, status.Detail)
 	}
 	workspace := filepath.Join(s.workspaces, "contributor", runRef)
 	if err := os.MkdirAll(workspace, 0o700); err != nil {
-		return CommissionResult{}, err
+		return nil, nil, err
 	}
-	spec, err := musecode.NewSession(status, workspace, s.bounds, nil)
+	spec, err := musecode.NewSession(status, workspace, bounds, nil)
 	if err != nil {
-		return CommissionResult{}, err
+		return nil, nil, err
 	}
 	// Lookup-first replay: the round digest covers the deadline, so a second
 	// StartRound call can never replay. The guard below keeps the
 	// same-key-different-input conflict honest instead.
 	if existing, err := s.db.RoundByRequest(ctx, s.actor, "muse:"+runRef); err == nil {
-		return s.replayGuarded(ctx, runRef, existing, profileVersion, rubricVersion)
+		replayed, err := s.replayGuarded(ctx, runRef, existing, profileVersion, rubricVersion)
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, &replayed, nil
 	} else if !errors.Is(err, store.ErrNotFound) {
-		return CommissionResult{}, fmt.Errorf("musewire: lookup round: %w", err)
+		return nil, nil, fmt.Errorf("musewire: lookup round: %w", err)
 	}
 	round, created, err := s.db.StartRound(ctx, s.actor, store.StartRoundInput{
-		RequestKey: "muse:" + runRef, Intent: CommissionIntent, Outcome: "pending",
+		// Outcome research_run routes owner stop/resume to the research
+		// run control; muse rounds are research runs.
+		RequestKey: "muse:" + runRef, Intent: CommissionIntent, Outcome: "research_run",
 		ProfileVersion: profileVersion,
 		Scope: store.RoundScope{
 			// research.search/fetch/api let the production executor
@@ -196,33 +286,37 @@ func (s *Service) CommissionDiscovery(ctx context.Context, runRef string, criter
 			Resources: []string{store.ResearchAuthorityResource},
 		},
 		Limits: store.RoundAllowance{
-			Requests: int64(s.bounds.MaxToolCalls), Items: 1000,
-			Tools: int64(s.bounds.MaxToolCalls), Turns: int64(s.bounds.MaxModelSteps),
+			Requests: int64(bounds.MaxToolCalls), Items: 1000,
+			Tools: int64(bounds.MaxToolCalls), Turns: int64(bounds.MaxModelSteps),
 		},
-		Deadline: time.Now().Add(s.bounds.MaxWallClock),
+		Deadline: time.Now().Add(bounds.MaxWallClock),
 	})
 	if err != nil {
-		return CommissionResult{}, fmt.Errorf("musewire: start round: %w", err)
+		return nil, nil, fmt.Errorf("musewire: start round: %w", err)
 	}
 	if !created {
-		return s.replay(ctx, runRef)
+		replayed, err := s.replay(ctx, runRef)
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, &replayed, nil
 	}
 	if _, err := s.db.ActivateRound(ctx, s.actor, round.ID); err != nil {
-		return CommissionResult{}, fmt.Errorf("musewire: activate round: %w", err)
+		return nil, nil, fmt.Errorf("musewire: activate round: %w", err)
 	}
 	if err := s.db.ResearchWrite(ctx, func(db store.ResearchDB) error {
 		return store.SaveRunCheckpoint(ctx, db, round.ID, researchcontract.Checkpoint{
 			ProfileVersion: profileVersion, RubricVersion: rubricVersion, Generation: 1,
 		})
 	}); err != nil {
-		return CommissionResult{}, fmt.Errorf("musewire: checkpoint brief: %w", err)
+		return nil, nil, fmt.Errorf("musewire: checkpoint brief: %w", err)
 	}
 	server, err := publicresearch.NewServer(publicresearch.Deps{
-		Executor: s.executor, Captures: s.captures, Bounds: s.bounds,
+		Executor: s.executor, Captures: s.captures, Bounds: bounds,
 		RunID: round.ID, Generation: 1,
 	})
 	if err != nil {
-		return CommissionResult{}, err
+		return nil, nil, err
 	}
 	validate := func(ref string) error {
 		if _, ok := server.Vacancy(ref); ok {
@@ -237,16 +331,14 @@ func (s *Service) CommissionDiscovery(ctx context.Context, runRef string, criter
 	s.mu.Lock()
 	s.runs[runRef] = &retainedRun{supervisor: supervisor, server: server}
 	s.mu.Unlock()
-	admission, err := supervisor.StartRun(ctx, runRef, spec, musecode.PublicInput{Criteria: criteria}, s.facts)
-	if err != nil {
-		return CommissionResult{}, err
-	}
-	atomic.AddInt64(&s.commissioned, 1)
-	terminal, ok := supervisor.Result(runRef)
-	if !ok {
-		return CommissionResult{}, errors.New("musewire: admitted run has no terminal result")
-	}
-	findings, classifyErrs := s.classifySaved(ctx, round.ID, profileVersion, rubricVersion, server, terminal.SavedRefs)
+	return &conductSetup{spec: spec, input: musecode.PublicInput{Criteria: criteria},
+		supervisor: supervisor, server: server, round: round}, nil, nil
+}
+
+// finalizeConducted classifies a conducted run's saves and persists the
+// terminal round and report rows.
+func (s *Service) finalizeConducted(ctx context.Context, setup *conductSetup, runRef string, profileVersion int64, rubricVersion string, terminal musecode.TerminalResult) ([]store.Finding, []string, error) {
+	findings, classifyErrs := s.classifySaved(ctx, setup.round.ID, profileVersion, rubricVersion, setup.server, terminal.SavedRefs)
 	terminalState := store.RoundCompleted
 	reason := "run completed"
 	if terminal.Outcome != musecode.OutcomeCompleted {
@@ -259,25 +351,139 @@ func (s *Service) CommissionDiscovery(ctx context.Context, runRef string, criter
 	summary, err := json.Marshal(map[string]any{"runRef": runRef,
 		"outcome": string(terminal.Outcome), "findings": len(findings)})
 	if err != nil {
-		return CommissionResult{}, err
+		return nil, nil, err
 	}
 	deliverable := fmt.Sprintf("report saved, %d findings", len(findings))
-	if _, err := s.db.FinishRound(ctx, s.actor, round.ID, terminalState, reason, deliverable, summary); err != nil {
-		return CommissionResult{}, fmt.Errorf("musewire: finish round: %w", err)
+	if _, err := s.db.FinishRound(ctx, s.actor, setup.round.ID, terminalState, reason, deliverable, summary); err != nil {
+		return nil, nil, fmt.Errorf("musewire: finish round: %w", err)
+	}
+	// Journal classified opportunities into the run checkpoint so run
+	// views and reports list them. A lag here never fails the run: the
+	// records are saved, and the gap says the checkpoint lagged.
+	if s.saved != nil && len(findings) > 0 {
+		ids := make([]string, 0, len(findings))
+		for _, finding := range findings {
+			if finding.OpportunityID != "" {
+				ids = append(ids, finding.OpportunityID)
+			}
+		}
+		if len(ids) > 0 {
+			if err := s.saved.NoteSavedRecords(ctx, setup.round.ID, runRef, ids); err != nil {
+				classifyErrs = append(classifyErrs, "musewire: note saved records: "+err.Error())
+			}
+		}
 	}
 	if err := s.db.SaveMuseRunReport(ctx, store.MuseRunReport{
-		RunRef: runRef, RoundID: round.ID, Tier: string(musecode.TierContributor),
+		RunRef: runRef, RoundID: setup.round.ID, Tier: string(musecode.TierContributor),
 		Outcome: string(terminal.Outcome), Detail: terminal.Detail,
 		SavedRefs: terminal.SavedRefs, ClassifyErrors: classifyErrs, UpdatedAt: terminal.EndedAt,
 	}); err != nil {
-		return CommissionResult{}, fmt.Errorf("musewire: persist report: %w", err)
+		return nil, nil, fmt.Errorf("musewire: persist report: %w", err)
 	}
 	s.mu.Lock()
-	s.runs[runRef].roundID = round.ID
+	s.runs[runRef].roundID = setup.round.ID
 	s.runs[runRef].terminal = terminal
 	s.mu.Unlock()
-	return CommissionResult{Admission: admission, Terminal: terminal, RoundID: round.ID,
+	return findings, classifyErrs, nil
+}
+
+// persistConductFailure records a conduct failure as a terminal failed run
+// so polling reads the failure instead of hanging on an active round.
+// Failures here are best-effort: there is no caller left to report to.
+func (s *Service) persistConductFailure(ctx context.Context, runRef, roundID, detail string) {
+	terminal := musecode.TerminalResult{RunRef: runRef, Tier: musecode.TierContributor,
+		Outcome: musecode.OutcomeFailed, Detail: detail, EndedAt: time.Now()}
+	reason := "run failed: " + detail
+	if len(reason) > 100 {
+		reason = reason[:100]
+	}
+	summary, _ := json.Marshal(map[string]any{"runRef": runRef, "outcome": "failed", "findings": 0})
+	_, _ = s.db.FinishRound(ctx, s.actor, roundID, store.RoundFailed, reason, "run failed", summary)
+	_ = s.db.SaveMuseRunReport(ctx, store.MuseRunReport{RunRef: runRef, RoundID: roundID,
+		Tier: string(musecode.TierContributor), Outcome: string(musecode.OutcomeFailed),
+		Detail: detail, UpdatedAt: terminal.EndedAt})
+	s.mu.Lock()
+	if retained, ok := s.runs[runRef]; ok {
+		retained.roundID = roundID
+		retained.terminal = terminal
+	}
+	s.mu.Unlock()
+}
+
+// CommissionDiscovery admits one bounded Contributor discovery run, conducts
+// it to a terminal result, classifies saved vacancies and persists the
+// terminal row. Same-key replays return the stored result without
+// re-conducting; unknown prior state fails closed instead of replaying blind.
+func (s *Service) CommissionDiscovery(ctx context.Context, runRef string, criteria musecode.PublicCriteria, profileVersion int64, rubricVersion string) (CommissionResult, error) {
+	setup, replayed, err := s.admitDiscovery(ctx, runRef, criteria, profileVersion, rubricVersion, s.bounds)
+	if err != nil {
+		return CommissionResult{}, err
+	}
+	if replayed != nil {
+		return *replayed, nil
+	}
+	admission, err := setup.supervisor.StartRun(ctx, runRef, setup.spec, setup.input, s.facts)
+	if err != nil {
+		s.persistConductFailure(context.WithoutCancel(ctx), runRef, setup.round.ID, err.Error())
+		return CommissionResult{}, err
+	}
+	atomic.AddInt64(&s.commissioned, 1)
+	terminal, ok := setup.supervisor.Result(runRef)
+	if !ok {
+		s.persistConductFailure(context.WithoutCancel(ctx), runRef, setup.round.ID, "admitted run has no terminal result")
+		return CommissionResult{}, errors.New("musewire: admitted run has no terminal result")
+	}
+	findings, classifyErrs, err := s.finalizeConducted(ctx, setup, runRef, profileVersion, rubricVersion, terminal)
+	if err != nil {
+		return CommissionResult{}, err
+	}
+	return CommissionResult{Admission: admission, Terminal: terminal, RoundID: setup.round.ID,
 		Findings: findings, ClassifyErrors: classifyErrs}, nil
+}
+
+// CommissionDiscoveryAsync admits one bounded Contributor discovery run and
+// conducts it in the background; the caller polls the run. Zero bounds
+// select the service ceiling, otherwise bounds narrow it. Admission-time
+// failures (unavailable Contributor, brief conflict, store errors) return
+// synchronously; conduct failures persist as a terminal failed run. A
+// same-key replay returns the existing run with Created=false.
+func (s *Service) CommissionDiscoveryAsync(ctx context.Context, runRef string, criteria musecode.PublicCriteria, profileVersion int64, rubricVersion string, bounds musecode.Bounds) (AsyncAdmission, error) {
+	eff, err := s.runBounds(bounds)
+	if err != nil {
+		return AsyncAdmission{}, err
+	}
+	setup, replayed, err := s.admitDiscovery(ctx, runRef, criteria, profileVersion, rubricVersion, eff)
+	if err != nil {
+		if errors.Is(err, ErrRunInProgress) {
+			if round, lerr := s.db.RoundByRequest(ctx, s.actor, "muse:"+runRef); lerr == nil {
+				return AsyncAdmission{RunRef: runRef, RoundID: round.ID}, nil
+			}
+		}
+		return AsyncAdmission{}, err
+	}
+	if replayed != nil {
+		return AsyncAdmission{RunRef: runRef, RoundID: replayed.RoundID}, nil
+	}
+	atomic.AddInt64(&s.commissioned, 1)
+	go s.conductAsync(context.WithoutCancel(ctx), runRef, setup, profileVersion, rubricVersion)
+	return AsyncAdmission{RunRef: runRef, RoundID: setup.round.ID, Created: true}, nil
+}
+
+// conductAsync conducts one admitted run to its terminal record in the
+// background. The context is detached: cancelling the commissioning
+// request never aborts the run; owner stop and session bounds still apply.
+func (s *Service) conductAsync(ctx context.Context, runRef string, setup *conductSetup, profileVersion int64, rubricVersion string) {
+	_, err := setup.supervisor.StartRun(ctx, runRef, setup.spec, setup.input, s.facts)
+	if err != nil {
+		s.persistConductFailure(ctx, runRef, setup.round.ID, err.Error())
+		return
+	}
+	terminal, ok := setup.supervisor.Result(runRef)
+	if !ok {
+		s.persistConductFailure(ctx, runRef, setup.round.ID, "admitted run has no terminal result")
+		return
+	}
+	_, _, _ = s.finalizeConducted(ctx, setup, runRef, profileVersion, rubricVersion, terminal)
 }
 
 // replayGuarded replays a same-key commission only when the brief matches;
@@ -309,7 +515,7 @@ func (s *Service) replay(ctx context.Context, runRef string) (CommissionResult, 
 	s.mu.Unlock()
 	if ok {
 		if retained.terminal.RunRef == "" {
-			return CommissionResult{}, errors.New("musewire: run " + runRef + " is already in progress")
+			return CommissionResult{}, fmt.Errorf("%w: run %q", ErrRunInProgress, runRef)
 		}
 		return s.storedResult(ctx, runRef, retained.roundID, retained.terminal)
 	}
