@@ -100,6 +100,7 @@ type SaveVacancyInput struct {
 	Title        string
 	LocationText string
 	PostedText   string
+	WorkPattern  string
 	SourceHost   string
 	Receipt      string
 }
@@ -168,6 +169,7 @@ func (s *Server) SaveVacancy(ctx context.Context, in SaveVacancyInput) (musecode
 		Title:        in.Title,
 		LocationText: in.LocationText,
 		PostedText:   in.PostedText,
+		WorkPattern:  musecode.SanitizeWorkPattern(in.WorkPattern),
 		CapturedAt:   s.now().UTC().Format(time.RFC3339),
 		ReceiptRef:   receiptID,
 	}

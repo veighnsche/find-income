@@ -125,15 +125,23 @@ func (c StoreClassifier) ClassifyVacancy(ctx context.Context, in VacancyClassifi
 	if employer == "" {
 		return store.Finding{}, fmt.Errorf("musewire: vacancy %q has no employer name", in.Vacancy.VacancyRef)
 	}
-	// One company per classified vacancy: the store has no employer dedup.
-	// A later pass may merge companies without touching findings.
-	company, _, err := c.DB.CreateCompany(ctx, in.Actor, store.CompanyInput{Name: employer})
-	if err != nil {
-		return store.Finding{}, fmt.Errorf("musewire: create company: %w", err)
-	}
-	opp, _, err := c.DB.CreateOpportunity(ctx, in.Actor, vacancyOpportunity(company.ID, in.Vacancy))
-	if err != nil {
-		return store.Finding{}, fmt.Errorf("musewire: create opportunity: %w", err)
+	// Lookup-first: a recollected vacancy reuses its existing identity
+	// without creating a redundant company row. CreateOpportunity would
+	// reconcile anyway; this only skips the orphan company insert.
+	var opp store.Opportunity
+	if existing, err := c.DB.OpportunityBySourceURL(ctx, strings.TrimSpace(in.Vacancy.PageURL)); err == nil {
+		opp = existing
+	} else {
+		// One company per classified vacancy: the store has no employer dedup.
+		// A later pass may merge companies without touching findings.
+		company, _, err := c.DB.CreateCompany(ctx, in.Actor, store.CompanyInput{Name: employer})
+		if err != nil {
+			return store.Finding{}, fmt.Errorf("musewire: create company: %w", err)
+		}
+		opp, _, err = c.DB.CreateOpportunity(ctx, in.Actor, vacancyOpportunity(company.ID, in.Vacancy))
+		if err != nil {
+			return store.Finding{}, fmt.Errorf("musewire: create opportunity: %w", err)
+		}
 	}
 	questions, index, err := frameQuestions(catalog)
 	if err != nil {
@@ -195,6 +203,7 @@ func vacancyOpportunity(companyID string, vacancy musecode.PublicVacancy) store.
 		CompanyID: companyID, Title: strings.TrimSpace(vacancy.Title), Kind: "employment",
 		SourceURL: strings.TrimSpace(vacancy.PageURL), Stage: "found",
 		LocationText: strings.TrimSpace(vacancy.LocationText),
+		WorkPattern: musecode.SanitizeWorkPattern(strings.TrimSpace(vacancy.WorkPattern)),
 	}
 }
 

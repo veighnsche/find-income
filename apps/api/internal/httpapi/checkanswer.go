@@ -127,6 +127,13 @@ func (h *Handler) startOpportunityCheck(w http.ResponseWriter, r *http.Request) 
 	if !decodeRecordJSON(w, r, &input) {
 		return
 	}
+	// A wired but unauthorized performer cannot conduct: refuse with an
+	// honest unavailable instead of parking the job inertly checking
+	// (R19). An unwired handler keeps the plain start for harnesses.
+	if h.museCheck != nil && !h.museCheck.Authorized() {
+		fail(w, http.StatusServiceUnavailable, generated.ApiErrorCodeUnavailable, "Check performer unavailable; retry when the Contributor lane is ready.")
+		return
+	}
 	value, created, err := h.database.StartJobCheck(r.Context(),
 		store.Actor{Kind: p.Kind, ID: p.ID}, r.PathValue("id"), input)
 	if err != nil {

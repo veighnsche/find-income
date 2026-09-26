@@ -45,7 +45,8 @@ const discoverySchemaJSON = `{
           "employer_name": {"type": "string"},
           "title": {"type": "string"},
           "location_text": {"type": "string"},
-          "posted_text": {"type": "string"}
+          "posted_text": {"type": "string"},
+          "work_pattern": {"type": "string", "enum": ["unknown", "onsite", "hybrid", "remote"]}
         },
         "required": ["page_url", "employer_name", "title"],
         "additionalProperties": false
@@ -159,9 +160,10 @@ func discoveryPrompt(criteria musecode.PublicCriteria) string {
 	b.WriteString("Browse each candidate listing page you report: at most 12 web_search/web_fetch calls total. ")
 	b.WriteString("Every reported field must come from a page you browsed; never invent vacancies, employers, titles, or reasons. ")
 	b.WriteString("Report each real vacancy with its exact listing page URL: the app re-fetches every URL itself and only saves what it verifies. ")
+	b.WriteString("State work_pattern (onsite, hybrid, remote) only when the listing page says so explicitly; otherwise use unknown. ")
 	b.WriteString("When the evidence is thin, report what you verified and name the coverage and gaps honestly. ")
 	b.WriteString("End with exactly one JSON object, no surrounding prose:\n")
-	b.WriteString(`{"vacancies":[{"page_url":"...","employer_name":"...","title":"...","location_text":"...","posted_text":"..."}],`)
+	b.WriteString(`{"vacancies":[{"page_url":"...","employer_name":"...","title":"...","location_text":"...","posted_text":"...","work_pattern":"unknown"}],`)
 	b.WriteString(`"sources_searched":["..."],"gaps":["..."]}`)
 	return b.String()
 }

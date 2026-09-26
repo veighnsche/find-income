@@ -637,13 +637,13 @@ func saveValidator(server *publicresearch.Server) func(string) error {
 	}
 }
 
-// ResumeDiscoveryAsync resumes a stopped run: the session re-conducts from
-// its durable cursor under the original admission bounds (the wall clock
-// restarts but never passes the round deadline), then re-finalizes and
-// overwrites the terminal report. Only stopped runs resume: completed,
-// failed, crashed and expired runs are terminal and start over with a
-// new commission, and past-deadline, cursorless and unknown runs
-// conflict honestly. A paused round revives here when run control has
+// ResumeDiscoveryAsync resumes a stopped or failed run: the session
+// re-conducts from its durable cursor under the original admission
+// bounds (the wall clock restarts but never passes the round deadline),
+// then re-finalizes and overwrites the terminal report. Completed,
+// crashed and expired runs are terminal and start over with a new
+// commission, and past-deadline, cursorless and unknown runs conflict
+// honestly. A paused or failed round revives here when run control has
 // not already revived it (the HTTP path revives first for its journal
 // and checkpoint semantics), and the tool server rebinds to the revived
 // generation so post-resume retrieval presents live. Earlier saves keep
@@ -683,28 +683,48 @@ func (s *Service) ResumeDiscoveryAsync(ctx context.Context, runRef string) (Asyn
 		case string(musecode.OutcomeCompleted):
 			return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
 				"run", "completed runs never replay; commission a new run")
-		case string(musecode.OutcomeFailed), string(musecode.OutcomeCrashed), string(musecode.OutcomeExpired):
+		case string(musecode.OutcomeCrashed), string(musecode.OutcomeExpired):
 			return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
 				"run", "run "+row.Outcome+"; commission a new run")
 		}
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return AsyncAdmission{}, fmt.Errorf("musewire: load report: %w", err)
 	}
-	switch round.State {
-	case store.RoundRunning:
-	case store.RoundPaused:
-		revived, err := s.db.ResumeRound(ctx, s.actor, round.ID, round.Generation)
+	revive := func(revive func() (store.Round, error), staying string) (store.Round, bool, error) {
+		revived, err := revive()
 		if err != nil {
 			if errors.Is(err, store.ErrExpired) {
-				return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+				return store.Round{}, false, researchcontract.NewError(researchcontract.OutcomeConflict,
 					"run", "the run deadline passed; commission a new run")
 			}
 			if errors.Is(err, store.ErrUncertain) {
-				return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
-					"run", "the run has unsettled attempts; it stays paused")
+				return store.Round{}, false, researchcontract.NewError(researchcontract.OutcomeConflict,
+					"run", "the run has unsettled attempts; it stays "+staying)
 			}
-			return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+			return store.Round{}, false, researchcontract.NewError(researchcontract.OutcomeConflict,
 				"run", "the run changed state; refresh and retry")
+		}
+		return revived, true, nil
+	}
+	switch round.State {
+	case store.RoundRunning:
+	case store.RoundPaused:
+		revived, _, err := revive(func() (store.Round, error) {
+			return s.db.ResumeRound(ctx, s.actor, round.ID, round.Generation)
+		}, "paused")
+		if err != nil {
+			return AsyncAdmission{}, err
+		}
+		round = revived
+	case store.RoundFailed:
+		// A failed run resumes from its durable cursor when one exists:
+		// stop-time findings stay, only newly saved vacancies classify,
+		// and the re-conduction overwrites the terminal report.
+		revived, _, err := revive(func() (store.Round, error) {
+			return s.db.ResumeFailedRound(ctx, s.actor, round.ID, round.Generation)
+		}, "failed")
+		if err != nil {
+			return AsyncAdmission{}, err
 		}
 		round = revived
 	default:

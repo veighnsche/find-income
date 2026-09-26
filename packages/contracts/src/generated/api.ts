@@ -1164,6 +1164,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/opportunities/{id}/clarifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List one job's owner clarifications with exact answers
+         * @description Job-scoped read of preparation's focused owner questions. Side-effect-free.
+         */
+        get: operations["listClarifications"];
+        put?: never;
+        /**
+         * Open one owner clarification tied to a sourced requirement
+         * @description Idempotent on request key; a reused key with different input conflicts.
+         */
+        post: operations["openClarification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opportunities/{id}/clarifications/{clarificationId}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                clarificationId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save the owner's exact answer, resolving once
+         * @description Verbatim save; a second different answer conflicts instead of forking truth.
+         */
+        post: operations["answerClarification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/opportunities/{id}/artifacts": {
         parameters: {
             query?: never;
@@ -3261,6 +3310,48 @@ export interface components {
             questionSetSha256: string;
             values: components["schemas"]["QuestionAnswerValue"][];
         };
+        ClarificationRequirement: {
+            statement: string;
+            captureId: string;
+            spanStart: number;
+            spanEnd: number;
+        };
+        ClarificationWorkRef: {
+            kind: string;
+            id: string;
+        };
+        Clarification: {
+            id: string;
+            opportunityId: string;
+            checkId: string;
+            /** @enum {string} */
+            origin: "owner_clarification";
+            requirement: components["schemas"]["ClarificationRequirement"];
+            prompt: string;
+            affectedWork: components["schemas"]["ClarificationWorkRef"][];
+            /** @enum {string} */
+            status: "open" | "answered";
+            answer?: string;
+            /** Format: date-time */
+            answeredAt?: string;
+            answeredBy?: {
+                actorKind: string;
+                actorId: string;
+            };
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ClarificationOpen: {
+            requestKey: string;
+            checkId: string;
+            requirement: components["schemas"]["ClarificationRequirement"];
+            prompt: string;
+            affectedWork: components["schemas"]["ClarificationWorkRef"][];
+        };
+        ClarificationAnswer: {
+            requestKey: string;
+            text: string;
+        };
         AnswerValueSave: {
             /** Format: int64 */
             expectedAnswerVersion: number;
@@ -5148,6 +5239,101 @@ export interface operations {
                     "application/json": components["schemas"]["RoleWorkflowState"];
                 };
             };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listClarifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Clarification list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Clarification"][];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    openClarification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClarificationOpen"];
+            };
+        };
+        responses: {
+            /** @description Replayed open */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Clarification"];
+                };
+            };
+            /** @description Clarification opened */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Clarification"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    answerClarification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+                clarificationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClarificationAnswer"];
+            };
+        };
+        responses: {
+            /** @description Answered clarification */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Clarification"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             503: components["responses"]["Unavailable"];

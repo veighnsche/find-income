@@ -47,24 +47,28 @@ func TestCheckPostPerformsWhenAuthorized(t *testing.T) {
 		return fmt.Sprintf(`{"requestKey":"check-perform-1","expectedOpportunityRevision":%d,"expectedWorkflowRevision":0}`, revision)
 	}
 
-	t.Run("unauthorized leaves pending", func(t *testing.T) {
+	t.Run("unauthorized refuses unavailable", func(t *testing.T) {
 		performer := &stubCheckPerformer{authorized: false}
 		h := checkWiredHarness(t, performer)
 		cookie, csrf := h.login()
 		id, revision := newOpportunity(t, h, "check-unauth")
 		performer.db = h.db
 		response := h.request("POST", "/api/v1/opportunities/"+id+"/checks", start(id, revision), cookie, "", csrf, origin)
-		if response.Code != 201 {
-			t.Fatalf("start: %d %s", response.Code, response.Body.String())
+		if response.Code != 503 {
+			t.Fatalf("start: %d %s, want honest 503", response.Code, response.Body.String())
 		}
+		if performer.calls != 0 {
+			t.Fatalf("calls=%d, want no perform", performer.calls)
+		}
+		current := h.request("GET", "/api/v1/opportunities/"+id+"/checks/current", "", cookie, "", "", "")
 		var view struct {
 			Status string `json:"status"`
 		}
-		if err := json.Unmarshal(response.Body.Bytes(), &view); err != nil {
+		if err := json.Unmarshal(current.Body.Bytes(), &view); err != nil {
 			t.Fatal(err)
 		}
-		if view.Status != "checking" || performer.calls != 0 {
-			t.Fatalf("view=%+v calls=%d, want pending with no perform", view, performer.calls)
+		if current.Code != 200 || view.Status != "not_checked" {
+			t.Fatalf("current=%d %+v, want no parked checking row", current.Code, view)
 		}
 	})
 

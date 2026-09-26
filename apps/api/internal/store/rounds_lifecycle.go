@@ -226,6 +226,52 @@ func (s *Store) ResumeRound(ctx context.Context, actor Actor, id string, expecte
 	return r, tx.Commit()
 }
 
+// ResumeFailedRound revives a failed round for one explicit resume: the
+// run re-conducts from its durable cursor under the original bounds and
+// overwrites the terminal report, instead of discarding stop-time work.
+// Completed rounds never revive; crashed/expired runs commission anew.
+// Guards mirror ResumeRound; completed_at clears so the revived round
+// reads running everywhere.
+func (s *Store) ResumeFailedRound(ctx context.Context, actor Actor, id string, expectedGeneration int64) (Round, error) {
+	if !ownerRoundActor(actor) || expectedGeneration < 1 {
+		return Round{}, ErrInvalid
+	}
+	tx, r, err := s.roundWriter(ctx, id)
+	if err != nil {
+		return Round{}, err
+	}
+	defer tx.Rollback()
+	if r.State != RoundFailed {
+		return Round{}, ErrFenced
+	}
+	if r.Generation != expectedGeneration {
+		return Round{}, ErrFenced
+	}
+	if !time.Now().Before(r.Deadline) {
+		return Round{}, ErrExpired
+	}
+	var uncertain int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM round_attempts WHERE round_id=?
+  AND state='uncertain'`, id).Scan(&uncertain); err != nil {
+		return Round{}, err
+	}
+	if uncertain != 0 {
+		return Round{}, ErrUncertain
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE rounds SET state='running',revision=revision+1,
+  generation=generation+1,reconciliation_required=0,stop_reason='',completed_at=NULL,updated_at=? WHERE id=?`, utcNow(), id); err != nil {
+		return Round{}, err
+	}
+	if err := writeRoundAudit(ctx, tx, actor, "round.resume_failed", id); err != nil {
+		return Round{}, err
+	}
+	r, err = scanRound(tx.QueryRowContext(ctx, `SELECT `+roundColumns+` FROM rounds WHERE id=?`, id))
+	if err != nil {
+		return Round{}, err
+	}
+	return r, tx.Commit()
+}
+
 // AwaitRoundInput fences worker work while a missing owner-held fact is
 // requested. An in-flight dispatch must first be stopped and reconciled.
 func (s *Store) AwaitRoundInput(ctx context.Context, actor Actor, id string, unresolved json.RawMessage) (Round, error) {

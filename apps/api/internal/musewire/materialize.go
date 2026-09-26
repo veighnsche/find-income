@@ -29,6 +29,7 @@ type discoverySighting struct {
 	Title        string `json:"title"`
 	LocationText string `json:"location_text"`
 	PostedText   string `json:"posted_text"`
+	WorkPattern  string `json:"work_pattern"`
 }
 
 // discoveryOutput is the parsed discovery turn product.
@@ -136,6 +137,7 @@ func materializeSighting(ctx context.Context, server *publicresearch.Server, ti,
 	vac, _, err := server.SaveVacancy(ctx, publicresearch.SaveVacancyInput{
 		PageURL: pageURL, EmployerName: sighting.EmployerName, Title: sighting.Title,
 		LocationText: sighting.LocationText, PostedText: sighting.PostedText,
+		WorkPattern: sighting.WorkPattern,
 		Receipt: fetched.Receipt.ID,
 	})
 	if err != nil {

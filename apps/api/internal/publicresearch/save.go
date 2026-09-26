@@ -32,6 +32,7 @@ type saveVacancyArgs struct {
 	Title          string `json:"title"`
 	LocationText   string `json:"location_text,omitempty"`
 	PostedText     string `json:"posted_text,omitempty"`
+	WorkPattern    string `json:"work_pattern,omitempty"`
 	SourceHost     string `json:"source_host,omitempty"`
 	Receipt        string `json:"receipt"`
 	IdempotencyKey string `json:"idempotency_key,omitempty"`
@@ -116,6 +117,7 @@ func (s *Server) saveVacancyTool(ctx context.Context, args saveVacancyArgs) (map
 		Title:        args.Title,
 		LocationText: args.LocationText,
 		PostedText:   args.PostedText,
+		WorkPattern:  musecode.SanitizeWorkPattern(args.WorkPattern),
 		CapturedAt:   s.now().UTC().Format(time.RFC3339),
 		ReceiptRef:   receiptID,
 	}

@@ -466,6 +466,39 @@ func (e CheckViewStatus) Valid() bool {
 	}
 }
 
+// Defines values for ClarificationOrigin.
+const (
+	OwnerClarification ClarificationOrigin = "owner_clarification"
+)
+
+// Valid indicates whether the value is a known member of the ClarificationOrigin enum.
+func (e ClarificationOrigin) Valid() bool {
+	switch e {
+	case OwnerClarification:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClarificationStatus.
+const (
+	ClarificationStatusAnswered ClarificationStatus = "answered"
+	ClarificationStatusOpen     ClarificationStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the ClarificationStatus enum.
+func (e ClarificationStatus) Valid() bool {
+	switch e {
+	case ClarificationStatusAnswered:
+		return true
+	case ClarificationStatusOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CompanyDuplicateReason.
 const (
 	SameName    CompanyDuplicateReason = "same_name"
@@ -2844,6 +2877,60 @@ type CheckView struct {
 // CheckViewStatus defines model for CheckView.Status.
 type CheckViewStatus string
 
+// Clarification defines model for Clarification.
+type Clarification struct {
+	AffectedWork []ClarificationWorkRef `json:"affectedWork"`
+	Answer       *string                `json:"answer,omitempty"`
+	AnsweredAt   *time.Time             `json:"answeredAt,omitempty"`
+	AnsweredBy   *struct {
+		ActorId   string `json:"actorId"`
+		ActorKind string `json:"actorKind"`
+	} `json:"answeredBy,omitempty"`
+	CheckId       string                   `json:"checkId"`
+	CreatedAt     time.Time                `json:"createdAt"`
+	Id            string                   `json:"id"`
+	OpportunityId string                   `json:"opportunityId"`
+	Origin        ClarificationOrigin      `json:"origin"`
+	Prompt        string                   `json:"prompt"`
+	Requirement   ClarificationRequirement `json:"requirement"`
+	Status        ClarificationStatus      `json:"status"`
+}
+
+// ClarificationOrigin defines model for Clarification.Origin.
+type ClarificationOrigin string
+
+// ClarificationStatus defines model for Clarification.Status.
+type ClarificationStatus string
+
+// ClarificationAnswer defines model for ClarificationAnswer.
+type ClarificationAnswer struct {
+	RequestKey string `json:"requestKey"`
+	Text       string `json:"text"`
+}
+
+// ClarificationOpen defines model for ClarificationOpen.
+type ClarificationOpen struct {
+	AffectedWork []ClarificationWorkRef   `json:"affectedWork"`
+	CheckId      string                   `json:"checkId"`
+	Prompt       string                   `json:"prompt"`
+	RequestKey   string                   `json:"requestKey"`
+	Requirement  ClarificationRequirement `json:"requirement"`
+}
+
+// ClarificationRequirement defines model for ClarificationRequirement.
+type ClarificationRequirement struct {
+	CaptureId string `json:"captureId"`
+	SpanEnd   int    `json:"spanEnd"`
+	SpanStart int    `json:"spanStart"`
+	Statement string `json:"statement"`
+}
+
+// ClarificationWorkRef defines model for ClarificationWorkRef.
+type ClarificationWorkRef struct {
+	Id   string `json:"id"`
+	Kind string `json:"kind"`
+}
+
 // CommissionResearchRequest defines model for CommissionResearchRequest.
 type CommissionResearchRequest struct {
 	Allowance      *ResearchAllowance `json:"allowance,omitempty"`
@@ -4953,6 +5040,12 @@ type SaveOpportunityArtifactJSONRequestBody = ArtifactSaveRequest
 
 // StartOpportunityCheckJSONRequestBody defines body for StartOpportunityCheck for application/json ContentType.
 type StartOpportunityCheckJSONRequestBody = CheckStartRequest
+
+// OpenClarificationJSONRequestBody defines body for OpenClarification for application/json ContentType.
+type OpenClarificationJSONRequestBody = ClarificationOpen
+
+// AnswerClarificationJSONRequestBody defines body for AnswerClarification for application/json ContentType.
+type AnswerClarificationJSONRequestBody = ClarificationAnswer
 
 // SetOwnerOpportunityDecisionJSONRequestBody defines body for SetOwnerOpportunityDecision for application/json ContentType.
 type SetOwnerOpportunityDecisionJSONRequestBody = OwnerDecisionInput

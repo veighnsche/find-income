@@ -1065,8 +1065,110 @@ func TestResumeDiscoveryAsyncRoundTrip(t *testing.T) {
 	}
 }
 
+// Stop, fail, then resume: a failed run with a durable cursor resumes
+// from it instead of discarding stop-time work. The revived round runs
+// again under the original bounds, the terminal report is overwritten,
+// stop-time findings stay judged once, and only the newly saved vacancy
+// classifies. Cursorless failed runs still conflict (see Conflicts).
+func TestResumeDiscoveryAsyncFailedRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	transport := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{}), emitted: make(chan struct{})}
+	transport.after = func(runCtx context.Context) {
+		<-runCtx.Done()
+	}
+	fix := newConnectedFixture(t, transport, []map[string]string{
+		{"reason-positive": "hybrid-ok", "reason-negative": "abstain", "reason-missing": "abstain"},
+		{"reason-positive": "abstain", "reason-negative": "abstain", "reason-missing": "pay-unknown"},
+	})
+	admitted, err := fix.service.CommissionDiscoveryAsync(ctx, "run-fail-resume",
+		musecode.PublicCriteria{RoleKeywords: []string{"support"}}, fix.profile, fix.rubric, musecode.Bounds{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-transport.started
+	server, ok := fix.service.ServerForRun("run-fail-resume")
+	if !ok {
+		t.Fatal("live tool server unavailable during the session")
+	}
+	session := mcpSession(t, server)
+	ref1 := saveFixtureVacancy(t, session, "https://jobs.example.invalid/1", "Example BV", "Senior support engineer", "rc-1")
+	transport.saves = []string{ref1}
+	close(transport.proceed)
+	<-transport.emitted
+	if !fix.service.Stop("run-fail-resume", "owner stop") {
+		t.Fatal("stop rejected a conducting run")
+	}
+	stopped := waitMuseReport(t, fix.db, "run-fail-resume")
+	if stopped.Outcome != string(musecode.OutcomeStopped) {
+		t.Fatalf("stopped report = %+v", stopped)
+	}
+	transport.after = nil
+	transport.returned = errors.New("fixture: conduction boom")
+	if _, err := fix.service.ResumeDiscoveryAsync(ctx, "run-fail-resume"); err != nil {
+		t.Fatal(err)
+	}
+	failDeadline := time.Now().Add(60 * time.Second)
+	var failed store.MuseRunReport
+	for {
+		failed = waitMuseReport(t, fix.db, "run-fail-resume")
+		if failed.Outcome == string(musecode.OutcomeFailed) {
+			break
+		}
+		if time.Now().After(failDeadline) {
+			t.Fatalf("failed report = %+v, want failed", failed)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	round, err := fix.db.Round(ctx, admitted.RoundID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if round.State != store.RoundFailed {
+		t.Fatalf("failed round state = %q, want failed", round.State)
+	}
+	ref2 := saveFixtureVacancy(t, session, "https://careers.example.invalid/2", "Careers Inc", "Support engineer nights", "rc-2")
+	transport.saves = []string{ref2}
+	transport.returned = nil
+	resumed, err := fix.service.ResumeDiscoveryAsync(ctx, "run-fail-resume")
+	if err != nil {
+		t.Fatalf("failed run with a cursor must resume: %v", err)
+	}
+	if resumed.Created || resumed.RoundID != admitted.RoundID {
+		t.Fatalf("resume = %+v, want identity of %+v", resumed, admitted)
+	}
+	revived, err := fix.db.Round(ctx, admitted.RoundID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revived.State != store.RoundRunning || revived.CompletedAt != "" {
+		t.Fatalf("revived round = %+v, want running with cleared completion", revived)
+	}
+	deadline := time.Now().Add(60 * time.Second)
+	var completed store.MuseRunReport
+	for {
+		completed = waitMuseReport(t, fix.db, "run-fail-resume")
+		if completed.Outcome == string(musecode.OutcomeCompleted) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("resumed report = %+v, want completed", completed)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	page, err := fix.db.ListRunFindings(ctx, admitted.RoundID, "", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 {
+		t.Fatalf("findings = %d, want 2 (stop-time plus resumed, no duplicate)", len(page.Items))
+	}
+	if fix.provider.count() != 2 {
+		t.Fatalf("jev calls = %d, want 2 (one per vacancy)", fix.provider.count())
+	}
+}
+
 // Resume conflicts honestly: unknown runs are unknown, conducting runs
-// stay single-flight, and terminal failed runs never re-conduct.
+// stay single-flight, and cursorless failed runs never re-conduct.
 func TestResumeDiscoveryAsyncConflicts(t *testing.T) {
 	ctx := context.Background()
 	transport := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}

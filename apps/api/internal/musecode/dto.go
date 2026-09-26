@@ -19,8 +19,24 @@ type PublicVacancy struct {
 	Title        string `json:"title"`
 	LocationText string `json:"location_text"`
 	PostedText   string `json:"posted_text"`
-	CapturedAt   string `json:"captured_at"`
-	ReceiptRef   string `json:"receipt_ref"`
+	// WorkPattern is the evidence-grounded arrangement stated on the
+	// listing page: unknown, onsite, hybrid or remote. Anything else
+	// the turn reports sanitizes to unknown; missing stays unknown.
+	WorkPattern string `json:"work_pattern"`
+	CapturedAt  string `json:"captured_at"`
+	ReceiptRef  string `json:"receipt_ref"`
+}
+
+// SanitizeWorkPattern keeps only the arrangement values the listing
+// page may state; every other claim becomes unknown rather than
+// inventing a pattern or failing the save.
+func SanitizeWorkPattern(pattern string) string {
+	switch pattern {
+	case "unknown", "onsite", "hybrid", "remote":
+		return pattern
+	default:
+		return "unknown"
+	}
 }
 
 // PublicQuestion is one actual employer question captured from a public

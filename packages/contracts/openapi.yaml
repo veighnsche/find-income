@@ -1168,6 +1168,71 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/clarifications:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: listClarifications
+      summary: List one job's owner clarifications with exact answers
+      description: Job-scoped read of preparation's focused owner questions. Side-effect-free.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Clarification list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Clarification' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: openClarification
+      summary: Open one owner clarification tied to a sourced requirement
+      description: Idempotent on request key; a reused key with different input conflicts.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/ClarificationOpen' } }
+      responses:
+        '200':
+          description: Replayed open
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Clarification' } }
+        '201':
+          description: Clarification opened
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Clarification' } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/clarifications/{clarificationId}/answer:
+    parameters:
+      - { $ref: '#/components/parameters/RecordId' }
+      - name: clarificationId
+        in: path
+        required: true
+        schema: { type: string, minLength: 1 }
+    post:
+      operationId: answerClarification
+      summary: Save the owner's exact answer, resolving once
+      description: Verbatim save; a second different answer conflicts instead of forking truth.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/ClarificationAnswer' } }
+      responses:
+        '200':
+          description: Answered clarification
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Clarification' } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /opportunities/{id}/artifacts:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     get:
@@ -4067,6 +4132,62 @@ components:
         values:
           type: array
           items: { $ref: '#/components/schemas/QuestionAnswerValue' }
+    ClarificationRequirement:
+      type: object
+      required: [statement, captureId, spanStart, spanEnd]
+      properties:
+        statement: { type: string }
+        captureId: { type: string }
+        spanStart: { type: integer, minimum: 0 }
+        spanEnd: { type: integer, minimum: 1 }
+    ClarificationWorkRef:
+      type: object
+      required: [kind, id]
+      properties:
+        kind: { type: string }
+        id: { type: string }
+    Clarification:
+      type: object
+      required: [id, opportunityId, checkId, origin, requirement, prompt, affectedWork, status, createdAt]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        checkId: { type: string }
+        origin: { type: string, enum: [owner_clarification] }
+        requirement: { $ref: '#/components/schemas/ClarificationRequirement' }
+        prompt: { type: string }
+        affectedWork: { type: array, items: { $ref: '#/components/schemas/ClarificationWorkRef' } }
+        status: { type: string, enum: [open, answered] }
+        answer: { type: string }
+        answeredAt: { type: string, format: date-time }
+        answeredBy:
+          type: object
+          required: [actorKind, actorId]
+          properties:
+            actorKind: { type: string }
+            actorId: { type: string }
+        createdAt: { type: string, format: date-time }
+    ClarificationOpen:
+      type: object
+      additionalProperties: false
+      required: [requestKey, checkId, requirement, prompt, affectedWork]
+      properties:
+        requestKey: { type: string, minLength: 1 }
+        checkId: { type: string, minLength: 1 }
+        requirement: { $ref: '#/components/schemas/ClarificationRequirement' }
+        prompt: { type: string, minLength: 1, maxLength: 2000 }
+        affectedWork:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { $ref: '#/components/schemas/ClarificationWorkRef' }
+    ClarificationAnswer:
+      type: object
+      additionalProperties: false
+      required: [requestKey, text]
+      properties:
+        requestKey: { type: string, minLength: 1 }
+        text: { type: string, minLength: 1, maxLength: 2000 }
     AnswerValueSave:
       type: object
       additionalProperties: false
