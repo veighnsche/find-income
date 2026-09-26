@@ -12,7 +12,7 @@ import (
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
-var requiredTools = []string{"round_context", "round_mutation", "round_evidence_correction", "source_links", "application_pack_prepare"}
+var requiredTools = []string{"round_context", "round_mutation", "round_evidence_correction", "source_links"}
 var errTool = errors.New("Round tool input or authority is invalid; refresh round_context.")
 
 type roundContextArgs struct {
