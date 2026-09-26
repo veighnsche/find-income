@@ -735,6 +735,13 @@ export type MaterialVersion = components["schemas"]["MaterialVersion"]
 export type MaterialStatusView = components["schemas"]["MaterialStatusView"]
 export type MaterialPrepareRequest =
   components["schemas"]["MaterialPrepareRequest"]
+export type ArtifactView = components["schemas"]["ArtifactView"]
+export type ArtifactFormValue = components["schemas"]["ArtifactFormValue"]
+export type ArtifactReadinessEntry =
+  components["schemas"]["ArtifactReadinessEntry"]
+export type ArtifactReadinessSet =
+  components["schemas"]["ArtifactReadinessSet"]
+export type ArtifactSaveRequest = components["schemas"]["ArtifactSaveRequest"]
 export type MaterialEditRequest = components["schemas"]["MaterialEditRequest"]
 export type MaterialRewriteRequest =
   components["schemas"]["MaterialRewriteRequest"]
@@ -993,6 +1000,74 @@ export function rewriteOpportunityMaterials(
     `/opportunities/${encodeURIComponent(id)}/materials/rewrite`,
     {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify(input),
+    }
+  )
+}
+
+export function listArtifactReadiness(
+  id: string,
+  signal?: AbortSignal
+): Promise<ArtifactReadinessSet> {
+  return request<ArtifactReadinessSet>(
+    `/opportunities/${encodeURIComponent(id)}/artifacts`,
+    { signal }
+  )
+}
+
+export function draftOpportunityArtifacts(
+  id: string,
+  input: MaterialPrepareRequest,
+  csrfToken: string
+): Promise<ArtifactReadinessSet> {
+  return request<ArtifactReadinessSet>(
+    `/opportunities/${encodeURIComponent(id)}/artifacts/draft`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify(input),
+    }
+  )
+}
+
+export function listPrepareActivity(
+  id: string,
+  signal?: AbortSignal
+): Promise<CheckActivityPage> {
+  return request<CheckActivityPage>(
+    `/opportunities/${encodeURIComponent(id)}/artifacts/activity`,
+    { signal }
+  )
+}
+
+export function getArtifactReadiness(
+  id: string,
+  artifactType: string,
+  signal?: AbortSignal
+): Promise<ArtifactReadinessEntry> {
+  return request<ArtifactReadinessEntry>(
+    `/opportunities/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactType)}`,
+    { signal }
+  )
+}
+
+export function saveOpportunityArtifact(
+  id: string,
+  artifactType: string,
+  input: ArtifactSaveRequest,
+  csrfToken: string
+): Promise<ArtifactView> {
+  return request<ArtifactView>(
+    `/opportunities/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactType)}`,
+    {
+      method: "PUT",
       headers: {
         "Content-Type": "application/json",
         "X-CSRF-Token": csrfToken,

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import type { MuseReadiness } from "@/features/discovery/muse-state"
 import { MuseReadinessPanel } from "@/features/discovery/muse-panels"
+import { ArtifactsSection } from "@/features/prepare/ArtifactsSection"
 import {
   REWRITE_INSTRUCTION_RUNE_LIMIT,
   countBytes,
@@ -238,13 +239,21 @@ function PrepareBody({
       )
     }
     return (
-      <PreparePrompt
-        jobId={jobId}
-        detail={detail}
-        workflow={workflow}
-        mode="prepare"
-        onDone={onMaterialsChanged}
-      />
+      <div className="flex min-w-0 flex-col gap-6">
+        <PreparePrompt
+          jobId={jobId}
+          detail={detail}
+          workflow={workflow}
+          mode="prepare"
+          onDone={onMaterialsChanged}
+        />
+        <ArtifactsSection
+          jobId={jobId}
+          checkId={detail.id}
+          questionSetSha256={detail.questionSetSha256}
+          workflowRevision={workflow.revision}
+        />
+      </div>
     )
   }
   if (materials.status === "preparing") {
@@ -286,17 +295,31 @@ function PrepareBody({
           stale
           onChanged={onMaterialsChanged}
         />
+        <ArtifactsSection
+          jobId={jobId}
+          checkId={detail.id}
+          questionSetSha256={detail.questionSetSha256}
+          workflowRevision={workflow.revision}
+        />
       </div>
     )
   }
   return (
-    <MaterialVersionPanel
-      jobId={jobId}
-      detail={detail}
-      current={current}
-      stale={false}
-      onChanged={onMaterialsChanged}
-    />
+    <div className="flex min-w-0 flex-col gap-6">
+      <MaterialVersionPanel
+        jobId={jobId}
+        detail={detail}
+        current={current}
+        stale={false}
+        onChanged={onMaterialsChanged}
+      />
+      <ArtifactsSection
+        jobId={jobId}
+        checkId={detail.id}
+        questionSetSha256={detail.questionSetSha256}
+        workflowRevision={workflow.revision}
+      />
+    </div>
   )
 }
 
