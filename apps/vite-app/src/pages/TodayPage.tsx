@@ -1,13 +1,17 @@
 import {
+  getActiveRound,
   getPreferences,
   getResearchRun,
   getRuntimeStatus,
   listOpportunities,
+  listRoleWorkflows,
+  type OpportunityView,
 } from "@/api/client"
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/shared"
 import { discoveryRunStorageKey } from "@/features/discovery/discovery-section"
 import { describeRunState } from "@/features/discovery/research-controls"
-import { useRead } from "@/pages/useRead"
+import { stageStatusText } from "@/pages/role-stages"
+import { useRead, type ReadResult } from "@/pages/useRead"
 
 function savedRunId(): string | null {
   try {
@@ -73,6 +77,12 @@ export function TodayPage() {
     getPreferences(signal)
   )
   const runtime = useRead("today:runtime", (signal) => getRuntimeStatus(signal))
+  const activeRound = useRead("today:active-round", (signal) =>
+    getActiveRound(signal)
+  )
+  const workflows = useRead("today:workflows", (signal) =>
+    listRoleWorkflows(signal)
+  )
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
@@ -83,6 +93,13 @@ export function TodayPage() {
           section reads saved state and starts nothing.
         </p>
       </div>
+
+      <ContinueSection
+        activeRound={activeRound}
+        opportunities={opportunities}
+        preferences={preferences}
+        workflows={workflows}
+      />
 
       {runId === null ? null : <SavedResearch runId={runId} />}
 
@@ -106,10 +123,20 @@ export function TodayPage() {
               onRetry={opportunities.retry}
             />
           ) : opportunities.data.items.length === 0 ? (
-            <EmptyBlock
-              title="No roles tracked yet"
-              description="The server returned an empty opportunity list."
-            />
+            <div className="flex flex-col gap-2">
+              <EmptyBlock
+                title="No roles tracked yet"
+                description="The server returned an empty opportunity list."
+              />
+              <p>
+                <a
+                  href="#/search"
+                  className="text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  Find jobs on My search
+                </a>
+              </p>
+            </div>
           ) : (
             <div className="flex flex-col gap-2">
               <p className="text-sm">
@@ -229,4 +256,169 @@ function activeCount(
 ): number {
   return items.filter((item) => item.opportunity.archivedAt === undefined)
     .length
+}
+
+function mostRecent(items: OpportunityView[]): OpportunityView | null {
+  let best: OpportunityView | null = null
+  for (const item of items) {
+    if (item.opportunity.archivedAt !== undefined) continue
+    if (best === null || item.opportunity.updatedAt > best.opportunity.updatedAt)
+      best = item
+  }
+  return best
+}
+
+/**
+ * Continue where the owner left off (B3). Priority: the exact active or
+ * paused search, then the most recently updated role, then the goals
+ * form when no explicit choices exist. Every state links somewhere
+ * useful; nothing renders a dead end.
+ */
+function ContinueSection({
+  activeRound,
+  opportunities,
+  preferences,
+  workflows,
+}: {
+  activeRound: ReadResult<Awaited<ReturnType<typeof getActiveRound>>>
+  opportunities: ReadResult<Awaited<ReturnType<typeof listOpportunities>>>
+  preferences: ReadResult<Awaited<ReturnType<typeof getPreferences>>>
+  workflows: ReadResult<Awaited<ReturnType<typeof listRoleWorkflows>>>
+}) {
+  const loading =
+    activeRound.status === "loading" ||
+    opportunities.status === "loading" ||
+    preferences.status === "loading" ||
+    workflows.status === "loading"
+  const failed =
+    activeRound.status === "error"
+      ? activeRound
+      : opportunities.status === "error"
+        ? opportunities
+        : preferences.status === "error"
+          ? preferences
+          : workflows.status === "error"
+            ? workflows
+            : null
+
+  return (
+    <section
+      aria-labelledby="today-continue-heading"
+      className="rounded-2xl border bg-card px-4 py-4"
+    >
+      <h2
+        id="today-continue-heading"
+        className="font-heading text-lg font-medium"
+      >
+        Continue
+      </h2>
+      <div className="mt-2">
+        {loading ? (
+          <LoadingBlock label="Loading where you left off…" />
+        ) : failed !== null ? (
+          <ErrorBlock
+            title="Could not load where you left off"
+            message={failed.error ?? "The request could not be completed."}
+            onRetry={() => {
+              activeRound.retry()
+              opportunities.retry()
+              preferences.retry()
+              workflows.retry()
+            }}
+          />
+        ) : (
+          <ContinueBody
+            round={activeRound.data}
+            items={opportunities.data?.items ?? []}
+            criteria={preferences.data?.roleCriteria.length ?? 0}
+            workflows={workflows.data ?? []}
+          />
+        )}
+      </div>
+    </section>
+  )
+}
+
+function ContinueBody({
+  round,
+  items,
+  criteria,
+  workflows,
+}: {
+  round: Awaited<ReturnType<typeof getActiveRound>>
+  items: OpportunityView[]
+  criteria: number
+  workflows: Awaited<ReturnType<typeof listRoleWorkflows>>
+}) {
+  const linkClass =
+    "text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+  if (round !== null) {
+    const paused = round.state === "paused"
+    return (
+      <div className="flex flex-col gap-2 text-sm">
+        <p>
+          {paused
+            ? "Your search is paused. Resume it exactly where it stopped."
+            : "Your search is running. Follow it live."}
+        </p>
+        <p>
+          <a href="#/search" className={linkClass}>
+            {paused ? "Resume search on My search" : "Open the running search"}
+          </a>
+        </p>
+      </div>
+    )
+  }
+  const recent = mostRecent(items)
+  if (recent !== null) {
+    const workflow = workflows.find(
+      (entry) => entry.opportunityId === recent.opportunity.id
+    )
+    const href =
+      workflow === undefined
+        ? `#/jobs/${recent.opportunity.id}`
+        : `#/applications/${recent.opportunity.id}`
+    return (
+      <div className="flex flex-col gap-2 text-sm">
+        <p>
+          Most recent role: {recent.opportunity.title}
+          {workflow === undefined
+            ? "."
+            : ` — ${stageStatusText(workflow)}.`}
+        </p>
+        <p>
+          <a href={href} className={linkClass}>
+            {workflow === undefined
+              ? "Open this role"
+              : "Continue this application"}
+          </a>
+        </p>
+      </div>
+    )
+  }
+  if (criteria === 0) {
+    return (
+      <div className="flex flex-col gap-2 text-sm">
+        <p>
+          No explicit wants or don&apos;t-wants are saved yet. The goals form
+          is open and waiting.
+        </p>
+        <p>
+          <a href="#/search" className={linkClass}>
+            Set your goals
+          </a>
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <p>Your goals are saved and no search is running.</p>
+      <p>
+        <a href="#/search" className={linkClass}>
+          Find jobs on My search
+        </a>
+      </p>
+    </div>
+  )
 }
