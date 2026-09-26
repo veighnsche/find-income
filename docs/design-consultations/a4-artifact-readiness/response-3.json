@@ -1,0 +1,42 @@
+{
+  "RequestedModel": "jev-1.13.0",
+  "ReturnedModel": "jev-1.13.0",
+  "Answers": {
+    "decision": {
+      "Type": "choice",
+      "Choice": {
+        "choice": "evidence_keyword",
+        "probabilities": {
+          "defer_to_prepare": 0,
+          "evidence_keyword": 1,
+          "fixed_kind_map": 0
+        },
+        "confidence": 1
+      },
+      "Score": null
+    }
+  },
+  "Usage": {
+    "input_tokens": 964,
+    "output_tokens": 49
+  },
+  "RawResponse": {
+    "model": "jev-1.13.0",
+    "answers": {
+      "decision": {
+        "type": "choice",
+        "choice": "evidence_keyword",
+        "confidence": 1.0,
+        "probabilities": {
+          "fixed_kind_map": 0.0,
+          "defer_to_prepare": 0.0,
+          "evidence_keyword": 1.0
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 964,
+      "output_tokens": 49
+    }
+  }
+}
