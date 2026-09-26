@@ -190,17 +190,57 @@ func TestExecArgsFor(t *testing.T) {
 	}
 }
 
+func walkProp(name, path string, child any, walk func(name, path string, node map[string]any)) {
+	if node, ok := child.(map[string]any); ok {
+		walk(name, path, node)
+	}
+}
+
 func TestContributorSchemasAreStrictJSON(t *testing.T) {
-	for name, raw := range map[string]string{"discovery": discoverySchemaJSON, "check": checkSchemaJSON} {
+	schemas := map[string]string{"discovery": discoverySchemaJSON, "check": checkSchemaJSON}
+	for _, purpose := range []string{standardDraftPurpose, standardRewritePurpose, standardArtifactPurpose} {
+		raw, err := standardSchemaJSON(purpose)
+		if err != nil {
+			t.Fatalf("standard %s: %v", purpose, err)
+		}
+		schemas["standard/"+purpose] = raw
+	}
+	var walk func(name, path string, node map[string]any)
+	walk = func(name, path string, node map[string]any) {
+		t.Helper()
+		props, _ := node["properties"].(map[string]any)
+		if len(props) > 0 {
+			if node["additionalProperties"] != false {
+				t.Errorf("%s %s: additionalProperties must be false", name, path)
+			}
+			required, _ := node["required"].([]any)
+			have := map[string]bool{}
+			for _, key := range required {
+				if s, ok := key.(string); ok {
+					have[s] = true
+				}
+			}
+			// Strict mode rejects the whole turn when required
+			// omits any property key (live 400: location_text).
+			for key := range props {
+				if !have[key] {
+					t.Errorf("%s %s: required omits property %q", name, path, key)
+				}
+			}
+			for key, child := range props {
+				walkProp(name, path+"."+key, child, walk)
+			}
+		}
+		if items, ok := node["items"].(map[string]any); ok {
+			walk(name, path+"[]", items)
+		}
+	}
+	for name, raw := range schemas {
 		var schema map[string]any
 		if err := json.Unmarshal([]byte(raw), &schema); err != nil {
 			t.Fatalf("%s schema is not JSON: %v", name, err)
 		}
-		props, _ := schema["properties"].(map[string]any)
-		required, _ := schema["required"].([]any)
-		if len(props) == 0 || len(required) == 0 || schema["additionalProperties"] != false {
-			t.Fatalf("%s schema is not strict: %s", name, raw)
-		}
+		walk(name, "$", schema)
 	}
 	var discovery struct {
 		Properties struct {
@@ -214,7 +254,7 @@ func TestContributorSchemasAreStrictJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(discoverySchemaJSON), &discovery); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"page_url", "employer_name", "title"} {
+	for _, want := range []string{"page_url", "employer_name", "title", "location_text", "posted_text", "work_pattern"} {
 		found := false
 		for _, key := range discovery.Properties.Vacancies.Items.Required {
 			found = found || key == want

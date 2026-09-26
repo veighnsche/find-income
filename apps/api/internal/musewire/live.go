@@ -48,7 +48,7 @@ const discoverySchemaJSON = `{
           "posted_text": {"type": "string"},
           "work_pattern": {"type": "string", "enum": ["unknown", "onsite", "hybrid", "remote"]}
         },
-        "required": ["page_url", "employer_name", "title"],
+        "required": ["page_url", "employer_name", "title", "location_text", "posted_text", "work_pattern"],
         "additionalProperties": false
       }
     },
