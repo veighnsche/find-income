@@ -156,6 +156,7 @@ func (c StoreClassifier) ClassifyVacancy(ctx context.Context, in VacancyClassifi
 	input := store.FindingSaveInput{
 		RunID: in.RoundID, OpportunityID: opp.ID, OpportunityRevision: opp.Revision,
 		AssessmentID: assessment.ID, Group: group, UnknownBasis: basis, Reasons: reasons,
+		VacancyRef: in.Vacancy.VacancyRef,
 		EvidenceLinks: []store.FindingEvidenceLinkInput{{
 			CaptureID: receipt.CaptureID, SpanStart: 0, SpanEnd: int64(len(excerpt)), ExcerptSHA256: excerptSHA,
 		}},

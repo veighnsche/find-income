@@ -134,6 +134,7 @@ func TestFindingSaveAndReadRoundTrip(t *testing.T) {
 		Detail: "Listing requires frequent night or weekend on-call rotations."}
 	in.MissingFact = &ReasonChoice{ID: "pay-unknown", Label: "Pay unstated",
 		Detail: "Listing states no base pay, so the minimum cannot be checked."}
+	in.VacancyRef = "vac-1"
 
 	saved, err := s.SaveFinding(ctx, in)
 	if err != nil {
@@ -141,6 +142,9 @@ func TestFindingSaveAndReadRoundTrip(t *testing.T) {
 	}
 	if saved.ID == "" || len(saved.ReuseKey) != 64 || saved.CreatedAt == "" {
 		t.Fatalf("saved identity incomplete: %+v", saved)
+	}
+	if saved.VacancyRef != "vac-1" {
+		t.Fatalf("saved vacancy ref = %q, want vac-1", saved.VacancyRef)
 	}
 	if saved.RunID != "round-1" || saved.OpportunityID != fix.opportunityID || saved.OpportunityRevision != 1 ||
 		saved.AssessmentID != fix.assessment.ID || saved.ProfileVersion != fix.catalog.ProfileVersion ||
@@ -170,6 +174,9 @@ func TestFindingSaveAndReadRoundTrip(t *testing.T) {
 	if got.ID != saved.ID || got.ReuseKey != saved.ReuseKey || got.CreatedAt != saved.CreatedAt ||
 		got.CatalogVersion != saved.CatalogVersion || len(got.Reasons) != 2 || got.Stale {
 		t.Fatalf("read mismatch: %+v vs %+v", got, saved)
+	}
+	if got.VacancyRef != "vac-1" {
+		t.Fatalf("read vacancy ref = %q, want vac-1", got.VacancyRef)
 	}
 	// Verbatim text: catalog wording survives the JSON round trip byte-for-byte.
 	if got.Reasons[0].Label != "Hybrid friendly" ||
@@ -294,6 +301,7 @@ func TestJevGroupUnknownBasisRule(t *testing.T) {
 				Detail: "Listing states no base pay, so the minimum cannot be checked."}
 		},
 		"bad group": func(in *FindingSaveInput) { in.Group = "maybe" },
+		"bad vacancy ref": func(in *FindingSaveInput) { in.VacancyRef = " padded " },
 	}
 	for name, mutate := range violations {
 		t.Run(name, func(t *testing.T) {

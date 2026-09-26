@@ -192,7 +192,9 @@ func (s *Supervisor) Resume(ctx context.Context, runRef string, spec SessionSpec
 
 // Stop fences a running session: app tools stop accepting calls, queued
 // work unqueues via context cancellation, and the supervisor waits for the
-// transport to return before reporting OutcomeStopped.
+// transport to return before reporting OutcomeStopped. The partial save
+// set persists as a cursor (best-effort) so Resume can continue the same
+// bounded run; a zero-save stop still records an empty cursor.
 func (s *Supervisor) Stop(runRef, reason string) {
 	s.mu.Lock()
 	r, ok := s.runs[runRef]
@@ -205,7 +207,17 @@ func (s *Supervisor) Stop(runRef, reason string) {
 		r.stopped = true
 		r.failed = reason
 	}
+	saved := append([]string(nil), r.saved...)
+	tier := r.spec.Tier
 	r.mu.Unlock()
+	cursor := Cursor{RunRef: runRef, Tier: tier, SavedCount: len(saved),
+		SavedRefs: saved, UpdatedAt: time.Now()}
+	if len(saved) > 0 {
+		cursor.LastSavedReceipt = saved[len(saved)-1]
+	}
+	saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = s.cursors.SaveCursor(saveCtx, cursor)
 	r.cancel()
 }
 

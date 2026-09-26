@@ -214,6 +214,42 @@ func TestWriteExecHomeIsolated(t *testing.T) {
 	}
 }
 
+func TestResumeContinuationListsPriorOpenings(t *testing.T) {
+	server, err := publicresearch.NewServer(publicresearch.Deps{
+		Executor: &fakeExecutor{},
+		Captures: &fakeCaptures{
+			receipts: map[string]researchcontract.ExecutionReceipt{
+				"rc-1": {ID: "rc-1", Status: researchcontract.ReceiptOK, CaptureID: "cap-1"},
+			},
+			blobs: map[string][]byte{},
+		},
+		Bounds: liveFixtureBounds(), RunID: "round-fixture", Generation: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seeded, err := server.SeedVacancies([]publicresearch.SeedVacancy{{
+		PageURL: "https://jobs.example.invalid/1", EmployerName: "Example BV",
+		Title: "Senior support engineer", ReceiptRef: "rc-1",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := resumeContinuation(server, musecode.Cursor{RunRef: "run-1",
+		SavedRefs: []string{seeded[0].VacancyRef, "q-absent"}})
+	for _, want := range []string{"CONTINUES an earlier session", "already saved 1 openings",
+		"https://jobs.example.invalid/1", "Example BV", "Senior support engineer",
+		"1 earlier saves are no longer listed here", "public_list_saved"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("continuation misses %q:\n%s", want, text)
+		}
+	}
+	empty := resumeContinuation(liveFixtureServer(t), musecode.Cursor{RunRef: "run-1", SavedRefs: []string{"vac-gone"}})
+	if !strings.Contains(empty, "already saved 0 openings") || !strings.Contains(empty, "public_list_saved") {
+		t.Errorf("empty continuation = %q", empty)
+	}
+}
+
 func TestLiveTransportRefusesStandard(t *testing.T) {
 	transport := &LiveTransport{CLIPath: "/nonexistent", ModelID: "m", ProviderID: "p",
 		Servers: func(string) (*publicresearch.Server, bool) { return nil, false }}

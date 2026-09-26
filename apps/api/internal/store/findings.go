@@ -96,6 +96,10 @@ type Finding struct {
 	MissingFact         *ReasonChoice
 	EvidenceLinks       []FindingEvidenceLink
 	SourceRef           *FindingSourceRef
+	// VacancyRef is the discovery save handle this finding judged, when
+	// the saver was discovery. Resume skips refs that already hold a
+	// finding instead of judging them twice; other savers leave it empty.
+	VacancyRef          string
 	Stale               bool
 	StaleBasis          string
 	CreatedAt           string
@@ -134,6 +138,7 @@ type FindingSaveInput struct {
 	MissingFact         *ReasonChoice
 	EvidenceLinks       []FindingEvidenceLinkInput
 	SourceRef           *FindingSourceRef
+	VacancyRef          string
 }
 
 // FindingListPage is one cursor page of latest-per-opportunity findings.
@@ -301,13 +306,16 @@ func validateFindingSaveInput(in FindingSaveInput) error {
 			return fmt.Errorf("%w: invalid finding source ref", ErrInvalid)
 		}
 	}
+	if in.VacancyRef != "" && !validFindingID(in.VacancyRef) {
+		return fmt.Errorf("%w: invalid finding vacancy ref", ErrInvalid)
+	}
 	return nil
 }
 
 const findingColumns = `id,actor_kind,actor_id,run_id,opportunity_id,opportunity_revision,
  assessment_id,profile_version,rubric_version,catalog_version,candidate_set_hash,reuse_key,
  group_name,unknown_basis,reasons_json,conflict_json,missing_fact_json,evidence_links_json,
- source_id,source_revision,observed_url,created_at`
+ source_id,source_revision,observed_url,vacancy_ref,created_at`
 
 func scanFinding(row rowScanner) (Finding, error) {
 	var f Finding
@@ -316,7 +324,7 @@ func scanFinding(row rowScanner) (Finding, error) {
 	err := row.Scan(&f.ID, &f.Actor.Kind, &f.Actor.ID, &f.RunID, &f.OpportunityID, &f.OpportunityRevision,
 		&f.AssessmentID, &f.ProfileVersion, &f.RubricVersion, &f.CatalogVersion, &f.CandidateSetHash, &f.ReuseKey,
 		&f.Group, &f.UnknownBasis, &reasonsJSON, &conflictJSON, &missingJSON, &evidenceJSON,
-		&sourceID, &sourceRevision, &observedURL, &f.CreatedAt)
+		&sourceID, &sourceRevision, &observedURL, &f.VacancyRef, &f.CreatedAt)
 	if err != nil {
 		return Finding{}, err
 	}
@@ -528,12 +536,12 @@ func (s *Store) SaveFinding(ctx context.Context, in FindingSaveInput) (Finding, 
    (id,actor_kind,actor_id,run_id,opportunity_id,opportunity_revision,assessment_id,
     profile_version,rubric_version,catalog_version,candidate_set_hash,reuse_key,
     group_name,unknown_basis,reasons_json,conflict_json,missing_fact_json,evidence_links_json,
-    source_id,source_revision,observed_url,created_at)
-   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    source_id,source_revision,observed_url,vacancy_ref,created_at)
+   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			id, actor.Kind, actor.ID, in.RunID, in.OpportunityID, in.OpportunityRevision, in.AssessmentID,
 			catalog.ProfileVersion, catalog.RubricVersion, catalog.CatalogVersion, assessment.CandidateSetHash, reuseKey,
 			in.Group, in.UnknownBasis, string(reasonsJSON), conflictJSON, missingJSON, string(evidenceJSON),
-			sourceID, sourceRevision, observedURL, now); err != nil {
+			sourceID, sourceRevision, observedURL, in.VacancyRef, now); err != nil {
 			if strings.Contains(err.Error(), "UNIQUE constraint") {
 				if existing, rerr := scanFinding(db.QueryRowContext(ctx, `SELECT `+findingColumns+
 					` FROM findings WHERE actor_kind=? AND actor_id=? AND reuse_key=?`, actor.Kind, actor.ID, reuseKey)); rerr == nil {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
+	"github.com/veighnsche/find-income-dashboard/api/internal/musewire"
 	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
@@ -94,7 +95,7 @@ func failResearch(w http.ResponseWriter, err error) {
 		return
 	}
 	switch {
-	case errors.Is(err, rounds.ErrNotReady):
+	case errors.Is(err, rounds.ErrNotReady), errors.Is(err, musewire.ErrContributorUnavailable):
 		fail(w, http.StatusServiceUnavailable, generated.ApiErrorCodeUnavailable, "Research supervision is unavailable.")
 	case errors.Is(err, store.ErrInvalid):
 		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Invalid research request.")

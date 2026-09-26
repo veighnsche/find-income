@@ -81,3 +81,45 @@ func (s *Store) LoadMuseRunReport(ctx context.Context, runRef string) (MuseRunRe
 	report.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAt)
 	return report, err
 }
+
+// MuseRunResume is the durable admission payload a stopped run needs to
+// resume: the original search criteria and session bounds as opaque JSON.
+// The store never interprets them; musewire owns the shapes.
+type MuseRunResume struct {
+	RunRef       string
+	RoundID      string
+	CriteriaJSON string
+	BoundsJSON   string
+}
+
+// SaveMuseRunResume inserts one resume payload. Admission writes it once;
+// replays never reach the insert.
+func (s *Store) SaveMuseRunResume(ctx context.Context, resume MuseRunResume) error {
+	if resume.RunRef == "" || resume.RoundID == "" {
+		return errors.New("museruns: run ref and round id required")
+	}
+	if resume.CriteriaJSON == "" {
+		resume.CriteriaJSON = "{}"
+	}
+	if resume.BoundsJSON == "" {
+		resume.BoundsJSON = "{}"
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO muse_run_resume
+		(run_ref,round_id,criteria_json,bounds_json,created_at)
+		VALUES (?,?,?,?,?) ON CONFLICT (run_ref) DO NOTHING`,
+		resume.RunRef, resume.RoundID, resume.CriteriaJSON, resume.BoundsJSON,
+		time.Now().UTC().Format(time.RFC3339Nano))
+	return err
+}
+
+// LoadMuseRunResume reads one resume payload. Unknown runs return ErrNotFound.
+func (s *Store) LoadMuseRunResume(ctx context.Context, runRef string) (MuseRunResume, error) {
+	var resume MuseRunResume
+	err := s.db.QueryRowContext(ctx, `SELECT run_ref,round_id,criteria_json,bounds_json
+		FROM muse_run_resume WHERE run_ref=?`, runRef).
+		Scan(&resume.RunRef, &resume.RoundID, &resume.CriteriaJSON, &resume.BoundsJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return MuseRunResume{}, ErrNotFound
+	}
+	return resume, err
+}

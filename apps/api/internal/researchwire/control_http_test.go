@@ -19,11 +19,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/veighnsche/find-income-dashboard/api/internal/auth"
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi"
 	"github.com/veighnsche/find-income-dashboard/api/internal/musecode"
 	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
+	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
 func TestHTTPStopResumeResearchRun(t *testing.T) {
@@ -210,9 +213,12 @@ func TestHTTPStopResumeResearchRun(t *testing.T) {
 }
 
 // Stopping a muse discovery run over HTTP fences the round and the live
-// Contributor session behind it; resuming answers 409 because stopped
-// discovery runs never resume.
-func TestHTTPStopFencesMuseSession(t *testing.T) {
+// Contributor session behind it; resuming revives the round and
+// re-conducts the session from its durable cursor. The stop-time
+// assessment is fenced with the round, so the stopped report carries the
+// save with an honest gap; the resumed run judges it once revived and
+// completes the same bounded run.
+func TestHTTPStopResumeMuseDiscoveryRun(t *testing.T) {
 	h := newHarness(t)
 	h.commission(t)
 	// Wait until the session sits inside the transport: stopping earlier
@@ -221,6 +227,78 @@ func TestHTTPStopFencesMuseSession(t *testing.T) {
 	case <-h.gate.started:
 	case <-time.After(10 * time.Second):
 		t.Fatal("discovery session never entered the transport")
+	}
+	if _, err := h.db.AuthorReasonCatalog(h.ctx, h.owner, store.ReasonCatalogInput{
+		ProfileVersion: h.profile,
+		Rubric:         "Match senior support roles; hybrid or remote.",
+		Positive:       []store.ReasonChoice{{ID: "hybrid-ok", Label: "Hybrid friendly", Detail: "Listing offers hybrid or remote work."}},
+		Negative:       []store.ReasonChoice{{ID: "oncall-heavy", Label: "Heavy on-call", Detail: "Listing requires heavy on-call."}},
+		MissingInformation: []store.ReasonChoice{
+			{ID: "pay-unknown", Label: "Pay unstated", Detail: "Listing states no base pay."},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	dispatched, err := h.stack.Supervisor.Dispatch(h.ctx, rounds.DispatchInput{
+		RunID: h.runID, Generation: h.gen, Kind: researchcontract.ExecuteFetch,
+		Request: researchcontract.RequestDescriptor{
+			Operation: researchcontract.OperationFetch, Backend: "generic-http",
+			Method: "GET", URLOrQuery: h.board.URL + "/roles/1",
+		},
+		Bounds:         researchcontract.Bounds{MaxBytes: 1 << 20, MaxRequests: 8, DeadlineMs: 15000},
+		IdempotencyKey: "muse-resume-fetch-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dispatched.Outcome != researchcontract.OutcomeOK {
+		t.Fatalf("dispatch: %+v", dispatched)
+	}
+	toolServer, ok := h.stack.Muse.ServerForRun("t23-run-1")
+	if !ok {
+		t.Fatal("live tool server unavailable during the session")
+	}
+	mcpServer := httptest.NewServer(toolServer.Handler())
+	t.Cleanup(mcpServer.Close)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "t27-muse", Version: "1"}, nil)
+	mcpSession, err := mcpClient.Connect(h.ctx, &mcp.StreamableClientTransport{
+		Endpoint: mcpServer.URL, HTTPClient: mcpServer.Client(),
+		DisableStandaloneSSE: true, MaxRetries: -1,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = mcpSession.Close() })
+	saved, err := mcpSession.CallTool(h.ctx, &mcp.CallToolParams{Name: "public_save_vacancy",
+		Arguments: map[string]any{
+			"page_url": h.board.URL + "/roles/1", "employer_name": "Contoso Support",
+			"title": "Support Engineer", "location_text": "Berlin", "receipt": dispatched.Receipt.ID,
+		}})
+	if err != nil || saved.IsError {
+		t.Fatalf("save vacancy: %+v %v", saved, err)
+	}
+	payload, ok := saved.StructuredContent.(map[string]any)
+	if !ok || payload["outcome"] != "ok" {
+		t.Fatalf("save vacancy: %+v", saved.StructuredContent)
+	}
+	vacancy, ok := payload["vacancy"].(map[string]any)
+	if !ok {
+		t.Fatalf("save vacancy: no vacancy in %+v", payload)
+	}
+	ref, _ := vacancy["vacancy_ref"].(string)
+	if ref == "" {
+		t.Fatalf("save vacancy: no ref in %+v", payload)
+	}
+	h.gate.emitted = make(chan struct{})
+	h.gate.saves = []string{ref}
+	h.gate.after = func(runCtx context.Context) {
+		<-runCtx.Done()
+	}
+	h.gate.Release()
+	select {
+	case <-h.gate.emitted:
+	case <-time.After(10 * time.Second):
+		t.Fatal("session never emitted the save")
 	}
 	authSvc := auth.NewService(h.db)
 	const password = "t27-muse-control-password"
@@ -295,21 +373,81 @@ func TestHTTPStopFencesMuseSession(t *testing.T) {
 	if stopped.State != "paused" {
 		t.Fatalf("stopped round: %+v", stopped)
 	}
-	if status, raw := post("/rounds/" + h.runID + "/resume"); status != http.StatusConflict {
-		t.Fatalf("HTTP resume: %d %s, want 409", status, raw)
-	}
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
-		report, err := h.stack.Muse.Report(context.Background(), "t23-run-1")
+		row, err := h.db.LoadMuseRunReport(context.Background(), "t23-run-1")
 		if err == nil {
-			if report.Outcome != musecode.OutcomeStopped {
-				t.Fatalf("muse outcome = %q, want stopped", report.Outcome)
+			if row.Outcome != string(musecode.OutcomeStopped) {
+				t.Fatalf("muse outcome = %q, want stopped", row.Outcome)
 			}
-			return
+			if len(row.SavedRefs) != 1 || row.SavedRefs[0] != ref {
+				t.Fatalf("stopped saves = %v, want [%s]", row.SavedRefs, ref)
+			}
+			if len(row.ClassifyErrors) != 1 || !strings.Contains(row.ClassifyErrors[0], "resume before new work") {
+				t.Fatalf("stopped gaps = %v, want the fence gap", row.ClassifyErrors)
+			}
+			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("no terminal muse report: %v", err)
+			t.Fatalf("no stopped muse report: %v", err)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+	page, err := h.db.ListRunFindings(h.ctx, h.runID, "", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 0 {
+		t.Fatalf("stop-time findings = %d, want 0 (assessment fenced)", len(page.Items))
+	}
+	h.gate.after = nil
+	h.gate.saves = nil
+	status, raw = post("/rounds/" + h.runID + "/resume")
+	if status != http.StatusOK {
+		t.Fatalf("HTTP resume: %d %s", status, raw)
+	}
+	var resumed struct {
+		State string `json:"state"`
+	}
+	if err := json.Unmarshal(raw, &resumed); err != nil {
+		t.Fatal(err)
+	}
+	if resumed.State != "running" {
+		t.Fatalf("resumed round: %+v", resumed)
+	}
+	deadline = time.Now().Add(60 * time.Second)
+	for {
+		row, err := h.db.LoadMuseRunReport(context.Background(), "t23-run-1")
+		if err == nil && row.Outcome == string(musecode.OutcomeCompleted) {
+			if len(row.SavedRefs) != 1 || row.SavedRefs[0] != ref {
+				t.Fatalf("resumed saves = %v, want [%s]", row.SavedRefs, ref)
+			}
+			if len(row.ClassifyErrors) != 0 {
+				t.Fatalf("resumed gaps = %v, want none", row.ClassifyErrors)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no completed muse report: %+v %v", row, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	page, err = h.db.ListRunFindings(h.ctx, h.runID, "", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || page.Items[0].VacancyRef != ref {
+		t.Fatalf("resumed findings = %+v, want the one judged save", page.Items)
+	}
+	round, err := h.db.Round(h.ctx, h.runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if round.State != store.RoundCompleted {
+		t.Fatalf("resumed round state = %q, want completed", round.State)
+	}
+	// A completed run never replays: the terminal round refuses resume.
+	if status, raw := post("/rounds/" + h.runID + "/resume"); status != http.StatusBadRequest {
+		t.Fatalf("completed resume: %d %s, want 400", status, raw)
 	}
 }

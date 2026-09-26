@@ -151,6 +151,39 @@ func testSession(t *testing.T, s *Server) *mcp.ClientSession {
 	return session
 }
 
+// Rebinding moves later retrieval to the revived generation while saves
+// stay put; a non-positive generation refuses without touching the
+// binding.
+func TestRebindGenerationMovesRetrieval(t *testing.T) {
+	exec, caps := testFixtures()
+	server := testServer(t, testBounds(), exec, caps)
+	session := testSession(t, server)
+	call(t, session, "public_search", map[string]any{
+		"query": "https://api.novel-example.invalid/v1/search?q=pilot",
+	})
+	if got := exec.last().Generation; got != 3 {
+		t.Fatalf("pre-rebind generation = %d, want 3", got)
+	}
+	if server.Generation() != 3 {
+		t.Fatalf("server generation = %d, want 3", server.Generation())
+	}
+	if err := server.RebindGeneration(0); err == nil {
+		t.Fatal("zero generation rebound")
+	}
+	if err := server.RebindGeneration(5); err != nil {
+		t.Fatal(err)
+	}
+	if server.Generation() != 5 {
+		t.Fatalf("server generation = %d, want 5", server.Generation())
+	}
+	call(t, session, "public_search", map[string]any{
+		"query": "https://api.novel-example.invalid/v1/search?q=pilot",
+	})
+	if got := exec.last().Generation; got != 5 {
+		t.Fatalf("post-rebind generation = %d, want 5", got)
+	}
+}
+
 func call(t *testing.T, session *mcp.ClientSession, tool string, args map[string]any) map[string]any {
 	t.Helper()
 	if args == nil {

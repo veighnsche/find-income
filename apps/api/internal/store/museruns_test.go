@@ -31,3 +31,39 @@ func TestMuseRunReportRoundTrip(t *testing.T) {
 		t.Error("outcome-less report accepted")
 	}
 }
+
+func TestMuseRunResumeRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	s := openResearchTestDB(t)
+	if _, err := s.LoadMuseRunResume(ctx, "absent"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("absent resume err = %v, want ErrNotFound", err)
+	}
+	want := MuseRunResume{RunRef: "run-1", RoundID: "round-1",
+		CriteriaJSON: `{"roleKeywords":["support"]}`, BoundsJSON: `{"MaxModelSteps":7}`}
+	if err := s.SaveMuseRunResume(ctx, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.LoadMuseRunResume(ctx, "run-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("resume = %+v, want %+v", got, want)
+	}
+	// Admission writes once: a second write keeps the first payload.
+	second := MuseRunResume{RunRef: "run-1", RoundID: "round-2",
+		CriteriaJSON: `{}`, BoundsJSON: `{}`}
+	if err := s.SaveMuseRunResume(ctx, second); err != nil {
+		t.Fatal(err)
+	}
+	kept, err := s.LoadMuseRunResume(ctx, "run-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kept != want {
+		t.Fatalf("resume after re-save = %+v, want %+v", kept, want)
+	}
+	if err := s.SaveMuseRunResume(ctx, MuseRunResume{}); err == nil {
+		t.Error("ref-less resume accepted")
+	}
+}

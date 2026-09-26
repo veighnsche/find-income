@@ -1,0 +1,1 @@
+ALTER TABLE findings ADD COLUMN vacancy_ref TEXT NOT NULL DEFAULT '';

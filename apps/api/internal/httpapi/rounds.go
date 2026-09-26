@@ -9,7 +9,6 @@ import (
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
 	"github.com/veighnsche/find-income-dashboard/api/internal/musewire"
-	"github.com/veighnsche/find-income-dashboard/api/internal/researchcontract"
 	"github.com/veighnsche/find-income-dashboard/api/internal/rounds"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
@@ -281,18 +280,40 @@ func (h *Handler) resumeResearchRun(w http.ResponseWriter, r *http.Request, id s
 		fail(w, http.StatusServiceUnavailable, generated.ApiErrorCodeUnavailable, "Research supervision is not connected yet.")
 		return
 	}
-	if round, err := h.database.Round(r.Context(), id); err == nil {
-		if _, isMuse := musewire.CommissionedRunRef(round); isMuse {
-			failResearch(w, researchcontract.NewError(researchcontract.OutcomeConflict,
-				"run", "muse discovery runs cannot resume after stop; commission a new run"))
+	round, err := h.database.Round(r.Context(), id)
+	if err != nil {
+		failResearch(w, err)
+		return
+	}
+	if runRef, isMuse := musewire.CommissionedRunRef(round); isMuse {
+		// Discovery resume is two-phase: the run control revives the
+		// round, then the stopped Contributor session re-conducts from
+		// its durable cursor in the background.
+		if _, err := h.researchControl.Resume(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, id); err != nil {
+			failResearch(w, err)
 			return
 		}
+		if h.muse == nil {
+			fail(w, http.StatusServiceUnavailable, generated.ApiErrorCodeUnavailable, "Discovery is not connected yet.")
+			return
+		}
+		if _, err := h.muse.ResumeDiscoveryAsync(r.Context(), runRef); err != nil {
+			failResearch(w, err)
+			return
+		}
+		round, err := h.database.Round(r.Context(), id)
+		if err != nil {
+			failResearch(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, roundModel(round))
+		return
 	}
 	if _, err := h.researchControl.Resume(r.Context(), store.Actor{Kind: p.Kind, ID: p.ID}, id); err != nil {
 		failResearch(w, err)
 		return
 	}
-	round, err := h.database.Round(r.Context(), id)
+	round, err = h.database.Round(r.Context(), id)
 	if err != nil {
 		failResearch(w, err)
 		return

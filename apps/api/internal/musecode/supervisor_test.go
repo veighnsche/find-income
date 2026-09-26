@@ -194,7 +194,8 @@ func TestStopFencesLateTools(t *testing.T) {
 		waitFor:   release,
 		emitAfter: []Event{{Kind: EventToolResult, Tool: "public_fetch"}, {Kind: EventSaved, SaveRef: "save-late"}},
 	}
-	supervisor := NewSupervisor(transport, &memoryCursors{}, acceptAll, readyFacts().EffectiveModel)
+	cursors := &memoryCursors{}
+	supervisor := NewSupervisor(transport, cursors, acceptAll, readyFacts().EffectiveModel)
 	done := make(chan error, 1)
 	go func() {
 		_, err := supervisor.StartRun(context.Background(), "run-stop",
@@ -213,6 +214,40 @@ func TestStopFencesLateTools(t *testing.T) {
 	}
 	if len(result.SavedRefs) != 1 || result.SavedRefs[0] != "save-1" {
 		t.Fatalf("saved refs = %v, want only the pre-stop save", result.SavedRefs)
+	}
+	cursor, err := cursors.LoadCursor(context.Background(), "run-stop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cursor.SavedCount != 1 || len(cursor.SavedRefs) != 1 || cursor.SavedRefs[0] != "save-1" {
+		t.Fatalf("stop cursor = %+v, want the pre-stop save", cursor)
+	}
+}
+
+// A zero-save stop still records an empty cursor so the run can resume.
+func TestStopWithoutSavesRecordsEmptyCursor(t *testing.T) {
+	release := make(chan struct{})
+	transport := &scriptTransport{waitFor: release}
+	cursors := &memoryCursors{}
+	supervisor := NewSupervisor(transport, cursors, acceptAll, readyFacts().EffectiveModel)
+	done := make(chan error, 1)
+	go func() {
+		_, err := supervisor.StartRun(context.Background(), "run-stop-empty",
+			testSpec(t, TierContributor, DefaultBounds()), PublicInput{}, readyFacts())
+		done <- err
+	}()
+	time.Sleep(50 * time.Millisecond)
+	supervisor.Stop("run-stop-empty", "owner stop")
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	cursor, err := cursors.LoadCursor(context.Background(), "run-stop-empty")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cursor.SavedCount != 0 || len(cursor.SavedRefs) != 0 || cursor.RunRef != "run-stop-empty" {
+		t.Fatalf("empty stop cursor = %+v", cursor)
 	}
 }
 

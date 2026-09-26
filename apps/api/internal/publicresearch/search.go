@@ -113,7 +113,7 @@ func (s *Server) searchTool(ctx context.Context, args searchArgs) (map[string]an
 	}
 	out, err := s.executor.Execute(ctx, researchcontract.ExecuteInput{
 		Kind: execKind, Request: desc, Bounds: s.execBounds(),
-		IdempotencyKey: args.IdempotencyKey, RunID: s.runID, Generation: s.generation,
+		IdempotencyKey: args.IdempotencyKey, RunID: s.runID, Generation: s.Generation(),
 	})
 	if err != nil {
 		if o, ok := contractOutcome(err); ok {
@@ -214,7 +214,7 @@ func (s *Server) fetchTool(ctx context.Context, args fetchArgs) (map[string]any,
 	}
 	out, err := s.executor.Execute(ctx, researchcontract.ExecuteInput{
 		Kind: execKind, Request: desc, Bounds: s.execBounds(),
-		IdempotencyKey: args.IdempotencyKey, RunID: s.runID, Generation: s.generation,
+		IdempotencyKey: args.IdempotencyKey, RunID: s.runID, Generation: s.Generation(),
 	})
 	if err != nil {
 		if o, ok := contractOutcome(err); ok {

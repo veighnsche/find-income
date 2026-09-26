@@ -90,6 +90,50 @@ func discoveryPrompt(criteria musecode.PublicCriteria) string {
 	return b.String()
 }
 
+// resumeContinuation renders the durable cursor's already-saved openings
+// as prompt context. Only vacancies the live tool server still holds
+// list by URL; anything else (question refs, or saves lost to a
+// restart) stays covered by the public_list_saved review instruction,
+// and re-saving any cursor ref still fails closed in the supervisor.
+func resumeContinuation(server *publicresearch.Server, resume musecode.Cursor) string {
+	type opening struct {
+		url, employer, title string
+	}
+	openings := []opening{}
+	vacancies, questions := 0, 0
+	for _, ref := range resume.SavedRefs {
+		if vacancy, ok := server.Vacancy(ref); ok {
+			vacancies++
+			if len(openings) < 50 {
+				openings = append(openings, opening{url: vacancy.PageURL, employer: vacancy.EmployerName, title: vacancy.Title})
+			}
+			continue
+		}
+		if _, ok := server.Question(ref); ok {
+			questions++
+		}
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n\nThis run CONTINUES an earlier session that already saved %d openings", vacancies)
+	if questions > 0 {
+		fmt.Fprintf(&b, " and %d questions", questions)
+	}
+	if missing := len(resume.SavedRefs) - vacancies - questions; missing > 0 {
+		fmt.Fprintf(&b, " (%d earlier saves are no longer listed here)", missing)
+	}
+	b.WriteString(". Do not save them again; continue discovering more. ")
+	if len(openings) == 0 {
+		b.WriteString("The earlier saves are not listed here: call public_list_saved first and review them before saving anything.")
+		return b.String()
+	}
+	b.WriteString("Already-saved openings:\n")
+	for _, item := range openings {
+		fmt.Fprintf(&b, "- %s | %s | %s\n", item.url, item.employer, item.title)
+	}
+	b.WriteString("Call public_list_saved to review these before saving anything.")
+	return b.String()
+}
+
 // mapToolName strips an MCP namespace wrapper. Anything that does not
 // resolve to a bare name keeps its verbatim form so the supervisor
 // fails the run closed.
@@ -192,9 +236,6 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 	if !ok {
 		return errors.New("musewire: live transport conducts contributor discovery only")
 	}
-	if resume.RunRef != "" {
-		return errors.New("musewire: resume arrives with the first live run")
-	}
 	if t.CLIPath == "" || t.ModelID == "" || t.ProviderID == "" || t.Servers == nil {
 		return errors.New("musewire: live transport needs CLI path, model, provider and run servers")
 	}
@@ -278,6 +319,14 @@ func (t *LiveTransport) Run(ctx context.Context, spec musecode.SessionSpec, inpu
 	if t.ValidationPrompt != "" {
 		prompt = t.ValidationPrompt
 		trace.note("validation prompt override active")
+	}
+	// Exec is one-shot: a resumed run continues as a fresh CLI session
+	// carrying the durable cursor's already-saved openings as prompt
+	// context, so the model keeps discovering instead of re-saving.
+	// The supervisor's duplicate-save guard stays the hard backstop.
+	if resume.RunRef != "" {
+		prompt += resumeContinuation(server, resume)
+		trace.note("resume continuation with %d prior saves", len(resume.SavedRefs))
 	}
 	promptFile := filepath.Join(spec.Workspace, "prompt.txt")
 	if err := os.WriteFile(promptFile, []byte(prompt), 0o600); err != nil {

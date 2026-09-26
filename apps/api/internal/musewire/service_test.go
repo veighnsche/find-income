@@ -40,7 +40,11 @@ type gateTransport struct {
 }
 
 func (g *gateTransport) Run(ctx context.Context, _ musecode.SessionSpec, _ musecode.SessionInput, _ musecode.Cursor, sink musecode.EventSink) error {
-	close(g.started)
+	select {
+	case <-g.started:
+	default:
+		close(g.started)
+	}
 	select {
 	case <-g.proceed:
 	case <-ctx.Done():
@@ -52,7 +56,11 @@ func (g *gateTransport) Run(ctx context.Context, _ musecode.SessionSpec, _ musec
 		sink.Emit(musecode.Event{Kind: musecode.EventSaved, SaveRef: ref})
 	}
 	if g.emitted != nil {
-		close(g.emitted)
+		select {
+		case <-g.emitted:
+		default:
+			close(g.emitted)
+		}
 	}
 	if g.after != nil {
 		g.after(ctx)
@@ -308,6 +316,26 @@ func callTool(t *testing.T, session *mcp.ClientSession, tool string, args map[st
 		t.Fatalf("%s: unstructured %+v", tool, result.StructuredContent)
 	}
 	return payload
+}
+
+func saveFixtureQuestion(t *testing.T, session *mcp.ClientSession, vacancyRef, prompt string) string {
+	t.Helper()
+	payload := callTool(t, session, "public_save_question", map[string]any{
+		"vacancy_ref": vacancyRef, "prompt_text": prompt, "required": true,
+		"source_url": "https://jobs.example.invalid/1/apply",
+	})
+	if payload["outcome"] != "ok" {
+		t.Fatalf("save question: %+v", payload)
+	}
+	question, ok := payload["question"].(map[string]any)
+	if !ok {
+		t.Fatalf("save question: no question in %+v", payload)
+	}
+	ref, _ := question["question_ref"].(string)
+	if ref == "" {
+		t.Fatalf("save question: no ref in %+v", payload)
+	}
+	return ref
 }
 
 func saveFixtureVacancy(t *testing.T, session *mcp.ClientSession, pageURL, employer, title, receipt string) string {
@@ -629,8 +657,15 @@ func TestStopKeepsPartialSavesHonest(t *testing.T) {
 	if report.Outcome != musecode.OutcomeStopped || len(report.Gaps) == 0 {
 		t.Fatalf("report = %+v, want stopped with gaps", report)
 	}
-	if report.NextAction != "Review partial checkpoints, then re-commission" {
+	if report.NextAction != "Resume the stopped run or commission a new one" {
 		t.Fatalf("next action = %q", report.NextAction)
+	}
+	round, err := fix.db.Round(ctx, result.RoundID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if round.State != store.RoundPaused {
+		t.Fatalf("stopped round state = %q, want paused", round.State)
 	}
 }
 
@@ -862,9 +897,157 @@ func TestFinalizeNotesSavedOpportunities(t *testing.T) {
 	}
 }
 
+// Stop mid-collection, then resume: the stopped run pauses its round with
+// the first vacancy classified and the question ref gapped; resume
+// revives the round, re-conducts from the durable cursor, and overwrites
+// the stopped report with the completed one. The earlier vacancy keeps
+// its stop-time finding (never judged twice), only the new vacancy
+// classifies, and the question ref gaps again instead of vanishing.
+func TestResumeDiscoveryAsyncRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	transport := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{}), emitted: make(chan struct{})}
+	transport.after = func(runCtx context.Context) {
+		<-runCtx.Done()
+	}
+	fix := newConnectedFixture(t, transport, []map[string]string{
+		{"reason-positive": "hybrid-ok", "reason-negative": "abstain", "reason-missing": "abstain"},
+		{"reason-positive": "abstain", "reason-negative": "abstain", "reason-missing": "pay-unknown"},
+	})
+	admitted, err := fix.service.CommissionDiscoveryAsync(ctx, "run-resume-1",
+		musecode.PublicCriteria{RoleKeywords: []string{"support"}}, fix.profile, fix.rubric, musecode.Bounds{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-transport.started
+	server, ok := fix.service.ServerForRun("run-resume-1")
+	if !ok {
+		t.Fatal("live tool server unavailable during the session")
+	}
+	session := mcpSession(t, server)
+	ref1 := saveFixtureVacancy(t, session, "https://jobs.example.invalid/1", "Example BV", "Senior support engineer", "rc-1")
+	question := saveFixtureQuestion(t, session, ref1, "Why do you want this support role?")
+	transport.saves = []string{ref1, question}
+	close(transport.proceed)
+	<-transport.emitted
+	if !fix.service.Stop("run-resume-1", "owner stop") {
+		t.Fatal("stop rejected a conducting run")
+	}
+	stopped := waitMuseReport(t, fix.db, "run-resume-1")
+	if stopped.Outcome != string(musecode.OutcomeStopped) {
+		t.Fatalf("stopped report = %+v", stopped)
+	}
+	if len(stopped.SavedRefs) != 2 || len(stopped.ClassifyErrors) != 1 ||
+		!strings.Contains(stopped.ClassifyErrors[0], "not a saved vacancy") {
+		t.Fatalf("stopped report = %+v, want 2 saves with the question gap", stopped)
+	}
+	paused, err := fix.db.Round(ctx, admitted.RoundID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paused.State != store.RoundPaused {
+		t.Fatalf("stopped round state = %q, want paused", paused.State)
+	}
+	ref2 := saveFixtureVacancy(t, session, "https://careers.example.invalid/2", "Careers Inc", "Support engineer nights", "rc-2")
+	transport.after = nil
+	transport.saves = []string{ref2}
+	resumed, err := fix.service.ResumeDiscoveryAsync(ctx, "run-resume-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.Created || resumed.RoundID != admitted.RoundID {
+		t.Fatalf("resume = %+v, want identity of %+v", resumed, admitted)
+	}
+	revived, err := fix.db.Round(ctx, admitted.RoundID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revived.State != store.RoundRunning || server.Generation() != revived.Generation {
+		t.Fatalf("revived round = %+v server gen %d, want running with rebound tools",
+			revived, server.Generation())
+	}
+	deadline := time.Now().Add(60 * time.Second)
+	var completed store.MuseRunReport
+	for {
+		completed = waitMuseReport(t, fix.db, "run-resume-1")
+		if completed.Outcome == string(musecode.OutcomeCompleted) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("resumed report = %+v, want completed with three saves", completed)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(completed.SavedRefs) != 3 {
+		t.Fatalf("resumed report = %+v, want completed with three saves", completed)
+	}
+	if len(completed.ClassifyErrors) != 1 || !strings.Contains(completed.ClassifyErrors[0], "not a saved vacancy") {
+		t.Fatalf("resumed gaps = %v, want the question gap again", completed.ClassifyErrors)
+	}
+	page, err := fix.db.ListRunFindings(ctx, admitted.RoundID, "", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 {
+		t.Fatalf("findings = %d, want 2 (stop-time plus resumed, no duplicate)", len(page.Items))
+	}
+	if fix.provider.count() != 2 {
+		t.Fatalf("jev calls = %d, want 2 (one per vacancy)", fix.provider.count())
+	}
+	running, err := fix.db.Round(ctx, admitted.RoundID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if running.State != store.RoundCompleted {
+		t.Fatalf("resumed round state = %q, want completed", running.State)
+	}
+	if _, err := fix.service.ResumeDiscoveryAsync(ctx, "run-resume-1"); err == nil {
+		t.Error("completed run resumed, want conflict")
+	} else {
+		var contractErr *researchcontract.Error
+		if !errors.As(err, &contractErr) || contractErr.Code != researchcontract.OutcomeConflict {
+			t.Fatalf("completed resume err = %v, want conflict", err)
+		}
+	}
+}
+
+// Resume conflicts honestly: unknown runs are unknown, conducting runs
+// stay single-flight, and terminal failed runs never re-conduct.
+func TestResumeDiscoveryAsyncConflicts(t *testing.T) {
+	ctx := context.Background()
+	transport := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
+	defer close(transport.proceed)
+	fix := newConnectedFixture(t, transport, nil)
+	if _, err := fix.service.ResumeDiscoveryAsync(ctx, "run-resume-absent"); !errors.Is(err, ErrUnknownRun) {
+		t.Fatalf("absent resume err = %v, want ErrUnknownRun", err)
+	}
+	if _, err := fix.service.CommissionDiscoveryAsync(ctx, "run-resume-busy",
+		musecode.PublicCriteria{RoleKeywords: []string{"support"}}, fix.profile, fix.rubric, musecode.Bounds{}); err != nil {
+		t.Fatal(err)
+	}
+	<-transport.started
+	_, err := fix.service.ResumeDiscoveryAsync(ctx, "run-resume-busy")
+	var contractErr *researchcontract.Error
+	if !errors.As(err, &contractErr) || contractErr.Code != researchcontract.OutcomeConflict {
+		t.Fatalf("conducting resume err = %v, want conflict", err)
+	}
+	failed := newConnectedFixture(t, scriptTransport{err: errors.New("fixture: transport boom")}, nil)
+	if _, err := failed.service.CommissionDiscoveryAsync(ctx, "run-resume-failed",
+		musecode.PublicCriteria{RoleKeywords: []string{"support"}}, failed.profile, failed.rubric, musecode.Bounds{}); err != nil {
+		t.Fatal(err)
+	}
+	row := waitMuseReport(t, failed.db, "run-resume-failed")
+	if row.Outcome != string(musecode.OutcomeFailed) {
+		t.Fatalf("report = %+v, want failed", row)
+	}
+	_, err = failed.service.ResumeDiscoveryAsync(ctx, "run-resume-failed")
+	if !errors.As(err, &contractErr) || contractErr.Code != researchcontract.OutcomeConflict {
+		t.Fatalf("failed resume err = %v, want conflict", err)
+	}
+}
+
 func waitMuseReport(t *testing.T, db *store.Store, runRef string) store.MuseRunReport {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(60 * time.Second)
 	for {
 		row, err := db.LoadMuseRunReport(context.Background(), runRef)
 		if err == nil {

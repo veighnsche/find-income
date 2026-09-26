@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,9 +31,21 @@ import (
 // gateTransport holds discovery sessions until the test releases the gate,
 // so commissioned runs stay active deterministically and no test ever
 // spawns the live CLI. started closes when a session enters the transport.
+// saves lists refs the session emits as validated saves after release;
+// after, when set, runs after emission instead of finishing (stop tests
+// hold the session open with it). release is idempotent so tests and the
+// harness cleanup can both call it.
 type gateTransport struct {
-	started chan struct{}
-	proceed chan struct{}
+	started  chan struct{}
+	proceed  chan struct{}
+	emitted  chan struct{}
+	saves       []string
+	after       func(context.Context)
+	releaseOnce sync.Once
+}
+
+func (g *gateTransport) Release() {
+	g.releaseOnce.Do(func() { close(g.proceed) })
 }
 
 func (g *gateTransport) Run(ctx context.Context, _ musecode.SessionSpec, _ musecode.SessionInput, _ musecode.Cursor, sink musecode.EventSink) error {
@@ -44,6 +57,22 @@ func (g *gateTransport) Run(ctx context.Context, _ musecode.SessionSpec, _ musec
 	select {
 	case <-g.proceed:
 	case <-ctx.Done():
+		return ctx.Err()
+	}
+	sink.Emit(musecode.Event{Kind: musecode.EventModelStep})
+	for _, ref := range g.saves {
+		sink.Emit(musecode.Event{Kind: musecode.EventToolCall, Tool: "public_save_vacancy"})
+		sink.Emit(musecode.Event{Kind: musecode.EventSaved, SaveRef: ref})
+	}
+	if g.emitted != nil {
+		select {
+		case <-g.emitted:
+		default:
+			close(g.emitted)
+		}
+	}
+	if g.after != nil {
+		g.after(ctx)
 		return ctx.Err()
 	}
 	sink.Emit(musecode.Event{Kind: musecode.EventFinished})
@@ -164,7 +193,7 @@ func newHarness(t *testing.T) *harness {
 	t.Cleanup(func() { _ = db.Close() })
 	provider := &scriptedProvider{model: "fixture-jev-1", verdicts: map[string]string{}}
 	gate := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
-	t.Cleanup(func() { close(gate.proceed) })
+	t.Cleanup(func() { gate.Release() })
 	facts := fixtureFacts()
 	cfg := Config{
 		ArtifactRoot:   filepath.Join(dir, "research-artifacts"),
@@ -801,7 +830,7 @@ func TestContinuationAcrossRestart(t *testing.T) {
 	}
 	provider := &scriptedProvider{model: "fixture-jev-1", verdicts: map[string]string{}}
 	gate := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
-	t.Cleanup(func() { close(gate.proceed) })
+	t.Cleanup(func() { gate.Release() })
 	facts := fixtureFacts()
 	stack, err := Wire(db, Config{
 		ArtifactRoot: filepath.Join(dir, "research-artifacts"), AgentID: DefaultAgentID,
@@ -848,7 +877,7 @@ func TestContinuationAcrossRestart(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db2.Close() })
 	gate2 := &gateTransport{started: make(chan struct{}), proceed: make(chan struct{})}
-	t.Cleanup(func() { close(gate2.proceed) })
+	t.Cleanup(func() { gate2.Release() })
 	stack2, err := Wire(db2, Config{
 		ArtifactRoot: filepath.Join(dir, "research-artifacts"), AgentID: DefaultAgentID,
 		PermitLoopback: true, JevProvider: provider,

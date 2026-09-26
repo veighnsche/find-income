@@ -30,6 +30,10 @@ var ErrUnknownRun = errors.New("musewire: unknown run")
 // recommissioning.
 var ErrRunInProgress = errors.New("musewire: run already in progress")
 
+// ErrContributorUnavailable reports admission against an unready
+// Contributor lane. The HTTP layer maps it to 503.
+var ErrContributorUnavailable = errors.New("musewire: contributor unavailable")
+
 // Deps wires one discovery service. Production passes the live exec
 // transport; unready facts or a disabled transport fail commissions
 // closed at admission while reads stay honest. Saved journals saved
@@ -83,6 +87,10 @@ type retainedRun struct {
 	supervisor *musecode.Supervisor
 	server     *publicresearch.Server
 	terminal   musecode.TerminalResult
+	// done closes when the latest background conduction (conduct plus
+	// finalization) settles. Resume waits on it so a late stop-time
+	// report can never overwrite the resumed terminal record.
+	done chan struct{}
 }
 
 // NewService validates one composition. Missing backends fail here so the
@@ -249,7 +257,7 @@ func (s *Service) admitDiscovery(ctx context.Context, runRef string, criteria mu
 	}
 	status := musecode.Check(musecode.TierContributor, s.facts)
 	if !status.Available {
-		return nil, nil, fmt.Errorf("musewire: contributor unavailable (%s): %s", status.Code, status.Detail)
+		return nil, nil, fmt.Errorf("%w (%s): %s", ErrContributorUnavailable, status.Code, status.Detail)
 	}
 	workspace := filepath.Join(s.workspaces, "contributor", runRef)
 	if err := os.MkdirAll(workspace, 0o700); err != nil {
@@ -311,6 +319,18 @@ func (s *Service) admitDiscovery(ctx context.Context, runRef string, criteria mu
 	}); err != nil {
 		return nil, nil, fmt.Errorf("musewire: checkpoint brief: %w", err)
 	}
+	criteriaJSON, err := json.Marshal(criteria)
+	if err != nil {
+		return nil, nil, err
+	}
+	boundsJSON, err := json.Marshal(bounds)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.db.SaveMuseRunResume(ctx, store.MuseRunResume{RunRef: runRef,
+		RoundID: round.ID, CriteriaJSON: string(criteriaJSON), BoundsJSON: string(boundsJSON)}); err != nil {
+		return nil, nil, fmt.Errorf("musewire: persist resume payload: %w", err)
+	}
 	server, err := publicresearch.NewServer(publicresearch.Deps{
 		Executor: s.executor, Captures: s.captures, Bounds: bounds,
 		RunID: round.ID, Generation: 1,
@@ -318,16 +338,7 @@ func (s *Service) admitDiscovery(ctx context.Context, runRef string, criteria mu
 	if err != nil {
 		return nil, nil, err
 	}
-	validate := func(ref string) error {
-		if _, ok := server.Vacancy(ref); ok {
-			return nil
-		}
-		if _, ok := server.Question(ref); ok {
-			return nil
-		}
-		return fmt.Errorf("musewire: unknown save ref %q", ref)
-	}
-	supervisor := musecode.NewSupervisor(s.transport, s.cursors, validate, s.facts.EffectiveModel)
+	supervisor := musecode.NewSupervisor(s.transport, s.cursors, saveValidator(server), s.facts.EffectiveModel)
 	s.mu.Lock()
 	s.runs[runRef] = &retainedRun{supervisor: supervisor, server: server}
 	s.mu.Unlock()
@@ -336,26 +347,39 @@ func (s *Service) admitDiscovery(ctx context.Context, runRef string, criteria mu
 }
 
 // finalizeConducted classifies a conducted run's saves and persists the
-// terminal round and report rows.
+// round and report rows. A stopped run pauses its round instead of
+// finishing it, so the owner can resume the same bounded run; every
+// other non-completed outcome finishes the round as failed and can only
+// start over with a new commission.
 func (s *Service) finalizeConducted(ctx context.Context, setup *conductSetup, runRef string, profileVersion int64, rubricVersion string, terminal musecode.TerminalResult) ([]store.Finding, []string, error) {
-	findings, classifyErrs := s.classifySaved(ctx, setup.round.ID, profileVersion, rubricVersion, setup.server, terminal.SavedRefs)
-	terminalState := store.RoundCompleted
-	reason := "run completed"
-	if terminal.Outcome != musecode.OutcomeCompleted {
-		terminalState = store.RoundFailed
-		reason = "run " + string(terminal.Outcome) + ": " + terminal.Detail
-	}
-	if len(reason) > 100 {
-		reason = reason[:100]
-	}
-	summary, err := json.Marshal(map[string]any{"runRef": runRef,
-		"outcome": string(terminal.Outcome), "findings": len(findings)})
-	if err != nil {
-		return nil, nil, err
-	}
-	deliverable := fmt.Sprintf("report saved, %d findings", len(findings))
-	if _, err := s.db.FinishRound(ctx, s.actor, setup.round.ID, terminalState, reason, deliverable, summary); err != nil {
-		return nil, nil, fmt.Errorf("musewire: finish round: %w", err)
+	findings, classifyErrs := s.classifySaved(ctx, setup, profileVersion, rubricVersion, terminal.SavedRefs)
+	if terminal.Outcome == musecode.OutcomeStopped {
+		if err := s.pauseStoppedRound(ctx, setup.round.ID); err != nil {
+			classifyErrs = append(classifyErrs, "musewire: pause stopped round: "+err.Error())
+		}
+	} else {
+		terminalState := store.RoundCompleted
+		reason := "run completed"
+		if terminal.Outcome != musecode.OutcomeCompleted {
+			terminalState = store.RoundFailed
+			reason = "run " + string(terminal.Outcome) + ": " + terminal.Detail
+		}
+		if len(reason) > 100 {
+			reason = reason[:100]
+		}
+		total, err := s.runFindings(ctx, setup.round.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+		summary, err := json.Marshal(map[string]any{"runRef": runRef,
+			"outcome": string(terminal.Outcome), "findings": len(total)})
+		if err != nil {
+			return nil, nil, err
+		}
+		deliverable := fmt.Sprintf("report saved, %d findings", len(total))
+		if _, err := s.db.FinishRound(ctx, s.actor, setup.round.ID, terminalState, reason, deliverable, summary); err != nil {
+			return nil, nil, fmt.Errorf("musewire: finish round: %w", err)
+		}
 	}
 	// Journal classified opportunities into the run checkpoint so run
 	// views and reports list them. A lag here never fails the run: the
@@ -387,6 +411,33 @@ func (s *Service) finalizeConducted(ctx context.Context, setup *conductSetup, ru
 	return findings, classifyErrs, nil
 }
 
+// pauseStoppedRound leaves a stopped run's round resumable: running rounds
+// fence through stop/pause, an in-flight stop settles to paused, and an
+// already-paused round (the HTTP stop fences before cancelling the
+// session) stays untouched. Terminal rounds cannot pause; the caller
+// records that as a gap instead of failing the stop-time report.
+func (s *Service) pauseStoppedRound(ctx context.Context, roundID string) error {
+	round, err := s.db.Round(ctx, roundID)
+	if err != nil {
+		return err
+	}
+	switch round.State {
+	case store.RoundCompleted, store.RoundFailed:
+		return fmt.Errorf("round already terminal (%s)", round.State)
+	case store.RoundPaused:
+		return nil
+	case store.RoundStopping:
+		_, err := s.db.PauseStoppedRound(ctx, s.actor, roundID)
+		return err
+	default:
+		if _, _, err := s.db.StopRound(ctx, s.actor, roundID); err != nil {
+			return err
+		}
+		_, err := s.db.PauseStoppedRound(ctx, s.actor, roundID)
+		return err
+	}
+}
+
 // persistConductFailure records a conduct failure as a terminal failed run
 // so polling reads the failure instead of hanging on an active round.
 // Failures here are best-effort: there is no caller left to report to.
@@ -397,17 +448,17 @@ func (s *Service) persistConductFailure(ctx context.Context, runRef, roundID, de
 	if len(reason) > 100 {
 		reason = reason[:100]
 	}
-	summary, _ := json.Marshal(map[string]any{"runRef": runRef, "outcome": "failed", "findings": 0})
-	_, _ = s.db.FinishRound(ctx, s.actor, roundID, store.RoundFailed, reason, "run failed", summary)
-	_ = s.db.SaveMuseRunReport(ctx, store.MuseRunReport{RunRef: runRef, RoundID: roundID,
-		Tier: string(musecode.TierContributor), Outcome: string(musecode.OutcomeFailed),
-		Detail: detail, UpdatedAt: terminal.EndedAt})
 	s.mu.Lock()
 	if retained, ok := s.runs[runRef]; ok {
 		retained.roundID = roundID
 		retained.terminal = terminal
 	}
 	s.mu.Unlock()
+	summary, _ := json.Marshal(map[string]any{"runRef": runRef, "outcome": "failed", "findings": 0})
+	_, _ = s.db.FinishRound(ctx, s.actor, roundID, store.RoundFailed, reason, "run failed", summary)
+	_ = s.db.SaveMuseRunReport(ctx, store.MuseRunReport{RunRef: runRef, RoundID: roundID,
+		Tier: string(musecode.TierContributor), Outcome: string(musecode.OutcomeFailed),
+		Detail: detail, UpdatedAt: terminal.EndedAt})
 }
 
 // CommissionDiscovery admits one bounded Contributor discovery run, conducts
@@ -465,16 +516,50 @@ func (s *Service) CommissionDiscoveryAsync(ctx context.Context, runRef string, c
 		return AsyncAdmission{RunRef: runRef, RoundID: replayed.RoundID}, nil
 	}
 	atomic.AddInt64(&s.commissioned, 1)
-	go s.conductAsync(context.WithoutCancel(ctx), runRef, setup, profileVersion, rubricVersion)
+	done := s.installSettle(runRef)
+	go s.conductAsync(context.WithoutCancel(ctx), runRef, setup, profileVersion, rubricVersion, done)
 	return AsyncAdmission{RunRef: runRef, RoundID: setup.round.ID, Created: true}, nil
+}
+
+// installSettle arms the settle channel the next background conduction
+// closes when conduct plus finalization complete. Callers install before
+// launching the goroutine so Resume can always wait on the latest
+// conduction.
+func (s *Service) installSettle(runRef string) chan struct{} {
+	done := make(chan struct{})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if retained, ok := s.runs[runRef]; ok {
+		retained.done = done
+	}
+	return done
 }
 
 // conductAsync conducts one admitted run to its terminal record in the
 // background. The context is detached: cancelling the commissioning
 // request never aborts the run; owner stop and session bounds still apply.
-func (s *Service) conductAsync(ctx context.Context, runRef string, setup *conductSetup, profileVersion int64, rubricVersion string) {
-	_, err := setup.supervisor.StartRun(ctx, runRef, setup.spec, setup.input, s.facts)
-	if err != nil {
+func (s *Service) conductAsync(ctx context.Context, runRef string, setup *conductSetup, profileVersion int64, rubricVersion string, done chan struct{}) {
+	s.finishConduct(ctx, runRef, setup, profileVersion, rubricVersion, done, func(ctx context.Context) error {
+		_, err := setup.supervisor.StartRun(ctx, runRef, setup.spec, setup.input, s.facts)
+		return err
+	})
+}
+
+// resumeAsync re-conducts one resumed run to its terminal record in the
+// background, from the durable cursor.
+func (s *Service) resumeAsync(ctx context.Context, runRef string, setup *conductSetup, profileVersion int64, rubricVersion string, done chan struct{}) {
+	s.finishConduct(ctx, runRef, setup, profileVersion, rubricVersion, done, func(ctx context.Context) error {
+		_, err := setup.supervisor.Resume(ctx, runRef, setup.spec, setup.input, s.facts)
+		return err
+	})
+}
+
+// finishConduct runs one background conduction to its terminal record:
+// conduct failures persist as a terminal failed run, and a conducted run
+// classifies and persists through the shared finalizer.
+func (s *Service) finishConduct(ctx context.Context, runRef string, setup *conductSetup, profileVersion int64, rubricVersion string, done chan struct{}, start func(context.Context) error) {
+	defer close(done)
+	if err := start(ctx); err != nil {
 		s.persistConductFailure(ctx, runRef, setup.round.ID, err.Error())
 		return
 	}
@@ -483,7 +568,185 @@ func (s *Service) conductAsync(ctx context.Context, runRef string, setup *conduc
 		s.persistConductFailure(ctx, runRef, setup.round.ID, "admitted run has no terminal result")
 		return
 	}
+	// The session is done conducting even while classification and
+	// report persistence still run; publish that before finalizing so
+	// Resume never misreads a settling run as still conducting.
+	s.mu.Lock()
+	if retained, ok := s.runs[runRef]; ok {
+		retained.terminal = terminal
+	}
+	s.mu.Unlock()
 	_, _, _ = s.finalizeConducted(ctx, setup, runRef, profileVersion, rubricVersion, terminal)
+}
+
+// saveValidator accepts exactly the refs the live tool server holds.
+func saveValidator(server *publicresearch.Server) func(string) error {
+	return func(ref string) error {
+		if _, ok := server.Vacancy(ref); ok {
+			return nil
+		}
+		if _, ok := server.Question(ref); ok {
+			return nil
+		}
+		return fmt.Errorf("musewire: unknown save ref %q", ref)
+	}
+}
+
+// ResumeDiscoveryAsync resumes a stopped run: the session re-conducts from
+// its durable cursor under the original admission bounds (the wall clock
+// restarts but never passes the round deadline), then re-finalizes and
+// overwrites the terminal report. Only stopped runs resume: completed,
+// failed, crashed and expired runs are terminal and start over with a
+// new commission, and past-deadline, cursorless and unknown runs
+// conflict honestly. A paused round revives here when run control has
+// not already revived it (the HTTP path revives first for its journal
+// and checkpoint semantics), and the tool server rebinds to the revived
+// generation so post-resume retrieval presents live. Earlier saves keep
+// their stop-time findings; only newly saved vacancies classify.
+func (s *Service) ResumeDiscoveryAsync(ctx context.Context, runRef string) (AsyncAdmission, error) {
+	if !validRunRef(runRef) {
+		return AsyncAdmission{}, fmt.Errorf("%w: invalid run ref", ErrUnknownRun)
+	}
+	round, err := s.db.RoundByRequest(ctx, s.actor, "muse:"+runRef)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return AsyncAdmission{}, ErrUnknownRun
+		}
+		return AsyncAdmission{}, fmt.Errorf("musewire: lookup round: %w", err)
+	}
+	if round.Intent != CommissionIntent {
+		return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+			"run", "run is not a muse discovery run")
+	}
+	s.mu.Lock()
+	retained, retainedOK := s.runs[runRef]
+	s.mu.Unlock()
+	if retainedOK && retained.terminal.RunRef == "" {
+		return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+			"run", "run is still conducting")
+	}
+	if retainedOK && retained.done != nil {
+		select {
+		case <-retained.done:
+		case <-ctx.Done():
+			return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+				"run", "run is still settling after stop; retry the resume")
+		}
+	}
+	if row, err := s.db.LoadMuseRunReport(ctx, runRef); err == nil {
+		switch row.Outcome {
+		case string(musecode.OutcomeCompleted):
+			return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+				"run", "completed runs never replay; commission a new run")
+		case string(musecode.OutcomeFailed), string(musecode.OutcomeCrashed), string(musecode.OutcomeExpired):
+			return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+				"run", "run "+row.Outcome+"; commission a new run")
+		}
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return AsyncAdmission{}, fmt.Errorf("musewire: load report: %w", err)
+	}
+	switch round.State {
+	case store.RoundRunning:
+	case store.RoundPaused:
+		revived, err := s.db.ResumeRound(ctx, s.actor, round.ID, round.Generation)
+		if err != nil {
+			if errors.Is(err, store.ErrExpired) {
+				return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+					"run", "the run deadline passed; commission a new run")
+			}
+			if errors.Is(err, store.ErrUncertain) {
+				return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+					"run", "the run has unsettled attempts; it stays paused")
+			}
+			return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+				"run", "the run changed state; refresh and retry")
+		}
+		round = revived
+	default:
+		return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+			"run", "run is "+string(round.State)+"; commission a new run")
+	}
+	if !round.Deadline.IsZero() && !time.Now().Before(round.Deadline) {
+		return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+			"run", "the run deadline passed; commission a new run")
+	}
+	status := musecode.Check(musecode.TierContributor, s.facts)
+	if !status.Available {
+		return AsyncAdmission{}, fmt.Errorf("%w (%s): %s", ErrContributorUnavailable, status.Code, status.Detail)
+	}
+	payload, err := s.db.LoadMuseRunResume(ctx, runRef)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+				"run", "run has no resumable admission; commission a new run")
+		}
+		return AsyncAdmission{}, fmt.Errorf("musewire: load resume payload: %w", err)
+	}
+	var criteria musecode.PublicCriteria
+	if err := json.Unmarshal([]byte(payload.CriteriaJSON), &criteria); err != nil {
+		return AsyncAdmission{}, fmt.Errorf("musewire: decode resume criteria: %w", err)
+	}
+	var bounds musecode.Bounds
+	if err := json.Unmarshal([]byte(payload.BoundsJSON), &bounds); err != nil {
+		return AsyncAdmission{}, fmt.Errorf("musewire: decode resume bounds: %w", err)
+	}
+	if err := bounds.Validate(); err != nil {
+		return AsyncAdmission{}, fmt.Errorf("musewire: resume bounds invalid: %w", err)
+	}
+	if !round.Deadline.IsZero() {
+		if remaining := time.Until(round.Deadline); remaining < bounds.MaxWallClock {
+			bounds.MaxWallClock = remaining
+		}
+	}
+	var cp researchcontract.Checkpoint
+	if err := s.db.Read(ctx, func(r store.Reader) error {
+		var err error
+		cp, err = store.GetRunCheckpoint(ctx, r, round.ID)
+		return err
+	}); err != nil {
+		return AsyncAdmission{}, fmt.Errorf("musewire: load checkpoint: %w", err)
+	}
+	if _, err := s.cursors.LoadCursor(ctx, runRef); err != nil {
+		return AsyncAdmission{}, researchcontract.NewError(researchcontract.OutcomeConflict,
+			"run", "run has no resumable cursor; commission a new run")
+	}
+	workspace := filepath.Join(s.workspaces, "contributor", runRef)
+	if err := os.MkdirAll(workspace, 0o700); err != nil {
+		return AsyncAdmission{}, err
+	}
+	spec, err := musecode.NewSession(status, workspace, bounds, nil)
+	if err != nil {
+		return AsyncAdmission{}, err
+	}
+	var supervisor *musecode.Supervisor
+	var server *publicresearch.Server
+	if retainedOK {
+		supervisor, server = retained.supervisor, retained.server
+		// The revive rotated the round generation; move the retained
+		// tool server with it while no conduction is active, or
+		// post-resume retrieval presents stale and fences.
+		if err := server.RebindGeneration(round.Generation); err != nil {
+			return AsyncAdmission{}, err
+		}
+	} else {
+		var err error
+		server, err = publicresearch.NewServer(publicresearch.Deps{
+			Executor: s.executor, Captures: s.captures, Bounds: bounds,
+			RunID: round.ID, Generation: round.Generation,
+		})
+		if err != nil {
+			return AsyncAdmission{}, err
+		}
+		supervisor = musecode.NewSupervisor(s.transport, s.cursors, saveValidator(server), s.facts.EffectiveModel)
+		s.mu.Lock()
+		s.runs[runRef] = &retainedRun{supervisor: supervisor, server: server, roundID: round.ID}
+		s.mu.Unlock()
+	}
+	setup := &conductSetup{spec: spec, input: musecode.PublicInput{Criteria: criteria},
+		supervisor: supervisor, server: server, round: round}
+	done := s.installSettle(runRef)
+	go s.resumeAsync(context.WithoutCancel(ctx), runRef, setup, cp.ProfileVersion, cp.RubricVersion, done)
+	return AsyncAdmission{RunRef: runRef, RoundID: round.ID}, nil
 }
 
 // replayGuarded replays a same-key commission only when the brief matches;
@@ -527,7 +790,7 @@ func (s *Service) replay(ctx context.Context, runRef string) (CommissionResult, 
 		return s.storedResult(ctx, runRef, row.RoundID, terminal)
 	}
 	if _, err := s.cursors.LoadCursor(ctx, runRef); err == nil {
-		return CommissionResult{}, errors.New("musewire: run " + runRef + " was interrupted; resume arrives with the first live run")
+		return CommissionResult{}, errors.New("musewire: run " + runRef + " was interrupted; resume the run explicitly")
 	}
 	return CommissionResult{}, fmt.Errorf("%w: round exists without run records", ErrUnknownRun)
 }
@@ -546,19 +809,48 @@ func (s *Service) storedResult(ctx context.Context, runRef, roundID string, term
 }
 
 // classifySaved judges every saved vacancy ref. Non-vacancy refs and
-// per-vacancy failures become honest gaps, never silent drops.
-func (s *Service) classifySaved(ctx context.Context, roundID string, profileVersion int64, rubricVersion string, server *publicresearch.Server, savedRefs []string) ([]store.Finding, []string) {
+// per-vacancy failures become honest gaps, never silent drops. Refs the
+// run already judged keep their findings and are never judged twice, so
+// a resumed run classifies only its new saves; refs whose stop-time
+// assessment was fenced by the stop carry no finding and classify once
+// the revived run judges them. Judgments present the live round
+// generation: stop/resume rotations move it, and the authority fence
+// rejects a stale one.
+func (s *Service) classifySaved(ctx context.Context, setup *conductSetup, profileVersion int64, rubricVersion string, savedRefs []string) ([]store.Finding, []string) {
 	findings := []store.Finding{}
 	gaps := []string{}
+	round, err := s.db.Round(ctx, setup.round.ID)
+	if err != nil {
+		for _, ref := range savedRefs {
+			gaps = append(gaps, "classify "+ref+": load round generation: "+err.Error())
+		}
+		return findings, gaps
+	}
+	judged := map[string]bool{}
+	existing, err := s.runFindings(ctx, setup.round.ID)
+	if err != nil {
+		for _, ref := range savedRefs {
+			gaps = append(gaps, "classify "+ref+": load judged refs: "+err.Error())
+		}
+		return findings, gaps
+	}
+	for _, finding := range existing {
+		if finding.VacancyRef != "" {
+			judged[finding.VacancyRef] = true
+		}
+	}
 	for _, ref := range savedRefs {
-		vacancy, ok := server.Vacancy(ref)
+		if judged[ref] {
+			continue
+		}
+		vacancy, ok := setup.server.Vacancy(ref)
 		if !ok {
 			gaps = append(gaps, "classify "+ref+": not a saved vacancy at discovery")
 			continue
 		}
 		finding, err := s.classifier.ClassifyVacancy(ctx, VacancyClassification{
-			RoundID: roundID, ProfileVersion: profileVersion, RubricVersion: rubricVersion,
-			Generation: 1, Actor: s.actor, Vacancy: vacancy,
+			RoundID: setup.round.ID, ProfileVersion: profileVersion, RubricVersion: rubricVersion,
+			Generation: round.Generation, Actor: s.actor, Vacancy: vacancy,
 		})
 		if err != nil {
 			gaps = append(gaps, "classify "+ref+": "+err.Error())
@@ -719,7 +1011,7 @@ func nextActionFor(outcome musecode.Outcome, findings int) string {
 	case outcome == musecode.OutcomeCompleted:
 		return "Adjust the search brief or run again"
 	case outcome == musecode.OutcomeStopped:
-		return "Review partial checkpoints, then re-commission"
+		return "Resume the stopped run or commission a new one"
 	default:
 		return "Inspect gaps, then re-commission"
 	}
