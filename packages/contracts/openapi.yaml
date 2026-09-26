@@ -59,30 +59,6 @@ paths:
                 allOf: [{ $ref: '#/components/schemas/Round' }]
                 nullable: true
         '400': { $ref: '#/components/responses/ValidationError' }
-  /rounds/prepare:
-    post:
-      operationId: prepareRound
-      summary: Owner commissions a private pack for a selected sourced opportunity
-      security: [{ cookieAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/PrepareRoundRequest' }
-      responses:
-        '200':
-          {
-            description: Existing round,
-            content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
-          }
-        '201':
-          {
-            description: Round created,
-            content: { application/json: { schema: { $ref: '#/components/schemas/Round' } } },
-          }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '503': { $ref: '#/components/responses/Unavailable' }
   /rounds/process-input:
     post:
       operationId: processOwnerInput
@@ -691,46 +667,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-  /codex/status:
-    get:
-      operationId: getCodexStatus
-      summary: Read isolated Codex account and ingestion readiness
-      description: Owner session required. Status never includes a sign-in code. Ready requires connected account and verified scoped tools.
-      security: [{ cookieAuth: [] }]
-      responses:
-        '200':
-          description: Safe connection state
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/CodexStatus' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-  /codex/connect:
-    post:
-      operationId: connectCodex
-      summary: Start owner device sign-in for the isolated Codex runner
-      description: Owner cookie, allowed Origin and X-CSRF-Token required. Returns an official verification URL and short-lived user code only to the owner.
-      security: [{ cookieAuth: [] }]
-      responses:
-        '200':
-          description: Device sign-in instructions
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/CodexConnection' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '503': { $ref: '#/components/responses/InternalError' }
-  /codex/connect/cancel:
-    post:
-      operationId: cancelCodexConnect
-      summary: Cancel the current owner device sign-in attempt
-      security: [{ cookieAuth: [] }]
-      responses:
-        '204': { description: Sign-in attempt cancelled or absent }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /muse/readiness:
     get:
       operationId: getMuseReadiness
@@ -1143,96 +1079,6 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
-  /opportunities/{id}/materials/prepare:
-    parameters: [{ $ref: '#/components/parameters/RecordId' }]
-    post:
-      operationId: prepareOpportunityMaterials
-      summary: Prepare grounded application materials for one answered role
-      description: Drafts unanswered required items only from verified facts; assembles a new immutable version. Idempotent on requestKey.
-      security: [{ cookieAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          { application/json: { schema: { $ref: '#/components/schemas/MaterialPrepareRequest' } } }
-      responses:
-        '201':
-          description: Materials prepared
-          content:
-            { application/json: { schema: { $ref: '#/components/schemas/MaterialStatusView' } } }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '503': { $ref: '#/components/responses/Unavailable' }
-  /opportunities/{id}/materials/current:
-    parameters: [{ $ref: '#/components/parameters/RecordId' }]
-    get:
-      operationId: getCurrentOpportunityMaterials
-      summary: Read the current prepared materials for one role
-      description: Saved version with readiness and provenance. Side-effect-free.
-      security: [{ cookieAuth: [] }]
-      responses:
-        '200':
-          description: Material status
-          content:
-            { application/json: { schema: { $ref: '#/components/schemas/MaterialStatusView' } } }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '503': { $ref: '#/components/responses/Unavailable' }
-    put:
-      operationId: editOpportunityMaterials
-      summary: Save an exact direct edit as a new material version
-      description: Exact text, no LLM call; invalidates prior review authorization.
-      security: [{ cookieAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          { application/json: { schema: { $ref: '#/components/schemas/MaterialEditRequest' } } }
-      responses:
-        '200':
-          description: Edited version saved
-          content:
-            { application/json: { schema: { $ref: '#/components/schemas/MaterialVersion' } } }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '503': { $ref: '#/components/responses/Unavailable' }
-  /opportunities/{id}/materials/rewrite:
-    parameters: [{ $ref: '#/components/parameters/RecordId' }]
-    post:
-      operationId: rewriteOpportunityMaterials
-      summary: Request an explicit Codex rewrite as a new reviewable version
-      description: Explicit action only; never implicit; prior versions retained.
-      security: [{ cookieAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          { application/json: { schema: { $ref: '#/components/schemas/MaterialRewriteRequest' } } }
-      responses:
-        '201':
-          description: Rewrite requested
-          content:
-            { application/json: { schema: { $ref: '#/components/schemas/MaterialVersion' } } }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '503': { $ref: '#/components/responses/Unavailable' }
-  /opportunities/{id}/materials/versions/{version}:
-    parameters:
-      - { $ref: '#/components/parameters/RecordId' }
-      - name: version
-        in: path
-        required: true
-        schema: { type: integer, format: int64, minimum: 1 }
-    get:
-      operationId: getOpportunityMaterialVersion
-      summary: Read one immutable material version
-      security: [{ cookieAuth: [] }]
-      responses:
-        '200':
-          description: Material version
-          content:
-            { application/json: { schema: { $ref: '#/components/schemas/MaterialVersion' } } }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '503': { $ref: '#/components/responses/Unavailable' }
   /opportunities/{id}/artifacts:
     parameters: [{ $ref: '#/components/parameters/RecordId' }]
     get:
@@ -1333,65 +1179,6 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
-  /opportunities/{id}/application-packs:
-    parameters: [{ $ref: '#/components/parameters/RecordId' }]
-    get:
-      operationId: listApplicationPacks
-      summary: List private immutable packs for one opportunity
-      security: [{ cookieAuth: [] }]
-      responses:
-        '200':
-          {
-            description: Pack versions,
-            content:
-              {
-                application/json: { schema: { $ref: '#/components/schemas/ApplicationPackList' } },
-              },
-          }
-        '404': { $ref: '#/components/responses/NotFound' }
-  /application-packs/{id}:
-    parameters: [{ $ref: '#/components/parameters/RecordId' }]
-    get:
-      operationId: getApplicationPack
-      summary: Read private pack manifest and revision metadata
-      security: [{ cookieAuth: [] }]
-      responses:
-        '200':
-          {
-            description: Pack detail,
-            content:
-              {
-                application/json:
-                  { schema: { $ref: '#/components/schemas/ApplicationPackDetail' } },
-              },
-          }
-        '404': { $ref: '#/components/responses/NotFound' }
-  /application-packs/{id}/pdf:
-    parameters: [{ $ref: '#/components/parameters/RecordId' }]
-    get:
-      operationId: getApplicationPackPdf
-      summary: Preview the private PDF
-      security: [{ cookieAuth: [] }]
-      responses:
-        '200':
-          {
-            description: Inline PDF,
-            content: { application/pdf: { schema: { type: string, format: binary } } },
-          }
-        '404': { $ref: '#/components/responses/NotFound' }
-  /application-packs/{id}/source.zip:
-    parameters: [{ $ref: '#/components/parameters/RecordId' }]
-    get:
-      operationId: getApplicationPackSource
-      summary: Download reproducible private Typst source
-      security: [{ cookieAuth: [] }]
-      responses:
-        '200':
-          {
-            description: Source archive,
-            content: { application/zip: { schema: { type: string, format: binary } } },
-          }
-        '404': { $ref: '#/components/responses/NotFound' }
   /relationships/counterparties:
     get:
       operationId: listRelationshipCounterparties
@@ -1967,15 +1754,6 @@ components:
         resources: { type: array, items: { type: string } }
         operations: { type: array, items: { type: string } }
         delegates: { type: array, items: { type: string } }
-    PrepareRoundRequest:
-      type: object
-      additionalProperties: false
-      description: Owner selects an existing sourced opportunity; the server derives all pack details and authority.
-      required: [requestKey, opportunityId]
-      properties:
-        requestKey: { type: string, minLength: 1, maxLength: 200 }
-        opportunityId: { type: string, minLength: 1 }
-        replacePaused: { $ref: '#/components/schemas/ReplacePausedRound' }
     ProcessInputRequest:
       type: object
       additionalProperties: false
@@ -2154,8 +1932,7 @@ components:
                 answered,
                 preparing,
                 prepared,
-                reviewing,
-                sent,
+                handoff_saved,
                 blocked,
               ],
           }
@@ -2269,18 +2046,6 @@ components:
         entityId: { type: string }
         revision: { type: integer, format: int64 }
         auditId: { type: string }
-    ApplicationPackSummary:
-      type: object
-      required:
-        [id, opportunityId, opportunityRevision, profileRevision, version, contentSha256, createdAt]
-      properties:
-        id: { type: string }
-        opportunityId: { type: string }
-        opportunityRevision: { type: integer, format: int64 }
-        profileRevision: { type: integer, format: int64 }
-        version: { type: integer, format: int64 }
-        contentSha256: { type: string }
-        createdAt: { type: string, format: date-time }
     RoundScreeningView:
       type: object
       required: [status, confirmed, current]
@@ -2400,95 +2165,6 @@ components:
       properties:
         input_tokens: { type: integer, format: int64 }
         output_tokens: { type: integer, format: int64 }
-    ApplicationPackList:
-      type: object
-      required: [items]
-      properties:
-        items: { type: array, items: { $ref: '#/components/schemas/ApplicationPackSummary' } }
-    ApplicationPackDetail:
-      allOf:
-        - { $ref: '#/components/schemas/ApplicationPackSummary' }
-        - type: object
-          required: [manifest]
-          properties:
-            manifest: { $ref: '#/components/schemas/ApplicationPackManifest' }
-    ApplicationPackManifest:
-      type: object
-      required: [role, sources, draft, templateSha256]
-      properties:
-        role: { $ref: '#/components/schemas/ApplicationPackRole' }
-        sources: { type: array, items: { $ref: '#/components/schemas/ApplicationPackSource' } }
-        draft: { $ref: '#/components/schemas/ApplicationPackDraft' }
-        templateSha256: { type: string }
-        preparationRequestSha256: { type: string }
-    ApplicationPackRole:
-      type: object
-      required:
-        [
-          opportunityId,
-          opportunityRevision,
-          profileRevision,
-          title,
-          company,
-          sourceUrl,
-          description,
-          destination,
-        ]
-      properties:
-        opportunityId: { type: string }
-        opportunityRevision: { type: integer, format: int64 }
-        profileRevision: { type: integer, format: int64 }
-        title: { type: string }
-        company: { type: string }
-        sourceUrl: { type: string }
-        description: { type: string }
-        destination: { type: string }
-    ApplicationPackSource:
-      type: object
-      required: [id, name, sha256, approved, body]
-      properties:
-        id: { type: string }
-        name: { type: string }
-        sha256: { type: string }
-        approved: { type: boolean }
-        body: { type: string }
-    ApplicationPackCitation:
-      type: object
-      required: [sourceId, excerpt]
-      properties:
-        sourceId: { type: string }
-        excerpt: { type: string }
-    ApplicationPackLine:
-      type: object
-      required: [text, citations]
-      properties:
-        text: { type: string }
-        citations: { type: array, items: { $ref: '#/components/schemas/ApplicationPackCitation' } }
-    ApplicationPackAnswer:
-      type: object
-      required: [question, lines]
-      properties:
-        question: { type: string }
-        lines: { type: array, items: { $ref: '#/components/schemas/ApplicationPackLine' } }
-    ApplicationPackRelevance:
-      type: object
-      required: [requirement, sourceId, scope, confidence, inputSha256, model]
-      properties:
-        requirement: { type: string }
-        sourceId: { type: string }
-        scope: { type: string, enum: [relevant, uncertain, unrelated] }
-        confidence: { type: number }
-        inputSha256: { type: string }
-        model: { type: string }
-    ApplicationPackDraft:
-      type: object
-      required: [focus, cover, answers, materialUnknowns, relevance]
-      properties:
-        focus: { $ref: '#/components/schemas/ApplicationPackLine' }
-        cover: { type: array, items: { $ref: '#/components/schemas/ApplicationPackLine' } }
-        answers: { type: array, items: { $ref: '#/components/schemas/ApplicationPackAnswer' } }
-        materialUnknowns: { type: array, items: { type: string } }
-        relevance: { type: array, items: { $ref: '#/components/schemas/ApplicationPackRelevance' } }
     RelationshipSource:
       type: object
       required: [sourceKind, sourceExcerpt, observedAt]
@@ -2581,22 +2257,6 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/OpportunityRoute' } }
-    CodexStatus:
-      type: object
-      required: [state, code, connected, ingestionAvailable, busy]
-      properties:
-        state: { type: string, enum: [unavailable, needs_sign_in, connecting, ready] }
-        code: { type: string, description: Safe readiness or failure code. }
-        connected: { type: boolean }
-        ingestionAvailable: { type: boolean }
-        busy: { type: boolean }
-    CodexConnection:
-      type: object
-      required: [loginId, verificationUrl, userCode]
-      properties:
-        loginId: { type: string }
-        verificationUrl: { type: string, format: uri }
-        userCode: { type: string }
     MuseReadiness:
       type: object
       required: [state, code, detail, tier]

@@ -11,16 +11,15 @@ import (
 var ErrRoleNotSelected = errors.New("role not selected")
 
 const (
-	RoleStageSelected  = "selected"
-	RoleStageChecking  = "checking"
-	RoleStageChecked   = "checked"
-	RoleStageAnswering = "answering"
-	RoleStageAnswered  = "answered"
-	RoleStagePreparing = "preparing"
-	RoleStagePrepared  = "prepared"
-	RoleStageReviewing = "reviewing"
-	RoleStageSent      = "sent"
-	RoleStageBlocked   = "blocked"
+	RoleStageSelected     = "selected"
+	RoleStageChecking     = "checking"
+	RoleStageChecked      = "checked"
+	RoleStageAnswering    = "answering"
+	RoleStageAnswered     = "answered"
+	RoleStagePreparing    = "preparing"
+	RoleStagePrepared     = "prepared"
+	RoleStageHandoffSaved = "handoff_saved"
+	RoleStageBlocked      = "blocked"
 )
 
 // roleStageTransitions is the single server-owned transition table for the
@@ -28,16 +27,15 @@ const (
 // AdvanceRoleWorkflow; no browser, selection, or discovery action may move a
 // role. Later contracts extend this table only through the contract owner.
 var roleStageTransitions = map[string][]string{
-	RoleStageSelected:  {RoleStageChecking},
-	RoleStageChecking:  {RoleStageChecked, RoleStageBlocked},
-	RoleStageBlocked:   {RoleStageChecking, RoleStagePreparing},
-	RoleStageChecked:   {RoleStageAnswering, RoleStageChecking},
-	RoleStageAnswering: {RoleStageAnswered},
-	RoleStageAnswered:  {RoleStagePreparing},
-	RoleStagePreparing: {RoleStagePrepared, RoleStageBlocked},
-	RoleStagePrepared:  {RoleStageReviewing, RoleStagePreparing},
-	RoleStageReviewing: {RoleStageSent, RoleStagePrepared},
-	RoleStageSent:      {},
+	RoleStageSelected:     {RoleStageChecking},
+	RoleStageChecking:     {RoleStageChecked, RoleStageBlocked},
+	RoleStageBlocked:      {RoleStageChecking, RoleStagePreparing},
+	RoleStageChecked:      {RoleStageAnswering, RoleStageChecking},
+	RoleStageAnswering:    {RoleStageAnswered},
+	RoleStageAnswered:     {RoleStagePreparing},
+	RoleStagePreparing:    {RoleStagePrepared, RoleStageBlocked},
+	RoleStagePrepared:     {RoleStageHandoffSaved, RoleStagePreparing},
+	RoleStageHandoffSaved: {},
 }
 
 func roleStageKnown(stage string) bool {

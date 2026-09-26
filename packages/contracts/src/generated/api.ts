@@ -55,23 +55,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/rounds/prepare": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Owner commissions a private pack for a selected sourced opportunity */
-        post: operations["prepareRound"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/rounds/process-input": {
         parameters: {
             query?: never;
@@ -670,63 +653,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/codex/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read isolated Codex account and ingestion readiness
-         * @description Owner session required. Status never includes a sign-in code. Ready requires connected account and verified scoped tools.
-         */
-        get: operations["getCodexStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/codex/connect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start owner device sign-in for the isolated Codex runner
-         * @description Owner cookie, allowed Origin and X-CSRF-Token required. Returns an official verification URL and short-lived user code only to the owner.
-         */
-        post: operations["connectCodex"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/codex/connect/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Cancel the current owner device sign-in attempt */
-        post: operations["cancelCodexConnect"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/muse/readiness": {
         parameters: {
             query?: never;
@@ -1183,96 +1109,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/opportunities/{id}/materials/prepare": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Prepare grounded application materials for one answered role
-         * @description Drafts unanswered required items only from verified facts; assembles a new immutable version. Idempotent on requestKey.
-         */
-        post: operations["prepareOpportunityMaterials"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/opportunities/{id}/materials/current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        /**
-         * Read the current prepared materials for one role
-         * @description Saved version with readiness and provenance. Side-effect-free.
-         */
-        get: operations["getCurrentOpportunityMaterials"];
-        /**
-         * Save an exact direct edit as a new material version
-         * @description Exact text, no LLM call; invalidates prior review authorization.
-         */
-        put: operations["editOpportunityMaterials"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/opportunities/{id}/materials/rewrite": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request an explicit Codex rewrite as a new reviewable version
-         * @description Explicit action only; never implicit; prior versions retained.
-         */
-        post: operations["rewriteOpportunityMaterials"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/opportunities/{id}/materials/versions/{version}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-                version: number;
-            };
-            cookie?: never;
-        };
-        /** Read one immutable material version */
-        get: operations["getOpportunityMaterialVersion"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/opportunities/{id}/artifacts": {
         parameters: {
             query?: never;
@@ -1353,82 +1189,6 @@ export interface paths {
          * @description Exact content, no LLM call; fenced on the current version. form_values is derived and rejected.
          */
         put: operations["saveOpportunityArtifact"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/opportunities/{id}/application-packs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        /** List private immutable packs for one opportunity */
-        get: operations["listApplicationPacks"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/application-packs/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        /** Read private pack manifest and revision metadata */
-        get: operations["getApplicationPack"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/application-packs/{id}/pdf": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        /** Preview the private PDF */
-        get: operations["getApplicationPackPdf"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/application-packs/{id}/source.zip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        /** Download reproducible private Typst source */
-        get: operations["getApplicationPackSource"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1921,12 +1681,6 @@ export interface components {
             operations: string[];
             delegates: string[];
         };
-        /** @description Owner selects an existing sourced opportunity; the server derives all pack details and authority. */
-        PrepareRoundRequest: {
-            requestKey: string;
-            opportunityId: string;
-            replacePaused?: components["schemas"]["ReplacePausedRound"];
-        };
         ProcessInputRequest: {
             requestKey: string;
             /** @enum {string} */
@@ -2056,7 +1810,7 @@ export interface components {
         RoleWorkflowState: {
             opportunityId: string;
             /** @enum {string} */
-            stage: "selected" | "checking" | "checked" | "answering" | "answered" | "preparing" | "prepared" | "reviewing" | "sent" | "blocked";
+            stage: "selected" | "checking" | "checked" | "answering" | "answered" | "preparing" | "prepared" | "handoff_saved" | "blocked";
             /** Format: int64 */
             revision: number;
             blockedReason?: string;
@@ -2127,19 +1881,6 @@ export interface components {
             /** Format: int64 */
             revision: number;
             auditId: string;
-        };
-        ApplicationPackSummary: {
-            id: string;
-            opportunityId: string;
-            /** Format: int64 */
-            opportunityRevision: number;
-            /** Format: int64 */
-            profileRevision: number;
-            /** Format: int64 */
-            version: number;
-            contentSha256: string;
-            /** Format: date-time */
-            createdAt: string;
         };
         RoundScreeningView: {
             /** @enum {string} */
@@ -2222,66 +1963,6 @@ export interface components {
             /** Format: int64 */
             output_tokens: number;
         };
-        ApplicationPackList: {
-            items: components["schemas"]["ApplicationPackSummary"][];
-        };
-        ApplicationPackDetail: components["schemas"]["ApplicationPackSummary"] & {
-            manifest: components["schemas"]["ApplicationPackManifest"];
-        };
-        ApplicationPackManifest: {
-            role: components["schemas"]["ApplicationPackRole"];
-            sources: components["schemas"]["ApplicationPackSource"][];
-            draft: components["schemas"]["ApplicationPackDraft"];
-            templateSha256: string;
-            preparationRequestSha256?: string;
-        };
-        ApplicationPackRole: {
-            opportunityId: string;
-            /** Format: int64 */
-            opportunityRevision: number;
-            /** Format: int64 */
-            profileRevision: number;
-            title: string;
-            company: string;
-            sourceUrl: string;
-            description: string;
-            destination: string;
-        };
-        ApplicationPackSource: {
-            id: string;
-            name: string;
-            sha256: string;
-            approved: boolean;
-            body: string;
-        };
-        ApplicationPackCitation: {
-            sourceId: string;
-            excerpt: string;
-        };
-        ApplicationPackLine: {
-            text: string;
-            citations: components["schemas"]["ApplicationPackCitation"][];
-        };
-        ApplicationPackAnswer: {
-            question: string;
-            lines: components["schemas"]["ApplicationPackLine"][];
-        };
-        ApplicationPackRelevance: {
-            requirement: string;
-            sourceId: string;
-            /** @enum {string} */
-            scope: "relevant" | "uncertain" | "unrelated";
-            confidence: number;
-            inputSha256: string;
-            model: string;
-        };
-        ApplicationPackDraft: {
-            focus: components["schemas"]["ApplicationPackLine"];
-            cover: components["schemas"]["ApplicationPackLine"][];
-            answers: components["schemas"]["ApplicationPackAnswer"][];
-            materialUnknowns: string[];
-            relevance: components["schemas"]["ApplicationPackRelevance"][];
-        };
         RelationshipSource: {
             sourceKind: string;
             sourceRef?: string;
@@ -2353,21 +2034,6 @@ export interface components {
         };
         OpportunityRouteList: {
             items: components["schemas"]["OpportunityRoute"][];
-        };
-        CodexStatus: {
-            /** @enum {string} */
-            state: "unavailable" | "needs_sign_in" | "connecting" | "ready";
-            /** @description Safe readiness or failure code. */
-            code: string;
-            connected: boolean;
-            ingestionAvailable: boolean;
-            busy: boolean;
-        };
-        CodexConnection: {
-            loginId: string;
-            /** Format: uri */
-            verificationUrl: string;
-            userCode: string;
         };
         MuseReadiness: {
             /** @enum {string} */
@@ -3844,42 +3510,6 @@ export interface operations {
             400: components["responses"]["ValidationError"];
         };
     };
-    prepareRound: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PrepareRoundRequest"];
-            };
-        };
-        responses: {
-            /** @description Existing round */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Round"];
-                };
-            };
-            /** @description Round created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Round"];
-                };
-            };
-            403: components["responses"]["Forbidden"];
-            409: components["responses"]["Conflict"];
-            503: components["responses"]["Unavailable"];
-        };
-    };
     processOwnerInput: {
         parameters: {
             query?: never;
@@ -4737,73 +4367,6 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    getCodexStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Safe connection state */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CodexStatus"];
-                };
-            };
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-        };
-    };
-    connectCodex: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Device sign-in instructions */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CodexConnection"];
-                };
-            };
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            409: components["responses"]["Conflict"];
-            503: components["responses"]["InternalError"];
-        };
-    };
-    cancelCodexConnect: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Sign-in attempt cancelled or absent */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthenticated"];
-            403: components["responses"]["Forbidden"];
-            409: components["responses"]["Conflict"];
-        };
-    };
     getMuseReadiness: {
         parameters: {
             query: {
@@ -5401,145 +4964,6 @@ export interface operations {
             503: components["responses"]["Unavailable"];
         };
     };
-    prepareOpportunityMaterials: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MaterialPrepareRequest"];
-            };
-        };
-        responses: {
-            /** @description Materials prepared */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MaterialStatusView"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            503: components["responses"]["Unavailable"];
-        };
-    };
-    getCurrentOpportunityMaterials: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Material status */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MaterialStatusView"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-            503: components["responses"]["Unavailable"];
-        };
-    };
-    editOpportunityMaterials: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MaterialEditRequest"];
-            };
-        };
-        responses: {
-            /** @description Edited version saved */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MaterialVersion"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            503: components["responses"]["Unavailable"];
-        };
-    };
-    rewriteOpportunityMaterials: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MaterialRewriteRequest"];
-            };
-        };
-        responses: {
-            /** @description Rewrite requested */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MaterialVersion"];
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            503: components["responses"]["Unavailable"];
-        };
-    };
-    getOpportunityMaterialVersion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-                version: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Material version */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MaterialVersion"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-            503: components["responses"]["Unavailable"];
-        };
-    };
     listArtifactReadiness: {
         parameters: {
             query?: never;
@@ -5695,98 +5119,6 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             503: components["responses"]["Unavailable"];
-        };
-    };
-    listApplicationPacks: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Pack versions */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApplicationPackList"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    getApplicationPack: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Pack detail */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApplicationPackDetail"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    getApplicationPackPdf: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Inline PDF */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/pdf": string;
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    getApplicationPackSource: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["RecordId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Source archive */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/zip": string;
-                };
-            };
-            404: components["responses"]["NotFound"];
         };
     };
     listRelationshipCounterparties: {

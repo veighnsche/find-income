@@ -154,27 +154,6 @@ func (e ApiErrorCode) Valid() bool {
 	}
 }
 
-// Defines values for ApplicationPackRelevanceScope.
-const (
-	ApplicationPackRelevanceScopeRelevant  ApplicationPackRelevanceScope = "relevant"
-	ApplicationPackRelevanceScopeUncertain ApplicationPackRelevanceScope = "uncertain"
-	ApplicationPackRelevanceScopeUnrelated ApplicationPackRelevanceScope = "unrelated"
-)
-
-// Valid indicates whether the value is a known member of the ApplicationPackRelevanceScope enum.
-func (e ApplicationPackRelevanceScope) Valid() bool {
-	switch e {
-	case ApplicationPackRelevanceScopeRelevant:
-		return true
-	case ApplicationPackRelevanceScopeUncertain:
-		return true
-	case ApplicationPackRelevanceScopeUnrelated:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ArtifactFormValueRequired.
 const (
 	ArtifactFormValueRequiredOptional ArtifactFormValueRequired = "optional"
@@ -478,30 +457,6 @@ func (e CheckViewStatus) Valid() bool {
 	case CheckViewStatusChecked:
 		return true
 	case CheckViewStatusChecking:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CodexStatusState.
-const (
-	CodexStatusStateConnecting  CodexStatusState = "connecting"
-	CodexStatusStateNeedsSignIn CodexStatusState = "needs_sign_in"
-	CodexStatusStateReady       CodexStatusState = "ready"
-	CodexStatusStateUnavailable CodexStatusState = "unavailable"
-)
-
-// Valid indicates whether the value is a known member of the CodexStatusState enum.
-func (e CodexStatusState) Valid() bool {
-	switch e {
-	case CodexStatusStateConnecting:
-		return true
-	case CodexStatusStateNeedsSignIn:
-		return true
-	case CodexStatusStateReady:
-		return true
-	case CodexStatusStateUnavailable:
 		return true
 	default:
 		return false
@@ -1953,16 +1908,15 @@ func (e RoleCriterionViewMode) Valid() bool {
 
 // Defines values for RoleWorkflowStateStage.
 const (
-	RoleWorkflowStateStageAnswered  RoleWorkflowStateStage = "answered"
-	RoleWorkflowStateStageAnswering RoleWorkflowStateStage = "answering"
-	RoleWorkflowStateStageBlocked   RoleWorkflowStateStage = "blocked"
-	RoleWorkflowStateStageChecked   RoleWorkflowStateStage = "checked"
-	RoleWorkflowStateStageChecking  RoleWorkflowStateStage = "checking"
-	RoleWorkflowStateStagePrepared  RoleWorkflowStateStage = "prepared"
-	RoleWorkflowStateStagePreparing RoleWorkflowStateStage = "preparing"
-	RoleWorkflowStateStageReviewing RoleWorkflowStateStage = "reviewing"
-	RoleWorkflowStateStageSelected  RoleWorkflowStateStage = "selected"
-	RoleWorkflowStateStageSent      RoleWorkflowStateStage = "sent"
+	RoleWorkflowStateStageAnswered     RoleWorkflowStateStage = "answered"
+	RoleWorkflowStateStageAnswering    RoleWorkflowStateStage = "answering"
+	RoleWorkflowStateStageBlocked      RoleWorkflowStateStage = "blocked"
+	RoleWorkflowStateStageChecked      RoleWorkflowStateStage = "checked"
+	RoleWorkflowStateStageChecking     RoleWorkflowStateStage = "checking"
+	RoleWorkflowStateStageHandoffSaved RoleWorkflowStateStage = "handoff_saved"
+	RoleWorkflowStateStagePrepared     RoleWorkflowStateStage = "prepared"
+	RoleWorkflowStateStagePreparing    RoleWorkflowStateStage = "preparing"
+	RoleWorkflowStateStageSelected     RoleWorkflowStateStage = "selected"
 )
 
 // Valid indicates whether the value is a known member of the RoleWorkflowStateStage enum.
@@ -1978,15 +1932,13 @@ func (e RoleWorkflowStateStage) Valid() bool {
 		return true
 	case RoleWorkflowStateStageChecking:
 		return true
+	case RoleWorkflowStateStageHandoffSaved:
+		return true
 	case RoleWorkflowStateStagePrepared:
 		return true
 	case RoleWorkflowStateStagePreparing:
 		return true
-	case RoleWorkflowStateStageReviewing:
-		return true
 	case RoleWorkflowStateStageSelected:
-		return true
-	case RoleWorkflowStateStageSent:
 		return true
 	default:
 		return false
@@ -2676,104 +2628,6 @@ type ApiError struct {
 // ApiErrorCode Stable machine-readable error code.
 type ApiErrorCode string
 
-// ApplicationPackAnswer defines model for ApplicationPackAnswer.
-type ApplicationPackAnswer struct {
-	Lines    []ApplicationPackLine `json:"lines"`
-	Question string                `json:"question"`
-}
-
-// ApplicationPackCitation defines model for ApplicationPackCitation.
-type ApplicationPackCitation struct {
-	Excerpt  string `json:"excerpt"`
-	SourceId string `json:"sourceId"`
-}
-
-// ApplicationPackDetail defines model for ApplicationPackDetail.
-type ApplicationPackDetail struct {
-	ContentSha256       string                  `json:"contentSha256"`
-	CreatedAt           time.Time               `json:"createdAt"`
-	Id                  string                  `json:"id"`
-	Manifest            ApplicationPackManifest `json:"manifest"`
-	OpportunityId       string                  `json:"opportunityId"`
-	OpportunityRevision int64                   `json:"opportunityRevision"`
-	ProfileRevision     int64                   `json:"profileRevision"`
-	Version             int64                   `json:"version"`
-}
-
-// ApplicationPackDraft defines model for ApplicationPackDraft.
-type ApplicationPackDraft struct {
-	Answers          []ApplicationPackAnswer    `json:"answers"`
-	Cover            []ApplicationPackLine      `json:"cover"`
-	Focus            ApplicationPackLine        `json:"focus"`
-	MaterialUnknowns []string                   `json:"materialUnknowns"`
-	Relevance        []ApplicationPackRelevance `json:"relevance"`
-}
-
-// ApplicationPackLine defines model for ApplicationPackLine.
-type ApplicationPackLine struct {
-	Citations []ApplicationPackCitation `json:"citations"`
-	Text      string                    `json:"text"`
-}
-
-// ApplicationPackList defines model for ApplicationPackList.
-type ApplicationPackList struct {
-	Items []ApplicationPackSummary `json:"items"`
-}
-
-// ApplicationPackManifest defines model for ApplicationPackManifest.
-type ApplicationPackManifest struct {
-	Draft                    ApplicationPackDraft    `json:"draft"`
-	PreparationRequestSha256 *string                 `json:"preparationRequestSha256,omitempty"`
-	Role                     ApplicationPackRole     `json:"role"`
-	Sources                  []ApplicationPackSource `json:"sources"`
-	TemplateSha256           string                  `json:"templateSha256"`
-}
-
-// ApplicationPackRelevance defines model for ApplicationPackRelevance.
-type ApplicationPackRelevance struct {
-	Confidence  float32                       `json:"confidence"`
-	InputSha256 string                        `json:"inputSha256"`
-	Model       string                        `json:"model"`
-	Requirement string                        `json:"requirement"`
-	Scope       ApplicationPackRelevanceScope `json:"scope"`
-	SourceId    string                        `json:"sourceId"`
-}
-
-// ApplicationPackRelevanceScope defines model for ApplicationPackRelevance.Scope.
-type ApplicationPackRelevanceScope string
-
-// ApplicationPackRole defines model for ApplicationPackRole.
-type ApplicationPackRole struct {
-	Company             string `json:"company"`
-	Description         string `json:"description"`
-	Destination         string `json:"destination"`
-	OpportunityId       string `json:"opportunityId"`
-	OpportunityRevision int64  `json:"opportunityRevision"`
-	ProfileRevision     int64  `json:"profileRevision"`
-	SourceUrl           string `json:"sourceUrl"`
-	Title               string `json:"title"`
-}
-
-// ApplicationPackSource defines model for ApplicationPackSource.
-type ApplicationPackSource struct {
-	Approved bool   `json:"approved"`
-	Body     string `json:"body"`
-	Id       string `json:"id"`
-	Name     string `json:"name"`
-	Sha256   string `json:"sha256"`
-}
-
-// ApplicationPackSummary defines model for ApplicationPackSummary.
-type ApplicationPackSummary struct {
-	ContentSha256       string    `json:"contentSha256"`
-	CreatedAt           time.Time `json:"createdAt"`
-	Id                  string    `json:"id"`
-	OpportunityId       string    `json:"opportunityId"`
-	OpportunityRevision int64     `json:"opportunityRevision"`
-	ProfileRevision     int64     `json:"profileRevision"`
-	Version             int64     `json:"version"`
-}
-
 // ArchiveRequest defines model for ArchiveRequest.
 type ArchiveRequest struct {
 	ExpectedRevision int64 `json:"expectedRevision"`
@@ -2981,27 +2835,6 @@ type CheckView struct {
 
 // CheckViewStatus defines model for CheckView.Status.
 type CheckViewStatus string
-
-// CodexConnection defines model for CodexConnection.
-type CodexConnection struct {
-	LoginId         string `json:"loginId"`
-	UserCode        string `json:"userCode"`
-	VerificationUrl string `json:"verificationUrl"`
-}
-
-// CodexStatus defines model for CodexStatus.
-type CodexStatus struct {
-	Busy bool `json:"busy"`
-
-	// Code Safe readiness or failure code.
-	Code               string           `json:"code"`
-	Connected          bool             `json:"connected"`
-	IngestionAvailable bool             `json:"ingestionAvailable"`
-	State              CodexStatusState `json:"state"`
-}
-
-// CodexStatusState defines model for CodexStatus.State.
-type CodexStatusState string
 
 // CommissionResearchRequest defines model for CommissionResearchRequest.
 type CommissionResearchRequest struct {
@@ -3798,13 +3631,6 @@ type PreferencesResponse struct {
 	TargetHours         string              `json:"targetHours"`
 	Timezone            string              `json:"timezone"`
 	Version             int64               `json:"version"`
-}
-
-// PrepareRoundRequest Owner selects an existing sourced opportunity; the server derives all pack details and authority.
-type PrepareRoundRequest struct {
-	OpportunityId string              `json:"opportunityId"`
-	ReplacePaused *ReplacePausedRound `json:"replacePaused,omitempty"`
-	RequestKey    string              `json:"requestKey"`
 }
 
 // ProcessInputRequest defines model for ProcessInputRequest.
@@ -5066,15 +4892,6 @@ type StartOpportunityCheckJSONRequestBody = CheckStartRequest
 // SetOwnerOpportunityDecisionJSONRequestBody defines body for SetOwnerOpportunityDecision for application/json ContentType.
 type SetOwnerOpportunityDecisionJSONRequestBody = OwnerDecisionInput
 
-// EditOpportunityMaterialsJSONRequestBody defines body for EditOpportunityMaterials for application/json ContentType.
-type EditOpportunityMaterialsJSONRequestBody = MaterialEditRequest
-
-// PrepareOpportunityMaterialsJSONRequestBody defines body for PrepareOpportunityMaterials for application/json ContentType.
-type PrepareOpportunityMaterialsJSONRequestBody = MaterialPrepareRequest
-
-// RewriteOpportunityMaterialsJSONRequestBody defines body for RewriteOpportunityMaterials for application/json ContentType.
-type RewriteOpportunityMaterialsJSONRequestBody = MaterialRewriteRequest
-
 // SaveQuestionAnswerJSONRequestBody defines body for SaveQuestionAnswer for application/json ContentType.
 type SaveQuestionAnswerJSONRequestBody = AnswerValueSave
 
@@ -5089,9 +4906,6 @@ type CommissionResearchRunJSONRequestBody = CommissionResearchRequest
 
 // SteerResearchRunJSONRequestBody defines body for SteerResearchRun for application/json ContentType.
 type SteerResearchRunJSONRequestBody = SteerResearchRequest
-
-// PrepareRoundJSONRequestBody defines body for PrepareRound for application/json ContentType.
-type PrepareRoundJSONRequestBody = PrepareRoundRequest
 
 // ProcessOwnerInputJSONRequestBody defines body for ProcessOwnerInput for application/json ContentType.
 type ProcessOwnerInputJSONRequestBody = ProcessInputRequest
