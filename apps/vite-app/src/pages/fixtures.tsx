@@ -5,6 +5,7 @@ import type {
   OwnerDecision,
   Preferences,
   RoleWorkflowState,
+  Round,
   RuntimeStatus,
   Session,
 } from "@/api/client"
@@ -169,6 +170,7 @@ export interface FetchStubOptions {
   decisionByOpportunity?: Record<string, OwnerDecision | null>
   workflowsByOpportunity?: Record<string, RoleWorkflowState | null>
   runtime?: RuntimeStatus
+  activeRound?: Round | null
 }
 
 export interface FetchCall {
@@ -229,6 +231,11 @@ export function stubFetch(options: FetchStubOptions = {}): {
         return jsonResponse(200, options.runtime ?? runtimeFixture)
       if (path === "/api/v1/workflow/roles")
         return jsonResponse(200, { items: [...workflows.values()] })
+      if (path === "/api/v1/rounds/active")
+        return options.activeRound === undefined ||
+          options.activeRound === null
+          ? jsonResponse(404, { error: { message: "No active round." } })
+          : jsonResponse(200, options.activeRound)
 
       const match = path.match(/^\/api\/v1\/opportunities\/([^/]+)(\/.*)?$/)
       if (match?.[1] !== undefined) {

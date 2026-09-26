@@ -48,4 +48,18 @@ describe("StageProgress", () => {
     const html = renderToStaticMarkup(<StageProgress activeStageId="find" />);
     expect(html).not.toContain("%");
   });
+
+  it("labels the acting party under stages that name one", () => {
+    const html = renderToStaticMarkup(
+      <StageProgress
+        activeStageId="goals"
+        stages={[
+          { id: "goals", label: "Your goals", state: "upcoming", actor: "You" },
+          { id: "find", label: "Find jobs", state: "upcoming", actor: "Contributor" },
+        ]}
+      />,
+    );
+    expect(html).toContain("Contributor");
+    expect(html.match(/aria-current="step"/g)).toHaveLength(1);
+  });
 });

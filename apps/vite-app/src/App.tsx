@@ -1,4 +1,10 @@
 import { useState, type FormEvent } from "react"
+import {
+  getActiveRound,
+  listRoleWorkflows,
+  type RoleWorkflowState,
+  type Round,
+} from "@/api/client"
 import { SessionProvider, useSession } from "@/api/session"
 import {
   EmptyBlock,
@@ -6,6 +12,7 @@ import {
   LoadingBlock,
   ShellNav,
 } from "@/components/shared"
+import { useRead } from "@/pages/useRead"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -59,60 +66,140 @@ function Shell() {
 
   if (session === null) return <SignInPanel />
 
+  return <Frame route={route} navigate={navigate} sessionExpiresAt={session.expiresAt} />
+}
+
+function Frame({
+  route,
+  navigate,
+  sessionExpiresAt,
+}: {
+  route: Route
+  navigate: (route: Route) => void
+  sessionExpiresAt: string
+}) {
+  const activeRound = useRead("shell-active-round", (signal) =>
+    getActiveRound(signal)
+  )
+  const workflows = useRead("shell-role-workflows", (signal) =>
+    listRoleWorkflows(signal)
+  )
+  const chosen =
+    workflows.status === "ready" ? workflows.data.length > 0 : false
+  const navItems = [
+    {
+      id: "today",
+      label: "Today",
+      href: "#/today",
+      active: route.page === "today",
+    },
+    {
+      id: "search",
+      label: "My search",
+      href: "#/search",
+      active: route.page === "search",
+    },
+    {
+      id: "jobs",
+      label: "Jobs",
+      href: "#/jobs",
+      active:
+        route.page === "jobs" ||
+        route.page === "check" ||
+        route.page === "answers" ||
+        route.page === "prepare",
+    },
+  ]
+  if (chosen) {
+    navItems.push({
+      id: "applications",
+      label: "Applications",
+      href: "#/applications",
+      active: route.page === "applications",
+    })
+  }
+
   return (
-    <div className="mx-auto flex min-h-svh w-full max-w-4xl flex-col gap-5 p-4 sm:p-6">
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card px-4 py-3">
-        <div className="min-w-0">
-          <p className="font-heading text-lg font-semibold">Find income</p>
-          <p
-            className="text-xs text-muted-foreground"
-            title={session.expiresAt}
-          >
-            Signed in · session ends {session.expiresAt.slice(0, 10)}
-          </p>
+    <div className="mx-auto flex min-h-svh w-full max-w-6xl flex-col gap-4 p-4 sm:p-6 md:flex-row md:gap-6">
+      <aside className="flex min-w-0 flex-col gap-4 md:w-60 md:shrink-0">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-heading text-lg font-semibold">Find income</p>
+            <p className="text-xs text-muted-foreground">
+              Your personal recruitment agency
+            </p>
+          </div>
+          <div className="md:hidden">
+            <SignOutButton />
+          </div>
         </div>
-        <SignOutButton />
-      </header>
+        <ShellNav ariaLabel="Primary" items={navItems} direction="vertical" />
+        <p
+          className="mt-auto hidden text-xs text-muted-foreground md:block"
+          title={sessionExpiresAt}
+        >
+          Signed in · session ends {sessionExpiresAt.slice(0, 10)}
+        </p>
+        <div className="hidden md:block">
+          <SignOutButton />
+        </div>
+      </aside>
 
-      <ShellNav
-        ariaLabel="Primary"
-        items={[
-          {
-            id: "today",
-            label: "Today",
-            href: "#/today",
-            active: route.page === "today",
-          },
-          {
-            id: "search",
-            label: "My search",
-            href: "#/search",
-            active: route.page === "search",
-          },
-          {
-            id: "jobs",
-            label: "Jobs",
-            href: "#/jobs",
-            active:
-              route.page === "jobs" ||
-              route.page === "check" ||
-              route.page === "answers" ||
-              route.page === "prepare",
-          },
-          {
-            id: "applications",
-            label: "Applications",
-            href: "#/applications",
-            active: route.page === "applications",
-          },
-        ]}
-      />
+      <div className="flex min-w-0 flex-1 flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border bg-card px-4 py-2">
+          <p className="text-sm font-medium">Your job search</p>
+          <WorkStatusText
+            activeRound={activeRound}
+            workflows={workflows}
+          />
+        </div>
 
-      <main className="min-w-0 flex-1">
-        <RoutePage route={route} navigate={navigate} />
-      </main>
+        <main className="min-w-0 flex-1">
+          <RoutePage route={route} navigate={navigate} />
+        </main>
+      </div>
     </div>
   )
+}
+
+function WorkStatusText({
+  activeRound,
+  workflows,
+}: {
+  activeRound: { status: string; data: Round | null }
+  workflows: { status: string; data: RoleWorkflowState[] | null }
+}) {
+  if (activeRound.status === "loading" || workflows.status === "loading")
+    return <p className="text-xs text-muted-foreground">Checking work status…</p>
+  if (activeRound.status !== "ready" || workflows.status !== "ready")
+    return <p className="text-xs text-muted-foreground">Work status unavailable</p>
+  const round = activeRound.data
+  if (round !== null) {
+    switch (round.state) {
+      case "paused":
+        return <p className="text-xs text-muted-foreground">Search paused</p>
+      case "awaiting_input":
+        return <p className="text-xs text-muted-foreground">Search needs your input</p>
+      case "stopping":
+        return <p className="text-xs text-muted-foreground">Search stopping…</p>
+      default:
+        return <p className="text-xs text-muted-foreground">Search running…</p>
+    }
+  }
+  const items = workflows.data ?? []
+  if (items.length > 0) {
+    const handoff = items.filter((item) =>
+      ["reviewing", "sent"].includes(item.stage)
+    ).length
+    if (handoff === items.length)
+      return <p className="text-xs text-muted-foreground">Applications ready for handoff</p>
+    return (
+      <p className="text-xs text-muted-foreground">
+        {items.length} chosen {items.length === 1 ? "job" : "jobs"} in progress
+      </p>
+    )
+  }
+  return <p className="text-xs text-muted-foreground">Ready to find jobs</p>
 }
 
 function RoutePage({

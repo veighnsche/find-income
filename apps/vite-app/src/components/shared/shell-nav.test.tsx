@@ -64,4 +64,21 @@ describe("ShellNav", () => {
     expect(html).toContain(longLabel);
     expect(html).toContain(`title="${longLabel}"`);
   });
+
+  it("stacks vertically for the sidebar without changing entries", () => {
+    const html = renderToStaticMarkup(
+      <ShellNav
+        ariaLabel="Primary"
+        direction="vertical"
+        items={[
+          { id: "today", label: "Today", href: "#/today", active: true },
+          { id: "jobs", label: "Jobs", href: "#/jobs" },
+        ]}
+      />,
+    );
+    expect(html).toContain("flex-col");
+    expect(html).toContain("#/today");
+    expect(html).toContain("#/jobs");
+    expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+  });
 });

@@ -14,14 +14,22 @@ export function ShellNav({
   items,
   ariaLabel,
   className,
+  direction = "horizontal",
 }: {
   items: ShellNavItem[];
   ariaLabel: string;
   className?: string;
+  direction?: "horizontal" | "vertical";
 }) {
   return (
     <nav aria-label={ariaLabel} className={cn("min-w-0", className)}>
-      <ul className="flex min-w-0 flex-wrap items-center gap-1">
+      <ul
+        className={
+          direction === "vertical"
+            ? "flex min-w-0 flex-col items-stretch gap-1"
+            : "flex min-w-0 flex-wrap items-center gap-1"
+        }
+      >
         {items.map((item) => (
           <li key={item.id} className="flex min-w-0 items-center">
             <ShellNavEntry item={item} />

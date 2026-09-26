@@ -91,7 +91,7 @@ describe("read-only shell", () => {
     render(<App />)
 
     expect(
-      await screen.findByRole("heading", { name: "My search" })
+      await screen.findByRole("heading", { name: "Let's find your next role" })
     ).toBeDefined()
     expect(await screen.findByText("Profile version 3")).toBeDefined()
     expect(await screen.findByText("Backend engineer")).toBeDefined()
@@ -178,7 +178,7 @@ describe("read-only shell", () => {
 
     go("#/search")
     expect(
-      await screen.findByRole("heading", { name: "My search" })
+      await screen.findByRole("heading", { name: "Let's find your next role" })
     ).toBeDefined()
     go("#/jobs")
     expect(await screen.findByRole("heading", { name: "Jobs" })).toBeDefined()
@@ -277,6 +277,64 @@ function correctionRound(overrides: Partial<Round> = {}): Round {
   } as Round
 }
 
+describe("frame sidebar and work-status strip (B1)", () => {
+  it("shows product identity, strip status and chosen-work navigation", async () => {
+    stubFetch()
+    render(<App />)
+
+    expect(await screen.findByText("Your personal recruitment agency"))
+      .toBeDefined()
+    expect(await screen.findByText("Your job search")).toBeDefined()
+    expect(await screen.findByText("1 chosen job in progress")).toBeDefined()
+    const nav = screen.getByRole("navigation", { name: "Primary" })
+    expect(nav.querySelector('a[href="#/applications"]')).not.toBeNull()
+    expect(nav.querySelector('a[href="#/search"]')).not.toBeNull()
+  })
+
+  it("hides Applications and reports readiness with no chosen work", async () => {
+    stubFetch({ workflowsByOpportunity: {} })
+    render(<App />)
+
+    expect(await screen.findByText("Ready to find jobs")).toBeDefined()
+    const nav = screen.getByRole("navigation", { name: "Primary" })
+    expect(nav.querySelector('a[href="#/applications"]')).toBeNull()
+  })
+
+  it("reports a paused search from the active round", async () => {
+    stubFetch({
+      activeRound: correctionRound({ id: "round-9", state: "paused" }),
+    })
+    render(<App />)
+
+    expect(await screen.findByText("Search paused")).toBeDefined()
+  })
+
+  it("opens My search with the seven-stage row and Handoff last", async () => {
+    window.location.hash = "#/search"
+    stubFetch()
+    render(<App />)
+
+    expect(
+      await screen.findByRole("heading", { name: "Let's find your next role" })
+    ).toBeDefined()
+    const journey = await screen.findByRole("list", {
+      name: "Seven-step journey",
+    })
+    const labels = Array.from(journey.querySelectorAll("li")).map(
+      (item) => item.textContent ?? ""
+    )
+    expect(labels).toHaveLength(7)
+    expect(labels[0]).toContain("Your goals")
+    expect(labels[6]).toContain("Handoff")
+    expect(labels[1]).toContain("Contributor")
+    expect(labels[5]).toContain("Standard")
+    expect(journey.querySelector('[aria-current="step"]')?.textContent).toContain(
+      "Your goals"
+    )
+    expect(screen.queryByText(/Review & send/)).toBeNull()
+  })
+})
+
 describe("owner corrections (RW-B1)", () => {
   beforeEach(() => {
     window.localStorage.clear()
@@ -304,7 +362,7 @@ describe("owner corrections (RW-B1)", () => {
     render(<App />)
 
     expect(
-      await screen.findByRole("heading", { name: "My search" })
+      await screen.findByRole("heading", { name: "Let's find your next role" })
     ).toBeDefined()
     expect(await screen.findByText("Profile version 3")).toBeDefined()
     expect(

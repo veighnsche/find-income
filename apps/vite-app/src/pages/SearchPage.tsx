@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 import { useSession } from "@/api/session"
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/shared"
+import {
+  SEVEN_STAGES,
+  StageProgress,
+} from "@/components/shared/stage-progress"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -11,6 +15,16 @@ import {
   type EffectiveSavedContext,
 } from "@/features/owner-context/useOwnerContext"
 import { formatCents } from "@/pages/format"
+
+const STAGE_ACTORS: Record<string, string> = {
+  goals: "You",
+  find: "Contributor",
+  select: "You",
+  check: "Contributor",
+  answer: "You + Jev",
+  prepare: "Standard",
+  handoff: "You",
+}
 
 function FieldCorrectButton({
   label,
@@ -327,11 +341,23 @@ export function SearchPage() {
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <div>
-        <h1 className="font-heading text-2xl font-semibold">My search</h1>
+        <h1 className="font-heading text-2xl font-semibold">
+          Let&apos;s find your next role
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          The saved search profile, exactly as the server returns it. Reading
-          this page changes nothing.
+          Set what you want once; the search, checks and drafts follow from
+          those saved choices. Reading this page changes nothing.
         </p>
+        <StageProgress
+          ariaLabel="Seven-step journey"
+          activeStageId="goals"
+          stages={SEVEN_STAGES.map((stage) => ({
+            ...stage,
+            state: "upcoming" as const,
+            actor: STAGE_ACTORS[stage.id] ?? "",
+          }))}
+          className="mt-3"
+        />
       </div>
 
       {owner.contextState === "loading" ? (

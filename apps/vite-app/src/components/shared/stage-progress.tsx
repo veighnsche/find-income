@@ -21,6 +21,7 @@ export type StageInput = {
   id: string;
   label: string;
   state: StageState;
+  actor?: string;
 };
 
 export function StageProgress({
@@ -54,9 +55,10 @@ export function StageProgress({
             {index > 0 ? (
               <span
                 aria-hidden="true"
-                className="bg-border mx-1 h-px w-4 shrink-0 sm:w-6"
+                className="bg-border mx-1 h-px w-4 shrink-0 self-center sm:w-6"
               />
             ) : null}
+            <span className="flex min-w-0 flex-col items-start">
             <span
               className={cn(
                 "inline-flex min-w-0 items-center gap-1.5 rounded-4xl border px-2.5 py-1 text-xs whitespace-nowrap sm:text-sm",
@@ -95,6 +97,12 @@ export function StageProgress({
                       ? " (blocked)"
                       : " (not started)"}
               </span>
+            </span>
+            {stage.actor !== undefined && stage.actor !== "" ? (
+              <span className="mt-0.5 truncate px-2.5 text-[11px] leading-tight text-muted-foreground">
+                {stage.actor}
+              </span>
+            ) : null}
             </span>
           </li>
         );
