@@ -143,6 +143,7 @@ type Service struct {
 	Store     *store.Store
 	Career    CareerLoader
 	Draft     Drafter
+	Artifacts ArtifactDrafter
 	Relevance RelevanceAssessor
 	Render    PackRenderer
 	// Captures opens already-stored vacancy capture bytes when the saved

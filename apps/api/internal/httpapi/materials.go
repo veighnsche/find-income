@@ -38,6 +38,10 @@ type MaterialPreparer interface {
 	// called implicitly.
 	RewriteOpportunityMaterials(ctx context.Context, actor store.Actor, opportunityID, requestKey string,
 		expectedVersion int64, instruction string) (store.MaterialVersionView, bool, error)
+	// DraftOpportunityArtifacts drafts required held artifact types in
+	// one bounded Standard turn and returns the stored readiness set.
+	DraftOpportunityArtifacts(ctx context.Context, actor store.Actor, opportunityID, requestKey string,
+		expectedCheckID, expectedQuestionSetSHA256 string, expectedWorkflowRevision int64) (store.ArtifactReadinessSet, bool, error)
 }
 
 func (h *Handler) prepareOpportunityMaterials(w http.ResponseWriter, r *http.Request) {

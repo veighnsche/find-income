@@ -76,6 +76,10 @@ type stubPreparer struct {
 	rewriteCalls   int
 	lastText       string
 	lastInstruct   string
+	draftSet       store.ArtifactReadinessSet
+	draftCreated   bool
+	draftErr       error
+	draftCalls     int
 }
 
 func (s *stubPreparer) PrepareOpportunityMaterials(context.Context, store.Actor, string, string, string, string, int64) (store.MaterialStatusView, bool, error) {
@@ -92,6 +96,11 @@ func (s *stubPreparer) RewriteOpportunityMaterials(_ context.Context, _ store.Ac
 	s.rewriteCalls++
 	s.lastInstruct = instruction
 	return s.rewriteView, s.rewriteCreated, s.rewriteErr
+}
+
+func (s *stubPreparer) DraftOpportunityArtifacts(context.Context, store.Actor, string, string, string, string, int64) (store.ArtifactReadinessSet, bool, error) {
+	s.draftCalls++
+	return s.draftSet, s.draftCreated, s.draftErr
 }
 
 func materialVersionFixture(origin string, version int64) store.MaterialVersionView {

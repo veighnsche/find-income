@@ -99,7 +99,7 @@ func runWithContext(ctx context.Context, args []string) error {
 			// bounded private Standard turn per operation. Without a
 			// proved Standard lane the drafter stays nil and drafting
 			// roles keep their honest 503 instead of invented drafts.
-			var drafter materialprep.Drafter
+			var drafter *materialprep.StandardDrafter
 			museBin := os.Getenv("JOBSEEK_MUSE_BIN")
 			if museBin == "" {
 				museBin = "muse"
@@ -125,6 +125,7 @@ func runWithContext(ctx context.Context, args []string) error {
 					return applicationpacks.LoadApprovedCareerSources(root, []string{"cv-vince-liem.typ", "cv-vince-liem.md", "github-evidence-review.md"})
 				},
 				Draft:     drafter,
+				Artifacts: drafter,
 				Relevance: materialprep.JevRelevance{Evaluator: jevClient},
 				Render: applicationpacks.Renderer{TypstPath: typst,
 					PrivateTempDir: filepath.Join(dataDir, "material-prep-tmp"), Timeout: 10 * time.Second},

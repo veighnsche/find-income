@@ -1273,6 +1273,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/opportunities/{id}/artifacts/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft required held artifact types in one bounded Standard turn
+         * @description Grounded in verified facts and saved answers; omitted types stay held. Idempotent on requestKey.
+         */
+        post: operations["draftOpportunityArtifacts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/opportunities/{id}/artifacts/{artifactType}": {
         parameters: {
             query?: never;
@@ -5473,6 +5495,45 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    draftOpportunityArtifacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialPrepareRequest"];
+            };
+        };
+        responses: {
+            /** @description Readiness set, nothing new drafted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactReadinessSet"];
+                };
+            };
+            /** @description Artifacts drafted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactReadinessSet"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["Unavailable"];
         };
     };

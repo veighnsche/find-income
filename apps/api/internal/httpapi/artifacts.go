@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
+	"github.com/veighnsche/find-income-dashboard/api/internal/materialprep"
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
@@ -12,6 +13,33 @@ import (
 // verified route to required/held/not-required/unresolved states; exact
 // edits persist literally without a model call. form_values is derived at
 // read time and rejected on write.
+func (h *Handler) draftOpportunityArtifacts(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.owner(w, r)
+	if !ok || !h.mutationAllowed(w, r, p) {
+		return
+	}
+	if h.materials == nil {
+		h.materialUnavailable(w, "Artifact drafting")
+		return
+	}
+	var body generated.MaterialPrepareRequest
+	if !decodeRecordJSON(w, r, &body) {
+		return
+	}
+	set, created, err := h.materials.DraftOpportunityArtifacts(r.Context(),
+		store.Actor{Kind: p.Kind, ID: p.ID}, r.PathValue("id"), body.RequestKey,
+		body.ExpectedCheckId, body.ExpectedQuestionSetSha256, body.ExpectedWorkflowRevision)
+	if err != nil {
+		failArtifactDraft(w, err)
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, artifactReadinessSetModel(set))
+}
+
 func (h *Handler) listArtifactReadiness(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.owner(w, r); !ok {
 		return
@@ -66,6 +94,14 @@ func (h *Handler) saveOpportunityArtifact(w http.ResponseWriter, r *http.Request
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, artifactViewModel(view))
+}
+
+func failArtifactDraft(w http.ResponseWriter, err error) {
+	if errors.Is(err, materialprep.ErrUnavailable) {
+		fail(w, http.StatusServiceUnavailable, generated.ApiErrorCodeUnavailable, "Artifact drafting is unavailable.")
+		return
+	}
+	failArtifact(w, err)
 }
 
 func failArtifact(w http.ResponseWriter, err error) {

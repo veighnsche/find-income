@@ -5048,6 +5048,9 @@ type RetryIngestionJSONRequestBody = RetryIngestionRequest
 // MatchOpportunityAnswersJSONRequestBody defines body for MatchOpportunityAnswers for application/json ContentType.
 type MatchOpportunityAnswersJSONRequestBody = AnswerMatchRequest
 
+// DraftOpportunityArtifactsJSONRequestBody defines body for DraftOpportunityArtifacts for application/json ContentType.
+type DraftOpportunityArtifactsJSONRequestBody = MaterialPrepareRequest
+
 // SaveOpportunityArtifactJSONRequestBody defines body for SaveOpportunityArtifact for application/json ContentType.
 type SaveOpportunityArtifactJSONRequestBody = ArtifactSaveRequest
 

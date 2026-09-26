@@ -1232,6 +1232,30 @@ paths:
             { application/json: { schema: { $ref: '#/components/schemas/ArtifactReadinessSet' } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/artifacts/draft:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    post:
+      operationId: draftOpportunityArtifacts
+      summary: Draft required held artifact types in one bounded Standard turn
+      description: Grounded in verified facts and saved answers; omitted types stay held. Idempotent on requestKey.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/MaterialPrepareRequest' } } }
+      responses:
+        '200':
+          description: Readiness set, nothing new drafted
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/ArtifactReadinessSet' } } }
+        '201':
+          description: Artifacts drafted
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/ArtifactReadinessSet' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /opportunities/{id}/artifacts/{artifactType}:
     parameters:
       - { $ref: '#/components/parameters/RecordId' }

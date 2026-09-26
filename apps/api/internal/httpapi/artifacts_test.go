@@ -3,6 +3,8 @@ package httpapi
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/veighnsche/find-income-dashboard/api/internal/store"
 )
 
 func TestArtifactReadsLive(t *testing.T) {
@@ -48,6 +50,36 @@ func TestArtifactReadsLive(t *testing.T) {
 	response = h.request("GET", "/api/v1/opportunities/"+opportunity.ID+"/artifacts/portfolio", "", cookie, "", "", "")
 	if response.Code != 400 {
 		t.Fatalf("unknown type: got %d, want 400", response.Code)
+	}
+}
+
+func TestArtifactDraftEndpoint(t *testing.T) {
+	h := newHarness(t)
+	cookie, csrf := h.login()
+	response := h.request("POST", "/api/v1/opportunities/synthetic-role/artifacts/draft",
+		`{"requestKey":"d","expectedCheckId":"c","expectedQuestionSetSha256":"s","expectedWorkflowRevision":0}`,
+		cookie, "", csrf, origin)
+	if response.Code != 503 {
+		t.Fatalf("unwired draft: got %d, want honest 503", response.Code)
+	}
+	stub := &stubPreparer{draftSet: store.ArtifactReadinessSet{OpportunityID: "synthetic-role",
+		CheckStatus: "checked", Entries: []store.ArtifactReadinessEntry{{Type: "cv", Required: true, State: "ready"}}},
+		draftCreated: true}
+	h.handler = NewHandler(h.db, h.service, Options{AllowedOrigins: []string{origin}, Materials: stub})
+	response = h.request("POST", "/api/v1/opportunities/synthetic-role/artifacts/draft",
+		`{"requestKey":"d","expectedCheckId":"c","expectedQuestionSetSha256":"s","expectedWorkflowRevision":0}`,
+		cookie, "", csrf, origin)
+	var set struct {
+		Entries []struct {
+			Type  string `json:"type"`
+			State string `json:"state"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &set); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != 201 || stub.draftCalls != 1 || len(set.Entries) != 1 || set.Entries[0].State != "ready" {
+		t.Fatalf("draft: %d calls=%d %+v", response.Code, stub.draftCalls, set)
 	}
 }
 
