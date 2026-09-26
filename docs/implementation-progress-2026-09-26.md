@@ -21,11 +21,11 @@ File ownership (one writer per file; transfers recorded before editing):
 Task ledger (checkbox only when acceptance evidence exists):
 - [x] I0 baseline/ownership ledger — done: HEAD ef463c4 == reviewed commit; docs-only delta; ledger committed a38ee26; baseline workflow synthesis confirmed.
 - [x] I1 minimum cross-layer semantics — done: contracts C1–C9 frozen in implementation-contracts-2026-09-26.md (f81c777) with shapes, ownership, 8 failing Q0 cases. No Jev consultation: semantics derive directly from product vision + reviewed findings.
-- [ ] R1 direct CLI seam — active (native R1-direct-cli; shared checkout, disjoint files, no worker commits). Temp R ownership of LiveTransport construction blocks in cmd/server/main.go + researchwire/wire.go (call-site compat only). Earlier workflow attempts: isolated-worktree run failed (workspace root not a repo), shared run cancelled after 5 turns with zero output.
-- [ ] M1 remove second preparation workflow — active (native M1-one-artifact-system; shared checkout, disjoint files, no worker commits). Temp M ownership of obsolete pack controls in features/prepare/PreparePage.tsx + ApplicationsPage pack list for deletion only; then handover to E. client.ts/openapi/handler/main/migrations stay I/F-owned: worker proposes, coordinator applies.
-- [ ] R2 cut rejected runtime consumers — blocked on R1+M1
-- [ ] I2 subtraction gate — blocked on M1+R2
-- [ ] I3 publish contracts — blocked on I2
+- [x] R1 direct CLI seam — done 02c077e: direct muse exec + output-schema + native web tools; app-side URL verification; loopback MCP/isolated-config deleted; echo zero-spend proofs pass; evidence/save boundary documented.
+- [x] M1 remove second preparation workflow — done 23a2654: 30 pack files cut; route artifacts canonical; pack UI controls deleted; E files handed over. No pack PDF survives (not re-derivable).
+- [x] R2 cut rejected runtime consumers — done 4a93058 + 2622b33: pack round-op/outcome/agency branches, codex session endpoints + CodexControl, pack tool/config/relevance, owner-authority case, required-tools list, migration 017, recovery script. R30 HTTP assertions pass.
+- [x] I2 subtraction gate — done: no pack/codex/MCP-server production refs (greps); suite fails only on Q0 01/02/03/05/06/07 (future-lane gaps); build/vet/typecheck green.
+- [ ] I3 publish contracts — active (coordinator): openapi pack/codex cuts + handoff_saved stage + Go/TS regen + minimal client.ts cut (temp I transfer, then F owns).
 - [ ] D1 catalog lifecycle — blocked on I3+R1
 - [ ] D2 vacancy identity/card facts — blocked on I3+R1
 - [ ] D3 server run recovery — blocked on I3+D1+D2
@@ -62,7 +62,9 @@ Task ledger (checkbox only when acceptance evidence exists):
 
 Integrated dependencies landed: I0 (a38ee26), I1/C1–C9 (f81c777). R1 design settled on evidence: `muse exec` has native web tools + --output-schema, so direct invocation needs no MCP loopback; app verifies cited URLs itself.
 
-Commits: a38ee26 docs(I0); f81c777 docs(I1/C1–C9); 983eb04 docs(I1 dispatch); e10557a docs(R2 map); e6ae53f test(Q0 harness, 8 expected failures).
+Commits: a38ee26 docs(I0); f81c777 docs(I1/C1–C9); 983eb04 docs(I1 dispatch); e10557a docs(R2 map); e6ae53f test(Q0 harness); a7736fc docs(Q0); b4dcb67 docs(R1/M1 dispatch); 02c077e refactor(R1); 23a2654 refactor(M1); 4a93058 refactor(R2); 7c58cd7 test(Q0 rewrite); 2622b33 fix(R2 residuals).
+Accepted boundaries: (1) publicresearch MCP registry type + musecode public_* allowlist + researchwire tool-protocol tests are inert (zero production session constructors) — D1/D3 rewrite them against the direct journey. (2) codexservice internals (dispatch/MCP bridge methods) + cmd/codex-runner retained for rounds/researchwire dispatch; HTTP session surface gone. (3) test_recovery.py fixture broken pre-existing (verified at HEAD b4dcb67: missing delivery tables); recovery.py pack checks removed; Go researchrestore green. (4) openapi pack/codex paths + generated code cut at I3 (contract publish).
+Q0 state: cases 04 (R08) + 08 (R30) PASS; 01/02/03/05/06/07 fail substantively.
 
 Verification: meaningful focused checks per checkpoint before commit; Q gates require production HTTP + real temp store, controlled provider adapters only, no seeded catalog/answered state/ready artifacts.
 
