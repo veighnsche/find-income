@@ -261,6 +261,10 @@ func (s *Service) DraftOpportunityArtifacts(ctx context.Context, actor store.Act
 		}
 	}
 	if len(targets) == 0 {
+		if err := s.recordPrepare(ctx, actor, opportunityID, resolved.check.ID,
+			store.PrepareCompleted, "ok", map[string]any{"drafted": []string{}, "reason": "no held types"}); err != nil {
+			return store.ArtifactReadinessSet{}, false, err
+		}
 		return readiness, false, nil
 	}
 	if s.Artifacts == nil {
@@ -286,6 +290,24 @@ func (s *Service) DraftOpportunityArtifacts(ctx context.Context, actor store.Act
 	for _, document := range resolved.check.RequestedDocuments {
 		documents = append(documents, ArtifactDocument{Label: document.Label, Required: document.Required})
 	}
+	targetNames := make([]string, 0, len(targets))
+	for _, target := range targets {
+		targetNames = append(targetNames, target.Type)
+	}
+	factIDs := make([]string, 0, len(sources))
+	for _, source := range sources {
+		factIDs = append(factIDs, source.ID)
+	}
+	answerIDs := make([]string, 0, len(answered))
+	for _, fact := range answered {
+		answerIDs = append(answerIDs, fact.QuestionID)
+	}
+	if err := s.recordPrepare(ctx, actor, opportunityID, resolved.check.ID,
+		store.PrepareTurnStarted, "started", map[string]any{
+			"targets": targetNames, "factIds": factIDs, "answerIds": answerIDs,
+			"savedAnswers": len(saved)}); err != nil {
+		return store.ArtifactReadinessSet{}, false, err
+	}
 	drafts, err := s.Artifacts.DraftArtifacts(ctx, ArtifactDraftRequest{
 		OpportunityID: resolved.opportunity.ID, OpportunityTitle: resolved.opportunity.Title,
 		CompanyName: resolved.company.Name, CheckID: resolved.check.ID,
@@ -294,27 +316,70 @@ func (s *Service) DraftOpportunityArtifacts(ctx context.Context, actor store.Act
 		Targets: targets, Answered: answered, SavedAnswers: saved,
 		CareerSources: sources, Profile: resolved.profile})
 	if err != nil {
+		_ = s.recordPrepare(ctx, actor, opportunityID, resolved.check.ID,
+			store.PrepareFailed, "error", map[string]any{"error": truncateRunes(err.Error(), 500)})
 		return store.ArtifactReadinessSet{}, false, err
 	}
 	created := false
+	done := make(map[string]bool, len(drafts))
 	for _, draft := range drafts {
 		refs := make([]store.ArtifactAnswerRef, 0, len(draft.AnswerIDs))
 		for _, id := range draft.AnswerIDs {
 			refs = append(refs, store.ArtifactAnswerRef{QuestionID: id, AnswerVersion: resolved.values[id].Version})
 		}
-		_, wasCreated, err := s.Store.SaveOpportunityArtifact(ctx, actor, opportunityID, store.ArtifactSaveInput{
+		view, wasCreated, err := s.Store.SaveOpportunityArtifact(ctx, actor, opportunityID, store.ArtifactSaveInput{
 			RequestKey: requestKey + ":" + draft.Type, Type: draft.Type, Content: draft.Content,
 			Basis: store.ArtifactBasis{FactIDs: draft.FactIDs, AnswerRefs: refs, CheckSpans: []store.CheckSourceSpan{}}})
 		if err != nil {
+			_ = s.recordPrepare(ctx, actor, opportunityID, resolved.check.ID,
+				store.PrepareFailed, "error", map[string]any{"error": truncateRunes(err.Error(), 500)})
 			return store.ArtifactReadinessSet{}, false, err
 		}
+		done[draft.Type] = true
 		created = created || wasCreated
+		if err := s.recordPrepare(ctx, actor, opportunityID, resolved.check.ID,
+			store.PrepareArtifactDone, "ok", map[string]any{"type": draft.Type,
+				"version": view.Version, "factIds": draft.FactIDs, "answerIds": draft.AnswerIDs}); err != nil {
+			return store.ArtifactReadinessSet{}, false, err
+		}
+	}
+	held := make([]string, 0)
+	drafted := make([]string, 0, len(drafts))
+	for _, draft := range drafts {
+		drafted = append(drafted, draft.Type)
+	}
+	for _, target := range targets {
+		if !done[target.Type] {
+			held = append(held, target.Type)
+			if err := s.recordPrepare(ctx, actor, opportunityID, resolved.check.ID,
+				store.PrepareArtifactHeld, "held", map[string]any{"type": target.Type,
+					"reason": "omitted by turn"}); err != nil {
+				return store.ArtifactReadinessSet{}, false, err
+			}
+		}
+	}
+	if err := s.recordPrepare(ctx, actor, opportunityID, resolved.check.ID,
+		store.PrepareCompleted, "ok", map[string]any{"drafted": drafted, "held": held}); err != nil {
+		return store.ArtifactReadinessSet{}, false, err
 	}
 	readiness, err = s.Store.ArtifactReadiness(ctx, opportunityID)
 	if err != nil {
 		return store.ArtifactReadinessSet{}, false, err
 	}
 	return readiness, created, nil
+}
+
+// recordPrepare journals one prepare activity entry. Payload must stay
+// small and JSON-encodable; failures propagate on success paths and are
+// ignored by failure paths (which keep their original error).
+func (s *Service) recordPrepare(ctx context.Context, actor store.Actor, opportunityID, checkID, kind, outcome string, payload map[string]any) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = s.Store.RecordPrepareActivity(ctx, actor, opportunityID, store.PrepareActivityInput{
+		CheckID: checkID, Kind: kind, Outcome: outcome, Payload: raw})
+	return err
 }
 
 // checkModelArtifactDrafts parses and validates one turn's output against

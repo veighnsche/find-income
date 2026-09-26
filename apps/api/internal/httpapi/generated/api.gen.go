@@ -4948,6 +4948,12 @@ type ListOpportunitiesParams struct {
 // ListOpportunitiesParamsKind defines parameters for ListOpportunities.
 type ListOpportunitiesParamsKind string
 
+// ListPrepareActivityParams defines parameters for ListPrepareActivity.
+type ListPrepareActivityParams struct {
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListOpportunityCheckActivityParams defines parameters for ListOpportunityCheckActivity.
 type ListOpportunityCheckActivityParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`

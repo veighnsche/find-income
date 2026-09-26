@@ -1,8 +1,11 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/httpapi/generated"
 	"github.com/veighnsche/find-income-dashboard/api/internal/materialprep"
@@ -38,6 +41,41 @@ func (h *Handler) draftOpportunityArtifacts(w http.ResponseWriter, r *http.Reque
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, artifactReadinessSetModel(set))
+}
+
+func (h *Handler) listPrepareActivity(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.owner(w, r); !ok {
+		return
+	}
+	limit := 25
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 100 {
+			fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Invalid activity request.")
+			return
+		}
+		limit = parsed
+	}
+	cursor := r.URL.Query().Get("cursor")
+	if len(cursor) > 512 {
+		fail(w, http.StatusBadRequest, generated.ApiErrorCodeValidationError, "Invalid activity request.")
+		return
+	}
+	events, next, err := h.database.ListPrepareActivity(r.Context(), r.PathValue("id"), cursor, limit)
+	if err != nil {
+		failArtifact(w, err)
+		return
+	}
+	page := generated.CheckActivityPage{Events: []generated.ResearchActivityEvent{}}
+	for _, event := range events {
+		page.Events = append(page.Events, generated.ResearchActivityEvent{EventId: event.ID,
+			At: event.RecordedAt, Kind: event.Kind,
+			Summary: prepareActivitySummary(event.Kind, string(event.Outcome), event.Payload)})
+	}
+	if next != "" {
+		page.NextCursor = &next
+	}
+	writeJSON(w, http.StatusOK, page)
 }
 
 func (h *Handler) listArtifactReadiness(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +132,57 @@ func (h *Handler) saveOpportunityArtifact(w http.ResponseWriter, r *http.Request
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, artifactViewModel(view))
+}
+
+// prepareActivitySummary renders one journal entry as owner-readable text
+// naming the facts, answers, produced items, or errors behind it.
+func prepareActivitySummary(kind, outcome string, payload json.RawMessage) string {
+	var detail map[string]any
+	if len(payload) > 0 {
+		_ = json.Unmarshal(payload, &detail)
+	}
+	stringsOf := func(key string) []string {
+		out := []string{}
+		list, _ := detail[key].([]any)
+		for _, item := range list {
+			if text, ok := item.(string); ok {
+				out = append(out, text)
+			}
+		}
+		return out
+	}
+	join := func(values []string) string {
+		if len(values) == 0 {
+			return "none"
+		}
+		return strings.Join(values, ", ")
+	}
+	switch kind {
+	case store.PrepareTurnStarted:
+		return "Drafting " + join(stringsOf("targets")) + " from facts " +
+			join(stringsOf("factIds")) + " and answers " + join(stringsOf("answerIds")) + "."
+	case store.PrepareArtifactDone:
+		name, _ := detail["type"].(string)
+		return "Saved " + name + " naming facts " + join(stringsOf("factIds")) +
+			" and answers " + join(stringsOf("answerIds")) + "."
+	case store.PrepareArtifactHeld:
+		name, _ := detail["type"].(string)
+		return "Held " + name + ": omitted by the drafting turn."
+	case store.PrepareCompleted:
+		return "Drafting finished: ready " + join(stringsOf("drafted")) +
+			"; held " + join(stringsOf("held")) + "."
+	case store.PrepareFailed:
+		message, _ := detail["error"].(string)
+		if message == "" {
+			message = outcome
+		}
+		return "Drafting failed: " + message
+	default:
+		if outcome == "" {
+			return kind + "."
+		}
+		return kind + " (" + outcome + ")."
+	}
 }
 
 func failArtifactDraft(w http.ResponseWriter, err error) {

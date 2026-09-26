@@ -1295,6 +1295,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/opportunities/{id}/artifacts/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        /** Read prepare activity naming facts, answers, produced items and outcome */
+        get: operations["listPrepareActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/opportunities/{id}/artifacts/{artifactType}": {
         parameters: {
             query?: never;
@@ -5534,6 +5553,34 @@ export interface operations {
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listPrepareActivity: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Prepare activity page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckActivityPage"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
             503: components["responses"]["Unavailable"];
         };
     };

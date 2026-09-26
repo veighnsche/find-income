@@ -185,6 +185,48 @@ func TestDraftOpportunityArtifactsCommitsSubset(t *testing.T) {
 	}
 }
 
+func TestDraftOpportunityArtifactsJournalsActivity(t *testing.T) {
+	ctx := context.Background()
+	f := setupPrep(t, "artifact-journal")
+	f.svc.Artifacts = &stubArtifactDrafter{fn: func(materialprep.ArtifactDraftRequest) ([]materialprep.ArtifactDraft, error) {
+		return []materialprep.ArtifactDraft{{Type: "cv", Content: "Go engineer.",
+			FactIDs: []string{careerEvidenceID}}}, nil
+	}}
+	checkID, questionSet, workflowRev := prepPins(t, f)
+	if _, _, err := f.svc.DraftOpportunityArtifacts(ctx, testOwner(), f.opportunity.ID,
+		"journal-1", checkID, questionSet, workflowRev); err != nil {
+		t.Fatal(err)
+	}
+	events, _, err := f.db.ListPrepareActivity(ctx, f.opportunity.ID, "", 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := make([]string, 0, len(events))
+	for _, event := range events {
+		kinds = append(kinds, event.Kind)
+	}
+	want := []string{store.PrepareTurnStarted, store.PrepareArtifactDone,
+		store.PrepareArtifactHeld, store.PrepareArtifactHeld, store.PrepareCompleted}
+	if len(kinds) != len(want) {
+		t.Fatalf("kinds: %v", kinds)
+	}
+	for i := range want {
+		if kinds[i] != want[i] {
+			t.Fatalf("kinds: %v", kinds)
+		}
+	}
+	if !strings.Contains(string(events[0].Payload), careerEvidenceID) {
+		t.Fatalf("turn payload: %s", events[0].Payload)
+	}
+	if !strings.Contains(string(events[1].Payload), `"type":"cv"`) {
+		t.Fatalf("saved payload: %s", events[1].Payload)
+	}
+	last := string(events[len(events)-1].Payload)
+	if !strings.Contains(last, `"drafted":["cv"]`) || !strings.Contains(last, "email_subject") {
+		t.Fatalf("completed payload: %s", last)
+	}
+}
+
 func TestDraftOpportunityArtifactsGuards(t *testing.T) {
 	ctx := context.Background()
 	f := setupPrep(t, "artifact-guard")

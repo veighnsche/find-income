@@ -194,6 +194,7 @@ func NewHandler(database *store.Store, service *auth.Service, options Options) h
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/materials/rewrite", h.rewriteOpportunityMaterials)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/materials/versions/{version}", h.getOpportunityMaterialVersion)
 	mux.HandleFunc("POST /api/v1/opportunities/{id}/artifacts/draft", h.draftOpportunityArtifacts)
+	mux.HandleFunc("GET /api/v1/opportunities/{id}/artifacts/activity", h.listPrepareActivity)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/artifacts", h.listArtifactReadiness)
 	mux.HandleFunc("GET /api/v1/opportunities/{id}/artifacts/{artifactType}", h.getArtifactReadiness)
 	mux.HandleFunc("PUT /api/v1/opportunities/{id}/artifacts/{artifactType}", h.saveOpportunityArtifact)

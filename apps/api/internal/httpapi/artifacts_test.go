@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/veighnsche/find-income-dashboard/api/internal/store"
@@ -50,6 +52,59 @@ func TestArtifactReadsLive(t *testing.T) {
 	response = h.request("GET", "/api/v1/opportunities/"+opportunity.ID+"/artifacts/portfolio", "", cookie, "", "", "")
 	if response.Code != 400 {
 		t.Fatalf("unknown type: got %d, want 400", response.Code)
+	}
+}
+
+func TestPrepareActivityEndpoint(t *testing.T) {
+	h := newHarness(t)
+	cookie, _ := h.login()
+	response := h.request("GET", "/api/v1/opportunities/synthetic-role/artifacts/activity", "", cookie, "", "", "")
+	if response.Code != 404 {
+		t.Fatalf("missing role: got %d, want honest 404", response.Code)
+	}
+	opportunity := createCheckedOpportunity(t, h, "artifact-activity-1")
+	response = h.request("GET", "/api/v1/opportunities/"+opportunity.ID+"/artifacts/activity", "", cookie, "", "", "")
+	var page struct {
+		Events []struct {
+			Kind    string `json:"kind"`
+			Summary string `json:"summary"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != 200 || len(page.Events) != 0 {
+		t.Fatalf("empty: %d %+v", response.Code, page)
+	}
+	ctx := context.Background()
+	owner := store.Actor{Kind: "administrator", ID: "owner"}
+	if _, err := h.db.RecordPrepareActivity(ctx, owner, opportunity.ID, store.PrepareActivityInput{
+		Kind: store.PrepareTurnStarted, Outcome: "started",
+		Payload: json.RawMessage(`{"targets":["cv"],"factIds":["cv-vince-liem.md"],"answerIds":[]}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.db.RecordPrepareActivity(ctx, owner, opportunity.ID, store.PrepareActivityInput{
+		Kind: store.PrepareCompleted, Outcome: "ok",
+		Payload: json.RawMessage(`{"drafted":["cv"],"held":["email_body"]}`)}); err != nil {
+		t.Fatal(err)
+	}
+	response = h.request("GET", "/api/v1/opportunities/"+opportunity.ID+"/artifacts/activity", "", cookie, "", "", "")
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != 200 || len(page.Events) != 2 {
+		t.Fatalf("page: %d %+v", response.Code, page)
+	}
+	if page.Events[0].Kind != "prepare.turn_started" ||
+		!strings.Contains(page.Events[0].Summary, "cv-vince-liem.md") {
+		t.Fatalf("turn summary: %+v", page.Events[0])
+	}
+	if !strings.Contains(page.Events[1].Summary, "email_body") {
+		t.Fatalf("completed summary: %+v", page.Events[1])
+	}
+	response = h.request("GET", "/api/v1/opportunities/"+opportunity.ID+"/artifacts/activity?limit=0", "", cookie, "", "", "")
+	if response.Code != 400 {
+		t.Fatalf("limit: got %d, want 400", response.Code)
 	}
 }
 

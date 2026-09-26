@@ -1256,6 +1256,27 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /opportunities/{id}/artifacts/activity:
+    parameters: [{ $ref: '#/components/parameters/RecordId' }]
+    get:
+      operationId: listPrepareActivity
+      summary: Read prepare activity naming facts, answers, produced items and outcome
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: Prepare activity page
+          content:
+            { application/json: { schema: { $ref: '#/components/schemas/CheckActivityPage' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /opportunities/{id}/artifacts/{artifactType}:
     parameters:
       - { $ref: '#/components/parameters/RecordId' }
