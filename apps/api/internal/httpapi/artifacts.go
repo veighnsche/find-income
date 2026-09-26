@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -36,11 +37,49 @@ func (h *Handler) draftOpportunityArtifacts(w http.ResponseWriter, r *http.Reque
 		failArtifactDraft(w, err)
 		return
 	}
+	if err := h.advanceWorkflowToPrepared(r.Context(), r.PathValue("id")); err != nil {
+		failArtifact(w, err)
+		return
+	}
 	status := http.StatusOK
 	if created {
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, artifactReadinessSetModel(set))
+}
+
+// advanceWorkflowToPrepared walks a successfully prepared role to the
+// prepared stage (answered → preparing → prepared) so the explicit
+// manual-Handoff save has its precondition. Prepared-with-holds is
+// legitimate: held/outdated items stay visible in the Handoff basis.
+// Roles without workflow state have nothing to walk; a conflict means
+// a concurrent draft advanced first, so re-read before giving up.
+func (h *Handler) advanceWorkflowToPrepared(ctx context.Context, opportunityID string) error {
+	for i := 0; i < 4; i++ {
+		workflow, err := h.database.RoleWorkflow(ctx, opportunityID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) || errors.Is(err, store.ErrRoleNotSelected) {
+				return nil
+			}
+			return err
+		}
+		var to string
+		switch workflow.Stage {
+		case store.RoleStageAnswered:
+			to = store.RoleStagePreparing
+		case store.RoleStagePreparing:
+			to = store.RoleStagePrepared
+		default:
+			return nil
+		}
+		if _, err := h.database.AdvanceRoleWorkflow(ctx, opportunityID, workflow.Revision, to, ""); err != nil {
+			if errors.Is(err, store.ErrConflict) {
+				continue
+			}
+			return err
+		}
+	}
+	return store.ErrConflict
 }
 
 func (h *Handler) listPrepareActivity(w http.ResponseWriter, r *http.Request) {
