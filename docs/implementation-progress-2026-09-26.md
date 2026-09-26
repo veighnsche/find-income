@@ -21,8 +21,8 @@ File ownership (one writer per file; transfers recorded before editing):
 Task ledger (checkbox only when acceptance evidence exists):
 - [x] I0 baseline/ownership ledger — done: HEAD ef463c4 == reviewed commit; docs-only delta; ledger committed a38ee26; baseline workflow synthesis confirmed.
 - [x] I1 minimum cross-layer semantics — done: contracts C1–C9 frozen in implementation-contracts-2026-09-26.md (f81c777) with shapes, ownership, 8 failing Q0 cases. No Jev consultation: semantics derive directly from product vision + reviewed findings.
-- [ ] R1 direct CLI seam — active (worker lane/r1). Temp R ownership of LiveTransport construction blocks in cmd/server/main.go + researchwire/wire.go (call-site compat only).
-- [ ] M1 remove second preparation workflow — active (worker lane/m1). Temp M ownership of obsolete pack controls in features/prepare/PreparePage.tsx + ApplicationsPage pack list for deletion only; then handover to E. client.ts/openapi/handler/main/migrations stay I/F-owned: worker proposes, coordinator applies.
+- [ ] R1 direct CLI seam — active (native R1-direct-cli; shared checkout, disjoint files, no worker commits). Temp R ownership of LiveTransport construction blocks in cmd/server/main.go + researchwire/wire.go (call-site compat only). Earlier workflow attempts: isolated-worktree run failed (workspace root not a repo), shared run cancelled after 5 turns with zero output.
+- [ ] M1 remove second preparation workflow — active (native M1-one-artifact-system; shared checkout, disjoint files, no worker commits). Temp M ownership of obsolete pack controls in features/prepare/PreparePage.tsx + ApplicationsPage pack list for deletion only; then handover to E. client.ts/openapi/handler/main/migrations stay I/F-owned: worker proposes, coordinator applies.
 - [ ] R2 cut rejected runtime consumers — blocked on R1+M1
 - [ ] I2 subtraction gate — blocked on M1+R2
 - [ ] I3 publish contracts — blocked on I2
