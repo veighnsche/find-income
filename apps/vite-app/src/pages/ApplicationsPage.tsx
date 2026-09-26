@@ -1,12 +1,10 @@
 import {
   getOpportunity,
   getOwnerOpportunityDecision,
-  listApplicationPacks,
   listOpportunities,
   listRoleWorkflows,
   type RoleWorkflowState,
 } from "@/api/client"
-import { ActivityDisclosure } from "@/components/shared/activity-disclosure"
 import {
   EmptyBlock,
   ErrorBlock,
@@ -132,9 +130,6 @@ function ApplicationDetail({ jobId }: { jobId: string }) {
   const opportunity = useRead(`application:${jobId}:job`, (signal) =>
     getOpportunity(jobId, signal)
   )
-  const packs = useRead(`application:${jobId}:packs`, (signal) =>
-    listApplicationPacks(jobId, signal)
-  )
   const decision = useRead(`application:${jobId}:decision`, (signal) =>
     getOwnerOpportunityDecision(jobId, signal)
   )
@@ -175,56 +170,6 @@ function ApplicationDetail({ jobId }: { jobId: string }) {
 
       <ApplicationContinue jobId={jobId} />
 
-      <section aria-labelledby="application-packs-heading">
-        <h2
-          id="application-packs-heading"
-          className="font-heading text-lg font-medium"
-        >
-          Saved packs
-        </h2>
-        <div className="mt-3">
-          {packs.status === "loading" ? (
-            <LoadingBlock label="Loading application packs…" />
-          ) : packs.status === "error" ? (
-            <ErrorBlock
-              title="Could not load application packs"
-              message={packs.error}
-              onRetry={packs.retry}
-            />
-          ) : packs.data.length === 0 ? (
-            <EmptyBlock
-              title="No application packs saved for this role"
-              description="Packs appear here after preparation saves them."
-            />
-          ) : (
-            <ol className="flex min-w-0 flex-col gap-2">
-              {packs.data.map((pack) => (
-                <li
-                  key={pack.id}
-                  className="rounded-md border bg-card px-3 py-2 text-sm"
-                >
-                  <p className="font-medium">Version {pack.version}</p>
-                  <p
-                    className="mt-0.5 text-xs text-muted-foreground"
-                    title={pack.createdAt}
-                  >
-                    Saved {formatDate(pack.createdAt)} · profile revision{" "}
-                    {pack.profileRevision} · role revision{" "}
-                    {pack.opportunityRevision}
-                  </p>
-                  <p
-                    className="mt-0.5 truncate font-mono text-xs text-muted-foreground"
-                    title={pack.contentSha256}
-                  >
-                    {pack.contentSha256}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      </section>
-
       <section aria-labelledby="application-decision-heading">
         <h2
           id="application-decision-heading"
@@ -257,32 +202,6 @@ function ApplicationDetail({ jobId }: { jobId: string }) {
         </div>
       </section>
 
-      {packs.status === "ready" ? (
-        <section aria-labelledby="application-activity-heading">
-          <h2
-            id="application-activity-heading"
-            className="font-heading text-lg font-medium"
-          >
-            Pack history
-          </h2>
-          <div className="mt-3">
-            <ActivityDisclosure
-              actor="owner"
-              phase="Application packs"
-              status={
-                packs.data.length === 0
-                  ? "No packs saved"
-                  : `${packs.data.length} ${packs.data.length === 1 ? "pack" : "packs"} saved`
-              }
-              entries={packs.data.map((pack) => ({
-                id: pack.id,
-                kind: "result",
-                text: `Version ${pack.version} saved ${formatDate(pack.createdAt)}`,
-              }))}
-            />
-          </div>
-        </section>
-      ) : null}
     </div>
   )
 }

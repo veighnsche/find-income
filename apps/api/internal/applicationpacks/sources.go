@@ -1,10 +1,33 @@
+// Package applicationpacks loads the pinned private career sources that
+// ground route-artifact drafting. Route artifacts (opportunity_artifacts)
+// are the single canonical user content; there is no combined-pack
+// workflow in this package.
 package applicationpacks
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 )
+
+var ErrInvalid = errors.New("invalid application pack")
+
+const templateSHA256 = "e9643864392f2aff7f900a82714a8feb573f636c24c62e7a169c29de41bc9a57"
+
+// Source is a private, exact snapshot. An approval is an owner/workflow decision,
+// not a conclusion that every possible paraphrase is true.
+type Source struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	SHA256   string `json:"sha256"`
+	Approved bool   `json:"approved"`
+	Body     string `json:"body"`
+}
+
+func hash(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 
 var approvedCareerDigests = map[string]string{
 	"cv-vince-liem.typ":         templateSHA256,
@@ -45,27 +68,4 @@ func LoadApprovedCareerSources(projectRoot string, names []string) ([]Source, []
 		return nil, nil, ErrInvalid
 	}
 	return sources, template, nil
-}
-
-// SameApprovedSourceSnapshots fences a correction when its prior pack and the
-// newly loaded approved career material do not have the same source digests.
-func SameApprovedSourceSnapshots(prior, current []Source) bool {
-	if len(prior) == 0 || len(prior) != len(current) {
-		return false
-	}
-	byID := make(map[string]Source, len(current))
-	for _, source := range current {
-		if !source.Approved || source.ID == "" || source.Name == "" || len(source.SHA256) != 64 || byID[source.ID].ID != "" {
-			return false
-		}
-		byID[source.ID] = source
-	}
-	for _, source := range prior {
-		match, ok := byID[source.ID]
-		if !ok || !source.Approved || source.Name != match.Name || source.SHA256 != match.SHA256 {
-			return false
-		}
-		delete(byID, source.ID)
-	}
-	return len(byID) == 0
 }
