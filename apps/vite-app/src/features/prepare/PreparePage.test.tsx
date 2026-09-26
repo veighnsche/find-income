@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen } from "@testing-library/react"
 import type {
+  ArtifactReadinessSet,
   CheckStatusView,
   CheckView,
   OpportunityView,
@@ -13,7 +14,7 @@ import {
   buildMaterialPrepareRequest,
   countBytes,
   countRunes,
-} from "@/features/prepare/usePrepareActions"
+} from "@/features/prepare/artifactsApi"
 import { roleWorkflowFixture, sessionFixture } from "@/pages/fixtures"
 
 afterEach(() => {
@@ -117,6 +118,21 @@ interface PrepareStubOptions {
   opportunities?: Record<string, OpportunityView | null>
   workflows?: Record<string, RoleWorkflowState | null>
   checks?: Record<string, CheckStatusView | null>
+  readiness?: ArtifactReadinessSet | null
+}
+
+const staleReadinessFixture: ArtifactReadinessSet = {
+  opportunityId: "job-1",
+  checkId: "check-job-1",
+  checkStatus: "checked",
+  entries: [
+    {
+      type: "cv",
+      required: true,
+      state: "held",
+      reason: "Held: no draft yet.",
+    },
+  ],
 }
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -173,6 +189,16 @@ function stubPrepareFetch(options: PrepareStubOptions = {}): {
             ? notFound("Check not found.")
             : jsonResponse(200, entry)
         }
+        if (suffix === "/artifacts") {
+          const entry = options.readiness ?? staleReadinessFixture
+          return entry === null
+            ? notFound("Artifacts not found.")
+            : jsonResponse(200, entry)
+        }
+        if (suffix === "/artifacts/activity")
+          return jsonResponse(200, { events: [] })
+        if (suffix === "/clarifications")
+          return jsonResponse(200, { items: [] })
       }
       return jsonResponse(404, { error: { message: "Not found." } })
     }
@@ -270,5 +296,52 @@ describe("prepare page reads", () => {
     for (const call of calls) {
       expect(call.method).toBe("GET")
     }
+  })
+
+  it("keeps preparing hidden while a check runs", async () => {
+    stubPrepareFetch(
+      preparedOptions({
+        checks: { "job-1": checkFixture("job-1", "checking") },
+      })
+    )
+    renderPreparePage("job-1")
+
+    expect(await screen.findByText("Check in progress")).toBeDefined()
+    expect(screen.queryByText("Route-mapped artifacts")).toBeNull()
+  })
+
+  it("keeps prior materials readable under an outdated check", async () => {
+    stubPrepareFetch(
+      preparedOptions({
+        checks: { "job-1": checkFixture("job-1", "outdated") },
+      })
+    )
+    renderPreparePage("job-1")
+
+    expect(
+      await screen.findByText("Route-mapped artifacts")
+    ).toBeDefined()
+    expect(
+      screen.getByText(/role changed after these materials/)
+    ).toBeDefined()
+    expect(screen.getByText("Outdated")).toBeDefined()
+    expect(screen.queryByText("Check outdated")).toBeNull()
+  })
+
+  it("keeps prior materials readable under a blocked check", async () => {
+    stubPrepareFetch(
+      preparedOptions({
+        checks: { "job-1": checkFixture("job-1", "blocked") },
+      })
+    )
+    renderPreparePage("job-1")
+
+    expect(
+      await screen.findByText("Route-mapped artifacts")
+    ).toBeDefined()
+    expect(
+      screen.getByText(/latest check is blocked/)
+    ).toBeDefined()
+    expect(screen.queryByText("Check blocked")).toBeNull()
   })
 })

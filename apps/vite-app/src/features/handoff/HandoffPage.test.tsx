@@ -8,9 +8,10 @@ import {
   within,
 } from "@testing-library/react"
 import type {
-  ArtifactReadinessSet,
   CheckStatusView,
+  HandoffView,
   OpportunityView,
+  RoleWorkflowState,
 } from "@/api/client"
 import { SessionProvider } from "@/api/session"
 import { HandoffPage } from "@/features/handoff/HandoffPage"
@@ -109,43 +110,35 @@ const unresolvedRoute = {
   observedAt: "2026-09-20T10:00:00Z",
 }
 
-function readinessFixture(): ArtifactReadinessSet {
+function handoffFixture(): HandoffView {
   return {
     opportunityId: "job-1",
+    title: "Backend Engineer",
+    companyName: "Example",
     checkId: "check-job-1",
     checkStatus: "checked",
-    entries: [
+    workflowStage: "prepared",
+    routeKind: "direct",
+    routeDestination: "https://example.com/apply/job-1",
+    routeExcerpt: "Apply through the portal.",
+    items: [
       {
         type: "cv",
         required: true,
         state: "ready",
         reason: "Drafted from verified facts.",
-        current: {
-          id: "artifact-cv-v2",
-          opportunityId: "job-1",
-          type: "cv",
-          version: 2,
-          content: "Jane Doe\nSenior Backend Engineer",
-          basis: { factIds: ["fact-1"], answerRefs: [], checkSpans: [] },
-          createdAt: "2026-09-22T10:00:00Z",
-          createdBy: { actorKind: "codex", actorId: "standard" },
-        },
+        version: 2,
+        content: "Jane Doe\nSenior Backend Engineer",
+        contentSha256: "abc123def4567890abc123def4567890",
       },
       {
         type: "email_subject",
         required: true,
         state: "ready",
         reason: "Drafted from the vacancy title.",
-        current: {
-          id: "artifact-subject-v1",
-          opportunityId: "job-1",
-          type: "email_subject",
-          version: 1,
-          content: "Application: Backend Engineer (Jane Doe)",
-          basis: { factIds: [], answerRefs: [], checkSpans: [] },
-          createdAt: "2026-09-22T10:00:00Z",
-          createdBy: { actorKind: "codex", actorId: "standard" },
-        },
+        version: 1,
+        content: "Application: Backend Engineer (Jane Doe)",
+        contentSha256: "subjectsha256subjectsha256subject12",
       },
       {
         type: "email_body",
@@ -176,19 +169,41 @@ function readinessFixture(): ArtifactReadinessSet {
         ],
       },
     ],
+    uploads: [
+      {
+        questionId: "q-cv",
+        questionText: "Upload your CV",
+        required: "required",
+        artifactType: "cv",
+        state: "ready",
+        version: 2,
+        contentSha256: "abc123def4567890abc123def4567890",
+      },
+      {
+        questionId: "q-portfolio",
+        questionText: "Portfolio upload",
+        required: "optional",
+        state: "unresolved",
+      },
+    ],
   }
 }
 
 interface HandoffStubOptions {
-  workflow?: boolean
+  workflow?: RoleWorkflowState | null
   check?: CheckStatusView | null
-  set?: ArtifactReadinessSet
+  handoff?: HandoffView
+  handoffConflict?: boolean
 }
 
 function stubHandoffFetch(options: HandoffStubOptions = {}): {
   calls: FetchCall[]
 } {
   const calls: FetchCall[] = []
+  let liveWorkflow =
+    options.workflow === undefined
+      ? roleWorkflowFixture("job-1", "prepared", { revision: 3 })
+      : options.workflow
   const fetchMock = vi.fn(
     async (input: string | URL | Request, init?: RequestInit) => {
       const url =
@@ -203,15 +218,16 @@ function stubHandoffFetch(options: HandoffStubOptions = {}): {
         method,
         body: typeof init?.body === "string" ? init.body : null,
       })
-      const path = new URL(url, "http://localhost").pathname
+      const parsed = new URL(url, "http://localhost")
+      const path = parsed.pathname
       if (path === "/api/v1/auth/session")
         return jsonResponse(200, sessionFixture)
       if (path === "/api/v1/opportunities/job-1" && method === "GET")
         return jsonResponse(200, opportunityFixture)
       if (path === "/api/v1/opportunities/job-1/workflow" && method === "GET")
-        return options.workflow === false
+        return liveWorkflow === null
           ? jsonResponse(404, { error: { message: "Role is not selected." } })
-          : jsonResponse(200, roleWorkflowFixture("job-1", "handoff_saved"))
+          : jsonResponse(200, liveWorkflow)
       if (
         path === "/api/v1/opportunities/job-1/checks/current" &&
         method === "GET"
@@ -224,11 +240,29 @@ function stubHandoffFetch(options: HandoffStubOptions = {}): {
           ? jsonResponse(404, { error: { message: "Check not found." } })
           : jsonResponse(200, entry)
       }
-      if (
-        path === "/api/v1/opportunities/job-1/artifacts" &&
-        method === "GET"
+      if (path === "/api/v1/opportunities/job-1/handoff" && method === "GET")
+        return jsonResponse(200, options.handoff ?? handoffFixture())
+      if (path === "/api/v1/opportunities/job-1/handoff" && method === "POST") {
+        if (options.handoffConflict === true)
+          return jsonResponse(409, {
+            error: { message: "Workflow moved; reload first." },
+          })
+        liveWorkflow =
+          liveWorkflow === null
+            ? liveWorkflow
+            : { ...liveWorkflow, stage: "handoff_saved", revision: 4 }
+        return jsonResponse(201, liveWorkflow)
+      }
+      const exportMatch = path.match(
+        /^\/api\/v1\/opportunities\/job-1\/artifacts\/([^/]+)\/export$/
       )
-        return jsonResponse(200, options.set ?? readinessFixture())
+      if (exportMatch?.[1] !== undefined && method === "GET") {
+        const version = parsed.searchParams.get("version") ?? "live"
+        return new Response(`exported:${exportMatch[1]}:v${version}`, {
+          status: 200,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        })
+      }
       return jsonResponse(404, { error: { message: "Not found." } })
     }
   )
@@ -271,13 +305,19 @@ describe("HandoffPage", () => {
       "Copy the email subject (v1) into your email's subject line."
     )
     within(checklist).getByText(
-      "Download tailored CV v2 from Prepare and attach the file yourself."
+      "Download tailored CV v2 and attach the file yourself."
     )
     within(checklist).getByText(
       "Fill the portal form fields yourself with the 1 ready value below."
     )
     within(checklist).getByText(
+      "Attach your downloaded Tailored CV (v2) to “Upload your CV” yourself."
+    )
+    within(checklist).getByText(
       "Motivation email: Held: motivation email needs a saved answer."
+    )
+    within(checklist).getByText(
+      "Upload for “Portfolio upload”: no file is mapped — see Prepare."
     )
     within(checklist).getByText(
       "You press send or submit in your own email app or browser. The app cannot do this for you."
@@ -299,6 +339,10 @@ describe("HandoffPage", () => {
     expect(
       calls.some((call) => call.method !== "GET" || call.url.includes("send"))
     ).toBe(false)
+    // No fill/attach/send/submit control exists anywhere on the page.
+    for (const button of screen.getAllByRole("button")) {
+      expect(button.textContent ?? "").not.toMatch(/fill|attach|send|submit/i)
+    }
   })
 
   it("links an email destination as mailto for the owner to open", async () => {
@@ -356,8 +400,95 @@ describe("HandoffPage", () => {
     expect(written).toEqual(["Application: Backend Engineer (Jane Doe)"])
   })
 
+  it("downloads a ready file from the canonical export", async () => {
+    stubHandoffFetch()
+    const blobs: Blob[] = []
+    vi.stubGlobal(
+      "URL",
+      class extends URL {
+        static createObjectURL(blob: Blob): string {
+          blobs.push(blob)
+          return "blob:fake"
+        }
+        static revokeObjectURL(): void {}
+      }
+    )
+    renderHandoff()
+
+    const checklist = await screen.findByRole("region", {
+      name: "Manual checklist",
+    })
+    fireEvent.click(
+      within(checklist).getByRole("button", {
+        name: "Download Email subject v1",
+      })
+    )
+    await vi.waitFor(() => expect(blobs).toHaveLength(1))
+    expect(await blobs[0]?.text()).toBe("exported:email_subject:v1")
+  })
+
+  it("saves the handoff record explicitly and reaches the terminal state", async () => {
+    const { calls } = stubHandoffFetch()
+    renderHandoff()
+
+    const record = await screen.findByRole("region", {
+      name: "Handoff record",
+    })
+    within(record).getByText(
+      /This only records your manual list here so you can revisit it\./
+    )
+    fireEvent.click(
+      within(record).getByRole("button", { name: "Save handoff record" })
+    )
+    await screen.findByText("Handoff saved")
+
+    const posts = calls.filter(
+      (call) =>
+        call.method === "POST" &&
+        call.url === "/api/v1/opportunities/job-1/handoff"
+    )
+    expect(posts).toHaveLength(1)
+    expect(JSON.parse(posts[0]?.body ?? "{}")).toEqual({
+      expectedWorkflowRevision: 3,
+    })
+    expect(
+      screen.queryByRole("button", { name: "Save handoff record" })
+    ).toBeNull()
+  })
+
+  it("reports a handoff conflict without claiming a save", async () => {
+    stubHandoffFetch({ handoffConflict: true })
+    renderHandoff()
+
+    const record = await screen.findByRole("region", {
+      name: "Handoff record",
+    })
+    fireEvent.click(
+      within(record).getByRole("button", { name: "Save handoff record" })
+    )
+    await within(record).findByText(
+      "These artifacts changed elsewhere. Reload this section, then try again."
+    )
+    expect(screen.queryByText("Handoff saved")).toBeNull()
+  })
+
+  it("holds the save until preparation completes", async () => {
+    stubHandoffFetch({
+      workflow: roleWorkflowFixture("job-1", "answered", { revision: 2 }),
+    })
+    renderHandoff()
+
+    const record = await screen.findByRole("region", {
+      name: "Handoff record",
+    })
+    within(record).getByText(/current stage: answered/)
+    expect(
+      within(record).queryByRole("button", { name: "Save handoff record" })
+    ).toBeNull()
+  })
+
   it("shows unselected roles without check or artifact state", async () => {
-    stubHandoffFetch({ workflow: false })
+    stubHandoffFetch({ workflow: null })
     renderHandoff()
 
     await screen.findByText("Role not selected")
@@ -373,5 +504,26 @@ describe("HandoffPage", () => {
     renderHandoff()
 
     await screen.findByText("No check yet")
+  })
+
+  it("keeps prior handoff content readable but outdated under a stale check", async () => {
+    stubHandoffFetch({ check: checkFixture(portalRoute, "outdated") })
+    renderHandoff()
+
+    const saved = await screen.findByRole("region", {
+      name: "Saved artifacts",
+    })
+    const banner = screen.getByRole("status")
+    expect(banner.textContent).toContain("role changed after these materials")
+    within(saved).getByText("Tailored CV · v2")
+    expect(within(saved).getAllByText("Outdated").length).toBeGreaterThan(0)
+    expect(within(saved).queryByText("Ready")).toBeNull()
+
+    const checklist = await screen.findByRole("region", {
+      name: "Manual checklist",
+    })
+    within(checklist).getByText(
+      "Nothing is ready to send yet. Prepare the required items first."
+    )
   })
 })

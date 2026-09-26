@@ -1,7 +1,6 @@
 import { useState } from "react"
 import {
-  RequestError,
-  draftOpportunityArtifacts,
+  exportOpportunityArtifact,
   isUnauthenticated,
   listArtifactReadiness,
   listPrepareActivity,
@@ -11,9 +10,15 @@ import {
   type ArtifactReadinessSet,
   type ArtifactView,
   type CheckActivityPage,
+  type CheckStatusView,
 } from "@/api/client"
 import { useSession } from "@/api/session"
-import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/shared"
+import {
+  EmptyBlock,
+  ErrorBlock,
+  LoadingBlock,
+  notifyAccepted,
+} from "@/components/shared"
 import {
   ActivityDisclosure,
   type ActivityEntry,
@@ -25,10 +30,17 @@ import {
   isCheckBlockerEvent,
   toCheckActivityEntry,
 } from "@/features/check/check-activity-feed"
+import { RewritePanel } from "@/features/prepare/ArtifactRewrite"
+import { VersionsPanel } from "@/features/prepare/ArtifactVersions"
 import {
-  buildMaterialPrepareRequest,
   newPrepareRequestKey,
-} from "@/features/prepare/usePrepareActions"
+  type StoredArtifactType,
+} from "@/features/prepare/artifactsApi"
+import { ClarificationsSection } from "@/features/prepare/ClarificationsSection"
+import {
+  mutationMessage,
+  useDraftArtifacts,
+} from "@/features/prepare/useDraftArtifacts"
 import { formatDate } from "@/pages/format"
 import { useRead } from "@/pages/useRead"
 
@@ -42,7 +54,7 @@ const artifactOrder: ReadonlyArray<ArtifactType> = [
   "form_values",
 ]
 
-export function artifactTypeLabel(type: ArtifactType): string {
+export function artifactTypeLabel(type: ArtifactType | string): string {
   switch (type) {
     case "cv":
       return "Tailored CV"
@@ -54,12 +66,16 @@ export function artifactTypeLabel(type: ArtifactType): string {
       return "Motivation email"
     case "form_values":
       return "Form values"
+    default:
+      return type
   }
 }
 
-function artifactStateLabel(
-  state: ArtifactReadinessEntry["state"]
-): string {
+export type EffectiveArtifactState =
+  | ArtifactReadinessEntry["state"]
+  | "outdated"
+
+export function artifactStateLabel(state: EffectiveArtifactState): string {
   switch (state) {
     case "ready":
       return "Ready"
@@ -69,7 +85,13 @@ function artifactStateLabel(
       return "Not required"
     case "unresolved":
       return "Unresolved"
+    case "outdated":
+      return "Outdated"
   }
+}
+
+function isStoredType(type: ArtifactType): type is StoredArtifactType {
+  return type !== "form_values"
 }
 
 export async function copyText(text: string): Promise<boolean> {
@@ -87,10 +109,14 @@ export async function copyText(text: string): Promise<boolean> {
   return false
 }
 
-export function downloadText(filename: string, text: string): boolean {
+export function downloadBlob(
+  filename: string,
+  text: string,
+  mediaType: string
+): boolean {
   try {
     if (typeof URL.createObjectURL !== "function") return false
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" })
+    const blob = new Blob([text], { type: `${mediaType};charset=utf-8` })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement("a")
     anchor.href = url
@@ -105,35 +131,42 @@ export function downloadText(filename: string, text: string): boolean {
   }
 }
 
-function requestMessage(cause: unknown): string {
-  if (cause instanceof RequestError && cause.status === 409)
-    return "These artifacts changed elsewhere. Reload this section, then try again."
-  return cause instanceof Error
-    ? cause.message
-    : "The request could not be completed."
+export function downloadText(filename: string, text: string): boolean {
+  return downloadBlob(filename, text, "text/plain")
 }
 
-// ArtifactsSection is the E1–E4 route-mapped artifact surface for one
-// checked role: Standard drafting of held types, per-type readable content,
-// exact per-artifact editors, copy/download of the displayed version, and
-// the prepare activity journal. Mount and reads are GET-only; drafting,
-// edits, copies and downloads each need an explicit click.
+// ArtifactsSection is the E1–E3 route-mapped artifact surface for one
+// checked role: the one explicit Prepare action, owner-question holds with
+// dependent resume, per-type readable content with honest ready/held/outdated
+// reasons, canonical prefilled exact editors, separate explicit rewrites,
+// inspectable version history, canonical export downloads of the shown
+// version, and the prepare activity journal. Mount and reads are GET-only;
+// drafting, answers, edits, rewrites, copies and downloads each need an
+// explicit click. Changed inputs never display stale content as ready: a
+// blocked/outdated check, or materials pinned to an older check, renders
+// prior bytes read-only under an Outdated badge with mutations disabled.
 export function ArtifactsSection({
   jobId,
   checkId,
+  checkStatus,
   questionSetSha256,
   workflowRevision,
 }: {
   jobId: string
   checkId: string
+  checkStatus: CheckStatusView["status"]
   questionSetSha256: string
   workflowRevision: number
 }) {
-  const readiness = useRead(`artifacts:${jobId}:readiness`, (signal) =>
-    listArtifactReadiness(jobId, signal)
+  const readiness = useRead(
+    `artifacts:${jobId}:readiness`,
+    (signal) => listArtifactReadiness(jobId, signal),
+    { scopes: ["materials"] }
   )
-  const activity = useRead(`artifacts:${jobId}:activity`, (signal) =>
-    listPrepareActivity(jobId, signal)
+  const activity = useRead(
+    `artifacts:${jobId}:activity`,
+    (signal) => listPrepareActivity(jobId, signal),
+    { scopes: ["materials"] }
   )
 
   if (readiness.status === "loading" || activity.status === "loading") {
@@ -161,47 +194,79 @@ export function ArtifactsSection({
     <ArtifactsBody
       jobId={jobId}
       checkId={checkId}
+      checkStatus={checkStatus}
       questionSetSha256={questionSetSha256}
       workflowRevision={workflowRevision}
       set={readiness.data}
       activity={activity.data}
-      onChanged={() => {
-        readiness.retry()
-        activity.retry()
-      }}
     />
   )
+}
+
+function staleReasonText(
+  checkStatus: CheckStatusView["status"],
+  setCheckId: string | undefined,
+  checkId: string
+): string | null {
+  if (checkStatus === "outdated")
+    return "The role changed after these materials were saved. They stay readable below but are outdated — nothing here counts as ready. Start a recheck; preparation reopens on the fresh check."
+  if (checkStatus === "blocked")
+    return "The latest check is blocked, so these last saved materials stay readable but are not current. Resolve the block with a recheck before preparing again."
+  if (setCheckId !== undefined && setCheckId !== "" && setCheckId !== checkId)
+    return `These materials belong to an older check (${setCheckId}); the current check is ${checkId}. They stay readable but are outdated — nothing here counts as ready.`
+  return null
 }
 
 function ArtifactsBody({
   jobId,
   checkId,
+  checkStatus,
   questionSetSha256,
   workflowRevision,
   set,
   activity,
-  onChanged,
 }: {
   jobId: string
   checkId: string
+  checkStatus: CheckStatusView["status"]
   questionSetSha256: string
   workflowRevision: number
   set: ArtifactReadinessSet
   activity: CheckActivityPage
-  onChanged: () => void
 }) {
   const entries = [...set.entries].sort(
     (left, right) =>
       artifactOrder.indexOf(left.type) - artifactOrder.indexOf(right.type)
   )
+  const staleReason = staleReasonText(checkStatus, set.checkId, checkId)
+  const stale = staleReason !== null
+  const mutationBlock = stale
+    ? "Resolve the check first — these materials are outdated."
+    : null
   return (
     <div className="flex min-w-0 flex-col gap-6">
+      {staleReason === null ? null : (
+        <p
+          role="status"
+          className="rounded-xl border border-border p-4 text-sm wrap-break-word"
+        >
+          {staleReason}
+        </p>
+      )}
       <DraftPrompt
         jobId={jobId}
         checkId={checkId}
         questionSetSha256={questionSetSha256}
         workflowRevision={workflowRevision}
-        onDone={onChanged}
+        disabledReason={mutationBlock}
+      />
+      <ClarificationsSection
+        jobId={jobId}
+        checkId={checkId}
+        questionSetSha256={questionSetSha256}
+        workflowRevision={workflowRevision}
+        stale={stale}
+        staleReason={mutationBlock}
       />
       {entries.length === 0 ? (
         <EmptyBlock
@@ -214,7 +279,8 @@ function ArtifactsBody({
             key={entry.type}
             jobId={jobId}
             entry={entry}
-            onChanged={onChanged}
+            stale={stale}
+            mutationBlock={mutationBlock}
           />
         ))
       )}
@@ -228,44 +294,21 @@ function DraftPrompt({
   checkId,
   questionSetSha256,
   workflowRevision,
-  onDone,
+  disabledReason,
 }: {
   jobId: string
   checkId: string
   questionSetSha256: string
   workflowRevision: number
-  onDone: () => void
+  disabledReason: string | null
 }) {
-  const { session, loseSession } = useSession()
-  const [drafting, setDrafting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function draft() {
-    if (session === undefined || session === null || drafting) return
-    setDrafting(true)
-    setError(null)
-    try {
-      await draftOpportunityArtifacts(
-        jobId,
-        buildMaterialPrepareRequest(
-          newPrepareRequestKey(),
-          checkId,
-          questionSetSha256,
-          workflowRevision
-        ),
-        session.csrfToken
-      )
-      setDrafting(false)
-      onDone()
-    } catch (cause: unknown) {
-      setDrafting(false)
-      if (isUnauthenticated(cause)) {
-        loseSession()
-        return
-      }
-      setError(requestMessage(cause))
-    }
-  }
+  const draft = useDraftArtifacts({
+    jobId,
+    checkId,
+    questionSetSha256,
+    workflowRevision,
+    disabledReason,
+  })
 
   return (
     <section
@@ -278,21 +321,27 @@ function DraftPrompt({
       <p className="text-sm wrap-break-word text-muted-foreground">
         One bounded Standard turn drafts the held types the verified route
         requires, grounded in verified facts and saved answers. Types with no
-        known fact stay held; nothing is sent.
+        known fact stay held and ask an owner question below; nothing is
+        sent.
       </p>
-      <div>
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         <Button
           type="button"
           size="sm"
-          disabled={drafting || session === undefined || session === null}
-          onClick={() => void draft()}
+          disabled={!draft.canDraft}
+          onClick={draft.draft}
         >
-          {drafting ? "Drafting…" : "Draft held artifacts"}
+          {draft.drafting ? "Drafting…" : "Draft held artifacts"}
         </Button>
+        {draft.unavailableReason === null ? null : (
+          <p className="text-sm wrap-break-word text-muted-foreground">
+            {draft.unavailableReason}
+          </p>
+        )}
       </div>
-      {error === null ? null : (
+      {draft.error === null ? null : (
         <p role="alert" className="text-sm wrap-break-word text-destructive">
-          {error}
+          {draft.error}
         </p>
       )}
     </section>
@@ -302,13 +351,16 @@ function DraftPrompt({
 function ArtifactEntrySection({
   jobId,
   entry,
-  onChanged,
+  stale,
+  mutationBlock,
 }: {
   jobId: string
   entry: ArtifactReadinessEntry
-  onChanged: () => void
+  stale: boolean
+  mutationBlock: string | null
 }) {
   const current = entry.current ?? null
+  const effective: EffectiveArtifactState = stale ? "outdated" : entry.state
   return (
     <section
       aria-label={artifactTypeLabel(entry.type)}
@@ -318,29 +370,35 @@ function ArtifactEntrySection({
         <h2 className="min-w-0 flex-1 text-base font-semibold wrap-break-word">
           {artifactTypeLabel(entry.type)}
         </h2>
-        <Badge variant={entry.state === "ready" ? "default" : "secondary"}>
-          {artifactStateLabel(entry.state)}
+        <Badge variant={effective === "ready" ? "default" : "secondary"}>
+          {artifactStateLabel(effective)}
         </Badge>
         <Badge variant="secondary">
           {entry.required ? "Required" : "Optional"}
         </Badge>
       </div>
       <p className="text-sm wrap-break-word text-muted-foreground">
-        {entry.reason}
+        {stale
+          ? `Outdated — last saved state was ${artifactStateLabel(entry.state).toLowerCase()}: ${entry.reason}`
+          : entry.reason}
       </p>
       {entry.basis === undefined || entry.basis === "" ? null : (
         <p className="text-xs wrap-break-word text-muted-foreground">
           {entry.basis}
         </p>
       )}
-      {entry.state === "ready" && entry.type === "form_values" ? (
-        <FormValuesPanel jobId={jobId} values={entry.formValues ?? []} />
-      ) : entry.state === "ready" && current !== null ? (
+      {entry.type === "form_values" ? (
+        <FormValuesPanel
+          jobId={jobId}
+          values={entry.formValues ?? []}
+          showValues={entry.state === "ready"}
+        />
+      ) : current !== null ? (
         <ArtifactContentPanel
           jobId={jobId}
           entry={entry}
           current={current}
-          onChanged={onChanged}
+          mutationBlock={mutationBlock}
         />
       ) : entry.state === "ready" ? (
         <p className="text-sm wrap-break-word text-muted-foreground">
@@ -367,27 +425,52 @@ function ArtifactContentPanel({
   jobId,
   entry,
   current,
-  onChanged,
+  mutationBlock,
 }: {
   jobId: string
   entry: ArtifactReadinessEntry
   current: ArtifactView
-  onChanged: () => void
+  mutationBlock: string | null
 }) {
+  const { loseSession } = useSession()
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
     "idle"
   )
-  const [downloadFailed, setDownloadFailed] = useState(false)
-  const filename = `${jobId}-${entry.type}-v${current.version}.txt`
+  const [exportState, setExportState] = useState<
+    "idle" | "working" | "failed"
+  >("idle")
 
   async function copy() {
-    setDownloadFailed(false)
+    setExportState("idle")
     setCopyState((await copyText(current.content)) ? "copied" : "failed")
   }
 
-  function download() {
+  // Canonical download: the server renders the pinned current version from
+  // stored content with identity/version/checksum headers. Downloading
+  // never means applied.
+  async function download() {
+    if (exportState === "working") return
     setCopyState("idle")
-    setDownloadFailed(!downloadText(filename, current.content))
+    setExportState("working")
+    try {
+      const exported = await exportOpportunityArtifact(
+        jobId,
+        entry.type,
+        current.version
+      )
+      const ok = downloadBlob(
+        exported.filename,
+        exported.text,
+        exported.mediaType === "" ? "text/plain" : exported.mediaType
+      )
+      setExportState(ok ? "idle" : "failed")
+    } catch (cause: unknown) {
+      if (isUnauthenticated(cause)) {
+        loseSession()
+        return
+      }
+      setExportState("failed")
+    }
   }
 
   return (
@@ -411,9 +494,10 @@ function ArtifactContentPanel({
           variant="outline"
           size="sm"
           aria-label={`Download ${artifactTypeLabel(entry.type)} v${current.version}`}
-          onClick={download}
+          disabled={exportState === "working"}
+          onClick={() => void download()}
         >
-          Download
+          {exportState === "working" ? "Exporting…" : "Download"}
         </Button>
         {copyState === "copied" ? (
           <p className="text-sm wrap-break-word text-muted-foreground">
@@ -424,19 +508,34 @@ function ArtifactContentPanel({
             Copy failed — select the text manually.
           </p>
         ) : null}
-        {downloadFailed ? (
+        {exportState === "failed" ? (
           <p className="text-sm wrap-break-word text-muted-foreground">
-            Download is unavailable in this browser.
+            Export failed — try again or copy the text instead.
           </p>
         ) : null}
       </div>
-      <ArtifactEditor
-        key={`${entry.type}:${current.version}`}
-        jobId={jobId}
-        entry={entry}
-        current={current}
-        onSaved={onChanged}
-      />
+      {isStoredType(entry.type) ? (
+        <>
+          <ArtifactEditor
+            key={`${entry.type}:${current.version}`}
+            jobId={jobId}
+            entry={entry}
+            current={current}
+            disabledReason={mutationBlock}
+          />
+          <RewritePanel
+            jobId={jobId}
+            artifactType={entry.type}
+            expectedVersion={current.version}
+            disabledReason={mutationBlock}
+          />
+          <VersionsPanel
+            jobId={jobId}
+            artifactType={entry.type}
+            current={current}
+          />
+        </>
+      ) : null}
     </div>
   )
 }
@@ -447,17 +546,18 @@ function ArtifactEditor({
   jobId,
   entry,
   current,
-  onSaved,
+  disabledReason,
 }: {
   jobId: string
   entry: ArtifactReadinessEntry
   current: ArtifactView
-  onSaved: () => void
+  disabledReason: string | null
 }) {
   const { session, loseSession } = useSession()
   const [text, setText] = useState(current.content)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingKey, setPendingKey] = useState<string | null>(null)
   const dirty = text !== current.content
   const tooLong = Array.from(text).length > ARTIFACT_CONTENT_RUNE_LIMIT
   const empty = text === ""
@@ -470,9 +570,14 @@ function ArtifactEditor({
       saving ||
       !dirty ||
       tooLong ||
-      empty
+      empty ||
+      disabledReason !== null
     )
       return
+    // Stable key per save attempt: an uncertain acknowledgment retries as
+    // an exact idempotent replay instead of a second version.
+    const requestKey = pendingKey ?? newPrepareRequestKey()
+    setPendingKey(requestKey)
     setSaving(true)
     setError(null)
     try {
@@ -480,21 +585,22 @@ function ArtifactEditor({
         jobId,
         entry.type,
         {
-          requestKey: newPrepareRequestKey(),
+          requestKey,
           expectedVersion: current.version,
           content: text,
         },
         session.csrfToken
       )
       setSaving(false)
-      onSaved()
+      setPendingKey(null)
+      notifyAccepted("materials", "workflows")
     } catch (cause: unknown) {
       setSaving(false)
       if (isUnauthenticated(cause)) {
         loseSession()
         return
       }
-      setError(requestMessage(cause))
+      setError(mutationMessage(cause))
     }
   }
 
@@ -518,6 +624,7 @@ function ArtifactEditor({
             !dirty ||
             tooLong ||
             empty ||
+            disabledReason !== null ||
             session === undefined ||
             session === null
           }
@@ -526,13 +633,14 @@ function ArtifactEditor({
           {saving ? "Saving…" : "Save exact edit"}
         </Button>
         <p className="text-sm wrap-break-word text-muted-foreground">
-          {tooLong
-            ? `Over the ${ARTIFACT_CONTENT_RUNE_LIMIT.toLocaleString()} character limit.`
-            : empty
-              ? "Content cannot be empty."
-              : !dirty
-                ? "No changes to save."
-                : "Unsaved changes."}
+          {disabledReason ??
+            (tooLong
+              ? `Over the ${ARTIFACT_CONTENT_RUNE_LIMIT.toLocaleString()} character limit.`
+              : empty
+                ? "Content cannot be empty."
+                : !dirty
+                  ? "No changes to save."
+                  : "Unsaved changes.")}
         </p>
       </div>
       {error === null ? null : (
@@ -547,12 +655,18 @@ function ArtifactEditor({
 function FormValuesPanel({
   jobId,
   values,
+  showValues,
 }: {
   jobId: string
   values: ArtifactFormValue[]
+  showValues: boolean
 }) {
+  const { loseSession } = useSession()
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [copyFailed, setCopyFailed] = useState(false)
+  const [exportState, setExportState] = useState<
+    "idle" | "working" | "failed"
+  >("idle")
 
   async function copy(value: ArtifactFormValue) {
     if (value.text === "") return
@@ -565,10 +679,43 @@ function FormValuesPanel({
     }
   }
 
-  if (values.length === 0) {
+  // Whole-set download, derived live by the server from saved answers.
+  async function downloadAll() {
+    if (exportState === "working") return
+    setExportState("working")
+    try {
+      const exported = await exportOpportunityArtifact(
+        jobId,
+        "form_values",
+        null
+      )
+      const ok = downloadBlob(
+        exported.filename,
+        exported.text,
+        exported.mediaType === "" ? "text/plain" : exported.mediaType
+      )
+      setExportState(ok ? "idle" : "failed")
+    } catch (cause: unknown) {
+      if (isUnauthenticated(cause)) {
+        loseSession()
+        return
+      }
+      setExportState("failed")
+    }
+  }
+
+  if (!showValues || values.length === 0) {
     return (
       <p className="text-sm wrap-break-word text-muted-foreground">
-        No form values derived for this route.
+        {values.length === 0
+          ? "No form values derived for this route."
+          : "Form values are not ready; the reason above says why."}{" "}
+        <a
+          href={`#/jobs/${encodeURIComponent(jobId)}/answers`}
+          className="underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          Open answers
+        </a>
       </p>
     )
   }
@@ -626,6 +773,24 @@ function FormValuesPanel({
           </li>
         ))}
       </ul>
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={exportState === "working"}
+          onClick={() => void downloadAll()}
+        >
+          {exportState === "working"
+            ? "Exporting…"
+            : "Download all values"}
+        </Button>
+        {exportState === "failed" ? (
+          <p className="text-sm wrap-break-word text-muted-foreground">
+            Export failed — try again or copy the values above.
+          </p>
+        ) : null}
+      </div>
       {copyFailed ? (
         <p className="text-sm wrap-break-word text-muted-foreground">
           Copy failed — select the text manually.

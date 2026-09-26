@@ -163,31 +163,14 @@ function PrepareBody({
       />
     )
   }
-  if (check.status === "blocked") {
-    return (
-      <EmptyBlock
-        title="Check blocked"
-        description={
-          detail.blockedReason !== undefined
-            ? `The check could not complete (${detail.blockedReason.code}): ${detail.blockedReason.detail === "" ? "no detail recorded." : detail.blockedReason.detail} Resolve it with a recheck before preparing.`
-            : "The check could not complete. Resolve it with a recheck before preparing."
-        }
-      />
-    )
-  }
-  if (check.status === "outdated") {
-    return (
-      <EmptyBlock
-        title="Check outdated"
-        description="The role changed after this check completed. Start a recheck; preparation reopens on the fresh check."
-      />
-    )
-  }
-
+  // Blocked and outdated checks keep prior materials readable: the
+  // artifacts section renders them under an honest Outdated banner with
+  // mutations disabled instead of hiding them.
   return (
     <ArtifactsSection
       jobId={jobId}
       checkId={detail.id}
+      checkStatus={check.status}
       questionSetSha256={detail.questionSetSha256}
       workflowRevision={workflow.revision}
     />

@@ -1,25 +1,25 @@
-// Public surface of the D5 prepare feature: the page the coordinator mounts
-// at #/jobs/:id/prepare plus the explicit prepare/edit/rewrite actions.
-// Reads stay inside PreparePage; this module commissions nothing.
+// Public surface of the prepare feature: the page the coordinator mounts
+// at #/jobs/:id/prepare plus the explicit request helpers. Reads stay
+// inside the page components; this module commissions nothing.
 export { PreparePage } from "@/features/prepare/PreparePage"
 export {
-  MATERIAL_EDIT_BYTE_LIMIT,
-  REWRITE_INSTRUCTION_RUNE_LIMIT,
-  buildMaterialEditRequest,
+  artifactStateLabel,
+  artifactTypeLabel,
+  copyText,
+  downloadBlob,
+  downloadText,
+} from "@/features/prepare/ArtifactsSection"
+export type {
+  ArtifactType,
+  EffectiveArtifactState,
+} from "@/features/prepare/ArtifactsSection"
+export {
+  buildClarificationAnswerRequest,
+  buildHandoffSaveRequest,
   buildMaterialPrepareRequest,
   buildMaterialRewriteRequest,
   countBytes,
   countRunes,
   newPrepareRequestKey,
-  useMaterialEdit,
-  useMaterialRewrite,
-  usePrepareStart,
-} from "@/features/prepare/usePrepareActions"
-export type {
-  UseMaterialEditOptions,
-  UseMaterialEditResult,
-  UseMaterialRewriteOptions,
-  UseMaterialRewriteResult,
-  UsePrepareStartOptions,
-  UsePrepareStartResult,
-} from "@/features/prepare/usePrepareActions"
+} from "@/features/prepare/artifactsApi"
+export type { StoredArtifactType } from "@/features/prepare/artifactsApi"
