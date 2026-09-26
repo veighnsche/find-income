@@ -135,9 +135,15 @@ semantics (Q2); proof levels separated (this ledger + Q3 record).
 
 ## Remaining limits and explicit follow-ups
 
-1. TYPESAFE_API_KEY is unset: Jev classification/matching and Standard
-   drafting (materials wiring is gated on the same flag) return honest
-   503/unavailable. Set the key and rerun the live pass.
+1. CORRECTION 26 Sep (post-closure): TYPESAFE_API_KEY was set all
+   along — the earlier "unset" claim came from a grep for `JEV`, which
+   cannot match that name. Live Jev answer choice now exercised for
+   real: POST answers/match → 201 matched, model jev-1.13.0, one
+   0.98-confidence choice bound to approved answer v1 with a recorded
+   Jev attempt id, two deterministic noneFits. Standard drafting still
+   503'd on that server only because no JOBSEEK_APPROVED_CAREER_ROOT
+   was configured (separate requirement); full live collection still
+   needs explicit owner auth (external sites, multi-turn spend).
 2. Full live Contributor collection + chosen-only deep check was not run:
    it contacts external sites and spends multi-turn budget. The E11
    validation turn (PASS, 33s, zero retrieval) proves the direct wire;
