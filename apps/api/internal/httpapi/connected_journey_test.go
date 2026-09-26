@@ -10,7 +10,6 @@
 package httpapi
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -18,6 +17,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -169,29 +169,11 @@ func cjAnswerMatchRaw(t *testing.T, input jev.AnswerMatchInput, choices map[stri
 	return raw
 }
 
-// cjMaterialStub counts Standard provider invocations behind preparation;
-// exact edits must never need it.
+// cjMaterialStub counts Standard provider invocations behind artifact
+// drafting; exact edits must never need it.
 type cjMaterialStub struct {
-	prepareCalls int
-	editCalls    int
-	rewriteCalls int
-	draftCalls   int
-	modelCalls   int
-}
-
-func (s *cjMaterialStub) PrepareOpportunityMaterials(_ context.Context, _ store.Actor, _, _, _, _ string, _ int64) (store.MaterialStatusView, bool, error) {
-	s.prepareCalls++
-	return store.MaterialStatusView{}, false, errCJUnexpectedProviderCall
-}
-
-func (s *cjMaterialStub) EditOpportunityMaterials(_ context.Context, _ store.Actor, _, _ string, _ int64, _ string) (store.MaterialVersionView, bool, error) {
-	s.editCalls++
-	return store.MaterialVersionView{}, false, errCJUnexpectedProviderCall
-}
-
-func (s *cjMaterialStub) RewriteOpportunityMaterials(_ context.Context, _ store.Actor, _, _ string, _ int64, _ string) (store.MaterialVersionView, bool, error) {
-	s.rewriteCalls++
-	return store.MaterialVersionView{}, false, errCJUnexpectedProviderCall
+	draftCalls int
+	modelCalls int
 }
 
 func (s *cjMaterialStub) DraftOpportunityArtifacts(_ context.Context, _ store.Actor, _, _, _, _ string, _ int64) (store.ArtifactReadinessSet, bool, error) {
@@ -199,131 +181,65 @@ func (s *cjMaterialStub) DraftOpportunityArtifacts(_ context.Context, _ store.Ac
 	return store.ArtifactReadinessSet{}, false, errCJUnexpectedProviderCall
 }
 
-func cjPackContentHash(manifest, source, pdf []byte) string {
-	encoded, _ := json.Marshal(struct {
-		Manifest []byte
-		Source   []byte
-		PDF      []byte
-	}{manifest, source, pdf})
-	sum := sha256.Sum256(encoded)
-	return hex.EncodeToString(sum[:])
-}
-
-func cjTextSHA(text string) string {
-	sum := sha256.Sum256([]byte(text))
-	return hex.EncodeToString(sum[:])
-}
-
-// cjPrepareStub is the controlled Standard boundary behind materials
-// prepare/rewrite/edit: it simulates Standard rendering (fixed pack bytes
-// marked per request key) and commits through the real production store.
+// cjPrepareStub is the controlled Standard boundary behind artifact
+// drafting: it simulates Standard rendering (fixed marker bytes per
+// request key) and commits through the real production store.
 type cjPrepareStub struct {
-	db                                                *store.Store
-	t                                                 *testing.T
-	prepareCalls, editCalls, rewriteCalls, modelCalls int
+	db                     *store.Store
+	t                      *testing.T
+	draftCalls, modelCalls int
 }
 
-func (s *cjPrepareStub) packFor(ctx context.Context, opportunityID, marker string, material map[string]any) store.ApplicationPackMutationInput {
+func (s *cjPrepareStub) DraftOpportunityArtifacts(ctx context.Context, actor store.Actor, opportunityID, requestKey, expectedCheckID, expectedQuestionSetSHA256 string, expectedWorkflowRevision int64) (store.ArtifactReadinessSet, bool, error) {
 	s.t.Helper()
-	workflow, err := s.db.RoleWorkflow(ctx, opportunityID)
-	if err != nil {
-		s.t.Fatal(err)
-	}
-	prefs, err := s.db.CurrentPreferences(ctx)
-	if err != nil {
-		s.t.Fatal(err)
-	}
-	manifest := map[string]any{
-		"role": map[string]any{"opportunityId": opportunityID,
-			"opportunityRevision": workflow.OpportunityRev, "profileRevision": prefs.Version},
-		"material": material,
-	}
-	manifestJSON, err := json.Marshal(manifest)
-	if err != nil {
-		s.t.Fatal(err)
-	}
-	typst := []byte("= Application\n% " + marker + "\n")
-	pdf := []byte("%PDF-1.4 cj\n% " + marker + "\n")
-	for len(pdf) < 120 {
-		pdf = append(pdf, '0')
-	}
-	return store.ApplicationPackMutationInput{OpportunityID: opportunityID,
-		ExpectedOpportunityRevision: workflow.OpportunityRev, ExpectedProfileRevision: prefs.Version,
-		ManifestJSON: manifestJSON, TypstSource: typst, PDF: pdf,
-		ContentSHA256: cjPackContentHash(manifestJSON, typst, pdf)}
-}
-
-func (s *cjPrepareStub) PrepareOpportunityMaterials(ctx context.Context, actor store.Actor, opportunityID, requestKey, expectedCheckID, expectedQuestionSetSHA256 string, expectedWorkflowRevision int64) (store.MaterialStatusView, bool, error) {
-	s.prepareCalls++
+	s.draftCalls++
 	s.modelCalls++
 	check, err := s.db.GetJobCheck(ctx, opportunityID, expectedCheckID)
 	if err != nil {
-		return store.MaterialStatusView{}, false, err
+		return store.ArtifactReadinessSet{}, false, err
 	}
-	answers := make([]map[string]any, 0, len(check.Questions))
-	for _, question := range check.Questions {
-		answers = append(answers, map[string]any{"questionId": question.ID})
+	if check.QuestionSetSHA256 != expectedQuestionSetSHA256 {
+		return store.ArtifactReadinessSet{}, false, store.ErrConflict
 	}
-	pack := s.packFor(ctx, opportunityID, requestKey, map[string]any{"checkId": check.ID,
-		"questionSetSha256": check.QuestionSetSHA256, "origin": store.MaterialOriginPrepared, "answers": answers})
-	return s.db.PrepareOpportunityMaterials(ctx, actor, opportunityID, store.MaterialPrepareInput{
-		RequestKey: requestKey, ExpectedCheckID: expectedCheckID,
-		ExpectedQuestionSetSHA256: expectedQuestionSetSHA256, ExpectedWorkflowRevision: expectedWorkflowRevision,
-		Pack: pack})
-}
-
-func (s *cjPrepareStub) EditOpportunityMaterials(ctx context.Context, actor store.Actor, opportunityID, requestKey string, expectedVersion int64, text string) (store.MaterialVersionView, bool, error) {
-	s.editCalls++
-	check, err := s.db.GetJobCheck(ctx, opportunityID, s.baseCheckID(ctx, opportunityID, expectedVersion))
+	workflow, err := s.db.RoleWorkflow(ctx, opportunityID)
 	if err != nil {
-		return store.MaterialVersionView{}, false, err
+		return store.ArtifactReadinessSet{}, false, err
 	}
-	answers := make([]map[string]any, 0, len(check.Questions))
-	for _, question := range check.Questions {
-		answers = append(answers, map[string]any{"questionId": question.ID})
+	if workflow.Revision != expectedWorkflowRevision {
+		return store.ArtifactReadinessSet{}, false, store.ErrConflict
 	}
-	pack := s.packFor(ctx, opportunityID, requestKey, map[string]any{"checkId": check.ID,
-		"questionSetSha256": check.QuestionSetSHA256, "origin": store.MaterialOriginDirectEdit,
-		"text": text, "answers": answers})
-	return s.db.EditOpportunityMaterials(ctx, actor, opportunityID,
-		store.MaterialEditInput{RequestKey: requestKey, ExpectedVersion: expectedVersion, Text: text, Pack: pack})
-}
-
-func (s *cjPrepareStub) baseCheckID(ctx context.Context, opportunityID string, expectedVersion int64) string {
-	s.t.Helper()
-	base, err := s.db.OpportunityMaterialVersion(ctx, opportunityID, expectedVersion)
+	answers, err := s.db.CurrentQuestionAnswers(ctx, opportunityID)
 	if err != nil {
-		s.t.Fatal(err)
+		return store.ArtifactReadinessSet{}, false, err
 	}
-	return base.CheckID
-}
-
-func (s *cjPrepareStub) RewriteOpportunityMaterials(ctx context.Context, actor store.Actor, opportunityID, requestKey string, expectedVersion int64, instruction string) (store.MaterialVersionView, bool, error) {
-	s.rewriteCalls++
-	s.modelCalls++
-	base, err := s.db.OpportunityMaterialVersion(ctx, opportunityID, expectedVersion)
+	refs := make([]store.ArtifactAnswerRef, 0, len(answers.Values))
+	for _, value := range answers.Values {
+		refs = append(refs, store.ArtifactAnswerRef{QuestionID: value.QuestionID, AnswerVersion: value.Version})
+	}
+	readiness, err := s.db.ArtifactReadiness(ctx, opportunityID)
 	if err != nil {
-		return store.MaterialVersionView{}, false, err
+		return store.ArtifactReadinessSet{}, false, err
 	}
-	check, err := s.db.GetJobCheck(ctx, opportunityID, base.CheckID)
+	created := false
+	for _, entry := range readiness.Entries {
+		if !entry.Required || entry.State != store.ArtifactStateHeld || entry.Type == store.ArtifactFormValues {
+			continue
+		}
+		_, wasCreated, err := s.db.SaveOpportunityArtifact(ctx, actor, opportunityID, store.ArtifactSaveInput{
+			RequestKey: requestKey + "-" + entry.Type, ExpectedVersion: 0, Type: entry.Type,
+			Content: "Standard draft (" + requestKey + ") for " + entry.Type + ".",
+			Basis:   store.ArtifactBasis{AnswerRefs: refs},
+		})
+		if err != nil {
+			return store.ArtifactReadinessSet{}, false, err
+		}
+		created = created || wasCreated
+	}
+	readiness, err = s.db.ArtifactReadiness(ctx, opportunityID)
 	if err != nil {
-		return store.MaterialVersionView{}, false, err
+		return store.ArtifactReadinessSet{}, false, err
 	}
-	texts := make([]store.MaterialRewriteText, 0, len(check.Questions))
-	manifestAnswers := make([]map[string]any, 0, len(check.Questions))
-	for _, question := range check.Questions {
-		text := "Standard rewrite (" + instruction + ") for " + question.ID + "."
-		texts = append(texts, store.MaterialRewriteText{QuestionID: question.ID, Text: text, TextSHA256: cjTextSHA(text)})
-		manifestAnswers = append(manifestAnswers, map[string]any{"questionId": question.ID, "text": text})
-	}
-	pack := s.packFor(ctx, opportunityID, requestKey, map[string]any{"checkId": check.ID,
-		"questionSetSha256": check.QuestionSetSHA256, "origin": store.MaterialOriginRewrite, "answers": manifestAnswers})
-	return s.db.RewriteOpportunityMaterials(ctx, actor, opportunityID,
-		store.MaterialRewriteInput{RequestKey: requestKey, ExpectedVersion: expectedVersion, Texts: texts, Pack: pack})
-}
-
-func (s *cjPrepareStub) DraftOpportunityArtifacts(_ context.Context, _ store.Actor, _, _, _, _ string, _ int64) (store.ArtifactReadinessSet, bool, error) {
-	return store.ArtifactReadinessSet{}, false, errCJUnexpectedProviderCall
+	return readiness, created, nil
 }
 
 func cjInsertCapture(t *testing.T, db *store.Store, url string) store.SourceCapture {
@@ -801,86 +717,98 @@ func TestConnectedJourney04ArtifactIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	response = h.request("POST", "/api/v1/opportunities/"+opportunity.ID+"/materials/prepare",
-		fmt.Sprintf(`{"requestKey":"cj4-prepare-1","expectedCheckId":%q,"expectedQuestionSetSha256":%q,"expectedWorkflowRevision":%d}`,
+	response = h.request("POST", "/api/v1/opportunities/"+opportunity.ID+"/artifacts/draft",
+		fmt.Sprintf(`{"requestKey":"cj4-draft-1","expectedCheckId":%q,"expectedQuestionSetSha256":%q,"expectedWorkflowRevision":%d}`,
 			started.Check.ID, started.Check.QuestionSetSHA256, workflow.Revision),
 		cookie, "", csrf, origin)
 	if response.Code != 201 {
-		t.Fatalf("prepare: got %d %s, want 201", response.Code, response.Body.String())
+		t.Fatalf("draft: got %d %s, want 201", response.Code, response.Body.String())
 	}
-	var prepared struct {
-		Status  string `json:"status"`
-		Current *struct {
-			Version int64  `json:"version"`
-			PackID  string `json:"packId"`
-		} `json:"current"`
+	var drafted struct {
+		Entries []struct {
+			Type     string `json:"type"`
+			State    string `json:"state"`
+			Required bool   `json:"required"`
+			Current  *struct {
+				Content string `json:"content"`
+				Version int64  `json:"version"`
+			} `json:"current"`
+		} `json:"entries"`
 	}
-	if err := json.Unmarshal(response.Body.Bytes(), &prepared); err != nil {
+	if err := json.Unmarshal(response.Body.Bytes(), &drafted); err != nil {
 		t.Fatal(err)
 	}
-	if prepared.Current == nil || prepared.Current.Version != 1 {
-		t.Fatalf("prepared view: %+v", prepared)
+	var email *struct {
+		State   string
+		Content string
+		Version int64
 	}
-	response = h.request("POST", "/api/v1/opportunities/"+opportunity.ID+"/materials/rewrite",
-		`{"requestKey":"cj4-rewrite-1","expectedVersion":1,"instruction":"shorter email"}`, cookie, "", csrf, origin)
-	if response.Code != 201 {
-		t.Fatalf("rewrite: got %d %s, want 201", response.Code, response.Body.String())
+	for _, entry := range drafted.Entries {
+		if entry.Type == "email_body" && entry.Current != nil {
+			found := struct {
+				State   string
+				Content string
+				Version int64
+			}{entry.State, entry.Current.Content, entry.Current.Version}
+			email = &found
+		}
 	}
-	var rewritten struct {
-		Version int64 `json:"version"`
+	if email == nil || email.State != "ready" || email.Version != 1 || !strings.Contains(email.Content, "cj4-draft-1") {
+		t.Fatalf("drafted email_body: %+v", drafted.Entries)
 	}
-	if err := json.Unmarshal(response.Body.Bytes(), &rewritten); err != nil {
-		t.Fatal(err)
-	}
-	if rewritten.Version != 2 {
-		t.Fatalf("rewritten view: %+v", rewritten)
-	}
-	response = h.request("PUT", "/api/v1/opportunities/"+opportunity.ID+"/materials/current",
-		`{"requestKey":"cj4-edit-1","expectedVersion":2,"text":"Owner literal email text."}`, cookie, "", csrf, origin)
+	// An exact edit updates the same artifact identity with literal text.
+	response = h.request("PUT", "/api/v1/opportunities/"+opportunity.ID+"/artifacts/email_body",
+		`{"requestKey":"cj4-edit-1","expectedVersion":1,"content":"Owner literal email text.","basis":{"factIds":[],"answerRefs":[],"checkSpans":[]}}`,
+		cookie, "", csrf, origin)
 	if response.Code != 201 {
 		t.Fatalf("exact edit: got %d %s, want 201", response.Code, response.Body.String())
 	}
-	response = h.request("GET", "/api/v1/opportunities/"+opportunity.ID+"/materials/current", "", cookie, "", "", "")
-	var current struct {
-		Current *struct {
-			Version int64  `json:"version"`
-			PackID  string `json:"packId"`
-		} `json:"current"`
-	}
-	if err := json.Unmarshal(response.Body.Bytes(), &current); err != nil {
-		t.Fatal(err)
-	}
-	if response.Code != 200 || current.Current == nil || current.Current.Version != 3 {
-		t.Fatalf("materials current: got %d %+v, want 200 v3", response.Code, current)
-	}
-	response = h.request("GET", "/api/v1/opportunities/"+opportunity.ID+"/materials/versions/1", "", cookie, "", "", "")
-	if response.Code != 200 {
-		t.Fatalf("prior version read: got %d, want 200", response.Code)
-	}
-	// The pack download agrees with the current pack version.
-	response = h.request("GET", "/api/v1/application-packs/"+current.Current.PackID+"/pdf", "", cookie, "", "", "")
-	if response.Code != 200 || !bytes.Contains(response.Body.Bytes(), []byte("cj4-edit-1")) {
-		t.Fatalf("pack download: got %d (marker cj4-edit-1 must agree with current v3)", response.Code)
-	}
-
-	// C6/R08: prepare/rewrite/edit/download must agree with Handoff's
-	// object — one current artifact set, not a separate pack truth plus an
-	// empty route-artifact set.
+	// Readback, list, and Handoff read agree on the same current version.
 	response = h.request("GET", "/api/v1/opportunities/"+opportunity.ID+"/artifacts/email_body", "", cookie, "", "", "")
-	var handoff struct {
+	var current struct {
 		State   string `json:"state"`
 		Current *struct {
 			Content string `json:"content"`
 			Version int64  `json:"version"`
 		} `json:"current"`
 	}
-	_ = json.Unmarshal(response.Body.Bytes(), &handoff)
-	if handoff.State != "ready" || handoff.Current == nil || handoff.Current.Content != "Owner literal email text." {
-		t.Fatalf("R08: Handoff email_body after pack prepare/rewrite/edit to v3: got state %q current %+v, want ready with the v3 text (two systems, no shared identity)",
-			handoff.State, handoff.Current)
+	_ = json.Unmarshal(response.Body.Bytes(), &current)
+	if response.Code != 200 || current.State != "ready" || current.Current == nil || current.Current.Content != "Owner literal email text." || current.Current.Version != 2 {
+		t.Fatalf("R08: artifact readback after draft+edit: got %d state %q current %+v, want 200 ready v2 literal (one current set)",
+			response.Code, current.State, current.Current)
+	}
+	response = h.request("GET", "/api/v1/opportunities/"+opportunity.ID+"/artifacts", "", cookie, "", "", "")
+	var listed struct {
+		Entries []struct {
+			Type    string `json:"type"`
+			Current *struct {
+				Content string `json:"content"`
+				Version int64  `json:"version"`
+			} `json:"current"`
+		} `json:"entries"`
+	}
+	_ = json.Unmarshal(response.Body.Bytes(), &listed)
+	listedOK := false
+	for _, entry := range listed.Entries {
+		if entry.Type == "email_body" && entry.Current != nil && entry.Current.Content == "Owner literal email text." && entry.Current.Version == 2 {
+			listedOK = true
+		}
+	}
+	if response.Code != 200 || !listedOK {
+		t.Fatalf("R08: artifact list after draft+edit: got %d %+v, want email_body v2 literal (one current set)", response.Code, listed.Entries)
+	}
+	// The second preparation truth is gone: no pack endpoint answers.
+	for _, probe := range [][2]string{
+		{"POST", "/api/v1/opportunities/" + opportunity.ID + "/materials/prepare"},
+		{"POST", "/api/v1/opportunities/" + opportunity.ID + "/materials/rewrite"},
+		{"GET", "/api/v1/application-packs/cj4-no-such-pack"},
+	} {
+		response = h.request(probe[0], probe[1], `{}`, cookie, "", csrf, origin)
+		if response.Code != 404 {
+			t.Fatalf("R08: removed pack endpoint %s %s: got %d, want 404", probe[0], probe[1], response.Code)
+		}
 	}
 }
-
 func TestConnectedJourney05StaleInvalidation(t *testing.T) {
 	h := newHarness(t)
 	cookie, csrf := h.login()
@@ -1177,12 +1105,12 @@ func TestConnectedJourney08ZeroProviderReads(t *testing.T) {
 		"/api/v1/opportunities/" + opportunity.ID + "/answers/match/current",
 		"/api/v1/opportunities/" + opportunity.ID + "/answers/current",
 		"/api/v1/opportunities/" + opportunity.ID + "/checks/current",
-		"/api/v1/opportunities/" + opportunity.ID + "/materials/current",
 		"/api/v1/opportunities/" + opportunity.ID + "/artifacts",
+		"/api/v1/opportunities/" + opportunity.ID + "/artifacts/cv",
+		"/api/v1/opportunities/" + opportunity.ID + "/artifacts/email_body",
 		"/api/v1/opportunities/" + opportunity.ID + "/workflow",
 		"/api/v1/rounds/active",
 		"/api/v1/rounds/cj-no-such-run",
-		"/api/v1/application-packs/cj-no-such-pack",
 		"/api/v1/muse/readiness?tier=contributor",
 		"/api/v1/codex/status",
 	}
@@ -1197,7 +1125,6 @@ func TestConnectedJourney08ZeroProviderReads(t *testing.T) {
 		t.Fatalf("exact artifact edit: got %d %s, want 201", response.Code, response.Body.String())
 	}
 	if research.providerCalls != 0 || matcher.calls != 0 || materials.modelCalls != 0 ||
-		materials.prepareCalls != 0 || materials.editCalls != 0 || materials.rewriteCalls != 0 ||
 		materials.draftCalls != 0 || performer.modelCalls != 0 {
 		t.Fatalf("reads/Why/exact edit caused provider work: research=%d match=%d materials=%+v check=%d",
 			research.providerCalls, matcher.calls, materials, performer.modelCalls)
