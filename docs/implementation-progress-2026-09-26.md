@@ -62,7 +62,7 @@ Task ledger (checkbox only when acceptance evidence exists):
 
 Integrated dependencies landed: none yet (I0 in progress).
 
-Commits: (record hash + task ID per checkpoint; first ledger commit next).
+Commits: a38ee26 docs(I0) ledger/baseline/ownership checkpoint.
 
 Verification: meaningful focused checks per checkpoint before commit; Q gates require production HTTP + real temp store, controlled provider adapters only, no seeded catalog/answered state/ready artifacts.
 
