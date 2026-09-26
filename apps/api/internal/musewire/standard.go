@@ -20,13 +20,15 @@ import (
 )
 
 // Standard model purposes. They select the hardcoded drafting discipline;
-// only these two are admitted, and the discipline never comes from caller
-// input. Values match materialprep.StandardDraftPurpose and
-// materialprep.StandardRewritePurpose without importing that package:
+// only these three are admitted, and the discipline never comes from
+// caller input. Values match materialprep.StandardDraftPurpose,
+// materialprep.StandardRewritePurpose, and
+// materialprep.StandardArtifactPurpose without importing that package:
 // the transport must not depend on the preparation adapter.
 const (
-	standardDraftPurpose   = "prepare-draft-required-answers"
-	standardRewritePurpose = "prepare-rewrite-materials"
+	standardDraftPurpose    = "prepare-draft-required-answers"
+	standardRewritePurpose  = "prepare-rewrite-materials"
+	standardArtifactPurpose = "prepare-draft-artifacts"
 )
 
 // standardDiscipline renders the trusted instructions for one purpose,
@@ -46,6 +48,13 @@ func standardDiscipline(purpose string) (string, error) {
 			`Never invent experience, dates, credentials, or availability, and never contact anyone or browse. ` +
 			`Every listed question id gets exactly one text; use the empty string for any question the facts cannot support. ` +
 			`Reply with exactly one JSON object {"texts":[{"questionId":"...","text":"..."}]}, ` +
+			`raw or in a single fenced block, and nothing else.`, nil
+	case standardArtifactPurpose:
+		return `Draft the listed application artifacts from the supplied verified facts only. ` +
+			`Use only the facts in the prompt: never invent experience, dates, credentials, or availability, and never contact anyone or browse. ` +
+			`Draft only the listed artifact types, at most once each; omit any type the facts cannot support. ` +
+			`Reply with exactly one JSON object ` +
+			`{"artifacts":[{"type":"...","content":"...","facts":["source-id"],"answers":["question-id"]}]}, ` +
 			`raw or in a single fenced block, and nothing else.`, nil
 	default:
 		return "", fmt.Errorf("musewire: unknown standard purpose %q", purpose)

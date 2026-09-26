@@ -113,7 +113,7 @@ func runWithContext(ctx context.Context, args []string) error {
 			if factory, err := musewire.NewStandardRunnerFactory(musewire.StandardRunnerConfig{
 				CLIPath: museBin, ModelID: "muse-spark-1.3", ProviderID: "meta",
 				Cursors: musewire.StoreCursors{DB: database},
-				Facts:   musecode.ProbeLocalFacts(museBin), Bounds: standardBounds,
+				Facts:   musewire.LiveFacts(museBin, "muse-spark-1.3"), Bounds: standardBounds,
 				Workspaces: filepath.Join(dataDir, "muse-sessions"),
 			}); err != nil {
 				log.Printf("standard drafting unavailable: %v", err)

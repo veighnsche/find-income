@@ -55,6 +55,16 @@ func TestStandardPromptGuards(t *testing.T) {
 			t.Fatalf("rewrite prompt missing %q", want)
 		}
 	}
+	artifacts, err := standardPrompt(musecode.StandardInput{Purpose: standardArtifactPurpose,
+		Context: map[string]string{"prompt": "VERIFIED-FACTS"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"verified facts only", "VERIFIED-FACTS", `"artifacts"`} {
+		if !strings.Contains(artifacts, want) {
+			t.Fatalf("artifact prompt missing %q", want)
+		}
+	}
 }
 
 func TestWriteStandardHomePinsModelWithoutTools(t *testing.T) {
