@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react"
 import { useSession } from "@/api/session"
-import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/shared"
+import {
+  EmptyBlock,
+  ErrorBlock,
+  LoadingBlock,
+  notifyGoalsAccepted,
+  SavedGoalsProvider,
+} from "@/components/shared"
 import {
   SEVEN_STAGES,
   StageProgress,
@@ -12,11 +18,15 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { DiscoverySection } from "@/features/discovery/discovery-section"
+import {
+  DiscoverySection,
+  discoveryRunStorageKey,
+} from "@/features/discovery/discovery-section"
 import {
   useOwnerContext,
   type EffectiveSavedContext,
 } from "@/features/owner-context/useOwnerContext"
+import { useRoute } from "@/routes/useRoute"
 
 const STAGE_ACTORS: Record<string, string> = {
   goals: "You",
@@ -81,11 +91,36 @@ function ProfileFactsPanel({ context }: { context: EffectiveSavedContext }) {
 }
 
 export function SearchPage() {
+  return (
+    <SavedGoalsProvider>
+      <SearchPageBody />
+    </SavedGoalsProvider>
+  )
+}
+
+function SearchPageBody() {
   const { session } = useSession()
+  const [route] = useRoute()
   const owner = useOwnerContext()
   const [draft, setDraft] = useState("")
   const draftRef = useRef<HTMLTextAreaElement>(null)
   const savedSeenRef = useRef<string | null>(null)
+  const routeRunId = route.page === "search" ? route.runId : null
+
+  // Deep-link bridge (F1 seam): `#/search?run=<id>` points the stored run
+  // pointer at the linked run before discovery mounts, so the existing
+  // discovery section restores that run from the server (GET-only) instead
+  // of a stale pointer. The write is idempotent and guarded; the server
+  // stays the recovery source. G replaces this with direct `useServerRun`
+  // adoption once DiscoverySection accepts a run id prop.
+  if (routeRunId !== null) {
+    try {
+      if (window.localStorage.getItem(discoveryRunStorageKey) !== routeRunId)
+        window.localStorage.setItem(discoveryRunStorageKey, routeRunId)
+    } catch {
+      // A blocked store only loses the convenience pointer.
+    }
+  }
 
   const correction = owner.correction
   const correctionBusy =
@@ -99,13 +134,20 @@ export function SearchPage() {
   }
 
   // A confirmed save consumes the draft; the saved status keeps the exact
-  // wording that was stored.
+  // wording that was stored. Accepted goal writes invalidate the shared
+  // "goals" scope so Find-jobs readiness updates immediately (F1/C9).
   useEffect(() => {
     if (correction.kind !== "saved") return
     if (savedSeenRef.current === correction.requestKey) return
     savedSeenRef.current = correction.requestKey
     setDraft("")
+    notifyGoalsAccepted()
   }, [correction])
+
+  const handleGoalsSaved = () => {
+    owner.retryContext()
+    notifyGoalsAccepted()
+  }
 
   const sendDisabled =
     correctionBusy ||
@@ -166,7 +208,7 @@ export function SearchPage() {
               csrfToken={session?.csrfToken ?? null}
               correctionBusy={correctionBusy}
               onCorrect={prefillCorrection}
-              onSaved={owner.retryContext}
+              onSaved={handleGoalsSaved}
             />
           </div>
           <ProfileFactsPanel context={owner.context} />
@@ -302,7 +344,10 @@ export function SearchPage() {
         </>
       )}
 
-      <DiscoverySection museScenario="live" />
+      <DiscoverySection
+        key={routeRunId ?? "live"}
+        museScenario="live"
+      />
     </div>
   )
 }

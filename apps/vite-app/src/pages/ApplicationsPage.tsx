@@ -41,8 +41,10 @@ export function ApplicationsPage({ jobId }: { jobId: string | null }) {
 }
 
 function ApplicationsList() {
-  const workflows = useRead("applications:workflows", (signal) =>
-    listRoleWorkflows(signal)
+  const workflows = useRead(
+    "applications:workflows",
+    (signal) => listRoleWorkflows(signal),
+    { scopes: ["selection"] }
   )
   const opportunities = useRead("applications:list", (signal) =>
     listOpportunities("", signal)
@@ -129,8 +131,10 @@ function ApplicationDetail({ jobId }: { jobId: string }) {
   const opportunity = useRead(`application:${jobId}:job`, (signal) =>
     getOpportunity(jobId, signal)
   )
-  const decision = useRead(`application:${jobId}:decision`, (signal) =>
-    getOwnerOpportunityDecision(jobId, signal)
+  const decision = useRead(
+    `application:${jobId}:decision`,
+    (signal) => getOwnerOpportunityDecision(jobId, signal),
+    { scopes: ["selection"] }
   )
 
   return (

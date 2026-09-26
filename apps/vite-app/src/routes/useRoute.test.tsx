@@ -9,7 +9,7 @@ describe("parseHash", () => {
   })
 
   it("parses the four read-only surfaces", () => {
-    expect(parseHash("#/search")).toEqual({ page: "search" })
+    expect(parseHash("#/search")).toEqual({ page: "search", runId: null })
     expect(parseHash("#/jobs")).toEqual({ page: "jobs", jobId: null })
     expect(parseHash("#/applications")).toEqual({
       page: "applications",
@@ -44,6 +44,24 @@ describe("parseHash", () => {
   it("decodes and round-trips identifiers with special characters", () => {
     const route: Route = { page: "jobs", jobId: "job 1/2" }
     expect(parseHash(routeToHash(route))).toEqual(route)
+    const searchRoute: Route = { page: "search", runId: "run 1/2" }
+    expect(parseHash(routeToHash(searchRoute))).toEqual(searchRoute)
+  })
+
+  it("parses stable run deep links with server-backed restore ids", () => {
+    expect(parseHash("#/search?run=run-1")).toEqual({
+      page: "search",
+      runId: "run-1",
+    })
+    expect(parseHash("#/search?run=run%201&utm=x")).toEqual({
+      page: "search",
+      runId: "run 1",
+    })
+    expect(parseHash("#/search?run=")).toEqual({ page: "search", runId: null })
+    expect(parseHash("#/search?utm=x")).toEqual({
+      page: "search",
+      runId: null,
+    })
   })
 
   it("ignores query strings and reports unknown pages honestly", () => {
@@ -62,7 +80,13 @@ describe("parseHash", () => {
 describe("routeToHash", () => {
   it("serializes every route back to a bookmarkable hash", () => {
     expect(routeToHash({ page: "today" })).toBe("#/today")
-    expect(routeToHash({ page: "search" })).toBe("#/search")
+    expect(routeToHash({ page: "search", runId: null })).toBe("#/search")
+    expect(routeToHash({ page: "search", runId: "run-1" })).toBe(
+      "#/search?run=run-1"
+    )
+    expect(routeToHash({ page: "search", runId: "run 1" })).toBe(
+      "#/search?run=run%201"
+    )
     expect(routeToHash({ page: "jobs", jobId: null })).toBe("#/jobs")
     expect(routeToHash({ page: "jobs", jobId: "job-1" })).toBe("#/jobs/job-1")
     expect(routeToHash({ page: "applications", jobId: null })).toBe(

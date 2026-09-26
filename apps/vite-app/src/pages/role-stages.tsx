@@ -139,11 +139,15 @@ export function readRoleWorkflowOrNull(
 }
 
 export function RoleStageSection({ jobId }: { jobId: string }) {
-  const workflow = useRead(`role-stage:${jobId}`, (signal) =>
-    readRoleWorkflowOrNull(jobId, signal)
+  const workflow = useRead(
+    `role-stage:${jobId}`,
+    (signal) => readRoleWorkflowOrNull(jobId, signal),
+    { scopes: ["workflows"] }
   )
-  const roles = useRead("role-stage:roles", (signal) =>
-    listRoleWorkflows(signal)
+  const roles = useRead(
+    "role-stage:roles",
+    (signal) => listRoleWorkflows(signal),
+    { scopes: ["selection", "workflows"] }
   )
   const titles = useRead("role-stage:titles", (signal) =>
     listOpportunities("", signal)

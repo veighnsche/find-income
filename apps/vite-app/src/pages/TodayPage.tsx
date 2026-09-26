@@ -22,8 +22,10 @@ function savedRunId(): string | null {
 }
 
 function SavedResearch({ runId }: { runId: string }) {
-  const run = useRead(`today:research:${runId}`, (signal) =>
-    getResearchRun(runId, signal)
+  const run = useRead(
+    `today:research:${runId}`,
+    (signal) => getResearchRun(runId, signal),
+    { scopes: ["run"] }
   )
 
   return (
@@ -57,7 +59,7 @@ function SavedResearch({ runId }: { runId: string }) {
             .
           </p>
           <a
-            href="#/search"
+            href={`#/search?run=${encodeURIComponent(runId)}`}
             className="font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             Open this research run
@@ -70,18 +72,26 @@ function SavedResearch({ runId }: { runId: string }) {
 
 export function TodayPage() {
   const runId = savedRunId()
-  const opportunities = useRead("today:opportunities", (signal) =>
-    listOpportunities("", signal)
+  const opportunities = useRead(
+    "today:opportunities",
+    (signal) => listOpportunities("", signal),
+    { scopes: ["run"] }
   )
-  const preferences = useRead("today:preferences", (signal) =>
-    getPreferences(signal)
+  const preferences = useRead(
+    "today:preferences",
+    (signal) => getPreferences(signal),
+    { scopes: ["goals"] }
   )
   const runtime = useRead("today:runtime", (signal) => getRuntimeStatus(signal))
-  const activeRound = useRead("today:active-round", (signal) =>
-    getActiveRound(signal)
+  const activeRound = useRead(
+    "today:active-round",
+    (signal) => getActiveRound(signal),
+    { scopes: ["run"] }
   )
-  const workflows = useRead("today:workflows", (signal) =>
-    listRoleWorkflows(signal)
+  const workflows = useRead(
+    "today:workflows",
+    (signal) => listRoleWorkflows(signal),
+    { scopes: ["selection", "workflows"] }
   )
 
   return (

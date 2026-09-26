@@ -79,11 +79,15 @@ function Frame({
   navigate: (route: Route) => void
   sessionExpiresAt: string
 }) {
-  const activeRound = useRead("shell-active-round", (signal) =>
-    getActiveRound(signal)
+  const activeRound = useRead(
+    "shell-active-round",
+    (signal) => getActiveRound(signal),
+    { scopes: ["run"] }
   )
-  const workflows = useRead("shell-role-workflows", (signal) =>
-    listRoleWorkflows(signal)
+  const workflows = useRead(
+    "shell-role-workflows",
+    (signal) => listRoleWorkflows(signal),
+    { scopes: ["selection", "workflows"] }
   )
   const chosen =
     workflows.status === "ready" ? workflows.data.length > 0 : false

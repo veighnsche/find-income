@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
+  commitRoleAnswers,
   getHealth,
   getSession,
   isUnauthenticated,
@@ -124,6 +125,50 @@ describe("failed requests", () => {
       vi.fn(async () => jsonResponse(200, { status: "ok", service: "other", version: "1" }))
     )
     await expect(getHealth()).rejects.toThrow("unexpected health response")
+  })
+})
+
+describe("answer commit", () => {
+  it("commits saved answers with the CSRF token and no invented body", async () => {
+    const committed = { opportunityId: "job-1", stage: "answered" }
+    let seenInit: RequestInit | undefined
+    const fetch = vi.fn(
+      async (_input: string | URL | Request, init?: RequestInit) => {
+        seenInit = init
+        return jsonResponse(200, committed)
+      }
+    )
+    vi.stubGlobal("fetch", fetch)
+    await expect(commitRoleAnswers("job 1", "csrf-token")).resolves.toEqual(
+      committed
+    )
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/v1/opportunities/job%201/answers/commit",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "X-CSRF-Token": "csrf-token" }),
+      })
+    )
+    expect(seenInit).not.toHaveProperty("body")
+  })
+
+  it("surfaces commit conflicts with the server message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(409, {
+          error: { message: "Required answers are missing." },
+        })
+      )
+    )
+    const cause = await commitRoleAnswers("job-1", "csrf-token").catch(
+      (error: unknown) => error
+    )
+    expect(cause).toBeInstanceOf(RequestError)
+    expect((cause as RequestError).status).toBe(409)
+    expect((cause as RequestError).message).toBe(
+      "Required answers are missing."
+    )
   })
 })
 

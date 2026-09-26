@@ -77,8 +77,10 @@ function nextStep(workflow: RoleWorkflowState): {
 // the server-owned workflow stage and links to that stage's page; other
 // pages stay reachable, so stages are never compulsory visits.
 export function ApplicationContinue({ jobId }: { jobId: string }) {
-  const workflow = useRead(`application-continue:${jobId}`, (signal) =>
-    getRoleWorkflowOrNull(jobId, signal)
+  const workflow = useRead(
+    `application-continue:${jobId}`,
+    (signal) => getRoleWorkflowOrNull(jobId, signal),
+    { scopes: ["workflows"] }
   )
 
   return (

@@ -17,8 +17,10 @@ export function JobDetailPage({ jobId }: { jobId: string }) {
   const opportunity = useRead(`job:${jobId}`, (signal) =>
     getOpportunity(jobId, signal)
   )
-  const decision = useRead(`job:${jobId}:decision`, (signal) =>
-    getOwnerOpportunityDecision(jobId, signal)
+  const decision = useRead(
+    `job:${jobId}:decision`,
+    (signal) => getOwnerOpportunityDecision(jobId, signal),
+    { scopes: ["selection"] }
   )
 
   return (

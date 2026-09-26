@@ -81,7 +81,7 @@ describe("read-only shell", () => {
     const link = screen.getByRole("link", {
       name: "Open this research run",
     }) as HTMLAnchorElement
-    expect(link.getAttribute("href")).toBe("#/search")
+    expect(link.getAttribute("href")).toBe("#/search?run=run-1")
     expect(calls.every((call) => call.method === "GET")).toBe(true)
   })
 

@@ -862,6 +862,22 @@ export function getCurrentQuestionAnswers(
   )
 }
 
+export type AnswerCommitResult =
+  paths["/opportunities/{id}/answers/commit"]["post"]["responses"][200]["content"]["application/json"]
+
+export function commitRoleAnswers(
+  id: string,
+  csrfToken: string
+): Promise<AnswerCommitResult> {
+  return request<AnswerCommitResult>(
+    `/opportunities/${encodeURIComponent(id)}/answers/commit`,
+    {
+      method: "POST",
+      headers: { "X-CSRF-Token": csrfToken },
+    }
+  )
+}
+
 export function saveQuestionAnswer(
   id: string,
   questionId: string,

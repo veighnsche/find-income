@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 
 export type Route =
   | { page: "today" }
-  | { page: "search" }
+  | { page: "search"; runId: string | null }
   | { page: "jobs"; jobId: string | null }
   | { page: "check"; jobId: string }
   | { page: "answers"; jobId: string }
@@ -19,9 +19,18 @@ function decodeSegment(segment: string): string {
   }
 }
 
+function parseSearchRunId(query: string): string | null {
+  if (query === "") return null
+  const run = new URLSearchParams(query).get("run")
+  if (run === null || run.trim() === "") return null
+  return run
+}
+
 export function parseHash(hash: string): Route {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash
-  const path = raw.split("?")[0] ?? ""
+  const queryIndex = raw.indexOf("?")
+  const path = queryIndex === -1 ? raw : raw.slice(0, queryIndex)
+  const query = queryIndex === -1 ? "" : raw.slice(queryIndex + 1)
   const segments = path
     .split("/")
     .filter((segment) => segment.length > 0)
@@ -51,7 +60,7 @@ export function parseHash(hash: string): Route {
         : { page: "not-found", hash: hash }
     case "search":
       return second === undefined
-        ? { page: "search" }
+        ? { page: "search", runId: parseSearchRunId(query) }
         : { page: "not-found", hash: hash }
     case "jobs":
       return second === undefined
@@ -71,7 +80,9 @@ export function routeToHash(route: Route): string {
     case "today":
       return "#/today"
     case "search":
-      return "#/search"
+      return route.runId === null
+        ? "#/search"
+        : `#/search?run=${encodeURIComponent(route.runId)}`
     case "jobs":
       return route.jobId === null
         ? "#/jobs"

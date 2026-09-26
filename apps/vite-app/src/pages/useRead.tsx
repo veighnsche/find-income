@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { isUnauthenticated } from "@/api/client"
 import { useSession } from "@/api/session"
+import {
+  scopeVersion,
+  useScopeEpoch,
+  type InvalidationScope,
+} from "@/components/shared/invalidation"
 
 export type ReadState<T> =
   | { status: "loading"; data: null; error: null }
@@ -13,6 +18,15 @@ type Settled<T> =
   | { requestKey: string; data: T; error: null }
   | { requestKey: string; data: null; error: string }
 
+export interface ReadOptions {
+  /**
+   * Invalidation scopes (F1 seam). After `notifyAccepted` bumps one of
+   * these scopes, the read re-issues from the server; unrelated bumps
+   * never refetch. Reads without scopes behave exactly as before.
+   */
+  scopes?: InvalidationScope[]
+}
+
 /**
  * GET-only server read. The visible state is derived from the latest settled
  * response for the current key, so retries re-issue the same read and a 401
@@ -20,17 +34,26 @@ type Settled<T> =
  */
 export function useRead<T>(
   key: string,
-  load: (signal: AbortSignal) => Promise<T>
+  load: (signal: AbortSignal) => Promise<T>,
+  options?: ReadOptions
 ): ReadResult<T> {
   const { loseSession } = useSession()
   const loadRef = useRef(load)
   useEffect(() => {
     loadRef.current = load
   })
+  // Subscribe to the invalidation clock; the request key below moves only
+  // when a subscribed scope's version moves, so unrelated writes refetch
+  // nothing.
+  const clock = useScopeEpoch()
+  void clock
   const [attempt, setAttempt] = useState(0)
   const [settled, setSettled] = useState<Settled<T> | null>(null)
   const retry = useCallback(() => setAttempt((value) => value + 1), [])
-  const requestKey = `${key}#${attempt}`
+  const scopeSuffix = (options?.scopes ?? [])
+    .map((scope) => scopeVersion(scope))
+    .join(",")
+  const requestKey = `${key}#${attempt}#${scopeSuffix}`
 
   useEffect(() => {
     const controller = new AbortController()
