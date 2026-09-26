@@ -54,7 +54,7 @@ Task ledger (checkbox only when acceptance evidence exists):
 - [ ] E2 editors/rewrite — blocked on E1+M5+F1
 - [ ] E3 partial/stale readable — blocked on E1+E2+M2+M6
 - [ ] E4 manual Handoff — blocked on E2+E3+F3+M6
-- [ ] Q0 connected harness — active (worker lane/q0, new harness files only; contract cases update after I3). Offending-test corrections go through lane owners later.
+- [ ] Q0 connected harness — harness landed e6ae53f (8 substantive failing cases, only failures in httpapi suite); contract-specific stub updates after I3. Offending tests (correct through lane owners later): seeded-catalog fixtures in httpapi/discovery_test.go, briefcatalog_verify_test.go, musewire/service_test.go:235, store/findings_test.go, researchwire/control_http_test.go:231; R19-pending in httpapi/checkperform_test.go; R03/R04 GET-only in AnswersPage.test.tsx:844.
 - [ ] Q1 seven-step identities — blocked on all feature lanes
 - [ ] Q2 UI/usability — blocked on Q1
 - [ ] Q3 live provider evidence — blocked on Q1 (+Q2 corrections for walkthrough)
@@ -62,7 +62,7 @@ Task ledger (checkbox only when acceptance evidence exists):
 
 Integrated dependencies landed: I0 (a38ee26), I1/C1–C9 (f81c777). R1 design settled on evidence: `muse exec` has native web tools + --output-schema, so direct invocation needs no MCP loopback; app verifies cited URLs itself.
 
-Commits: a38ee26 docs(I0) ledger/baseline/ownership checkpoint.
+Commits: a38ee26 docs(I0); f81c777 docs(I1/C1–C9); 983eb04 docs(I1 dispatch); e10557a docs(R2 map); e6ae53f test(Q0 harness, 8 expected failures).
 
 Verification: meaningful focused checks per checkpoint before commit; Q gates require production HTTP + real temp store, controlled provider adapters only, no seeded catalog/answered state/ready artifacts.
 
