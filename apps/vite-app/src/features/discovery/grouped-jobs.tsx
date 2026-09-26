@@ -165,7 +165,7 @@ function JobCard({
   const finding = tracked?.entry ?? null
   const effective = selection?.saved ?? decision
   const busy = selection?.busy === true
-  const locked = workflow !== null && workflow.stage === "sent"
+  const locked = workflow !== null && workflow.stage === "handoff_saved"
 
   return (
     <li className="rounded-lg border bg-card px-3 py-2.5">

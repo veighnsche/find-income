@@ -37,7 +37,12 @@ describe("deep links and history", () => {
     window.location.hash = "#/applications/job-1"
     render(<App />)
 
-    expect(await screen.findByText("Version 2")).toBeDefined()
+    expect(
+      await screen.findByRole("heading", { name: "Backend Engineer" })
+    ).toBeDefined()
+    expect(
+      await screen.findByRole("heading", { name: "Continue this application" })
+    ).toBeDefined()
   })
 
   it("follows hash history forward and back without losing the page", async () => {

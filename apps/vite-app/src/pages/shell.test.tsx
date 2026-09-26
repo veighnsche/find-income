@@ -138,14 +138,18 @@ describe("read-only shell", () => {
     ).toBeNull()
   })
 
-  it("renders saved application packs per role", async () => {
+  it("renders the application detail without packs", async () => {
     stubFetch()
     window.location.hash = "#/applications/job-1"
     render(<App />)
 
-    expect(await screen.findByText("Version 1")).toBeDefined()
-    expect(await screen.findByText("Version 2")).toBeDefined()
-    expect(await screen.findByText(/2 packs saved/)).toBeDefined()
+    expect(
+      await screen.findByRole("heading", { name: "Backend Engineer" })
+    ).toBeDefined()
+    expect(
+      await screen.findByRole("heading", { name: "Continue this application" })
+    ).toBeDefined()
+    expect(screen.queryByText(/packs saved/)).toBeNull()
   })
 
   it("shows the server message when a job does not exist", async () => {
@@ -195,7 +199,9 @@ describe("read-only shell", () => {
       await screen.findByRole("heading", { name: "Applications" })
     ).toBeDefined()
     go("#/applications/job-1")
-    expect(await screen.findByText("Version 2")).toBeDefined()
+    expect(
+      await screen.findByRole("heading", { name: "Continue this application" })
+    ).toBeDefined()
     go("#/today")
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "Today" })).toBeDefined()

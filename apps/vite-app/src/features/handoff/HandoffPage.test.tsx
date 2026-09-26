@@ -211,7 +211,7 @@ function stubHandoffFetch(options: HandoffStubOptions = {}): {
       if (path === "/api/v1/opportunities/job-1/workflow" && method === "GET")
         return options.workflow === false
           ? jsonResponse(404, { error: { message: "Role is not selected." } })
-          : jsonResponse(200, roleWorkflowFixture("job-1", "reviewing"))
+          : jsonResponse(200, roleWorkflowFixture("job-1", "handoff_saved"))
       if (
         path === "/api/v1/opportunities/job-1/checks/current" &&
         method === "GET"

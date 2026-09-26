@@ -27,8 +27,7 @@ function continueHref(workflow: RoleWorkflowState): string {
     case "preparing":
     case "prepared":
       return `#/jobs/${id}/prepare`
-    case "reviewing":
-    case "sent":
+    case "handoff_saved":
       return `#/applications/${id}`
     case "selected":
     case "blocked":

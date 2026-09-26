@@ -46,16 +46,8 @@ describe("ApplicationContinue", () => {
     expect(link.getAttribute("href")).toBe("#/jobs/job-1/prepare")
   })
 
-  it("routes a reviewing role to its saved handoff", async () => {
-    stubWorkflow("reviewing")
-    renderContinue("job-1")
-
-    const link = await screen.findByRole("link", { name: "Handoff" })
-    expect(link.getAttribute("href")).toBe("#/jobs/job-1/handoff")
-  })
-
-  it("reopens the saved handoff for sent roles", async () => {
-    stubWorkflow("sent")
+  it("reopens the saved handoff for handoff_saved roles", async () => {
+    stubWorkflow("handoff_saved")
     renderContinue("job-1")
 
     const link = await screen.findByRole("link", { name: "Saved handoff" })

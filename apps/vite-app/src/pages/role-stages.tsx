@@ -19,7 +19,7 @@ import { useRead, type ReadResult } from "@/pages/useRead"
  *
  * The server owns one stage per chosen role (`RoleWorkflowState.stage`):
  * selected | checking | checked | answering | answered | preparing |
- * prepared | reviewing | sent | blocked. The dashboard renders those ten
+ * prepared | handoff_saved | blocked. The dashboard renders those nine
  * states on the fixed seven-step journey (Your goals → Find jobs →
  * Select jobs → Check job details → Answer questions → Prepare
  * materials → Handoff). Steps before the active step render as
@@ -35,14 +35,14 @@ import { useRead, type ReadResult } from "@/pages/useRead"
  * | answered   | Answer questions  | … + Check job details       |
  * | preparing  | Prepare materials | … + Answer questions        |
  * | prepared   | Prepare materials | … + Answer questions        |
- * | reviewing  | Handoff           | … + Prepare materials       |
- * | sent       | none (all seven complete) | all seven           |
+ * | handoff_saved | none (all seven complete) | all seven        |
  * | blocked    | none (unknown origin) | none marked            |
  *
  * Past-tense role stages (checked, answered, prepared) rest on their
  * journey step as current: the phase is recorded but the next phase has
- * not started, so claiming the next step would invent progress. `sent`
- * is a legacy terminal state and completes the journey visually. `blocked` carries a
+ * not started, so claiming the next step would invent progress.
+ * `handoff_saved` is the terminal saved state and completes the journey
+ * visually. `blocked` carries a
  * free-text reason but no prior stage (the server reaches it from
  * checking or preparing), so the indicator marks nothing and the reason
  * is shown as text instead of guessing a step. Roles without a selected
@@ -71,14 +71,13 @@ const ROLE_TO_JOURNEY: Record<string, string> = {
   answered: "answer",
   preparing: "prepare",
   prepared: "prepare",
-  reviewing: "handoff",
 }
 
 export function journeyViewFor(stage: RoleStage): {
   stages: StageInput[]
   activeStageId: string | null
 } {
-  if (stage === "sent")
+  if (stage === "handoff_saved")
     return {
       stages: SEVEN_STAGES.map((item) => ({ ...item, state: "complete" })),
       activeStageId: null,
@@ -104,13 +103,13 @@ export function compactStageLabel(stage: RoleStage): string {
 }
 
 export function journeyLabelFor(stage: RoleStage): string | null {
-  if (stage === "sent" || stage === "blocked") return null
+  if (stage === "handoff_saved" || stage === "blocked") return null
   const active = ROLE_TO_JOURNEY[stage] ?? "select"
   return SEVEN_STAGES.find((item) => item.id === active)?.label ?? null
 }
 
 export function stageStatusText(workflow: RoleWorkflowState): string {
-  if (workflow.stage === "sent")
+  if (workflow.stage === "handoff_saved")
     return "Saved for handoff — all seven stages complete."
   if (workflow.stage === "blocked") {
     const reason = workflow.blockedReason ?? ""

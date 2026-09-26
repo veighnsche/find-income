@@ -1,6 +1,5 @@
 import { vi } from "vitest"
 import type {
-  ApplicationPackSummary,
   OpportunityView,
   OwnerDecision,
   Preferences,
@@ -116,26 +115,6 @@ export const decisionFixture: OwnerDecision = {
   createdAt: "2026-09-18T10:00:00Z",
 }
 
-export const packOneFixture: ApplicationPackSummary = {
-  id: "pack-1",
-  opportunityId: "job-1",
-  opportunityRevision: 2,
-  profileRevision: 3,
-  version: 1,
-  contentSha256: "aaa111-content-sha-256",
-  createdAt: "2026-09-19T10:00:00Z",
-}
-
-export const packTwoFixture: ApplicationPackSummary = {
-  id: "pack-2",
-  opportunityId: "job-1",
-  opportunityRevision: 2,
-  profileRevision: 3,
-  version: 2,
-  contentSha256: "bbb222-content-sha-256",
-  createdAt: "2026-09-20T10:00:00Z",
-}
-
 export const runtimeFixture: RuntimeStatus = {
   ingestionAvailable: true,
   organisationAvailable: false,
@@ -167,7 +146,6 @@ export interface FetchStubOptions {
   preferences?: Preferences
   opportunities?: OpportunityView[]
   opportunityById?: Record<string, OpportunityView | null>
-  packsByOpportunity?: Record<string, ApplicationPackSummary[]>
   decisionByOpportunity?: Record<string, OwnerDecision | null>
   workflowsByOpportunity?: Record<string, RoleWorkflowState | null>
   runtime?: RuntimeStatus
@@ -316,13 +294,6 @@ export function stubFetch(options: FetchStubOptions = {}): {
           return decision === null
             ? jsonResponse(404, { error: { message: "Decision not found." } })
             : jsonResponse(200, decision)
-        }
-        if (suffix === "/application-packs") {
-          const packs =
-            options.packsByOpportunity === undefined && id === "job-1"
-              ? [packOneFixture, packTwoFixture]
-              : (options.packsByOpportunity?.[id] ?? [])
-          return jsonResponse(200, { items: packs })
         }
         if (suffix === "/workflow") {
           const entry = workflows.get(id)

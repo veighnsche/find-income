@@ -484,8 +484,8 @@ describe("GroupedJobs", () => {
     expect(calls.filter((call) => call.url.includes("/checks"))).toEqual([])
   })
 
-  it("offers the decision triple during review but not after a completed send", async () => {
-    stubGroupedFetch({ workflowStages: { "job-rec": "reviewing" } })
+  it("offers the decision triple during review but not after a saved handoff", async () => {
+    stubGroupedFetch({ workflowStages: { "job-rec": "prepared" } })
     const first = renderJobs()
     await screen.findByRole("button", { name: "Check chosen jobs (1)" })
     fireEvent.click(
@@ -496,7 +496,7 @@ describe("GroupedJobs", () => {
     await screen.findByRole("button", { name: "Check chosen jobs (0)" })
 
     first.unmount()
-    stubGroupedFetch({ workflowStages: { "job-rec": "sent" } })
+    stubGroupedFetch({ workflowStages: { "job-rec": "handoff_saved" } })
     renderJobs()
     await screen.findByRole("button", { name: "Check chosen jobs (1)" })
     expect(

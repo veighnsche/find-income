@@ -8,13 +8,8 @@ export type LatestCompletedRound =
   paths["/rounds/latest-completed"]["get"]["responses"][200]["content"]["application/json"]
 export type RoundResults = components["schemas"]["RoundResults"]
 export type RoundHistoryEvent = components["schemas"]["RoundHistoryEvent"]
-export type PrepareRoundRequest = components["schemas"]["PrepareRoundRequest"]
 export type ProcessInputRequest = components["schemas"]["ProcessInputRequest"]
 export type ProcessInputResponse = components["schemas"]["ProcessInputResponse"]
-export type ApplicationPackSummary =
-  components["schemas"]["ApplicationPackSummary"]
-export type ApplicationPackDetail =
-  components["schemas"]["ApplicationPackDetail"]
 export type RoundScreeningView = components["schemas"]["RoundScreeningView"]
 export type RelationshipCounterparty =
   components["schemas"]["RelationshipCounterparty"]
@@ -37,8 +32,6 @@ export type OpportunityPage = components["schemas"]["OpportunityPage"]
 export type IngestionRequest = components["schemas"]["IngestionRequest"]
 export type IngestionPage = components["schemas"]["IngestionPage"]
 export type RuntimeStatus = components["schemas"]["RuntimeStatus"]
-export type CodexStatus = components["schemas"]["CodexStatus"]
-export type CodexConnection = components["schemas"]["CodexConnection"]
 export type MuseReadiness = components["schemas"]["MuseReadiness"]
 export type MuseRunCheckpoint = components["schemas"]["MuseRunCheckpoint"]
 export type MuseRunReport = components["schemas"]["MuseRunReport"]
@@ -181,17 +174,6 @@ export function getLatestCompletedSavedRound(
   })
 }
 
-export function prepareApplicationRound(
-  input: PrepareRoundRequest,
-  csrfToken: string
-): Promise<Round> {
-  return request<Round>("/rounds/prepare", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
-    body: JSON.stringify(input),
-  })
-}
-
 export function processInput(
   input: ProcessInputRequest,
   csrfToken: string
@@ -201,26 +183,6 @@ export function processInput(
     headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
     body: JSON.stringify(input),
   })
-}
-
-export function listApplicationPacks(
-  opportunityId: string,
-  signal?: AbortSignal
-): Promise<ApplicationPackSummary[]> {
-  return request<components["schemas"]["ApplicationPackList"]>(
-    `/opportunities/${encodeURIComponent(opportunityId)}/application-packs`,
-    { signal }
-  ).then((page) => page.items)
-}
-
-export function getApplicationPack(
-  id: string,
-  signal?: AbortSignal
-): Promise<ApplicationPackDetail> {
-  return request<ApplicationPackDetail>(
-    `/application-packs/${encodeURIComponent(id)}`,
-    { signal }
-  )
 }
 
 export function getOpportunityScreening(
@@ -266,14 +228,6 @@ export function getRoleWorkflowOrNull(
     if (cause instanceof RequestError && cause.status === 404) return null
     throw cause
   })
-}
-
-export function applicationPackPdfUrl(id: string): string {
-  return `/api/v1/application-packs/${encodeURIComponent(id)}/pdf`
-}
-
-export function applicationPackSourceUrl(id: string): string {
-  return `/api/v1/application-packs/${encodeURIComponent(id)}/source.zip`
 }
 
 export function getRoundResults(
@@ -405,24 +359,6 @@ export function stopRound(id: string, csrfToken: string): Promise<Round> {
 
 export function resumeRound(id: string, csrfToken: string): Promise<Round> {
   return request<Round>(`/rounds/${encodeURIComponent(id)}/resume`, {
-    method: "POST",
-    headers: { "X-CSRF-Token": csrfToken },
-  })
-}
-
-export function getCodexStatus(signal?: AbortSignal): Promise<CodexStatus> {
-  return request<CodexStatus>("/codex/status", { signal })
-}
-
-export function connectCodex(csrfToken: string): Promise<CodexConnection> {
-  return request<CodexConnection>("/codex/connect", {
-    method: "POST",
-    headers: { "X-CSRF-Token": csrfToken },
-  })
-}
-
-export function cancelCodexConnect(csrfToken: string): Promise<void> {
-  return request<void>("/codex/connect/cancel", {
     method: "POST",
     headers: { "X-CSRF-Token": csrfToken },
   })

@@ -189,9 +189,7 @@ function WorkStatusText({
   }
   const items = workflows.data ?? []
   if (items.length > 0) {
-    const handoff = items.filter((item) =>
-      ["reviewing", "sent"].includes(item.stage)
-    ).length
+    const handoff = items.filter((item) => item.stage === "handoff_saved").length
     if (handoff === items.length)
       return <p className="text-xs text-muted-foreground">Applications ready for handoff</p>
     return (

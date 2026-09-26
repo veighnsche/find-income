@@ -42,8 +42,7 @@ describe("Applications list", () => {
     ["answered", "#/jobs/job-1/answers"],
     ["preparing", "#/jobs/job-1/prepare"],
     ["prepared", "#/jobs/job-1/prepare"],
-    ["reviewing", "#/applications/job-1"],
-    ["sent", "#/applications/job-1"],
+    ["handoff_saved", "#/applications/job-1"],
     ["blocked", "#/jobs/job-1"],
   ] as const)("routes %s to %s", async (stage, href) => {
     stubFetch({

@@ -27,8 +27,7 @@ const ACTIVE_JOURNEY: Record<Stage, string | null> = {
   answered: "Answer questions",
   preparing: "Prepare materials",
   prepared: "Prepare materials",
-  reviewing: "Handoff",
-  sent: null,
+  handoff_saved: null,
   blocked: null,
 }
 
@@ -63,8 +62,7 @@ describe("role-stage mapping", () => {
       ["answered", "answer"],
       ["preparing", "prepare"],
       ["prepared", "prepare"],
-      ["reviewing", "handoff"],
-      ["sent", null],
+      ["handoff_saved", null],
       ["blocked", null],
     ]
     for (const [stage, active] of cases) {
@@ -73,9 +71,9 @@ describe("role-stage mapping", () => {
     }
   })
 
-  it("completes the whole journey on sent and marks nothing on blocked", () => {
+  it("completes the whole journey on handoff_saved and marks nothing on blocked", () => {
     expect(
-      journeyViewFor("sent").stages.every(
+      journeyViewFor("handoff_saved").stages.every(
         (item) => item.state === "complete"
       )
     ).toBe(true)
@@ -95,8 +93,7 @@ describe("role-stage mapping", () => {
       "answered",
       "preparing",
       "prepared",
-      "reviewing",
-      "sent",
+      "handoff_saved",
       "blocked",
     ]
     for (const stage of stages)
@@ -135,7 +132,7 @@ describe.each(Object.entries(ACTIVE_JOURNEY))(
         await screen.findByRole("heading", { name: "Backend Engineer" })
       ).toBeDefined()
       if (journey === null) {
-        if (stage === "sent") {
+        if (stage === "handoff_saved") {
           expect(
             await screen.findByText(
               "Saved for handoff — all seven stages complete."
@@ -285,16 +282,18 @@ describe("reload persistence and record independence", () => {
     const options = {
       workflowsByOpportunity: {
         "job-1": roleWorkflowFixture("job-1", "checking"),
-        "job-2": roleWorkflowFixture("job-2", "reviewing"),
+        "job-2": roleWorkflowFixture("job-2", "prepared"),
       },
     }
     stubFetch(options)
     window.location.hash = "#/jobs/job-2"
     const first = render(<App />)
     expect(
-      await screen.findByText("Current stage: Handoff (reviewing)")
+      await screen.findByText("Current stage: Prepare materials (prepared)")
     ).toBeDefined()
-    await waitFor(() => expect(currentStepLabel()).toContain("Handoff"))
+    await waitFor(() =>
+      expect(currentStepLabel()).toContain("Prepare materials")
+    )
     first.unmount()
     cleanup()
 
@@ -302,9 +301,11 @@ describe("reload persistence and record independence", () => {
     window.location.hash = "#/jobs/job-2"
     render(<App />)
     expect(
-      await screen.findByText("Current stage: Handoff (reviewing)")
+      await screen.findByText("Current stage: Prepare materials (prepared)")
     ).toBeDefined()
-    await waitFor(() => expect(currentStepLabel()).toContain("Handoff"))
+    await waitFor(() =>
+      expect(currentStepLabel()).toContain("Prepare materials")
+    )
   })
 
   it("keeps two records independent across list and detail", async () => {
